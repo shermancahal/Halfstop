@@ -38,7 +38,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Run tests
         run: npm test
@@ -47,16 +47,25 @@ jobs:
         run: npm run check
 
       - name: Write the Mapbox token
-        # token.js is gitignored, so it is created here from a secret. Without
-        # the secret the site still works, on the open basemaps.
+        # token.js is gitignored, so it is generated here from the secret.
+        #
+        # When the secret is absent we must NOT ship an empty token.js: doing so
+        # would overwrite a token already on the server and silently drop the
+        # Mapbox basemaps. Instead the file is excluded from the upload, leaving
+        # whatever is already deployed untouched.
+        id: token
         env:
           MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
         run: |
-          printf "window.ABMAP_MAPBOX_TOKEN = '%s';\n" "$MAPBOX_TOKEN" > assets/js/token.js
           if [ -n "$MAPBOX_TOKEN" ]; then
-            echo "Mapbox token written (${#MAPBOX_TOKEN} chars)"
+            printf "window.ABMAP_MAPBOX_TOKEN = '%s';\n" "$MAPBOX_TOKEN" > assets/js/token.js
+            echo "Mapbox token written from the secret (${#MAPBOX_TOKEN} characters)"
+            echo "skip=" >> "$GITHUB_OUTPUT"
           else
-            echo "No MAPBOX_TOKEN secret set — deploying with the open basemaps"
+            printf "window.ABMAP_MAPBOX_TOKEN = '';\n" > assets/js/token.js
+            echo "No MAPBOX_TOKEN secret set."
+            echo "Leaving any token.js already on the server alone, rather than blanking it."
+            echo "skip=assets/js/token.js" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Stage the upload package
@@ -90,3 +99,4 @@ jobs:
             **/.git*
             **/.git*/**
             **/american-byways-maps.zip
+            ${{ steps.token.outputs.skip }}
