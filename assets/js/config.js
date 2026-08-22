@@ -27,7 +27,21 @@ export const SITE = {
  * fully functional, no account needed. Set it and the Mapbox-backed styles below
  * light up automatically.
  */
-export const MAPBOX_TOKEN = '';
+export const MAPBOX_TOKEN = readMapboxToken();
+
+/**
+ * The token is kept OUT of this file, and out of git.
+ *
+ * assets/js/token.js sets `window.ABMAP_MAPBOX_TOKEN` and is gitignored; copy
+ * token.example.js to token.js and put your token there. A Mapbox `pk.` token
+ * is public by design and is meant to ship in client code, but GitHub's secret
+ * scanner blocks pushes containing one, and a token in git outlives the day you
+ * decide to rotate it.
+ */
+function readMapboxToken() {
+  const injected = typeof globalThis === 'undefined' ? '' : globalThis.ABMAP_MAPBOX_TOKEN;
+  return typeof injected === 'string' ? injected.trim() : '';
+}
 
 /**
  * Rendering engine.
@@ -133,7 +147,15 @@ export const BASEMAPS = [
   },
 ];
 
+/**
+ * Default basemap when the URL does not name one.
+ *
+ * Two defaults, because the good answer differs: without a Mapbox account the
+ * USGS quads are the best general-purpose base available, but once a token is
+ * configured the Mapbox vector style is almost certainly what was wanted.
+ */
 export const DEFAULT_BASEMAP = 'usgs-topo';
+export const DEFAULT_BASEMAP_WITH_TOKEN = 'mapbox-outdoors';
 
 /**
  * Overlays drawn on top of the basemap. Each is independently toggleable with
@@ -184,5 +206,5 @@ export const TRACK_COLORS = [
 
 export default {
   SITE, MAPBOX_TOKEN, MAP_ENGINE, DEFAULT_VIEW, DEFAULT_UNITS,
-  BASEMAPS, DEFAULT_BASEMAP, OVERLAYS, TRACK_COLORS,
+  BASEMAPS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN, OVERLAYS, TRACK_COLORS,
 };

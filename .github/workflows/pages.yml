@@ -2,7 +2,12 @@ name: Build and deploy
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      # Pre-merge preview: publishes the working branch to the same Pages site,
+      # so the deployed build can be checked before merging. Drop this line once
+      # the branch is merged and main should be the only thing that deploys.
+      - 'claude/**'
   pull_request:
   workflow_dispatch:
 
@@ -31,7 +36,7 @@ jobs:
   deploy:
     name: Deploy to GitHub Pages
     needs: verify
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read

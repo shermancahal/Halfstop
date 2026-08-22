@@ -167,8 +167,14 @@ browser's developer console (F12) and look at the Network tab: it is almost
 always a file that did not finish uploading.
 
 
-TWO THINGS WORTH KNOWING
-------------------------
+THREE THINGS WORTH KNOWING
+--------------------------
+Mapbox token
+  It lives in assets/js/token.js, on its own so it never ends up in version
+  control. Edit that one line to change or remove it, and re-upload just that
+  file. Leave it empty and the site runs on the open USGS / Esri /
+  OpenStreetMap basemaps with no account.
+
 HTTPS
   The "find my location" button only works over https://. Browsers block
   location access on plain http://. See the notes inside .htaccess.
@@ -233,6 +239,21 @@ async function main() {
 
   const bytes = staged.reduce((sum, entry) => sum + entry.data.length, 0);
   const encoder = new TextEncoder();
+
+  // token.js is gitignored, so it may not exist. Always emit one: the pages load
+  // it with a plain <script> tag, and a missing file would 404 on every visit.
+  const tokenPath = path.join(ROOT, 'assets', 'js', 'token.js');
+  if (existsSync(tokenPath)) {
+    const token = await readFile(tokenPath, 'utf8');
+    const configured = /ABMAP_MAPBOX_TOKEN\s*=\s*['"]\s*\S/.test(token);
+    console.log(configured
+      ? '  Mapbox token: found in assets/js/token.js — included in the package'
+      : '  Mapbox token: assets/js/token.js is empty — the open basemaps will be used');
+  } else {
+    staged.push({ name: 'assets/js/token.js', data: encoder.encode("window.ABMAP_MAPBOX_TOKEN = '';\n") });
+    console.log('  Mapbox token: none configured — shipping an empty assets/js/token.js');
+  }
+
   staged.push({ name: '.htaccess', data: encoder.encode(HTACCESS) });
   staged.push({ name: 'UPLOAD-INSTRUCTIONS.txt', data: encoder.encode(deployNotes(staged.length + 1, bytes)) });
 

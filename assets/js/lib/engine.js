@@ -123,7 +123,12 @@ export function buildRasterStyle(basemap, overlays = []) {
     });
   }
 
-  return { version: 8, sources, layers, glyphs: undefined };
+  // Note: no `glyphs` key. Mapbox GL validates the style against the style spec
+  // and aborts loading on any error — and `glyphs: undefined` is an error there
+  // ("string expected, undefined found"), even though MapLibre tolerates it.
+  // A style with no symbol layers does not need glyphs at all, so omit the key
+  // entirely rather than setting it to undefined.
+  return { version: 8, sources, layers };
 }
 
 /** Overlays are raster layers named `overlay-<id>`; this is their draw order anchor. */

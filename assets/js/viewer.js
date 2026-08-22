@@ -10,7 +10,8 @@
  */
 
 import {
-  SITE, BASEMAPS, DEFAULT_BASEMAP, OVERLAYS, DEFAULT_VIEW, DEFAULT_UNITS, TRACK_COLORS,
+  SITE, BASEMAPS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN, OVERLAYS,
+  DEFAULT_VIEW, DEFAULT_UNITS, TRACK_COLORS,
 } from './config.js';
 import { loadEngine, buildRasterStyle, hasMapboxToken } from './lib/engine.js';
 import { loadCatalog, findMap } from './lib/catalog.js';
@@ -49,6 +50,34 @@ let toast = () => {};
 /* ------------------------------------------------------------------ helpers */
 
 const basemapById = (id) => BASEMAPS.find((b) => b.id === id) || BASEMAPS[0];
+
+/** With a token configured the Mapbox style is the better default; without one it is not selectable. */
+function defaultBasemapId() {
+  if (!hasMapboxToken()) return DEFAULT_BASEMAP;
+  return BASEMAPS.some((b) => b.id === DEFAULT_BASEMAP_WITH_TOKEN) ? DEFAULT_BASEMAP_WITH_TOKEN : DEFAULT_BASEMAP;
+}
+
+/**
+ * Whether the style is loaded enough to accept sources and layers.
+ *
+ * Every mutation below goes through this. A style that fails spec validation
+ * never loads, and Mapbox GL answers every addSource/addLayer/getStyle call
+ * after that with "Style is not done loading" — which surfaces to the user as
+ * an unexplained failure when they drop a file in.
+ */
+function styleReady() {
+  try {
+    return Boolean(state.map && state.map.isStyleLoaded && state.map.isStyleLoaded());
+  } catch {
+    return false;
+  }
+}
+
+/** Run now if the style is ready, otherwise once it next finishes loading. */
+function whenStyleReady(run) {
+  if (styleReady()) { run(); return; }
+  state.map?.once('style.load', () => run());
+}
 
 /** Basemaps needing a Mapbox token are hidden entirely when none is configured. */
 const availableBasemaps = () => BASEMAPS.filter((b) => !b.requiresToken || hasMapboxToken());
@@ -108,7 +137,7 @@ async function main() {
   state.engine = engine;
 
   const initial = readURL();
-  state.basemapId = initial.basemap || DEFAULT_BASEMAP;
+  state.basemapId = initial.basemap || defaultBasemapId();
   if (initial.overlays) {
     for (const [id, entry] of state.overlays) entry.visible = initial.overlays.includes(id);
   }
@@ -135,16 +164,31 @@ async function main() {
   if (gl.FullscreenControl) state.map.addControl(new gl.FullscreenControl(), 'top-right');
 
   state.map.on('error', (event) => {
-    // Tile 404s are noisy and self-correcting; only surface real failures.
     const message = event?.error?.message || '';
-    if (/Failed to fetch|NetworkError/i.test(message)) return;
-    console.warn('[map]', message || event);
+    // Individual tile 404s are noisy and self-correcting; everything else is
+    // worth seeing, because a style-level failure is otherwise silent.
+    if (/Failed to fetch|NetworkError|AbortError/i.test(message)) return;
+    console.error('[map]', message || event);
+    if (/style|glyph|sprite|token|access/i.test(message)) {
+      toast(`Map style problem: ${message}`, { tone: 'error', timeout: 12000 });
+    }
   });
 
-  await new Promise((resolve) => state.map.on('load', resolve));
+  const started = await waitForStyle();
+  if (!started) {
+    // The panel, catalogue and folders are all still usable without a rendered
+    // map, so carry on rather than leaving a half-initialised page.
+    toast('The basemap did not load. Try another basemap under Layers.', { tone: 'error', timeout: 14000 });
+  }
+
   addAppLayers();
   addFolderLayers();
   refreshFolderData();
+  // A Mapbox vector style starts without our overlays; the raster path bakes
+  // them into the initial style, so this only has work to do in the former case.
+  if (basemap.style && hasMapboxToken()) {
+    for (const overlay of activeOverlays()) addOverlayLayer(overlay);
+  }
   renderLayersTab();
   renderFoldersTab();
 
@@ -163,6 +207,31 @@ async function main() {
     setStatus(false);
   }
   renderDetailsTab();
+}
+
+/**
+ * Resolve once the map has loaded, or false if it never does.
+ *
+ * Awaiting 'load' unconditionally means a style that fails to load hangs the
+ * rest of startup forever — no catalogue, no layer list, no explanation.
+ */
+function waitForStyle(timeoutMs = 15000) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(ok);
+    };
+    const timer = setTimeout(() => {
+      console.error(`[map] the style did not finish loading within ${timeoutMs}ms`);
+      finish(false);
+    }, timeoutMs);
+
+    if (state.map.loaded && state.map.loaded()) { finish(true); return; }
+    state.map.once('load', () => finish(true));
+  });
 }
 
 function cacheDom() {
@@ -212,7 +281,7 @@ function writeURL() {
   const params = new URLSearchParams();
   const slugs = [...state.documents.values()].map((d) => d.slug).filter(Boolean);
   if (slugs.length) params.set('m', slugs.join(','));
-  if (state.basemapId !== DEFAULT_BASEMAP) params.set('b', state.basemapId);
+  if (state.basemapId !== defaultBasemapId()) params.set('b', state.basemapId);
 
   const visibleOverlays = [...state.overlays].filter(([, v]) => v.visible).map(([id]) => id);
   const defaultOverlays = OVERLAYS.filter((o) => o.enabled).map((o) => o.id);
@@ -361,12 +430,19 @@ function setBasemap(id) {
 }
 
 function firstDataLayerId() {
-  const layers = state.map.getStyle()?.layers || [];
+  if (!styleReady()) return undefined;
+  let layers = [];
+  try {
+    layers = state.map.getStyle()?.layers || [];
+  } catch {
+    return undefined;
+  }
   const found = layers.find((layer) => layer.id.startsWith('data-') || /-line-casing$|-fill$|^scratch-/.test(layer.id));
   return found?.id;
 }
 
 function addOverlayLayer(overlay) {
+  if (!styleReady()) { whenStyleReady(() => addOverlayLayer(overlay)); return; }
   const id = `overlay-${overlay.id}`;
   if (state.map.getLayer(id)) return;
   const entry = state.overlays.get(overlay.id);
@@ -399,6 +475,7 @@ function removeOverlayLayer(id) {
  * Re-run after every style change, which wipes all of them.
  */
 function addAppLayers() {
+  if (!styleReady()) { whenStyleReady(addAppLayers); return; }
   const empty = { type: 'geojson', data: { type: 'FeatureCollection', features: [] } };
   if (!state.map.getSource('scratch-highlight')) state.map.addSource('scratch-highlight', empty);
   if (!state.map.getSource('scratch-cursor')) state.map.addSource('scratch-cursor', empty);
@@ -423,6 +500,7 @@ function addAppLayers() {
 }
 
 function addDocumentLayers(entry) {
+  if (!styleReady()) { whenStyleReady(() => addDocumentLayers(entry)); return; }
   const sourceId = sourceIdFor(entry.key);
   if (!state.map.getSource(sourceId)) {
     state.map.addSource(sourceId, { type: 'geojson', data: entry.doc.geojson });
@@ -499,6 +577,7 @@ function removeDocumentLayers(key) {
 }
 
 function applyVisibility() {
+  if (!styleReady()) return;
   for (const entry of state.documents.values()) {
     const visibility = entry.visible ? 'visible' : 'none';
     for (const id of layerIdsFor(entry.key)) {
@@ -986,6 +1065,7 @@ function focusFeature(feature) {
  * visibility is a data refresh, not a layer rebuild.
  */
 function addFolderLayers() {
+  if (!styleReady()) { whenStyleReady(addFolderLayers); return; }
   if (!state.map.getSource(FOLDER_SOURCE)) return;
   const color = ['coalesce', ['get', 'folderColor'], '#b4441f'];
   const [casing, line, halo, point] = FOLDER_LAYERS;
@@ -1037,6 +1117,7 @@ function addFolderLayers() {
 
 /** Move folder layers (and the profile cursor) back to the top of the stack. */
 function raiseFolderLayers() {
+  if (!styleReady()) return;
   for (const id of FOLDER_LAYERS) {
     if (state.map.getLayer(id)) state.map.moveLayer(id);
   }
@@ -1044,8 +1125,13 @@ function raiseFolderLayers() {
 }
 
 function refreshFolderData() {
-  const source = state.map?.getSource(FOLDER_SOURCE);
-  if (source) source.setData(state.folders.toGeoJSON({ visibleOnly: true }));
+  if (!styleReady()) return;
+  try {
+    const source = state.map.getSource(FOLDER_SOURCE);
+    if (source) source.setData(state.folders.toGeoJSON({ visibleOnly: true }));
+  } catch (error) {
+    console.warn('[map] could not refresh folder data:', error.message);
+  }
 }
 
 function wireFolders() {
