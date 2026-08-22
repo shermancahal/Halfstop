@@ -8,8 +8,8 @@
  */
 
 export const SITE = {
-  name: 'American Byways Maps',
-  shortName: 'AB Maps',
+  name: 'American Byways GPS',
+  shortName: 'AB GPS',
   tagline: 'Field maps, tracks and waypoints from the road.',
   description:
     'A public library of GPS tracks, routes and waypoints exported from GaiaGPS — '
@@ -116,6 +116,40 @@ export const BASEMAPS = [
     attribution: ESRI_ATTRIBUTION,
   },
   {
+    id: 'cyclosm',
+    name: 'Byways Topo',
+    group: 'Topographic',
+    description: 'OpenStreetMap rendered for the outdoors — tracks, trail surfaces and land cover. The closest open equivalent to a Gaia-style topo.',
+    tiles: [
+      'https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
+      'https://b.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
+      'https://c.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
+    ],
+    tileSize: 256,
+    maxzoom: 18,
+    attribution: `${OSM_ATTRIBUTION}, tiles by <a href="https://www.cyclosm.org/">CyclOSM</a>`,
+  },
+  {
+    id: 'esri-topo',
+    name: 'Esri Topo',
+    group: 'Topographic',
+    description: 'Worldwide topographic base with roads, boundaries and land cover.',
+    tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}'],
+    tileSize: 256,
+    maxzoom: 19,
+    attribution: 'Map data © <a href="https://www.esri.com/">Esri</a> and the GIS community',
+  },
+  {
+    id: 'usgs-imagery',
+    name: 'USGS Imagery',
+    group: 'Imagery',
+    description: 'Aerial imagery from The National Map, without labels.',
+    tiles: ['https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}'],
+    tileSize: 256,
+    maxzoom: 16,
+    attribution: USGS_ATTRIBUTION,
+  },
+  {
     id: 'osm',
     name: 'Street',
     group: 'Road',
@@ -163,6 +197,55 @@ export const DEFAULT_BASEMAP_WITH_TOKEN = 'mapbox-outdoors';
  * to change.
  */
 export const OVERLAYS = [
+  {
+    id: 'public-lands',
+    name: 'Public lands',
+    description: 'Federal and state land ownership from the USGS Protected Areas Database (PAD-US).',
+    // ArcGIS dynamic map services are requested by bounding box rather than by
+    // tile index; both GL libraries substitute {bbox-epsg-3857} for a WMS-style
+    // request. `unverified` shows a caveat in the layer picker.
+    tiles: ['https://carto.nationalmap.gov/arcgis/rest/services/govunits/MapServer/export'
+      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image&layers=show:19,20,21,22,23'],
+    tileSize: 256,
+    maxzoom: 16,
+    opacity: 0.45,
+    enabled: false,
+    unverified: true,
+    attribution: USGS_ATTRIBUTION,
+  },
+  {
+    id: 'trails-hiking',
+    name: 'Hiking routes',
+    description: 'Waymarked hiking and long-distance trail routes from OpenStreetMap.',
+    tiles: ['https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png'],
+    tileSize: 256,
+    maxzoom: 18,
+    opacity: 0.9,
+    enabled: false,
+    attribution: `${OSM_ATTRIBUTION}, routes by <a href="https://hiking.waymarkedtrails.org/">Waymarked Trails</a> (CC-BY-SA)`,
+  },
+  {
+    id: 'trails-cycling',
+    name: 'Cycling routes',
+    description: 'Waymarked cycle route networks from OpenStreetMap.',
+    tiles: ['https://tile.waymarkedtrails.org/cycling/{z}/{x}/{y}.png'],
+    tileSize: 256,
+    maxzoom: 18,
+    opacity: 0.9,
+    enabled: false,
+    attribution: `${OSM_ATTRIBUTION}, routes by <a href="https://cycling.waymarkedtrails.org/">Waymarked Trails</a> (CC-BY-SA)`,
+  },
+  {
+    id: 'usgs-relief',
+    name: 'Shaded relief',
+    description: 'USGS terrain relief. An alternative to the Esri hillshade below.',
+    tiles: ['https://basemap.nationalmap.gov/arcgis/rest/services/USGSShadedReliefOnly/MapServer/tile/{z}/{y}/{x}'],
+    tileSize: 256,
+    maxzoom: 16,
+    opacity: 0.4,
+    enabled: false,
+    attribution: USGS_ATTRIBUTION,
+  },
   {
     id: 'hillshade',
     name: 'Hillshade',

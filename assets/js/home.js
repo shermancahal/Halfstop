@@ -27,6 +27,7 @@ function cacheDom() {
 function applyBranding() {
   document.title = `Map library — ${SITE.name}`;
   const set = (id, value) => { const node = document.getElementById(id); if (node && value) node.textContent = value; };
+  set('brand-name', SITE.name);
   set('brand-parent', SITE.parent?.name);
   set('parent-name', SITE.parent?.name);
   set('footer-name', SITE.name);

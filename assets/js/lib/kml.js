@@ -250,7 +250,7 @@ export function parseKML(source) {
         color: style.color || null,
         fill: style.fill || null,
         width: style.width || null,
-        icon: style.icon || null,
+        iconHref: style.icon || null,
         symbol: '',
         link: null,
         time: timestamp ? Date.parse(timestamp) || null : null,

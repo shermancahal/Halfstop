@@ -1,4 +1,4 @@
-# American Byways Maps
+# American Byways GPS
 
 A hosted library and browser viewer for GPS maps exported from GaiaGPS, built as
 a subsidiary site of [American Byways](https://americanbyways.com).
@@ -90,7 +90,7 @@ from the geometry, using the same code the viewer runs in the browser.
 
 ---
 
-## Folders
+## Folders and pin styling
 
 Folders are the map's own organiser, and they are entirely client-side.
 
@@ -105,6 +105,21 @@ Folders are the map's own organiser, and they are entirely client-side.
 - **Move items** by dragging them onto another folder, or via *Move to…* in a
   saved item's popup.
 - **Export** a folder as GPX from the download button in its header.
+- **Style a pin** with the brush button on its row: pick a colour and one of
+  ~47 icons grouped by Camp / Water / Terrain / Access / Services / Interest /
+  Hazard.
+- **Style many at once** by ticking pins and using the brush in the folder
+  header — with nothing ticked it applies to the whole folder. Only the fields
+  you actually touch are applied, so changing an icon in bulk leaves everyone's
+  colours alone.
+
+Imported files bring their own styling where they have any. GPX `<sym>` values
+(GaiaGPS and Garmin write one on every waypoint) and KML `IconStyle` names are
+matched to the icon set on import, so a GaiaGPS export arrives already looking
+like something rather than as a field of identical dots. Track and route
+colours from GPX `DisplayColor`/`gpx_style` and KML `LineStyle` were already
+honoured. Per-pin styling overrides the folder's colour; clearing an override
+falls back to it.
 
 Two behaviours worth knowing:
 

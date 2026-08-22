@@ -1,0 +1,92 @@
+name: Deploy to web host (FTP)
+
+# Publishes the built site to shared hosting on every push to the working
+# branch, so the browser is the only place you need to look after a change.
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions):
+#   FTP_SERVER    e.g. ftp.shermanc8.sg-host.com
+#   FTP_USERNAME  the FTP account user
+#   FTP_PASSWORD  the FTP account password
+#   FTP_DIR       target directory, e.g. /public_html/  (must end in a slash)
+#
+# Optional secret, so the deployed site gets a Mapbox token without the token
+# ever being committed:
+#   MAPBOX_TOKEN  pk.…
+#
+# Nothing runs if the secrets are absent, so forks and clones stay inert.
+
+on:
+  push:
+    branches:
+      - main
+      - 'claude/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ftp-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build and upload
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run tests
+        run: npm test
+
+      - name: Verify data/catalog.json matches data/maps/
+        run: npm run check
+
+      - name: Write the Mapbox token
+        # token.js is gitignored, so it is created here from a secret. Without
+        # the secret the site still works, on the open basemaps.
+        env:
+          MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
+        run: |
+          printf "window.ABMAP_MAPBOX_TOKEN = '%s';\n" "$MAPBOX_TOKEN" > assets/js/token.js
+          if [ -n "$MAPBOX_TOKEN" ]; then
+            echo "Mapbox token written (${#MAPBOX_TOKEN} chars)"
+          else
+            echo "No MAPBOX_TOKEN secret set — deploying with the open basemaps"
+          fi
+
+      - name: Stage the upload package
+        run: npm run build && node tools/build-dist.mjs
+
+      - name: Check the FTP secrets are present
+        id: guard
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+        run: |
+          if [ -z "$FTP_SERVER" ]; then
+            echo "FTP_SERVER is not set — skipping the upload."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload changed files
+        if: steps.guard.outputs.ready == 'true'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: ${{ secrets.FTP_DIR }}
+          local-dir: ./dist/
+          # Only transfers what actually changed, tracked by a manifest the
+          # action leaves on the server.
+          dangerous-clean-slate: false
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/american-byways-maps.zip

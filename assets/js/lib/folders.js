@@ -11,6 +11,8 @@
  * working set, not a synced account — and the UI says so.
  */
 
+import { DEFAULT_PIN_ICON } from './pin-icons.js';
+
 const STORAGE_KEY = 'ab-maps-folders-v1';
 const NAME_LIMIT = 80;
 
@@ -50,6 +52,9 @@ function packFeature(feature, { keepTimes = false } = {}) {
       symbol: props.symbol || '',
       type: props.type || '',
       color: props.color || null,
+      // Resolved from the source file's <sym>/IconStyle at import time, so a
+      // GaiaGPS export arrives already styled rather than as identical dots.
+      icon: props.icon || null,
       link: props.link || null,
       time: Number.isFinite(props.time) ? props.time : null,
       sourceName: props.sourceName || props.source || '',
@@ -254,6 +259,38 @@ export class FolderStore {
     return true;
   }
 
+  /**
+   * Apply a style to specific items, or to every item in the folder.
+   *
+   * @param {string} folderId
+   * @param {object} style        { color?: string|null, icon?: string|null }
+   * @param {string[]|null} itemIds  null applies to the whole folder
+   * @returns {number} how many items changed
+   */
+  styleItems(folderId, style, itemIds = null) {
+    const folder = this.get(folderId);
+    if (!folder) return 0;
+    const wanted = itemIds ? new Set(itemIds) : null;
+    let changed = 0;
+
+    for (const item of folder.items) {
+      if (wanted && !wanted.has(item.id)) continue;
+      const props = item.feature.properties;
+      let touched = false;
+      if ('color' in style && props.color !== style.color) { props.color = style.color; touched = true; }
+      if ('icon' in style && props.icon !== style.icon) { props.icon = style.icon; touched = true; }
+      if (touched) changed++;
+    }
+
+    if (changed) this.emit();
+    return changed;
+  }
+
+  /** Clear per-item overrides so items fall back to the folder's own colour. */
+  clearItemStyles(folderId, itemIds = null) {
+    return this.styleItems(folderId, { color: null, icon: null }, itemIds);
+  }
+
   renameItem(folderId, itemId, name) {
     const folder = this.get(folderId);
     const item = folder?.items.find((entry) => entry.id === itemId);
@@ -280,6 +317,9 @@ export class FolderStore {
             folderName: folder.name,
             folderColor: folder.color,
             itemId: item.id,
+            // Per-item overrides win; otherwise inherit the folder's styling.
+            pinColor: item.feature.properties.color || folder.color,
+            pinIcon: item.feature.properties.icon || DEFAULT_PIN_ICON,
           },
         });
       }

@@ -84,8 +84,27 @@ test('style: raster sources carry the fields the spec requires', () => {
     assert.ok(Array.isArray(source.tiles) && source.tiles.length, `${id} needs a non-empty tiles array`);
     assert.equal(typeof source.tileSize, 'number', `${id} needs a numeric tileSize`);
     assert.ok(source.tiles.every((url) => /^https:\/\//.test(url)), `${id} must use https tile URLs`);
-    assert.ok(source.tiles.every((url) => url.includes('{z}') && url.includes('{x}') && url.includes('{y}')),
-      `${id} tile URLs need {z}/{x}/{y} placeholders`);
+    // Two valid forms: XYZ tile indices, or a WMS/ArcGIS-export bounding box.
+    // Both are substituted by the GL libraries; a URL with neither is static.
+    assert.ok(source.tiles.every((url) => {
+      const xyz = url.includes('{z}') && url.includes('{x}') && url.includes('{y}');
+      const bbox = url.includes('{bbox-epsg-3857}');
+      return xyz || bbox;
+    }), `${id} tile URLs need either {z}/{x}/{y} or {bbox-epsg-3857}`);
+  }
+});
+
+test('style: bbox sources declare a square tile size', () => {
+  // A WMS/ArcGIS export request hard-codes its output size in the URL; if that
+  // disagrees with tileSize the tiles arrive stretched.
+  const style = buildRasterStyle(rasterBasemaps[0], overlays());
+  for (const [id, source] of Object.entries(style.sources)) {
+    const bboxUrl = source.tiles.find((url) => url.includes('{bbox-epsg-3857}'));
+    if (!bboxUrl) continue;
+    const declared = /[?&]size=(\d+),(\d+)/.exec(bboxUrl);
+    assert.ok(declared, `${id} bbox URL must declare an output size`);
+    assert.equal(Number(declared[1]), source.tileSize, `${id} width should match tileSize`);
+    assert.equal(Number(declared[2]), source.tileSize, `${id} height should match tileSize`);
   }
 });
 

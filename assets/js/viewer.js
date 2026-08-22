@@ -23,6 +23,9 @@ import {
 import { el, escapeHTML, createToaster, downloadText, initTheme, formatDate } from './lib/ui.js';
 import { icons } from './lib/icons.js';
 import { FolderStore, FOLDER_COLORS } from './lib/folders.js';
+import {
+  PIN_ICONS, DEFAULT_PIN_ICON, pinIconGroups, pinIconSVG, pinImageId, registerPinImages,
+} from './lib/pin-icons.js';
 import { toGPX } from './lib/gpx-write.js';
 
 /* ------------------------------------------------------------------ state */
@@ -42,6 +45,10 @@ const state = {
   profile: null,
   folders: null,
   dragItem: null,
+  /** `${folderId}:${itemId}` for pins ticked for bulk styling. */
+  selection: new Set(),
+  /** Tile health per configured layer id, so dead sources can be flagged. */
+  layerHealth: new Map(),
 };
 
 const dom = {};
@@ -88,7 +95,9 @@ const layerIdsFor = (key) => [
 ];
 
 const FOLDER_SOURCE = 'folders';
-const FOLDER_LAYERS = ['folders-line-casing', 'folders-line', 'folders-point-halo', 'folders-point'];
+const FOLDER_LAYERS = [
+  'folders-line-casing', 'folders-line', 'folders-point-halo', 'folders-point', 'folders-point-icon',
+];
 
 const IS_LINE = ['match', ['geometry-type'], ['LineString', 'MultiLineString'], true, false];
 const IS_POLY = ['match', ['geometry-type'], ['Polygon', 'MultiPolygon'], true, false];
@@ -113,6 +122,7 @@ function uniqueKey(base) {
 async function main() {
   cacheDom();
   document.title = SITE.name;
+  applyBranding();
   toast = createToaster(dom.toasts);
   initTheme(document.getElementById('theme-toggle'));
   state.folders = new FolderStore();
@@ -163,7 +173,12 @@ async function main() {
   }), 'top-right');
   if (gl.FullscreenControl) state.map.addControl(new gl.FullscreenControl(), 'top-right');
 
+  state.map.on('sourcedata', (event) => {
+    if (event.sourceId && event.isSourceLoaded) noteLayerHealth(event.sourceId, true);
+  });
+
   state.map.on('error', (event) => {
+    if (event?.sourceId) noteLayerHealth(event.sourceId, false);
     const message = event?.error?.message || '';
     // Individual tile 404s are noisy and self-correcting; everything else is
     // worth seeing, because a style-level failure is otherwise silent.
@@ -232,6 +247,14 @@ function waitForStyle(timeoutMs = 15000) {
     if (state.map.loaded && state.map.loaded()) { finish(true); return; }
     state.map.once('load', () => finish(true));
   });
+}
+
+/** Push the configured site identity into the shared page chrome. */
+function applyBranding() {
+  const name = document.getElementById('brand-name');
+  if (name) name.textContent = SITE.name;
+  const parent = document.getElementById('brand-parent');
+  if (parent && SITE.parent?.name) parent.textContent = SITE.parent.name;
 }
 
 function cacheDom() {
@@ -342,6 +365,33 @@ function setStatus(busy, text = 'Loading…') {
 
 /* ------------------------------------------------------------------ basemaps & overlays */
 
+/**
+ * Track whether a tile source is actually serving tiles.
+ *
+ * Third-party tile endpoints move and retire without notice, and a dead one is
+ * indistinguishable from a slow one until enough requests have failed. Counting
+ * outcomes per source lets the layer picker say so instead of leaving the user
+ * staring at an empty map wondering what they broke.
+ */
+function noteLayerHealth(sourceId, ok) {
+  const layerId = sourceId === 'basemap' ? state.basemapId
+    : sourceId.startsWith('overlay-') ? sourceId.slice('overlay-'.length)
+      : null;
+  if (!layerId) return;
+
+  const health = state.layerHealth.get(layerId) || { ok: 0, failed: 0 };
+  if (ok) health.ok++; else health.failed++;
+  state.layerHealth.set(layerId, health);
+
+  // Only call it dead once several requests have failed with none succeeding.
+  if (!ok && health.failed === 4 && health.ok === 0) renderLayersTab();
+}
+
+function layerIsBroken(id) {
+  const health = state.layerHealth.get(id);
+  return Boolean(health && health.ok === 0 && health.failed >= 4);
+}
+
 function activeOverlays() {
   return OVERLAYS
     .filter((o) => state.overlays.get(o.id)?.visible)
@@ -350,23 +400,33 @@ function activeOverlays() {
 
 function renderLayersTab() {
   dom.basemapList.replaceChildren();
-  let currentGroup = null;
+
+  // Group by name rather than by position, so config order cannot produce two
+  // headings with the same label.
+  const grouped = new Map();
   for (const basemap of availableBasemaps()) {
-    if (basemap.group !== currentGroup) {
-      currentGroup = basemap.group;
-      dom.basemapList.append(el('div', { class: 'layer-group-label', text: currentGroup }));
+    if (!grouped.has(basemap.group)) grouped.set(basemap.group, []);
+    grouped.get(basemap.group).push(basemap);
+  }
+
+  for (const [group, entries] of grouped) {
+    dom.basemapList.append(el('div', { class: 'layer-group-label', text: group }));
+    for (const basemap of entries) {
+      const selected = basemap.id === state.basemapId;
+      dom.basemapList.append(el('label', { class: `layer-option${selected ? ' is-selected' : ''}` }, [
+        el('input', {
+          type: 'radio', name: 'basemap', value: basemap.id, checked: selected,
+          onchange: () => setBasemap(basemap.id),
+        }),
+        el('span', { class: 'layer-option-text' }, [
+          el('span', { class: 'layer-option-name' }, [
+            el('span', { text: basemap.name }),
+            layerBadge(basemap),
+          ]),
+          el('span', { class: 'layer-option-desc', text: basemap.description || '' }),
+        ]),
+      ]));
     }
-    const selected = basemap.id === state.basemapId;
-    dom.basemapList.append(el('label', { class: `layer-option${selected ? ' is-selected' : ''}` }, [
-      el('input', {
-        type: 'radio', name: 'basemap', value: basemap.id, checked: selected,
-        onchange: () => setBasemap(basemap.id),
-      }),
-      el('span', { class: 'layer-option-text' }, [
-        el('span', { class: 'layer-option-name', text: basemap.name }),
-        el('span', { class: 'layer-option-desc', text: basemap.description || '' }),
-      ]),
-    ]));
   }
 
   dom.overlayList.replaceChildren();
@@ -400,13 +460,35 @@ function renderLayersTab() {
           },
         }),
         el('span', { class: 'layer-option-text' }, [
-          el('span', { class: 'layer-option-name', text: overlay.name }),
+          el('span', { class: 'layer-option-name' }, [
+            el('span', { text: overlay.name }),
+            layerBadge(overlay),
+          ]),
           el('span', { class: 'layer-option-desc', text: overlay.description || '' }),
         ]),
       ]),
       opacityRow,
     );
   }
+}
+
+/** Small marker beside a layer name: unverified endpoint, or one that is failing. */
+function layerBadge(entry) {
+  if (layerIsBroken(entry.id)) {
+    return el('span', {
+      class: 'layer-badge is-broken',
+      title: 'This layer\u2019s tile server is not responding. The endpoint may have moved — see assets/js/config.js.',
+      text: 'not responding',
+    });
+  }
+  if (entry.unverified) {
+    return el('span', {
+      class: 'layer-badge',
+      title: 'This endpoint has not been confirmed working. If it stays blank, the service has probably moved.',
+      text: 'unverified',
+    });
+  }
+  return null;
 }
 
 function setBasemap(id) {
@@ -680,6 +762,20 @@ function savedItemActions(props, popup) {
     });
     children.push(select);
   }
+
+  children.push(el('button', {
+    type: 'button', text: 'Edit style',
+    onclick: () => {
+      const folder = state.folders.get(props.folderId);
+      popup.remove();
+      openTab('folders');
+      if (!folder) return;
+      // Re-render first so the row the editor anchors to exists.
+      renderFoldersTab();
+      const row = dom.folderList.querySelector(`[data-item="${props.itemId}"]`);
+      if (row) openStyleEditor(folder, [props.itemId], row);
+    },
+  }));
 
   children.push(el('button', {
     type: 'button', text: 'Remove',
@@ -1067,8 +1163,10 @@ function focusFeature(feature) {
 function addFolderLayers() {
   if (!styleReady()) { whenStyleReady(addFolderLayers); return; }
   if (!state.map.getSource(FOLDER_SOURCE)) return;
+  // A style swap discards every registered image, so re-add them each time.
+  registerPinImages(state.map);
   const color = ['coalesce', ['get', 'folderColor'], '#b4441f'];
-  const [casing, line, halo, point] = FOLDER_LAYERS;
+  const [casing, line, halo, point, iconLayer] = FOLDER_LAYERS;
 
   if (!state.map.getLayer(casing)) {
     state.map.addLayer({
@@ -1091,14 +1189,19 @@ function addFolderLayers() {
       },
     });
   }
+  // A pin is three layers: a white halo, a disc carrying the pin's colour, and
+  // a white glyph on top. Splitting colour from glyph means N icons cost N map
+  // images rather than one per icon-and-colour pair.
+  const pinColor = ['coalesce', ['get', 'pinColor'], ['get', 'folderColor'], '#b4441f'];
+
   if (!state.map.getLayer(halo)) {
     state.map.addLayer({
       id: halo, type: 'circle', source: FOLDER_SOURCE, filter: IS_POINT,
       paint: {
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 7, 15, 11],
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 9, 15, 13],
         'circle-color': 'rgba(255,255,255,0.95)',
         'circle-stroke-width': 1,
-        'circle-stroke-color': 'rgba(0,0,0,0.12)',
+        'circle-stroke-color': 'rgba(0,0,0,0.14)',
       },
     });
   }
@@ -1106,12 +1209,26 @@ function addFolderLayers() {
     state.map.addLayer({
       id: point, type: 'circle', source: FOLDER_SOURCE, filter: IS_POINT,
       paint: {
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 4, 15, 7],
-        'circle-color': color,
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 7.5, 15, 11],
+        'circle-color': pinColor,
       },
     });
     bindFeatureInteractions(point);
     bindFeatureInteractions(line);
+  }
+  if (!state.map.getLayer(iconLayer)) {
+    state.map.addLayer({
+      id: iconLayer, type: 'symbol', source: FOLDER_SOURCE, filter: IS_POINT,
+      layout: {
+        'icon-image': ['concat', 'pin-', ['coalesce', ['get', 'pinIcon'], DEFAULT_PIN_ICON]],
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.5, 15, 0.72],
+        // Pins must never be dropped for collision — a hidden saved waypoint is
+        // worse than an overlapping one.
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+      },
+    });
+    bindFeatureInteractions(iconLayer);
   }
 }
 
@@ -1176,6 +1293,7 @@ function renderFoldersTab() {
 
 function renderFolder(folder) {
   const counts = state.folders.counts(folder);
+  const chosen = selectedIn(folder.id);
 
   const node = el('section', {
     class: `folder${folder.collapsed ? ' is-collapsed' : ''}`,
@@ -1209,6 +1327,15 @@ function renderFolder(folder) {
     }),
     counts.total ? el('span', { class: 'folder-count', text: String(counts.total) }) : null,
     el('div', { class: 'folder-head-actions' }, [
+      el('button', {
+        class: `icon-button${chosen.length ? ' is-armed' : ''}`, type: 'button',
+        title: chosen.length
+          ? `Style the ${chosen.length} selected pin${chosen.length === 1 ? '' : 's'}`
+          : 'Style every pin in this folder',
+        'aria-label': `Style pins in ${folder.name}`,
+        html: icons.brush,
+        onclick: (event) => openStyleEditor(folder, chosen.length ? chosen : null, event.currentTarget.closest('.folder-head')),
+      }),
       el('button', {
         class: 'icon-button', type: 'button', title: 'Zoom to this folder',
         'aria-label': `Zoom to ${folder.name}`, html: icons.target,
@@ -1270,8 +1397,11 @@ function renderFolderItem(folder, item) {
     ? (props.symbol || props.sourceName || '')
     : (props.distance_m ? formatDistance(props.distance_m, state.units) : '');
 
+  const key = selectionKey(folder.id, item.id);
+  const color = props.color || folder.color;
+
   const node = el('div', {
-    class: 'folder-item', draggable: 'true',
+    class: `folder-item${state.selection.has(key) ? ' is-selected' : ''}`, draggable: 'true',
     dataset: { item: item.id },
     ondragstart: (event) => {
       state.dragItem = { itemId: item.id, folderId: folder.id };
@@ -1282,10 +1412,20 @@ function renderFolderItem(folder, item) {
     },
     ondragend: () => { node.classList.remove('is-dragging'); state.dragItem = null; },
   }, [
-    el('span', {
-      class: `folder-item-kind${isWaypoint ? '' : ' is-track'}`,
-      style: `background:${props.color || folder.color}`,
+    el('input', {
+      type: 'checkbox', class: 'folder-item-pick', checked: state.selection.has(key),
+      'aria-label': `Select ${props.name} for bulk styling`,
+      onchange: (event) => {
+        if (event.target.checked) state.selection.add(key); else state.selection.delete(key);
+        renderFoldersTab();
+      },
     }),
+    isWaypoint
+      ? el('span', {
+        class: 'folder-item-icon', style: `background:${color}`,
+        html: pinIconSVG(props.icon || DEFAULT_PIN_ICON, { size: 12, stroke: 2 }),
+      })
+      : el('span', { class: 'folder-item-kind is-track', style: `background:${color}` }),
     el('span', {
       class: 'folder-item-name', text: props.name, title: props.name,
       role: 'button', tabindex: '0',
@@ -1293,10 +1433,20 @@ function renderFolderItem(folder, item) {
       onkeydown: (event) => { if (event.key === 'Enter') focusFolderItem(item); },
     }),
     meta ? el('span', { class: 'folder-item-meta', text: meta }) : null,
+    isWaypoint
+      ? el('button', {
+        class: 'icon-button', type: 'button', title: 'Edit colour and icon',
+        'aria-label': `Edit ${props.name}`, html: icons.brush,
+        onclick: (event) => openStyleEditor(folder, [item.id], event.currentTarget.closest('.folder-item')),
+      })
+      : null,
     el('button', {
       class: 'icon-button', type: 'button', title: 'Remove from this folder',
       'aria-label': `Remove ${props.name} from ${folder.name}`, html: icons.close,
-      onclick: () => state.folders.removeItem(folder.id, item.id),
+      onclick: () => {
+        state.selection.delete(key);
+        state.folders.removeItem(folder.id, item.id);
+      },
     }),
   ]);
   return node;
@@ -1323,6 +1473,149 @@ function exportFolder(folder) {
   const filename = `${folder.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'folder'}.gpx`;
   downloadText(filename, toGPX(geojson, { name: folder.name }), 'application/gpx+xml');
   toast(`Exported ${geojson.features.length} item${geojson.features.length === 1 ? '' : 's'} as ${filename}.`, { tone: 'ok' });
+}
+
+/* ---------------- pin styling ---------------- */
+
+const selectionKey = (folderId, itemId) => `${folderId}:${itemId}`;
+
+function selectedIn(folderId) {
+  const prefix = `${folderId}:`;
+  return [...state.selection].filter((key) => key.startsWith(prefix)).map((key) => key.slice(prefix.length));
+}
+
+function clearSelection(folderId = null) {
+  if (!folderId) { state.selection.clear(); return; }
+  for (const id of selectedIn(folderId)) state.selection.delete(selectionKey(folderId, id));
+}
+
+/**
+ * Inline editor for a pin's colour and icon.
+ *
+ * One component serves both the single-pin and bulk cases: `itemIds` of null
+ * means the whole folder, an array means just those pins. Bulk edits are the
+ * common case after an import, where fifty points arrive looking identical.
+ */
+function openStyleEditor(folder, itemIds, anchor) {
+  dom.folderList.querySelectorAll('.style-editor').forEach((node) => node.remove());
+
+  const single = Array.isArray(itemIds) && itemIds.length === 1;
+  const target = single ? folder.items.find((item) => item.id === itemIds[0]) : null;
+  const count = itemIds === null ? folder.items.length : itemIds.length;
+  if (!count) {
+    toast('Nothing to style — that folder is empty.', { tone: 'error' });
+    return;
+  }
+
+  let chosenColor = single ? (target?.feature.properties.color || null) : null;
+  let chosenIcon = single ? (target?.feature.properties.icon || null) : null;
+  // Only fields the user actually touches are applied. Without this, opening
+  // the bulk editor to change an icon would also wipe every pin's colour back
+  // to the folder default, which is not what "change the icon" means.
+  let colorTouched = false;
+  let iconTouched = false;
+
+  const editor = el('div', { class: 'style-editor' });
+
+  const heading = single
+    ? `Style “${target.feature.properties.name}”`
+    : `Style ${count} pin${count === 1 ? '' : 's'} in “${folder.name}”`;
+  editor.append(el('h3', { class: 'style-editor-title', text: heading }));
+
+  if (single) {
+    const nameField = el('input', {
+      type: 'text', class: 'style-name', value: target.feature.properties.name,
+      'aria-label': 'Pin name',
+      onchange: (event) => state.folders.renameItem(folder.id, target.id, event.target.value),
+    });
+    editor.append(nameField);
+  }
+
+  /* colour */
+  editor.append(el('div', { class: 'style-label', text: 'Colour' }));
+  const colorRow = el('div', { class: 'swatch-row' });
+  const paintSwatches = () => {
+    colorRow.querySelectorAll('.swatch').forEach((node) => {
+      node.classList.toggle('is-chosen', node.dataset.color === (chosenColor || ''));
+    });
+  };
+  colorRow.append(el('button', {
+    class: 'swatch is-inherit', type: 'button', dataset: { color: '' },
+    title: 'Clear the override and use the folder colour',
+    'aria-label': 'Use the folder colour',
+    style: `--swatch:${folder.color}`,
+    onclick: () => { chosenColor = null; colorTouched = true; paintSwatches(); },
+  }));
+  for (const color of FOLDER_COLORS) {
+    colorRow.append(el('button', {
+      class: 'swatch', type: 'button', dataset: { color },
+      title: color, 'aria-label': `Colour ${color}`, style: `--swatch:${color}`,
+      onclick: () => { chosenColor = color; colorTouched = true; paintSwatches(); },
+    }));
+  }
+  editor.append(colorRow);
+  paintSwatches();
+
+  /* icon */
+  editor.append(el('div', { class: 'style-label', text: 'Icon' }));
+  const iconWrap = el('div', { class: 'icon-picker' });
+  const paintIcons = () => {
+    iconWrap.querySelectorAll('.icon-choice').forEach((node) => {
+      node.classList.toggle('is-chosen', node.dataset.icon === (chosenIcon || ''));
+    });
+  };
+  iconWrap.append(el('button', {
+    class: 'icon-choice is-inherit', type: 'button', dataset: { icon: '' },
+    title: 'Clear the override and use the plain pin',
+    'aria-label': 'Use the default pin icon',
+    html: pinIconSVG(DEFAULT_PIN_ICON, { size: 17 }),
+    onclick: () => { chosenIcon = null; iconTouched = true; paintIcons(); },
+  }));
+  for (const [group, icons] of pinIconGroups()) {
+    iconWrap.append(el('div', { class: 'icon-group-label', text: group }));
+    const grid = el('div', { class: 'icon-grid' });
+    for (const icon of icons) {
+      grid.append(el('button', {
+        class: 'icon-choice', type: 'button', dataset: { icon: icon.id },
+        title: icon.name, 'aria-label': icon.name,
+        html: pinIconSVG(icon.id, { size: 17 }),
+        onclick: () => { chosenIcon = icon.id; iconTouched = true; paintIcons(); },
+      }));
+    }
+    iconWrap.append(grid);
+  }
+  editor.append(iconWrap);
+  paintIcons();
+
+  editor.append(el('div', { class: 'picker-row' }, [
+    el('button', {
+      class: 'button button-primary button-small', type: 'button', text: 'Apply',
+      onclick: () => {
+        const patch = {};
+        if (colorTouched || single) patch.color = chosenColor;
+        if (iconTouched || single) patch.icon = chosenIcon;
+        if (!Object.keys(patch).length) {
+          editor.remove();
+          toast('Pick a colour or an icon first.', { tone: 'info' });
+          return;
+        }
+        const changed = state.folders.styleItems(folder.id, patch, itemIds);
+        editor.remove();
+        clearSelection(folder.id);
+        renderFoldersTab();
+        toast(changed
+          ? `Styled ${changed} pin${changed === 1 ? '' : 's'}.`
+          : 'Those pins already had that style.', { tone: changed ? 'ok' : 'info' });
+      },
+    }),
+    el('button', {
+      class: 'button button-ghost button-small', type: 'button', text: 'Cancel',
+      onclick: () => editor.remove(),
+    }),
+  ]));
+
+  anchor.after(editor);
+  editor.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
 /* ---------------- importing into folders ---------------- */

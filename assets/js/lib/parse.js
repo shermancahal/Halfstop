@@ -3,6 +3,7 @@
  * viewer and the catalogue both display.
  */
 
+import { iconForSymbol } from './pin-icons.js';
 import { parseGPX, looksLikeGPX } from './gpx.js';
 import { parseKML, looksLikeKML } from './kml.js';
 import { extractKMLFromKMZ } from './kmz.js';
@@ -88,6 +89,14 @@ export function summarize(geojson) {
 
   for (const feature of geojson.features || []) {
     if (!feature.properties) feature.properties = {};
+    // GPX <sym> and KML IconStyle are the only styling most files carry for
+    // points; translate them once here so every consumer sees a resolved icon.
+    if (!feature.properties.icon && feature.properties.kind === 'waypoint') {
+      const resolved = iconForSymbol(feature.properties.symbol)
+        || iconForSymbol(feature.properties.iconHref)
+        || iconForSymbol(feature.properties.type);
+      if (resolved) feature.properties.icon = resolved;
+    }
     const measurements = measureFeature(feature);
     stats.featureCount++;
 
