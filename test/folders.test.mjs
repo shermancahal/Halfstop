@@ -1,0 +1,260 @@
+/**
+ * Tests for the folder store and the GPX writer — the pieces behind organising
+ * waypoints into folders and getting them back out again.
+ */
+
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import { FolderStore, fingerprint, packFeature } from '../assets/js/lib/folders.js';
+import { toGPX } from '../assets/js/lib/gpx-write.js';
+import { parseGPX } from '../assets/js/lib/gpx.js';
+import { parseMapFile } from '../assets/js/lib/parse.js';
+
+/** In-memory stand-in for localStorage, so tests never touch a real browser API. */
+function memoryStorage(initial = null) {
+  const map = new Map(initial ? [['ab-maps-folders-v1', initial]] : []);
+  return {
+    getItem: (key) => (map.has(key) ? map.get(key) : null),
+    setItem: (key, value) => { map.set(key, value); },
+    removeItem: (key) => { map.delete(key); },
+    get size() { return map.size; },
+    dump: (key = 'ab-maps-folders-v1') => map.get(key),
+  };
+}
+
+const waypoint = (name, lon = -84, lat = 36) => ({
+  type: 'Feature',
+  geometry: { type: 'Point', coordinates: [lon, lat, 300] },
+  properties: { kind: 'waypoint', name, symbol: 'Campground', description: 'note' },
+});
+
+const track = (name) => ({
+  type: 'Feature',
+  geometry: { type: 'LineString', coordinates: [[-84, 36, 300], [-84.1, 36.1, 400]] },
+  properties: { kind: 'track', name, coordTimes: [1714557600000, 1714561200000] },
+});
+
+/* ------------------------------------------------------------------ folders */
+
+test('folders: create, rename and remove', () => {
+  const store = new FolderStore({ storage: memoryStorage() });
+  const folder = store.create('Trip planning');
+  assert.equal(store.list().length, 1);
+  assert.equal(folder.name, 'Trip planning');
+
+  store.rename(folder.id, '  Fall  colour  run ');
+  assert.equal(store.get(folder.id).name, 'Fall colour run');
+
+  store.remove(folder.id);
+  assert.equal(store.list().length, 0);
+});
+
+test('folders: ensure() reuses a folder by name, case-insensitively', () => {
+  const store = new FolderStore({ storage: memoryStorage() });
+  const a = store.ensure('Day 1');
+  const b = store.ensure('day 1');
+  assert.equal(a.id, b.id);
+  assert.equal(store.list().length, 1);
+});
+
+test('folders: adding features reports added and skipped counts', () => {
+  const store = new FolderStore({ storage: memoryStorage() });
+  const folder = store.create('Camps');
+  const first = store.addFeatures(folder.id, [waypoint('Camp A'), waypoint('Camp B', -84.5)]);
+  assert.deepEqual(first, { added: 2, skipped: 0 });
+
+  const second = store.addFeatures(folder.id, [waypoint('Camp A'), waypoint('Camp C', -85)]);
+  assert.deepEqual(second, { added: 1, skipped: 1 }, 'the duplicate should be skipped, not re-added');
+  assert.equal(store.counts(folder).total, 3);
+});
+
+test('folders: de-duplication is by name and position, not object identity', () => {
+  assert.equal(fingerprint(waypoint('Camp A')), fingerprint(waypoint('camp a')));
+  assert.notEqual(fingerprint(waypoint('Camp A')), fingerprint(waypoint('Camp A', -85)));
+});
+
+test('folders: a folder owns copies, so it survives its source going away', () => {
+  const store = new FolderStore({ storage: memoryStorage() });
+  const folder = store.create('Saved');
+  const source = waypoint('Overlook');
+  store.addFeatures(folder.id, [source]);
+
+  source.properties.name = 'Renamed after the fact';
+  assert.equal(store.get(folder.id).items[0].feature.properties.name, 'Overlook');
+});
+
+test('folders: track timestamps are dropped unless explicitly kept', () => {
+  assert.equal(packFeature(track('Road')).properties.coordTimes, undefined);
+  assert.equal(packFeature(track('Road'), { keepTimes: true }).properties.coordTimes.length, 2);
+});
+
+test('folders: moving an item transfers it exactly once', () => {
+  const store = new FolderStore({ storage: memoryStorage() });
+  const from = store.create('Inbox');
+  const to = store.create('Day 2');
+  store.addFeatures(from.id, [waypoint('Spring')]);
+  const itemId = store.get(from.id).items[0].id;
+
+  assert.equal(store.moveItem(itemId, from.id, to.id), true);
+  assert.equal(store.counts(store.get(from.id)).total, 0);
+  assert.equal(store.counts(store.get(to.id)).total, 1);
+});
+
+test('folders: moving onto a folder that already holds the point does not duplicate it', () => {
+  const store = new FolderStore({ storage: memoryStorage() });
+  const from = store.create('A');
+  const to = store.create('B');
+  store.addFeatures(from.id, [waypoint('Spring')]);
+  store.addFeatures(to.id, [waypoint('Spring')]);
+
+  store.moveItem(store.get(from.id).items[0].id, from.id, to.id);
+  assert.equal(store.counts(store.get(from.id)).total, 0);
+  assert.equal(store.counts(store.get(to.id)).total, 1);
+});
+
+test('folders: toGeoJSON tags features with their folder and honours visibility', () => {
+  const store = new FolderStore({ storage: memoryStorage() });
+  const shown = store.create('Shown');
+  const hidden = store.create('Hidden');
+  store.addFeatures(shown.id, [waypoint('A')]);
+  store.addFeatures(hidden.id, [waypoint('B', -85)]);
+  store.update(hidden.id, { visible: false });
+
+  const visible = store.toGeoJSON();
+  assert.equal(visible.features.length, 1);
+  assert.equal(visible.features[0].properties.folderName, 'Shown');
+  assert.equal(visible.features[0].properties.folderColor, shown.color);
+  assert.ok(visible.features[0].properties.itemId);
+
+  assert.equal(store.toGeoJSON({ visibleOnly: false }).features.length, 2);
+});
+
+test('folders: state round-trips through storage', () => {
+  const storage = memoryStorage();
+  const store = new FolderStore({ storage });
+  const folder = store.create('Persisted');
+  store.addFeatures(folder.id, [waypoint('Camp'), track('Road')]);
+  store.update(folder.id, { visible: false, collapsed: true });
+
+  const reloaded = new FolderStore({ storage });
+  assert.equal(reloaded.list().length, 1);
+  const restored = reloaded.list()[0];
+  assert.equal(restored.name, 'Persisted');
+  assert.equal(restored.visible, false);
+  assert.equal(restored.collapsed, true);
+  assert.deepEqual(reloaded.counts(restored), { waypoints: 1, tracks: 1, total: 2 });
+});
+
+test('folders: corrupt stored state starts clean instead of throwing', () => {
+  const store = new FolderStore({ storage: memoryStorage('{not json at all') });
+  assert.deepEqual(store.list(), []);
+});
+
+test('folders: a null storage (private mode) still works in memory', () => {
+  const store = new FolderStore({ storage: null });
+  const folder = store.create('Ephemeral');
+  assert.equal(store.addFeatures(folder.id, [waypoint('A')]).added, 1);
+  assert.equal(store.counts(folder).total, 1);
+});
+
+test('folders: a failing save reports rather than throwing', () => {
+  const storage = {
+    getItem: () => null,
+    setItem: () => { const error = new Error('full'); error.name = 'QuotaExceededError'; throw error; },
+    removeItem: () => {},
+  };
+  const store = new FolderStore({ storage });
+  const folder = store.create('Big');
+  assert.equal(store.addFeatures(folder.id, [waypoint('A')]).added, 1, 'in-memory state stays correct');
+  assert.match(store.lastError, /Local storage is full/);
+});
+
+test('folders: change listeners fire on mutation', () => {
+  const store = new FolderStore({ storage: memoryStorage() });
+  let calls = 0;
+  const off = store.onChange(() => { calls++; });
+  const folder = store.create('Watched');
+  store.addFeatures(folder.id, [waypoint('A')]);
+  assert.equal(calls, 2);
+  off();
+  store.create('Unwatched');
+  assert.equal(calls, 2);
+});
+
+test('folders: totals aggregate across folders', () => {
+  const store = new FolderStore({ storage: memoryStorage() });
+  const a = store.create('A');
+  const b = store.create('B');
+  store.addFeatures(a.id, [waypoint('1'), waypoint('2', -85)]);
+  store.addFeatures(b.id, [track('T')]);
+  assert.deepEqual(store.totals(), { folders: 2, waypoints: 2, tracks: 1 });
+});
+
+/* ------------------------------------------------------------------ GPX out */
+
+test('gpx-write: a folder export round-trips back through the reader', async () => {
+  const store = new FolderStore({ storage: memoryStorage() });
+  const folder = store.create('Day 2');
+  store.addFeatures(folder.id, [waypoint('Spring at the gap')], { keepTimes: false });
+  store.addFeatures(folder.id, [track('Ridge road')], { keepTimes: true });
+
+  const gpx = toGPX(store.folderGeoJSON(folder.id), { name: folder.name });
+  const parsed = await parseMapFile(gpx, 'day-2.gpx');
+
+  assert.equal(parsed.name, 'Day 2');
+  assert.equal(parsed.stats.waypointCount, 1);
+  assert.equal(parsed.stats.trackCount, 1);
+
+  const point = parsed.geojson.features.find((f) => f.properties.kind === 'waypoint');
+  assert.equal(point.properties.name, 'Spring at the gap');
+  assert.equal(point.properties.symbol, 'Campground');
+  assert.equal(point.geometry.coordinates[2], 300);
+
+  const line = parsed.geojson.features.find((f) => f.properties.kind === 'track');
+  assert.equal(line.properties.coordTimes.length, 2);
+});
+
+test('gpx-write: escapes XML metacharacters in names and descriptions', () => {
+  const gpx = toGPX({
+    type: 'FeatureCollection',
+    features: [{
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [-84, 36] },
+      properties: { kind: 'waypoint', name: 'Rock & Roll <trailhead>', description: 'say "hi"' },
+    }],
+  });
+  assert.match(gpx, /<name>Rock &amp; Roll &lt;trailhead&gt;<\/name>/);
+  assert.match(gpx, /<desc>say &quot;hi&quot;<\/desc>/);
+  const reparsed = parseGPX(gpx);
+  assert.equal(reparsed.geojson.features[0].properties.name, 'Rock & Roll <trailhead>');
+});
+
+test('gpx-write: emits waypoints before tracks regardless of input order', () => {
+  const gpx = toGPX({ type: 'FeatureCollection', features: [track('T'), waypoint('W')] });
+  assert.ok(gpx.indexOf('<wpt') < gpx.indexOf('<trk'), 'GPX requires wpt before trk');
+});
+
+test('gpx-write: multi-segment tracks keep their segment boundaries', async () => {
+  const gpx = toGPX({
+    type: 'FeatureCollection',
+    features: [{
+      type: 'Feature',
+      geometry: {
+        type: 'MultiLineString',
+        coordinates: [[[-84, 36], [-84.1, 36.1]], [[-84.2, 36.2], [-84.3, 36.3]]],
+      },
+      properties: { kind: 'track', name: 'Split' },
+    }],
+  });
+  assert.equal((gpx.match(/<trkseg>/g) || []).length, 2);
+  const parsed = await parseMapFile(gpx, 'split.gpx');
+  assert.equal(parsed.geojson.features[0].geometry.type, 'MultiLineString');
+});
+
+test('gpx-write: an empty collection is still a valid document', () => {
+  const gpx = toGPX({ type: 'FeatureCollection', features: [] }, { name: 'Empty' });
+  assert.match(gpx, /<gpx version="1.1"/);
+  assert.match(gpx, /<\/gpx>/);
+  assert.equal(parseGPX(gpx).geojson.features.length, 0);
+});

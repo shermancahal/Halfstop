@@ -25,7 +25,7 @@ function cacheDom() {
 }
 
 function applyBranding() {
-  document.title = `${SITE.name} — GPS tracks, routes and waypoints`;
+  document.title = `Map library — ${SITE.name}`;
   const set = (id, value) => { const node = document.getElementById(id); if (node && value) node.textContent = value; };
   set('brand-parent', SITE.parent?.name);
   set('parent-name', SITE.parent?.name);
@@ -87,7 +87,7 @@ function thumbnail(record) {
 }
 
 function card(record) {
-  const viewerURL = `map.html?m=${encodeURIComponent(record.slug)}`;
+  const viewerURL = `./?m=${encodeURIComponent(record.slug)}`;
   const fileURL = record.path || `data/maps/${record.file}`;
   const stats = record.stats || {};
 
@@ -155,7 +155,7 @@ function render() {
       el('h3', { text: 'The library is empty' }),
       el('p', {
         html: 'Add a GaiaGPS export to <code>data/maps/</code> and run <code>npm run build</code> to publish it. '
-          + 'In the meantime, the <a href="map.html">viewer</a> will open files straight from your computer.',
+          + 'In the meantime, the <a href="./">map</a> will open files straight from your computer.',
       }),
     ]));
   } else if (!matches.length) {

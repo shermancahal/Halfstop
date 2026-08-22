@@ -3,14 +3,20 @@
 A hosted library and browser viewer for GPS maps exported from GaiaGPS, built as
 a subsidiary site of [American Byways](https://americanbyways.com).
 
-Two things live here:
+The site opens directly into the map. Three things live here:
 
-1. **The library** (`index.html`) — a searchable catalogue of published maps,
+1. **The map** (`index.html`) — the homepage. A Mapbox-ready map with switchable
+   topo, imagery and street basemaps, stackable overlays, distance and elevation
+   statistics, and a shareable URL for any view. It will open a GPX, KML, KMZ or
+   GeoJSON file straight from your own computer.
+2. **Folders** — your own organisation of saved waypoints and tracks, built
+   inside the map. Import waypoints out of any file into a folder, move them
+   between folders, and export a folder back out as GPX.
+3. **The library** (`library.html`) — a searchable catalogue of published maps,
    each downloadable in its original GPX/KML/KMZ form.
-2. **The viewer** (`map.html`) — a Mapbox-ready map that renders those files over
-   switchable topo, imagery and street basemaps, with stackable overlays,
-   distance and elevation statistics, and a shareable URL for any view. It will
-   also open a file straight from your own computer.
+
+`map.html` redirects to the homepage, preserving any query and hash, so older
+links keep working.
 
 The whole thing is static: HTML, CSS and ES modules with no framework, no
 bundler and no runtime dependencies. `npm` is used only for the local dev server
@@ -23,6 +29,8 @@ and the catalogue build script, both of which are plain Node.
 ```bash
 npm start           # serves the site at http://localhost:8080
 ```
+
+That opens on the map. The catalogue is at `/library.html`.
 
 The site uses ES modules and `fetch()`, so it needs a real origin — opening
 `index.html` from the filesystem will not work.
@@ -78,6 +86,37 @@ from the geometry, using the same code the viewer runs in the browser.
 | KML | `.kml` | Placemarks, folders, `Style`/`StyleMap` colours, polygons, `MultiGeometry`, `gx:Track`, `ExtendedData` |
 | KMZ | `.kmz` | Unzipped in the browser via `DecompressionStream`; the first `.kml` entry is used |
 | GeoJSON | `.geojson` | Passed through, with feature kinds inferred from geometry type |
+
+---
+
+## Folders
+
+Folders are the map's own organiser, and they are entirely client-side.
+
+- **Create** a folder from the Folders tab, or from the map's floating
+  **Folders** button.
+- **Import into it** with *Import from a map…*: pick any loaded map, choose
+  waypoints / tracks / everything, and choose the destination. Tick *split into
+  folders using the file's own folder names* and a KML's folder structure is
+  reproduced as separate folders.
+- **Save a single point** by clicking it on the map and choosing *Save to
+  folder* in the popup.
+- **Move items** by dragging them onto another folder, or via *Move to…* in a
+  saved item's popup.
+- **Export** a folder as GPX from the download button in its header.
+
+Two behaviours worth knowing:
+
+**A folder owns copies of what you put in it.** It does not reference the source
+file. Unload the map, change the catalogue, or come back tomorrow — the folder
+is unaffected. It is your collection, not a view over someone else's data.
+
+**Folders live in this browser.** They are stored in `localStorage`: not
+uploaded, not synced, not visible to anyone else, and not carried to another
+device. The UI says so, and warns if the browser refuses storage entirely
+(private mode, blocked site data). Export as GPX to keep or move a folder.
+Re-importing the same points is safe — duplicates are detected by name and
+position and skipped.
 
 ---
 
@@ -157,17 +196,20 @@ will deploy to Netlify, Cloudflare Pages, S3 or any web server just as happily.
 ## How it is put together
 
 ```
-index.html                  library / landing page
-map.html                    the viewer
+index.html                  the map — the homepage
+library.html                the published-map catalogue
+map.html                    redirect to the homepage (legacy links)
 assets/
   css/site.css              design tokens, shared chrome, landing page
   css/viewer.css            the viewer's app shell
   js/config.js              ← branding, Mapbox token, basemaps, overlays
-  js/home.js                landing page: catalogue rendering and filters
-  js/viewer.js              the viewer application
+  js/home.js                library page: catalogue rendering and filters
+  js/viewer.js              the map application
   js/lib/
     xml.js                  dependency-free XML parser (browser + Node)
     gpx.js  kml.js  kmz.js  format readers → GeoJSON
+    gpx-write.js            GeoJSON → GPX, for folder export
+    folders.js              the folder store (state, de-duplication, persistence)
     parse.js                format dispatch + distance/elevation statistics
     geo.js                  haversine, bounds, simplification, formatting
     engine.js               Mapbox GL / MapLibre GL loader and style builder
@@ -179,6 +221,7 @@ tools/
   build-catalog.mjs         scans data/maps/, writes data/catalog.json
   serve.mjs                 local dev server
 test/parsers.test.mjs       parser and geometry tests
+test/folders.test.mjs       folder store and GPX writer tests
 ```
 
 Two decisions are worth knowing about:
@@ -189,7 +232,7 @@ build script share one implementation. The distance shown on a catalogue card an
 the distance shown in the viewer cannot drift apart, because they are the same
 function.
 
-**The viewer is written against the Mapbox GL API.** MapLibre GL implements the
+**The map is written against the Mapbox GL API.** MapLibre GL implements the
 same surface, so the site works today with no account and no key, and adopting
 Mapbox later is a config change rather than a rewrite. That is what makes the
 "long term, move to Mapbox with custom layers" path cheap.
@@ -198,14 +241,16 @@ Mapbox later is a config change rather than a rewrite. That is what makes the
 
 ## Where this is going
 
-- **Shipped** — hosted library, viewer, client-side GPX/KML/KMZ parsing,
-  stackable overlays, elevation profiles, shareable views.
+- **Shipped** — map-first homepage, hosted library, client-side GPX/KML/KMZ
+  parsing, stackable overlays, elevation profiles, shareable views, and folders
+  for organising saved waypoints with GPX export.
 - **Next** — Mapbox vector styles, 3D terrain and Mapbox Studio layers behind the
   existing engine abstraction.
 - **Next** — an offline-capable installable version with cached tiles, which is
   the part of GaiaGPS that matters most away from signal.
 - **Later** — drawing and editing routes in the browser and exporting them back
-  out as GPX.
+  out as GPX; syncing folders across devices, which is the one thing
+  `localStorage` cannot do.
 
 ---
 

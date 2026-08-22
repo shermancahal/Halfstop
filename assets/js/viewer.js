@@ -21,6 +21,8 @@ import {
 } from './lib/geo.js';
 import { el, escapeHTML, createToaster, downloadText, initTheme, formatDate } from './lib/ui.js';
 import { icons } from './lib/icons.js';
+import { FolderStore, FOLDER_COLORS } from './lib/folders.js';
+import { toGPX } from './lib/gpx-write.js';
 
 /* ------------------------------------------------------------------ state */
 
@@ -37,6 +39,8 @@ const state = {
   activeKey: null,
   colorCursor: 0,
   profile: null,
+  folders: null,
+  dragItem: null,
 };
 
 const dom = {};
@@ -53,6 +57,9 @@ const sourceIdFor = (key) => `data-${key}`;
 const layerIdsFor = (key) => [
   `${key}-fill`, `${key}-fill-line`, `${key}-line-casing`, `${key}-line`, `${key}-point-halo`, `${key}-point`,
 ];
+
+const FOLDER_SOURCE = 'folders';
+const FOLDER_LAYERS = ['folders-line-casing', 'folders-line', 'folders-point-halo', 'folders-point'];
 
 const IS_LINE = ['match', ['geometry-type'], ['LineString', 'MultiLineString'], true, false];
 const IS_POLY = ['match', ['geometry-type'], ['Polygon', 'MultiPolygon'], true, false];
@@ -76,11 +83,25 @@ function uniqueKey(base) {
 
 async function main() {
   cacheDom();
-  document.title = `Map viewer · ${SITE.name}`;
+  document.title = SITE.name;
   toast = createToaster(dom.toasts);
   initTheme(document.getElementById('theme-toggle'));
+  state.folders = new FolderStore();
+  state.folders.onChange(() => {
+    renderFoldersTab();
+    refreshFolderData();
+    if (state.folders.lastError) toast(state.folders.lastError, { tone: 'error', timeout: 10000 });
+  });
   wirePanel();
+  wireFolders();
   wireDropzone();
+  if (!state.folders.storage) {
+    const note = document.getElementById('folder-storage-note');
+    if (note) {
+      note.textContent = 'This browser is not allowing site storage, so folders will be lost when you '
+        + 'close the tab. Export anything you want to keep as GPX.';
+    }
+  }
 
   const { gl, engine } = await loadEngine();
   state.gl = gl;
@@ -121,8 +142,11 @@ async function main() {
   });
 
   await new Promise((resolve) => state.map.on('load', resolve));
-  addScratchLayers();
+  addAppLayers();
+  addFolderLayers();
+  refreshFolderData();
   renderLayersTab();
+  renderFoldersTab();
 
   // The catalogue is optional: the viewer still works as a drop-and-view tool.
   try {
@@ -148,6 +172,7 @@ function cacheDom() {
   dom.tabPanels = {
     layers: document.getElementById('tab-layers'),
     maps: document.getElementById('tab-maps'),
+    folders: document.getElementById('tab-folders'),
     details: document.getElementById('tab-details'),
   };
   dom.basemapList = document.getElementById('basemap-list');
@@ -162,6 +187,12 @@ function cacheDom() {
   dom.status = document.getElementById('map-status');
   dom.statusText = document.getElementById('map-status-text');
   dom.unitsToggle = document.getElementById('units-toggle');
+  dom.folderList = document.getElementById('folder-list');
+  dom.folderTotals = document.getElementById('folder-totals');
+  dom.newFolder = document.getElementById('new-folder');
+  dom.importIntoFolder = document.getElementById('import-into-folder');
+  dom.quickLayers = document.getElementById('quick-layers');
+  dom.quickFolders = document.getElementById('quick-folders');
 }
 
 /* ------------------------------------------------------------------ URL state */
@@ -208,6 +239,8 @@ function wirePanel() {
     renderDetailsTab();
     writeURL();
   });
+  dom.quickLayers?.addEventListener('click', () => openTab('layers'));
+  dom.quickFolders?.addEventListener('click', () => openTab('folders'));
   document.getElementById('share-button')?.addEventListener('click', shareView);
   document.getElementById('download-button')?.addEventListener('click', downloadVisible);
   document.getElementById('fit-button')?.addEventListener('click', fitAll);
@@ -219,6 +252,17 @@ function selectTab(name) {
     tab.setAttribute('aria-selected', String(selected));
     dom.tabPanels[tab.dataset.tab].hidden = !selected;
   }
+}
+
+/**
+ * Show a tab and make sure the panel itself is open — on narrow screens the
+ * panel is collapsed by default, so selecting a tab alone would appear to do
+ * nothing. This is what the floating map buttons call.
+ */
+function openTab(name) {
+  selectTab(name);
+  if (dom.panel.hidden) dom.panel.hidden = false;
+  dom.panel.querySelector(`.panel-tab[data-tab="${name}"]`)?.focus();
 }
 
 function setStatus(busy, text = 'Loading…') {
@@ -306,9 +350,11 @@ function setBasemap(id) {
   state.map.setStyle(useVectorStyle ? basemap.style : buildRasterStyle(basemap, activeOverlays()));
   state.map.once('style.load', () => {
     if (useVectorStyle) for (const overlay of activeOverlays()) addOverlayLayer(overlay);
-    addScratchLayers();
+    addAppLayers();
     for (const entry of state.documents.values()) addDocumentLayers(entry);
     applyVisibility();
+    addFolderLayers();
+    refreshFolderData();
   });
   renderLayersTab();
   writeURL();
@@ -347,11 +393,16 @@ function removeOverlayLayer(id) {
 
 /* ------------------------------------------------------------------ data layers */
 
-/** Sources used for selection highlight and the elevation-profile cursor. */
-function addScratchLayers() {
+/**
+ * Sources and layers the app owns, as opposed to a loaded map file: the
+ * selection highlight, the elevation-profile cursor, and the user's folders.
+ * Re-run after every style change, which wipes all of them.
+ */
+function addAppLayers() {
   const empty = { type: 'geojson', data: { type: 'FeatureCollection', features: [] } };
   if (!state.map.getSource('scratch-highlight')) state.map.addSource('scratch-highlight', empty);
   if (!state.map.getSource('scratch-cursor')) state.map.addSource('scratch-cursor', empty);
+  if (!state.map.getSource(FOLDER_SOURCE)) state.map.addSource(FOLDER_SOURCE, empty);
 
   if (!state.map.getLayer('scratch-highlight-line')) {
     state.map.addLayer({
@@ -437,6 +488,8 @@ function addDocumentLayers(entry) {
     bindFeatureInteractions(fillLine);
     entry.bound = true;
   }
+  // The user's own saved points belong on top of whatever file was just loaded.
+  raiseFolderLayers();
 }
 
 function removeDocumentLayers(key) {
@@ -468,6 +521,8 @@ function bindFeatureInteractions(layerId) {
 function showFeaturePopup(feature, lngLat) {
   const props = feature.properties || {};
   const rows = [];
+  // Values arriving from a GL query are stringified; values from our own state
+  // are not. Normalise before testing them.
   const number = (value) => (typeof value === 'string' ? Number(value) : value);
 
   const distance = number(props.distance_m);
@@ -481,20 +536,81 @@ function showFeaturePopup(feature, lngLat) {
   const duration = number(props.duration_s);
   if (Number.isFinite(duration) && duration > 0) rows.push(['Moving time', formatDuration(duration)]);
   if (props.symbol) rows.push(['Symbol', props.symbol]);
-  if (props.folder) rows.push(['Folder', props.folder]);
+  if (props.folderName) rows.push(['Folder', props.folderName]);
+  else if (props.folder) rows.push(['Folder', props.folder]);
 
   const description = props.description ? String(props.description).slice(0, 1200) : '';
-  const html = `
+  const content = el('div', {});
+  content.innerHTML = `
     <div class="popup-title">${escapeHTML(props.name || 'Untitled')}</div>
     <div class="popup-kind">${escapeHTML(props.kind || 'feature')}</div>
     ${description ? `<p class="popup-desc">${escapeHTML(description)}</p>` : ''}
     ${rows.length ? `<dl class="popup-stats">${rows.map(([k, v]) => `<dt>${escapeHTML(k)}</dt><dd>${escapeHTML(v)}</dd>`).join('')}</dl>` : ''}
   `;
 
-  new state.gl.Popup({ closeButton: true, maxWidth: '300px', offset: 12 })
-    .setLngLat(feature.geometry?.type === 'Point' ? feature.geometry.coordinates : lngLat)
-    .setHTML(html)
-    .addTo(state.map);
+  const popup = new state.gl.Popup({ closeButton: true, maxWidth: '300px', offset: 12 })
+    .setLngLat(feature.geometry?.type === 'Point' ? feature.geometry.coordinates : lngLat);
+
+  content.append(props.itemId
+    ? savedItemActions(props, popup)
+    : saveToFolderActions(feature, popup));
+
+  popup.setDOMContent(content).addTo(state.map);
+}
+
+/** Actions for a feature that is not yet in a folder: pick one and save. */
+function saveToFolderActions(feature, popup) {
+  const folders = state.folders.list();
+  const select = el('select', { 'aria-label': 'Folder to save into' }, [
+    ...folders.map((folder) => el('option', { value: folder.id, text: folder.name })),
+    el('option', { value: '__new__', text: folders.length ? '— New folder —' : 'New folder' }),
+  ]);
+  select.value = folders.length ? folders[folders.length - 1].id : '__new__';
+
+  return el('div', { class: 'popup-actions' }, [
+    select,
+    el('button', {
+      type: 'button', text: 'Save to folder',
+      onclick: () => {
+        const name = select.value === '__new__'
+          ? window.prompt('Name the new folder', 'Saved places')
+          : null;
+        if (select.value === '__new__' && name === null) return;
+        saveFeatureToFolder(feature, select.value, name);
+        popup.remove();
+        openTab('folders');
+      },
+    }),
+  ]);
+}
+
+/** Actions for a feature already saved in a folder. */
+function savedItemActions(props, popup) {
+  const folders = state.folders.list().filter((folder) => folder.id !== props.folderId);
+  const children = [];
+
+  if (folders.length) {
+    const select = el('select', { 'aria-label': 'Move to another folder' }, [
+      el('option', { value: '', text: 'Move to…' }),
+      ...folders.map((folder) => el('option', { value: folder.id, text: folder.name })),
+    ]);
+    select.addEventListener('change', () => {
+      if (!select.value) return;
+      state.folders.moveItem(props.itemId, props.folderId, select.value);
+      popup.remove();
+    });
+    children.push(select);
+  }
+
+  children.push(el('button', {
+    type: 'button', text: 'Remove',
+    onclick: () => {
+      state.folders.removeItem(props.folderId, props.itemId);
+      popup.remove();
+    },
+  }));
+
+  return el('div', { class: 'popup-actions' }, children);
 }
 
 /* ------------------------------------------------------------------ documents */
@@ -621,7 +737,13 @@ async function handleFiles(files) {
   setStatus(false);
   if (bounds) {
     fitTo(bounds);
-    toast(`Loaded ${accepted.length} file${accepted.length > 1 ? 's' : ''}. These stay in your browser — nothing is uploaded.`, { tone: 'ok' });
+    const waypoints = [...state.documents.values()]
+      .filter((entry) => entry.origin === 'local')
+      .reduce((sum, entry) => sum + entry.doc.stats.waypointCount, 0);
+    toast(waypoints
+      ? `Loaded ${accepted.length} file${accepted.length > 1 ? 's' : ''}. Nothing was uploaded — open Folders to file its waypoints away.`
+      : `Loaded ${accepted.length} file${accepted.length > 1 ? 's' : ''}. These stay in your browser — nothing is uploaded.`,
+    { tone: 'ok', timeout: 9000 });
   }
   selectTab('details');
 }
@@ -854,6 +976,415 @@ function focusFeature(feature) {
     fitTo(geojsonBounds({ type: 'FeatureCollection', features: [feature] }));
     setHighlight(feature);
   }
+}
+
+/* ------------------------------------------------------------------ folders */
+
+/**
+ * Folder features render from one source, coloured per folder. Keeping them in a
+ * single source (rather than one per folder) means toggling a folder's
+ * visibility is a data refresh, not a layer rebuild.
+ */
+function addFolderLayers() {
+  if (!state.map.getSource(FOLDER_SOURCE)) return;
+  const color = ['coalesce', ['get', 'folderColor'], '#b4441f'];
+  const [casing, line, halo, point] = FOLDER_LAYERS;
+
+  if (!state.map.getLayer(casing)) {
+    state.map.addLayer({
+      id: casing, type: 'line', source: FOLDER_SOURCE, filter: IS_LINE,
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': 'rgba(255,255,255,0.85)',
+        'line-width': ['interpolate', ['linear'], ['zoom'], 6, 4, 12, 7.5, 16, 10],
+      },
+    });
+  }
+  if (!state.map.getLayer(line)) {
+    state.map.addLayer({
+      id: line, type: 'line', source: FOLDER_SOURCE, filter: IS_LINE,
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': color,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 6, 2, 12, 4, 16, 6],
+        'line-dasharray': [2.5, 1.4],
+      },
+    });
+  }
+  if (!state.map.getLayer(halo)) {
+    state.map.addLayer({
+      id: halo, type: 'circle', source: FOLDER_SOURCE, filter: IS_POINT,
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 7, 15, 11],
+        'circle-color': 'rgba(255,255,255,0.95)',
+        'circle-stroke-width': 1,
+        'circle-stroke-color': 'rgba(0,0,0,0.12)',
+      },
+    });
+  }
+  if (!state.map.getLayer(point)) {
+    state.map.addLayer({
+      id: point, type: 'circle', source: FOLDER_SOURCE, filter: IS_POINT,
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 4, 15, 7],
+        'circle-color': color,
+      },
+    });
+    bindFeatureInteractions(point);
+    bindFeatureInteractions(line);
+  }
+}
+
+/** Move folder layers (and the profile cursor) back to the top of the stack. */
+function raiseFolderLayers() {
+  for (const id of FOLDER_LAYERS) {
+    if (state.map.getLayer(id)) state.map.moveLayer(id);
+  }
+  if (state.map.getLayer('scratch-cursor-point')) state.map.moveLayer('scratch-cursor-point');
+}
+
+function refreshFolderData() {
+  const source = state.map?.getSource(FOLDER_SOURCE);
+  if (source) source.setData(state.folders.toGeoJSON({ visibleOnly: true }));
+}
+
+function wireFolders() {
+  dom.newFolder?.addEventListener('click', () => {
+    const folder = state.folders.create(`Folder ${state.folders.list().length + 1}`);
+    openTab('folders');
+    // Drop straight into renaming — a folder called "Folder 3" is never the goal.
+    requestAnimationFrame(() => {
+      const field = dom.folderList.querySelector(`[data-folder="${folder.id}"] .folder-name`);
+      field?.focus();
+      field?.select?.();
+    });
+  });
+  dom.importIntoFolder?.addEventListener('click', () => toggleImportPicker());
+}
+
+function renderFoldersTab() {
+  if (!dom.folderList) return;
+  const folders = state.folders.list();
+  const totals = state.folders.totals();
+  dom.folderTotals.textContent = totals.folders
+    ? `${totals.waypoints} waypoint${totals.waypoints === 1 ? '' : 's'}${totals.tracks ? `, ${totals.tracks} track${totals.tracks === 1 ? '' : 's'}` : ''}`
+    : '';
+
+  const existingPicker = dom.folderList.querySelector('.picker');
+  dom.folderList.replaceChildren();
+  if (existingPicker) dom.folderList.append(existingPicker);
+
+  if (!folders.length) {
+    dom.folderList.append(el('p', {
+      class: 'hint',
+      html: 'No folders yet. Create one, then use <b>Import from a map…</b> to file waypoints into it — '
+        + 'or click any waypoint on the map and save it.',
+    }));
+    return;
+  }
+
+  for (const folder of folders) {
+    dom.folderList.append(renderFolder(folder));
+  }
+}
+
+function renderFolder(folder) {
+  const counts = state.folders.counts(folder);
+
+  const node = el('section', {
+    class: `folder${folder.collapsed ? ' is-collapsed' : ''}`,
+    dataset: { folder: folder.id },
+  });
+
+  const head = el('div', { class: 'folder-head' }, [
+    el('button', {
+      class: 'folder-disclosure', type: 'button',
+      'aria-label': folder.collapsed ? `Expand ${folder.name}` : `Collapse ${folder.name}`,
+      'aria-expanded': String(!folder.collapsed),
+      html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
+      onclick: () => state.folders.update(folder.id, { collapsed: !folder.collapsed }),
+    }),
+    el('input', {
+      type: 'checkbox', checked: folder.visible, 'aria-label': `Show ${folder.name} on the map`,
+      onchange: (event) => state.folders.update(folder.id, { visible: event.target.checked }),
+    }),
+    el('button', {
+      class: 'folder-swatch', type: 'button', style: `background:${folder.color}`,
+      title: 'Change colour', 'aria-label': `Change the colour of ${folder.name}`,
+      onclick: () => {
+        const next = FOLDER_COLORS[(FOLDER_COLORS.indexOf(folder.color) + 1) % FOLDER_COLORS.length];
+        state.folders.update(folder.id, { color: next });
+      },
+    }),
+    el('input', {
+      class: 'folder-name', type: 'text', value: folder.name, 'aria-label': 'Folder name',
+      onchange: (event) => state.folders.rename(folder.id, event.target.value),
+      onkeydown: (event) => { if (event.key === 'Enter') event.target.blur(); },
+    }),
+    counts.total ? el('span', { class: 'folder-count', text: String(counts.total) }) : null,
+    el('div', { class: 'folder-head-actions' }, [
+      el('button', {
+        class: 'icon-button', type: 'button', title: 'Zoom to this folder',
+        'aria-label': `Zoom to ${folder.name}`, html: icons.target,
+        onclick: () => {
+          const bounds = geojsonBounds(state.folders.folderGeoJSON(folder.id));
+          if (boundsAreValid(bounds)) fitTo(bounds);
+          else toast('That folder has nothing in it yet.', { tone: 'error' });
+        },
+      }),
+      el('button', {
+        class: 'icon-button', type: 'button', title: 'Export this folder as GPX',
+        'aria-label': `Export ${folder.name} as GPX`, html: icons.download,
+        onclick: () => exportFolder(folder),
+      }),
+      el('button', {
+        class: 'icon-button', type: 'button', title: 'Delete this folder',
+        'aria-label': `Delete ${folder.name}`, html: icons.trash,
+        onclick: () => {
+          const message = counts.total
+            ? `Delete “${folder.name}” and its ${counts.total} item${counts.total === 1 ? '' : 's'}? This cannot be undone.`
+            : `Delete “${folder.name}”?`;
+          if (window.confirm(message)) state.folders.remove(folder.id);
+        },
+      }),
+    ]),
+  ]);
+
+  const body = el('div', { class: 'folder-body' });
+  if (!folder.items.length) {
+    body.append(el('p', { class: 'folder-empty', text: 'Empty — drag items here, or import from a loaded map.' }));
+  } else {
+    for (const item of folder.items) body.append(renderFolderItem(folder, item));
+  }
+
+  // Folders are drop targets so items can be dragged between them.
+  node.addEventListener('dragover', (event) => {
+    if (!state.dragItem || state.dragItem.folderId === folder.id) return;
+    event.preventDefault();
+    node.classList.add('is-drop-target');
+  });
+  node.addEventListener('dragleave', () => node.classList.remove('is-drop-target'));
+  node.addEventListener('drop', (event) => {
+    node.classList.remove('is-drop-target');
+    if (!state.dragItem || state.dragItem.folderId === folder.id) return;
+    event.preventDefault();
+    const { itemId, folderId } = state.dragItem;
+    state.dragItem = null;
+    state.folders.moveItem(itemId, folderId, folder.id);
+  });
+
+  node.append(head, body);
+  return node;
+}
+
+function renderFolderItem(folder, item) {
+  const props = item.feature.properties;
+  const isWaypoint = props.kind === 'waypoint';
+  const meta = isWaypoint
+    ? (props.symbol || props.sourceName || '')
+    : (props.distance_m ? formatDistance(props.distance_m, state.units) : '');
+
+  const node = el('div', {
+    class: 'folder-item', draggable: 'true',
+    dataset: { item: item.id },
+    ondragstart: (event) => {
+      state.dragItem = { itemId: item.id, folderId: folder.id };
+      node.classList.add('is-dragging');
+      event.dataTransfer.effectAllowed = 'move';
+      // Firefox will not start a drag without payload on the transfer.
+      event.dataTransfer.setData('text/plain', props.name || 'item');
+    },
+    ondragend: () => { node.classList.remove('is-dragging'); state.dragItem = null; },
+  }, [
+    el('span', {
+      class: `folder-item-kind${isWaypoint ? '' : ' is-track'}`,
+      style: `background:${props.color || folder.color}`,
+    }),
+    el('span', {
+      class: 'folder-item-name', text: props.name, title: props.name,
+      role: 'button', tabindex: '0',
+      onclick: () => focusFolderItem(item),
+      onkeydown: (event) => { if (event.key === 'Enter') focusFolderItem(item); },
+    }),
+    meta ? el('span', { class: 'folder-item-meta', text: meta }) : null,
+    el('button', {
+      class: 'icon-button', type: 'button', title: 'Remove from this folder',
+      'aria-label': `Remove ${props.name} from ${folder.name}`, html: icons.close,
+      onclick: () => state.folders.removeItem(folder.id, item.id),
+    }),
+  ]);
+  return node;
+}
+
+function focusFolderItem(item) {
+  const feature = item.feature;
+  if (feature.geometry?.type === 'Point') {
+    state.map.easeTo({ center: feature.geometry.coordinates, zoom: Math.max(state.map.getZoom(), 14), duration: 600 });
+    showFeaturePopup(feature, feature.geometry.coordinates);
+  } else {
+    const bounds = geojsonBounds({ type: 'FeatureCollection', features: [feature] });
+    if (boundsAreValid(bounds)) fitTo(bounds);
+    setHighlight(feature);
+  }
+}
+
+function exportFolder(folder) {
+  const geojson = state.folders.folderGeoJSON(folder.id);
+  if (!geojson.features.length) {
+    toast('That folder is empty, so there is nothing to export.', { tone: 'error' });
+    return;
+  }
+  const filename = `${folder.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'folder'}.gpx`;
+  downloadText(filename, toGPX(geojson, { name: folder.name }), 'application/gpx+xml');
+  toast(`Exported ${geojson.features.length} item${geojson.features.length === 1 ? '' : 's'} as ${filename}.`, { tone: 'ok' });
+}
+
+/* ---------------- importing into folders ---------------- */
+
+/**
+ * Inline picker: choose a loaded map, choose what to take from it, choose the
+ * destination folder. Kept in the panel rather than a modal so the map stays
+ * visible while you file things.
+ */
+function toggleImportPicker() {
+  const existing = dom.folderList.querySelector('.picker');
+  if (existing) { existing.remove(); return; }
+
+  const documents = [...state.documents.values()];
+  if (!documents.length) {
+    toast('Load or open a map first — then you can file its waypoints into a folder.', { tone: 'error' });
+    return;
+  }
+
+  const sourceSelect = el('select', { 'aria-label': 'Map to import from' },
+    documents.map((entry) => el('option', { value: entry.key, text: entry.name })));
+
+  const whatSelect = el('select', { 'aria-label': 'What to import' }, [
+    el('option', { value: 'waypoints', text: 'Waypoints only' }),
+    el('option', { value: 'tracks', text: 'Tracks and routes only' }),
+    el('option', { value: 'all', text: 'Everything' }),
+  ]);
+
+  const folders = state.folders.list();
+  const targetSelect = el('select', { 'aria-label': 'Destination folder' }, [
+    ...folders.map((folder) => el('option', { value: folder.id, text: folder.name })),
+    el('option', { value: '__new__', text: folders.length ? '— New folder —' : 'New folder' }),
+  ]);
+  targetSelect.value = folders.length ? folders[folders.length - 1].id : '__new__';
+
+  const nameField = el('input', {
+    type: 'text', placeholder: 'New folder name', 'aria-label': 'New folder name',
+    hidden: targetSelect.value !== '__new__',
+  });
+  targetSelect.addEventListener('change', () => { nameField.hidden = targetSelect.value !== '__new__'; });
+
+  // KML files carry their own folder structure; offer to preserve it.
+  const byFolderToggle = el('label', { class: 'picker-note', style: 'display:flex;gap:7px;align-items:center' }, [
+    el('input', { type: 'checkbox', id: 'import-by-folder' }),
+    el('span', { text: "Split into folders using the file's own folder names" }),
+  ]);
+
+  const picker = el('div', { class: 'picker' }, [
+    el('h3', { text: 'Import into a folder' }),
+    sourceSelect,
+    whatSelect,
+    targetSelect,
+    nameField,
+    byFolderToggle,
+    el('div', { class: 'picker-row' }, [
+      el('button', {
+        class: 'button button-primary button-small', type: 'button', text: 'Import',
+        onclick: () => {
+          runImport({
+            entry: state.documents.get(sourceSelect.value),
+            what: whatSelect.value,
+            target: targetSelect.value,
+            newName: nameField.value,
+            splitByFolder: byFolderToggle.querySelector('input').checked,
+          });
+          picker.remove();
+        },
+      }),
+      el('button', {
+        class: 'button button-ghost button-small', type: 'button', text: 'Cancel',
+        onclick: () => picker.remove(),
+      }),
+    ]),
+  ]);
+
+  dom.folderList.prepend(picker);
+  sourceSelect.focus();
+}
+
+function selectFeatures(entry, what) {
+  return entry.doc.geojson.features.filter((feature) => {
+    const kind = feature.properties.kind;
+    if (what === 'waypoints') return kind === 'waypoint';
+    if (what === 'tracks') return kind === 'track' || kind === 'route';
+    return true;
+  }).map((feature) => ({
+    ...feature,
+    properties: { ...feature.properties, sourceName: entry.name },
+  }));
+}
+
+function runImport({ entry, what, target, newName, splitByFolder }) {
+  if (!entry) return;
+  const features = selectFeatures(entry, what);
+  if (!features.length) {
+    toast(`“${entry.name}” has no ${what === 'all' ? 'features' : what} to import.`, { tone: 'error' });
+    return;
+  }
+
+  let added = 0;
+  let skipped = 0;
+  const touched = new Set();
+
+  if (splitByFolder) {
+    // Group by the source file's own folder path, falling back to the map name.
+    const groups = new Map();
+    for (const feature of features) {
+      const label = (feature.properties.folder || '').split(' / ').pop() || entry.name;
+      if (!groups.has(label)) groups.set(label, []);
+      groups.get(label).push(feature);
+    }
+    for (const [label, group] of groups) {
+      const folder = state.folders.ensure(label);
+      const result = state.folders.addFeatures(folder.id, group, { keepTimes: what !== 'waypoints' });
+      added += result.added;
+      skipped += result.skipped;
+      touched.add(folder.name);
+    }
+  } else {
+    const folder = target === '__new__'
+      ? state.folders.create(newName?.trim() || entry.name)
+      : state.folders.get(target);
+    if (!folder) return;
+    const result = state.folders.addFeatures(folder.id, features, { keepTimes: what !== 'waypoints' });
+    added = result.added;
+    skipped = result.skipped;
+    touched.add(folder.name);
+  }
+
+  const where = touched.size === 1 ? `“${[...touched][0]}”` : `${touched.size} folders`;
+  const duplicates = skipped ? ` ${skipped} already there.` : '';
+  toast(added
+    ? `Filed ${added} item${added === 1 ? '' : 's'} into ${where}.${duplicates}`
+    : `Nothing new to add — everything was already in ${where}.`,
+  { tone: added ? 'ok' : 'info' });
+}
+
+/** Save a single feature (typically from a map popup) into a folder. */
+function saveFeatureToFolder(feature, folderId, newName) {
+  const folder = folderId === '__new__'
+    ? state.folders.create(newName?.trim() || 'Saved places')
+    : state.folders.get(folderId);
+  if (!folder) return;
+  const { added } = state.folders.addFeatures(folder.id, [feature], { keepTimes: false });
+  toast(added
+    ? `Saved “${feature.properties?.name || 'item'}” to “${folder.name}”.`
+    : `“${feature.properties?.name || 'That item'}” is already in “${folder.name}”.`,
+  { tone: added ? 'ok' : 'info' });
 }
 
 /* ------------------------------------------------------------------ elevation profile */
