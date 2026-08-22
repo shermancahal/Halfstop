@@ -38,6 +38,7 @@ The site uses ES modules and `fetch()`, so it needs a real origin — opening
 ```bash
 npm run build       # regenerate data/catalog.json from data/maps/
 npm run check       # verify the committed catalogue is current (used by CI)
+npm run dist        # stage an upload-ready copy in dist/ (plus a .zip)
 npm test            # run the parser and geometry test suite
 ```
 
@@ -176,7 +177,35 @@ has moved, the fix is a URL edit in `config.js`.
 
 ---
 
-## Deploying
+## Deploying by FTP
+
+`npm run dist` rebuilds the catalogue, then stages everything the live site
+needs — and nothing else — into `dist/`, along with:
+
+- **`.htaccess`** — correct MIME types for `.gpx`/`.kml`/`.kmz` (shared hosts
+  often serve them as `text/plain`, which breaks the download links),
+  compression, short cache lifetimes, and a commented-out HTTPS redirect.
+- **`UPLOAD-INSTRUCTIONS.txt`** — the same guidance in plain text, so it
+  travels with the files.
+- **`american-byways-maps.zip`** — the same tree as an archive, for hosts whose
+  file manager can upload and extract one.
+
+The test suite, `tools/`, `package.json` and the git metadata are deliberately
+excluded: a web server has no business serving them.
+
+Upload the contents of `dist/` to `public_html/` (whole domain) or
+`public_html/maps/` (subfolder). Both work — the site uses no absolute paths,
+so it runs from any directory depth without edits.
+
+Two things that catch people out:
+
+- **HTTPS is not optional.** The geolocate button silently fails on plain
+  `http://`; browsers only expose the Geolocation API on secure origins.
+- **Restrict your Mapbox token to the deployed domain** if you have added one.
+
+---
+
+## Deploying with GitHub Pages
 
 `.github/workflows/pages.yml` runs the test suite, verifies `data/catalog.json`
 matches `data/maps/`, and deploys to GitHub Pages on every push to `main`.
@@ -219,6 +248,8 @@ data/
   catalog.json              generated — do not edit by hand
 tools/
   build-catalog.mjs         scans data/maps/, writes data/catalog.json
+  build-dist.mjs            stages an upload-ready copy in dist/
+  zip.mjs                   dependency-free ZIP writer used by build-dist
   serve.mjs                 local dev server
 test/parsers.test.mjs       parser and geometry tests
 test/folders.test.mjs       folder store and GPX writer tests
