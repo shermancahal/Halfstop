@@ -1,0 +1,20 @@
+{
+  "name": "american-byways-maps",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A hosted library and browser viewer for GPS maps exported from GaiaGPS, published as a subsidiary site of American Byways.",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node tools/serve.mjs",
+    "build": "node tools/build-catalog.mjs",
+    "check": "node tools/build-catalog.mjs --check",
+    "test": "node --test test/*.test.mjs"
+  },
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "playwright": "^1.49.1"
+  }
+}

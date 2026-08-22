@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="American Byways Maps">
+  <rect width="32" height="32" rx="7.5" fill="#b4441f"/>
+  <path d="M9.5 26c0-4.6 4.2-5.4 7-7 2.8-1.6 3.4-3 1.4-4.6-2-1.6-6-1.3-6-4.4C11.9 7.4 14.6 6 18 6"
+        fill="none" stroke="#faf7f2" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="0.1 5.2"/>
+  <path d="M9.5 26c0-4.6 4.2-5.4 7-7 2.8-1.6 3.4-3 1.4-4.6-2-1.6-6-1.3-6-4.4C11.9 7.4 14.6 6 18 6"
+        fill="none" stroke="#faf7f2" stroke-width="0.9" stroke-linecap="round" opacity="0.55"/>
+  <circle cx="22.6" cy="9.4" r="3" fill="#faf7f2"/>
+  <circle cx="22.6" cy="9.4" r="1.2" fill="#b4441f"/>
+</svg>

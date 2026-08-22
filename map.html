@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+<title>Map viewer — American Byways Maps</title>
+<meta name="description" content="View published GPS tracks and waypoints on topo, satellite and street basemaps — or drop in your own GPX, KML or KMZ file.">
+<meta name="theme-color" content="#b4441f" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15120f" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="assets/img/mark.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/css/site.css">
+<link rel="stylesheet" href="assets/css/viewer.css">
+</head>
+<body>
+
+<div class="app">
+
+  <header class="site-header">
+    <div class="wrap" style="max-width:none">
+      <a class="brand" href="./">
+        <img class="brand-mark" src="assets/img/mark.svg" alt="" width="30" height="30">
+        <span class="brand-text">
+          <span class="brand-name">Byways Maps</span>
+          <span class="brand-parent">Viewer</span>
+        </span>
+      </a>
+      <nav class="nav">
+        <a href="./#library">Library</a>
+        <a href="map.html" class="is-active">Viewer</a>
+      </nav>
+      <button class="button button-ghost button-small" id="units-toggle" type="button" title="Switch units">mi / ft</button>
+      <button class="icon-button" id="fit-button" type="button" title="Zoom to all loaded maps" aria-label="Zoom to all loaded maps">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V5a2 2 0 0 1 2-2h3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2h-3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/></svg>
+      </button>
+      <button class="icon-button" id="download-button" type="button" title="Download visible maps as GeoJSON" aria-label="Download visible maps as GeoJSON">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
+      </button>
+      <button class="icon-button" id="share-button" type="button" title="Copy a link to this view" aria-label="Copy a link to this view">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4"/><path d="m15.4 6.5-6.8 4"/></svg>
+      </button>
+      <button class="icon-button" id="theme-toggle" type="button" aria-label="Toggle theme"></button>
+    </div>
+  </header>
+
+  <div class="app-body">
+
+    <aside class="panel" id="panel" aria-label="Map controls">
+      <div class="panel-tabs" role="tablist">
+        <button class="panel-tab" role="tab" data-tab="layers" aria-selected="false" aria-controls="tab-layers" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
+          Layers
+        </button>
+        <button class="panel-tab" role="tab" data-tab="maps" aria-selected="true" aria-controls="tab-maps" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 3-6 3v15l6-3 6 3 6-3V3l-6 3-6-3Z"/><path d="M9 3v15"/><path d="M15 6v15"/></svg>
+          Maps
+        </button>
+        <button class="panel-tab" role="tab" data-tab="details" aria-selected="false" aria-controls="tab-details" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 20 6.5-11 4 6 2.5-4L21 20H3Z"/></svg>
+          Details
+        </button>
+      </div>
+
+      <div class="panel-scroll">
+
+        <div id="tab-layers" role="tabpanel" hidden>
+          <div class="panel-section">
+            <h2 class="panel-title">Basemap</h2>
+            <div id="basemap-list"></div>
+          </div>
+          <div class="panel-section">
+            <h2 class="panel-title">Overlays</h2>
+            <div id="overlay-list"></div>
+          </div>
+        </div>
+
+        <div id="tab-maps" role="tabpanel">
+          <div class="panel-section">
+            <h2 class="panel-title">Published maps</h2>
+            <div id="catalog-list"></div>
+          </div>
+          <div class="panel-section">
+            <h2 class="panel-title">
+              <span>Loaded</span>
+              <span class="count" id="loaded-count"></span>
+            </h2>
+            <div id="loaded-list"></div>
+          </div>
+          <div class="panel-section">
+            <h2 class="panel-title">Open your own</h2>
+            <div class="dropzone" id="dropzone" role="button" tabindex="0">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
+              <b>Drop a file, or click to choose</b>
+              GPX · KML · KMZ · GeoJSON
+            </div>
+            <input type="file" id="file-input" multiple accept=".gpx,.kml,.kmz,.geojson,.json" hidden>
+            <p class="hint" style="margin-top:10px">Files you open stay in your browser. Nothing is uploaded.</p>
+          </div>
+        </div>
+
+        <div id="tab-details" role="tabpanel" hidden>
+          <div id="details-body"></div>
+        </div>
+
+      </div>
+    </aside>
+
+    <div class="map-surface">
+      <div id="map"></div>
+      <button class="icon-button panel-toggle" id="panel-toggle" type="button" aria-label="Toggle the controls panel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
+      </button>
+      <div class="map-loading" id="map-status" hidden>
+        <span class="spinner"></span>
+        <span id="map-status-text">Loading…</span>
+      </div>
+      <div class="toast-stack" id="toasts"></div>
+      <div class="drop-overlay">Drop to open</div>
+    </div>
+
+  </div>
+</div>
+
+<noscript>
+  <p style="padding:40px;text-align:center">The map viewer needs JavaScript. The published files are still downloadable from the <a href="./#library">library</a>.</p>
+</noscript>
+
+<script type="module" src="assets/js/viewer.js"></script>
+</body>
+</html>
