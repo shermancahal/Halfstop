@@ -88,8 +88,17 @@ jobs:
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # Shared hosting drops the FTP control connection while a long data
+      # transfer is in progress, which surfaces as "Timeout (control socket)".
+      # It only bites on large uploads, so it looks intermittent: small deploys
+      # finish inside the window, big ones do not. Three things address it —
+      # a longer timeout, FTPS (which also stops the password crossing the
+      # network in clear text), and one retry, since a dropped socket is
+      # transient by nature.
       - name: Upload changed files
+        id: upload
         if: steps.guard.outputs.ready == 'true'
+        continue-on-error: true
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
@@ -97,6 +106,13 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           server-dir: ${{ secrets.FTP_DIR }}
           local-dir: ./dist/
+          protocol: ftps
+          # 'loose' accepts the host's certificate without verifying it. The
+          # credentials and payload are still encrypted, which plain FTP does
+          # not manage at all; set this to 'strict' if SiteGround's FTP
+          # certificate matches the hostname.
+          security: loose
+          timeout: 120000
           # Only transfers what actually changed, tracked by a manifest the
           # action leaves on the server.
           dangerous-clean-slate: false
@@ -105,3 +121,39 @@ jobs:
             **/.git*/**
             **/american-byways-maps.zip
             ${{ steps.token.outputs.skip }}
+
+      # A first attempt that died mid-transfer leaves no state file, so this
+      # retry re-sends everything rather than resuming — slower, but it is the
+      # difference between a deploy that lands and one that does not.
+      - name: Retry the upload once
+        id: retry
+        if: steps.guard.outputs.ready == 'true' && steps.upload.outcome == 'failure'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: ${{ secrets.FTP_DIR }}
+          local-dir: ./dist/
+          protocol: ftps
+          security: loose
+          timeout: 180000
+          dangerous-clean-slate: false
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/american-byways-maps.zip
+            ${{ steps.token.outputs.skip }}
+
+      - name: Report the upload result
+        if: steps.guard.outputs.ready == 'true'
+        run: |
+          if [ "${{ steps.upload.outcome }}" = "success" ]; then
+            echo "Uploaded on the first attempt."
+          elif [ "${{ steps.retry.outcome }}" = "success" ]; then
+            echo "The first attempt failed and the retry succeeded."
+            echo "If this keeps happening, the host is dropping the control socket mid-transfer."
+          else
+            echo "Both upload attempts failed." >&2
+            exit 1
+          fi
