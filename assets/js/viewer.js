@@ -34,6 +34,10 @@ import {
 import { landManager, forecast, weatherClass } from './lib/lookup.js';
 import { describeSync } from './lib/sync.js';
 import {
+  OfflineStore, MAX_ZOOM as OFFLINE_MAX_ZOOM, TILE_BUDGET,
+  measureRegion, buildManifest, regionsToGeoJSON, formatBytes as formatTileBytes,
+} from './lib/offline.js';
+import {
   putPhoto, photoURL, deletePhoto, pruneUnreferenced, fetchLinkedPhoto, formatBytes, PHOTO_TYPES,
 } from './lib/photos.js';
 
@@ -67,6 +71,10 @@ const state = {
   selectedPin: null,
   waypointQuery: '',
   waypointFolderFilter: '',
+  /** Saved offline regions, defined here and downloaded by the mobile app. */
+  offline: null,
+  /** Region id whose outline is emphasised on the map, or ''. */
+  highlightRegion: '',
 };
 
 const dom = {};
@@ -113,6 +121,7 @@ const layerIdsFor = (key) => [
 ];
 
 const FOLDER_SOURCE = 'folders';
+const REGION_SOURCE = 'offline-regions';
 const FOLDER_LAYERS = [
   'folders-line-casing', 'folders-line', 'folders-point-halo', 'folders-point', 'folders-point-icon',
 ];
@@ -144,6 +153,11 @@ async function main() {
   toast = createToaster(dom.toasts);
   initTheme(document.getElementById('theme-toggle'));
   state.folders = new FolderStore();
+  state.offline = new OfflineStore();
+  state.offline.addEventListener('change', () => {
+    renderOfflineTab();
+    refreshRegionData();
+  });
   state.account = new Account(state.folders);
   state.account.addEventListener('change', renderAccount);
 
@@ -234,12 +248,14 @@ async function main() {
   addAppLayers();
   addFolderLayers();
   refreshFolderData();
+  refreshRegionData();
   // A Mapbox vector style starts without our overlays; the raster path bakes
   // them into the initial style, so this only has work to do in the former case.
   if (basemap.style && hasMapboxToken()) {
     for (const overlay of activeOverlays()) addOverlayLayer(overlay);
   }
   renderLayersTab();
+  renderOfflineTab();
   renderFoldersTab();
   renderWaypointsTab();
   renderDropTarget();
@@ -331,6 +347,8 @@ function cacheDom() {
   dom.importIntoFolder = document.getElementById('import-into-folder');
   dom.dropTarget = document.getElementById('drop-target');
   dom.account = document.getElementById('account-panel');
+  dom.offline = document.getElementById('offline-panel');
+  dom.offlineCount = document.getElementById('offline-count');
   dom.quickLayers = document.getElementById('quick-layers');
   dom.quickFolders = document.getElementById('quick-folders');
 }
@@ -543,6 +561,185 @@ function renderLayersTab() {
   }
 }
 
+/* ---------------- offline regions ---------------- */
+
+/**
+ * Whether the current basemap is vector, which changes the size estimate.
+ *
+ * A vector tile carries the geometry for every zoom above it and so runs
+ * heavier than a raster tile of the same ground — enough that using one figure
+ * for both would put the estimate out by half.
+ */
+function currentTileKind() {
+  return basemapById(state.basemapId)?.style ? 'vector' : 'raster';
+}
+
+/** The style a downloader would be pointed at for the current basemap. */
+function currentStyleURL() {
+  const basemap = basemapById(state.basemapId);
+  return basemap?.style || (basemap?.tiles || [])[0] || '';
+}
+
+function regionBoundsLabel({ west, south, east, north }) {
+  const ns = (value) => `${Math.abs(value).toFixed(2)}°${value >= 0 ? 'N' : 'S'}`;
+  const ew = (value) => `${Math.abs(value).toFixed(2)}°${value >= 0 ? 'E' : 'W'}`;
+  return `${ns(south)} ${ew(west)} → ${ns(north)} ${ew(east)}`;
+}
+
+/** Push region outlines to the map, marking the highlighted one. */
+function refreshRegionData() {
+  if (!styleReady()) return;
+  try {
+    const source = state.map.getSource(REGION_SOURCE);
+    if (!source) return;
+    const data = regionsToGeoJSON(state.offline.list());
+    for (const feature of data.features) {
+      feature.properties.highlight = feature.properties.id === state.highlightRegion;
+    }
+    source.setData(data);
+  } catch (error) {
+    console.warn('[map] could not refresh region outlines:', error.message);
+  }
+}
+
+/**
+ * The offline panel.
+ *
+ * The framing matters as much as the controls: Mapbox GL JS has no offline
+ * API, so this browser genuinely cannot download tiles and saying otherwise
+ * would be a promise broken at the worst possible moment. What it can do is let
+ * you choose the ground and see the cost honestly, and export that in the shape
+ * the mobile SDKs take — so the planning done here is not repeated on a phone.
+ */
+function renderOfflineTab() {
+  if (!dom.offline) return;
+  const regions = state.offline.list();
+  const kind = currentTileKind();
+  dom.offline.replaceChildren();
+
+  if (dom.offlineCount) {
+    dom.offlineCount.textContent = regions.length ? `${regions.length} saved` : '';
+  }
+
+  dom.offline.append(
+    el('p', {
+      class: 'hint',
+      style: 'margin:-4px 0 10px',
+      text: 'Mark the ground you want on the phone. Downloading happens in the app — a browser cannot '
+        + `store map tiles for later — so this saves the region and the zooms, capped at z${OFFLINE_MAX_ZOOM}.`,
+    }),
+    el('div', { class: 'folder-actions' }, [
+      el('button', {
+        class: 'button button-secondary button-small', type: 'button',
+        text: 'Save what is on screen',
+        onclick: () => {
+          const basemap = basemapById(state.basemapId);
+          const region = state.offline.add({
+            name: `Region ${state.offline.list().length + 1}`,
+            bounds: state.map.getBounds(),
+            minZoom: Math.max(0, Math.min(OFFLINE_MAX_ZOOM, Math.round(state.map.getZoom()) - 3)),
+            maxZoom: Math.min(OFFLINE_MAX_ZOOM, Math.max(8, Math.round(state.map.getZoom()) + 1)),
+            basemapId: basemap?.id || '',
+            basemapName: basemap?.name || '',
+          });
+          if (!region) { toast('The map view could not be read as a region.', { tone: 'error' }); return; }
+          toast(`Saved “${region.name}” from the current view.`);
+        },
+      }),
+      regions.length ? el('button', {
+        class: 'button button-ghost button-small', type: 'button',
+        text: 'Export for the app',
+        onclick: () => {
+          const manifest = buildManifest(regions, { styleURL: currentStyleURL(), kind, app: SITE.name });
+          downloadText('offline-regions.json', JSON.stringify(manifest, null, 2));
+          toast(`Exported ${regions.length} region${regions.length === 1 ? '' : 's'}.`);
+        },
+      }) : null,
+    ]),
+  );
+
+  if (!regions.length) {
+    dom.offline.append(el('p', {
+      class: 'hint',
+      text: 'No regions yet. Pan and zoom to the area you are heading for, then save it.',
+    }));
+    return;
+  }
+
+  const list = el('div', { class: 'region-list' });
+  for (const region of regions) list.append(regionRow(region, kind));
+  dom.offline.append(list);
+
+  // The Mapbox ceiling is per account across every region, so one region being
+  // comfortable says nothing — the total is the number that decides whether the
+  // download succeeds.
+  const totalTiles = state.offline.totalTiles(kind);
+  const overBudget = totalTiles > TILE_BUDGET;
+  dom.offline.append(el('p', {
+    class: overBudget ? 'region-warning' : 'source-note',
+    text: overBudget
+      ? `${totalTiles.toLocaleString()} tiles in total, over the ${TILE_BUDGET.toLocaleString()} `
+        + 'Mapbox allows per account by default. Trim a region, lower a maximum zoom, or ask Mapbox to raise the limit.'
+      : `${totalTiles.toLocaleString()} tiles in total of the ${TILE_BUDGET.toLocaleString()} Mapbox allows per account.`,
+  }));
+}
+
+/** One saved region: what it covers, what it costs, and what you can do to it. */
+function regionRow(region, kind) {
+  const measure = measureRegion(region, kind);
+
+  const zoomSelect = (which, value) => el('select', {
+    class: 'region-zoom',
+    'aria-label': which === 'minZoom' ? 'Minimum zoom' : 'Maximum zoom',
+    onchange: (event) => state.offline.update(region.id, { [which]: Number(event.target.value) }),
+  }, Array.from({ length: OFFLINE_MAX_ZOOM + 1 }, (_, zoom) => el('option', {
+    value: String(zoom), selected: zoom === value, text: `z${zoom}`,
+  })));
+
+  return el('div', {
+    class: `region${state.highlightRegion === region.id ? ' is-active' : ''}`,
+    onmouseenter: () => { state.highlightRegion = region.id; refreshRegionData(); },
+    onmouseleave: () => { state.highlightRegion = ''; refreshRegionData(); },
+  }, [
+    el('div', { class: 'region-head' }, [
+      el('input', {
+        class: 'region-name', value: region.name, 'aria-label': 'Region name',
+        onchange: (event) => state.offline.update(region.id, { name: event.target.value }),
+      }),
+      el('button', {
+        class: 'icon-button', type: 'button', title: 'Show this region',
+        html: icons.target,
+        onclick: () => {
+          const { west, south, east, north } = region.bounds;
+          state.map.fitBounds([[west, south], [east, north]], { padding: 40, duration: 600 });
+        },
+      }),
+      el('button', {
+        class: 'icon-button', type: 'button', title: 'Delete this region',
+        html: icons.trash,
+        onclick: () => {
+          state.offline.remove(region.id);
+          toast(`Removed “${region.name}”.`);
+        },
+      }),
+    ]),
+    el('div', { class: 'region-meta', text: regionBoundsLabel(region.bounds) }),
+    el('div', { class: 'region-controls' }, [
+      zoomSelect('minZoom', region.minZoom),
+      el('span', { class: 'region-to', text: 'to' }),
+      zoomSelect('maxZoom', region.maxZoom),
+      el('span', {
+        class: `region-cost${measure.overBudget ? ' is-over' : ''}`,
+        text: `${measure.tiles.toLocaleString()} tiles · ~${formatTileBytes(measure.bytes)}`,
+      }),
+    ]),
+    el('div', {
+      class: 'region-meta',
+      text: `${Math.round(measure.area).toLocaleString()} km² · ${region.basemapName || 'no basemap recorded'}`,
+    }),
+  ]);
+}
+
 /**
  * One layer row: control, name, and an info button that reveals the
  * description.
@@ -631,8 +828,11 @@ function setBasemap(id) {
     applyVisibility();
     addFolderLayers();
     refreshFolderData();
+    refreshRegionData();
   });
   renderLayersTab();
+  // The size estimate depends on whether the new basemap is vector or raster.
+  renderOfflineTab();
   writeURL();
 }
 
@@ -687,6 +887,29 @@ function addAppLayers() {
   if (!state.map.getSource('scratch-highlight')) state.map.addSource('scratch-highlight', empty);
   if (!state.map.getSource('scratch-cursor')) state.map.addSource('scratch-cursor', empty);
   if (!state.map.getSource(FOLDER_SOURCE)) state.map.addSource(FOLDER_SOURCE, empty);
+  if (!state.map.getSource(REGION_SOURCE)) state.map.addSource(REGION_SOURCE, empty);
+
+  // Region outlines sit under everything else the app draws: they are context
+  // for where your maps stop, not something to read a route through.
+  if (!state.map.getLayer('region-fill')) {
+    state.map.addLayer({
+      id: 'region-fill', type: 'fill', source: REGION_SOURCE,
+      paint: {
+        'fill-color': '#1d4ed8',
+        'fill-opacity': ['case', ['get', 'highlight'], 0.18, 0.05],
+      },
+    });
+  }
+  if (!state.map.getLayer('region-line')) {
+    state.map.addLayer({
+      id: 'region-line', type: 'line', source: REGION_SOURCE,
+      paint: {
+        'line-color': '#1d4ed8',
+        'line-width': ['case', ['get', 'highlight'], 2.6, 1.4],
+        'line-dasharray': [3, 2],
+      },
+    });
+  }
 
   if (!state.map.getLayer('scratch-highlight-line')) {
     state.map.addLayer({

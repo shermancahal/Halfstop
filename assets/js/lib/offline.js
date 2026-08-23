@@ -1,0 +1,396 @@
+/**
+ * Offline regions — defining what to take with you.
+ *
+ * The honest framing first, because it decides the whole design: Mapbox GL JS
+ * has no offline API. The browser cannot pre-download a tile pyramid and serve
+ * it back with no signal; only the native mobile SDKs can, through
+ * `OfflineRegionDefinition`. So this module does not pretend to download
+ * anything. It does the part the browser is actually good at — letting you
+ * choose the ground, see honestly what it will cost, and save that choice — and
+ * exports the result in exactly the shape the iOS and Android SDKs consume.
+ *
+ * That means the regions you define on a laptop at the kitchen table are the
+ * regions the app downloads later, rather than work to be redone on a phone.
+ *
+ * All the arithmetic here is pure and offline, which is the point: you are
+ * usually planning this the night before, on a connection you do not trust.
+ */
+
+/**
+ * The zoom ceiling for a saved region.
+ *
+ * Not arbitrary. Each zoom level past the last quadruples the tile count, and
+ * z14 is roughly where a topo still shows the individual switchbacks and creek
+ * crossings you navigate by. Going to z16 for the same ground costs sixteen
+ * times the tiles to add detail you will not read on a phone screen while
+ * standing in weather.
+ */
+export const MAX_ZOOM = 14;
+
+/**
+ * Mapbox's default offline ceiling per user, across all their regions.
+ *
+ * 6,000 tiles is what a Mapbox account allows before downloads start failing,
+ * and it is raised only by asking them. Worth showing before a download is
+ * queued rather than after it stops halfway up a mountain.
+ */
+export const TILE_BUDGET = 6000;
+
+/**
+ * Average bytes per tile, used for the size estimate.
+ *
+ * Deliberately a single documented number rather than a false precision: real
+ * tiles run from a few hundred bytes over empty desert to 100 KB over a city,
+ * and no estimate made without fetching them can be better than an order of
+ * magnitude. Vector tiles carry geometry for every zoom above them, so they run
+ * heavier than a raster tile of the same ground.
+ */
+const BYTES_PER_TILE = { vector: 45000, raster: 28000 };
+
+const STORAGE_KEY = 'ab-maps-offline-v1';
+const NAME_LIMIT = 80;
+
+let idCounter = 0;
+function makeId() {
+  idCounter += 1;
+  return `region_${Date.now().toString(36)}_${idCounter.toString(36)}`;
+}
+
+/* ------------------------------------------------------------------ bounds */
+
+/**
+ * Coerce anything bounds-shaped into `{west, south, east, north}`.
+ *
+ * Accepts the array form Mapbox uses, the object form this module stores, and
+ * a live `LngLatBounds` — the map hands back the last one and the URL carries
+ * the first, so normalising once here keeps that mess out of everything else.
+ */
+export function normalizeBounds(input) {
+  if (!input) return null;
+
+  let west; let south; let east; let north;
+
+  if (typeof input.getWest === 'function') {
+    west = input.getWest(); south = input.getSouth();
+    east = input.getEast(); north = input.getNorth();
+  } else if (Array.isArray(input)) {
+    const flat = input.flat();
+    if (flat.length !== 4) return null;
+    [west, south, east, north] = flat;
+  } else {
+    ({ west, south, east, north } = input);
+  }
+
+  if (![west, south, east, north].every(Number.isFinite)) return null;
+
+  // Web Mercator is undefined at the poles and the tile scheme stops at ±85.05.
+  south = Math.max(-85.0511, Math.min(85.0511, south));
+  north = Math.max(-85.0511, Math.min(85.0511, north));
+  if (south > north) [south, north] = [north, south];
+
+  return { west, south, east, north };
+}
+
+/** Does this box cross the antimeridian? Real in Alaska and the Aleutians. */
+export function crossesAntimeridian({ west, east }) {
+  return west > east;
+}
+
+/**
+ * Split an antimeridian-crossing box into ordinary west-to-east boxes.
+ *
+ * Everything downstream can then assume west <= east, rather than each caller
+ * rediscovering that a region over Attu counts negative tiles.
+ */
+function spans(bounds) {
+  if (!crossesAntimeridian(bounds)) return [bounds];
+  return [
+    { ...bounds, west: bounds.west, east: 180 },
+    { ...bounds, west: -180, east: bounds.east },
+  ];
+}
+
+/* ------------------------------------------------------------------ tiles */
+
+function lonToX(lon, zoom) {
+  return Math.floor(((lon + 180) / 360) * 2 ** zoom);
+}
+
+function latToY(lat, zoom) {
+  const rad = (lat * Math.PI) / 180;
+  const y = (1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2;
+  return Math.floor(y * 2 ** zoom);
+}
+
+/**
+ * The tile x/y range covering a box at one zoom.
+ *
+ * y runs southward in the XYZ scheme, so the north edge produces the smaller
+ * index — the inversion that quietly makes every hand-rolled tile counter
+ * return zero the first time.
+ */
+export function tileRange(bounds, zoom) {
+  const box = normalizeBounds(bounds);
+  if (!box) return null;
+
+  const limit = 2 ** zoom - 1;
+  const clamp = (value) => Math.max(0, Math.min(limit, value));
+
+  return {
+    minX: clamp(lonToX(box.west, zoom)),
+    maxX: clamp(lonToX(box.east, zoom)),
+    minY: clamp(latToY(box.north, zoom)),
+    maxY: clamp(latToY(box.south, zoom)),
+  };
+}
+
+/** Tiles needed for a box across an inclusive zoom range. */
+export function countTiles(bounds, minZoom = 0, maxZoom = MAX_ZOOM) {
+  const box = normalizeBounds(bounds);
+  if (!box) return 0;
+
+  const low = Math.max(0, Math.round(minZoom));
+  const high = Math.min(MAX_ZOOM, Math.round(maxZoom));
+  if (high < low) return 0;
+
+  let total = 0;
+  for (const part of spans(box)) {
+    for (let zoom = low; zoom <= high; zoom += 1) {
+      const range = tileRange(part, zoom);
+      total += (range.maxX - range.minX + 1) * (range.maxY - range.minY + 1);
+    }
+  }
+  return total;
+}
+
+/** Rough download size in bytes. See BYTES_PER_TILE for how rough. */
+export function estimateBytes(tiles, kind = 'raster') {
+  return tiles * (BYTES_PER_TILE[kind] || BYTES_PER_TILE.raster);
+}
+
+export function formatBytes(bytes) {
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(0)} KB`;
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(bytes < 10 * 1024 ** 2 ? 1 : 0)} MB`;
+  return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+}
+
+/** Ground area of a box in square kilometres, corrected for latitude. */
+export function areaKm2(bounds) {
+  const box = normalizeBounds(bounds);
+  if (!box) return 0;
+
+  let total = 0;
+  for (const part of spans(box)) {
+    const meanLat = ((part.north + part.south) / 2) * (Math.PI / 180);
+    const height = (part.north - part.south) * 111.32;
+    const width = (part.east - part.west) * 111.32 * Math.cos(meanLat);
+    total += Math.abs(height * width);
+  }
+  return total;
+}
+
+/* ------------------------------------------------------------------ regions */
+
+function clampName(value, fallback) {
+  const text = String(value ?? '').replace(/\s+/g, ' ').trim();
+  return text ? text.slice(0, NAME_LIMIT) : fallback;
+}
+
+/**
+ * A saved region: the ground, the zooms, and which map it is for.
+ *
+ * The basemap matters because a region is a pyramid of one map's tiles. Saving
+ * "the Cherokee at z10–14" without saying which map means nothing to the
+ * downloader, so the region carries the basemap it was defined against.
+ */
+export function createRegion({ name, bounds, minZoom = 8, maxZoom = 12, basemapId = '', basemapName = '' } = {}) {
+  const box = normalizeBounds(bounds);
+  if (!box) return null;
+
+  const low = Math.max(0, Math.min(MAX_ZOOM, Math.round(minZoom)));
+  const high = Math.max(low, Math.min(MAX_ZOOM, Math.round(maxZoom)));
+
+  return {
+    id: makeId(),
+    name: clampName(name, 'Untitled region'),
+    bounds: box,
+    minZoom: low,
+    maxZoom: high,
+    basemapId,
+    basemapName,
+    created: Date.now(),
+    updatedAt: Date.now(),
+  };
+}
+
+/**
+ * What this region costs and whether it is over budget.
+ *
+ * Returned as data rather than rendered text so the same numbers drive the
+ * panel, the warning and the export without being computed three ways.
+ */
+export function measureRegion(region, kind = 'raster') {
+  const tiles = countTiles(region.bounds, region.minZoom, region.maxZoom);
+  return {
+    tiles,
+    bytes: estimateBytes(tiles, kind),
+    area: areaKm2(region.bounds),
+    overBudget: tiles > TILE_BUDGET,
+  };
+}
+
+/**
+ * The region in the shape Mapbox's mobile SDKs actually take.
+ *
+ * `OfflineTilePyramidRegionDefinition` on Android and
+ * `MGLTilePyramidOfflineRegion` on iOS both want exactly these five fields, so
+ * an app can hand this straight to the SDK with no translation layer — which is
+ * the whole reason for defining regions in a browser that cannot download them.
+ */
+export function regionDefinition(region, { styleURL = '', pixelRatio = 2 } = {}) {
+  const { west, south, east, north } = region.bounds;
+  return {
+    styleURL,
+    bounds: { sw: [west, south], ne: [east, north] },
+    minZoom: region.minZoom,
+    maxZoom: region.maxZoom,
+    pixelRatio,
+  };
+}
+
+/**
+ * The export file: regions, definitions, and what they will cost.
+ *
+ * Versioned, because the app that reads this does not exist yet and will want
+ * to know what it is looking at.
+ */
+export function buildManifest(regions, { styleURL = '', pixelRatio = 2, kind = 'raster', app = 'American Byways GPS' } = {}) {
+  return {
+    format: 'american-byways-offline',
+    version: 1,
+    app,
+    exported: new Date().toISOString(),
+    tileBudget: TILE_BUDGET,
+    maxZoom: MAX_ZOOM,
+    regions: regions.map((region) => {
+      const measure = measureRegion(region, kind);
+      return {
+        name: region.name,
+        basemap: region.basemapName || region.basemapId,
+        bounds: region.bounds,
+        minZoom: region.minZoom,
+        maxZoom: region.maxZoom,
+        estimate: { tiles: measure.tiles, bytes: measure.bytes, areaKm2: Math.round(measure.area) },
+        definition: regionDefinition(region, { styleURL, pixelRatio }),
+      };
+    }),
+  };
+}
+
+/** A GeoJSON outline of every region, for drawing them on the map. */
+export function regionsToGeoJSON(regions) {
+  return {
+    type: 'FeatureCollection',
+    features: regions.flatMap((region) => spans(region.bounds).map((box) => ({
+      type: 'Feature',
+      properties: { id: region.id, name: region.name },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [[
+          [box.west, box.south], [box.east, box.south],
+          [box.east, box.north], [box.west, box.north],
+          [box.west, box.south],
+        ]],
+      },
+    }))),
+  };
+}
+
+/* ------------------------------------------------------------------ store */
+
+/**
+ * Saved regions, persisted per browser.
+ *
+ * Same shape as the folder store on purpose — list/create/remove, a 'change'
+ * event, and localStorage underneath — so the panel that renders it works the
+ * way the rest of the app already does.
+ */
+export class OfflineStore extends EventTarget {
+  constructor({ storage = globalThis.localStorage } = {}) {
+    super();
+    this.storage = storage;
+    this.regions = this.load();
+  }
+
+  load() {
+    try {
+      const raw = this.storage?.getItem(STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .map((region) => (normalizeBounds(region?.bounds) ? { ...region, bounds: normalizeBounds(region.bounds) } : null))
+        .filter(Boolean);
+    } catch {
+      // A corrupt entry should cost you your saved regions, not the whole app.
+      return [];
+    }
+  }
+
+  save() {
+    try {
+      this.storage?.setItem(STORAGE_KEY, JSON.stringify(this.regions));
+    } catch (error) {
+      console.warn('[offline] could not save regions:', error.message);
+    }
+  }
+
+  emit() {
+    this.save();
+    this.dispatchEvent(new CustomEvent('change'));
+  }
+
+  list() {
+    return this.regions.slice();
+  }
+
+  get(id) {
+    return this.regions.find((region) => region.id === id) || null;
+  }
+
+  add(input) {
+    const region = createRegion(input);
+    if (!region) return null;
+    this.regions.push(region);
+    this.emit();
+    return region;
+  }
+
+  update(id, changes) {
+    const region = this.get(id);
+    if (!region) return null;
+
+    if (changes.name !== undefined) region.name = clampName(changes.name, region.name);
+    if (changes.bounds !== undefined) region.bounds = normalizeBounds(changes.bounds) || region.bounds;
+    if (changes.minZoom !== undefined) region.minZoom = Math.max(0, Math.min(MAX_ZOOM, Math.round(changes.minZoom)));
+    if (changes.maxZoom !== undefined) region.maxZoom = Math.max(0, Math.min(MAX_ZOOM, Math.round(changes.maxZoom)));
+    if (region.maxZoom < region.minZoom) region.maxZoom = region.minZoom;
+
+    region.updatedAt = Date.now();
+    this.emit();
+    return region;
+  }
+
+  remove(id) {
+    const before = this.regions.length;
+    this.regions = this.regions.filter((region) => region.id !== id);
+    if (this.regions.length === before) return false;
+    this.emit();
+    return true;
+  }
+
+  /** Total tiles across every saved region — what Mapbox's ceiling applies to. */
+  totalTiles(kind = 'raster') {
+    return this.regions.reduce((sum, region) => sum + measureRegion(region, kind).tiles, 0);
+  }
+}

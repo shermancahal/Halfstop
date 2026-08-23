@@ -653,3 +653,55 @@ html, body { height: 100%; overflow: hidden; }
 .note-head .icon-button { width: 22px; height: 22px; }
 .note-head .icon-button svg { width: 12px; height: 12px; }
 .note-text { margin: 2px 0 0; font-size: .85rem; line-height: 1.45; white-space: pre-line; }
+
+/* ==========================================================================
+   Offline regions
+   ========================================================================== */
+
+.region-list { display: grid; gap: 8px; margin: 4px 0 10px; }
+
+.region {
+  padding: 9px 10px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--line);
+}
+.region.is-active { border-color: var(--line-strong); background: var(--paper-2); }
+
+.region-head { display: flex; align-items: center; gap: 4px; }
+.region-name {
+  flex: 1; min-width: 0; padding: 3px 5px; font: inherit; font-size: .88rem; font-weight: 550;
+  color: var(--ink); background: transparent; border: 1px solid transparent; border-radius: 4px;
+}
+.region-name:hover { border-color: var(--line); }
+.region-name:focus { border-color: var(--line-strong); background: var(--surface); outline: none; }
+.region-head .icon-button { width: 24px; height: 24px; }
+.region-head .icon-button svg { width: 13px; height: 13px; }
+
+.region-meta {
+  margin-top: 3px; font-size: .73rem; color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.region-controls { display: flex; align-items: center; gap: 5px; margin-top: 7px; flex-wrap: wrap; }
+/* The global select rule sets a 150px minimum, which here would push the cost
+   onto its own line and break the side-by-side reading the panel depends on. */
+.region-zoom {
+  flex: none; min-width: 0; width: auto;
+  padding: 2px 4px; font: inherit; font-size: .76rem;
+  color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 4px;
+}
+.region-to { font-size: .73rem; color: var(--ink-3); }
+
+/* The cost sits beside the zooms it comes from, so raising one visibly moves
+   the other — which is the whole argument for the z14 cap. */
+.region-cost {
+  margin-left: auto; font-size: .76rem; color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.region-cost.is-over { color: var(--clay-2); font-weight: 600; }
+
+.region-warning {
+  margin: 9px 0 0; padding: 8px 10px; border-radius: var(--radius-sm);
+  font-size: .76rem; line-height: 1.45;
+  color: var(--clay-2); background: var(--clay-soft);
+}
