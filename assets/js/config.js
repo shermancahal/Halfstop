@@ -249,15 +249,52 @@ export const OVERLAYS = [
   {
     id: 'public-lands',
     name: 'Public lands',
-    description: 'Federal and state land ownership (PAD-US).',
-    // ArcGIS dynamic map services are requested by bounding box rather than by
-    // tile index; both GL libraries substitute {bbox-epsg-3857} for a WMS-style
-    // request. `unverified` shows a caveat in the layer picker.
-    tiles: ['https://carto.nationalmap.gov/arcgis/rest/services/govunits/MapServer/export'
-      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image&layers=show:19,20,21,22,23'],
+    description: 'Who manages this land — BLM, USFS, NPS, state, private.',
+    // BLM's cached Surface Management Agency layer: a proper tile service, not
+    // a per-request export, so it is fast and behaves like any other basemap.
+    tiles: ['https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_Cached_without_PriUnk/MapServer/tile/{z}/{y}/{x}'],
     tileSize: 256,
     maxzoom: 16,
     opacity: 0.45,
+    enabled: false,
+    unverified: true,
+    attribution: 'Surface management © <a href="https://navigator.blm.gov/">BLM</a>',
+  },
+  {
+    id: 'blm-recreation',
+    name: 'BLM recreation sites',
+    description: 'Campgrounds, trailheads and facilities on BLM land.',
+    tiles: ['https://gis.blm.gov/arcgis/rest/services/recreation/BLM_Natl_Recreation_Site_Points/MapServer/export'
+      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'],
+    tileSize: 256,
+    maxzoom: 16,
+    opacity: 0.95,
+    enabled: false,
+    unverified: true,
+    attribution: 'Recreation sites © <a href="https://navigator.blm.gov/">BLM</a>',
+  },
+  {
+    id: 'usgs-contours',
+    name: 'Contours',
+    description: 'USGS contour lines — drape over imagery for relief.',
+    tiles: ['https://carto.nationalmap.gov/arcgis/rest/services/contours/MapServer/export'
+      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'],
+    tileSize: 256,
+    maxzoom: 16,
+    opacity: 0.75,
+    enabled: false,
+    unverified: true,
+    attribution: USGS_ATTRIBUTION,
+  },
+  {
+    id: 'usgs-transport',
+    name: 'Roads & trails (USGS)',
+    description: 'USGS transportation network, including forest routes.',
+    tiles: ['https://carto.nationalmap.gov/arcgis/rest/services/transportation/MapServer/export'
+      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'],
+    tileSize: 256,
+    maxzoom: 16,
+    opacity: 0.85,
     enabled: false,
     unverified: true,
     attribution: USGS_ATTRIBUTION,
