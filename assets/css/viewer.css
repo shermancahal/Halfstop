@@ -577,3 +577,79 @@ html, body { height: 100%; overflow: hidden; }
   .detail-line { grid-template-columns: 72px 1fr auto; }
   .waypoint-row { padding: 12px 9px; }
 }
+
+/* ==========================================================================
+   Weather, land manager and field notes
+   ========================================================================== */
+
+.source-note { margin: 9px 0 0; font-size: .72rem; color: var(--ink-3); }
+
+/* Headline card: condition sets the wash behind it, so a glance reads the
+   weather before any of the text does. */
+.weather-now {
+  display: flex; align-items: center; gap: 13px;
+  padding: 13px 14px; border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: linear-gradient(135deg, var(--wash-a, var(--paper-2)), var(--wash-b, var(--surface-2)));
+}
+.weather-now.is-clear   { --wash-a: #fdf0d5; --wash-b: #fbe3b3; }
+.weather-now.is-partly  { --wash-a: #f4eee2; --wash-b: #e6ecf2; }
+.weather-now.is-cloud   { --wash-a: #eceef1; --wash-b: #dfe3e8; }
+.weather-now.is-rain    { --wash-a: #e2ebf3; --wash-b: #cddced; }
+.weather-now.is-thunder { --wash-a: #e6e3ef; --wash-b: #d2cde3; }
+.weather-now.is-snow    { --wash-a: #eef3f7; --wash-b: #dfe9f1; }
+.weather-now.is-fog     { --wash-a: #ecedee; --wash-b: #e0e2e4; }
+.weather-now.is-wind    { --wash-a: #e9f0ec; --wash-b: #d8e5dd; }
+
+/* Dark theme: the washes above are far too bright, so mute them heavily
+   rather than restating twelve gradients. */
+:root[data-theme="dark"] .weather-now,
+:root:not([data-theme="light"]) .weather-now {
+  background: var(--surface-2);
+  border-color: var(--line);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .weather-now { background: var(--surface-2); }
+}
+
+.weather-glyph { flex: none; width: 42px; height: 42px; color: var(--ink-2); }
+.weather-glyph svg { width: 100%; height: 100%; }
+.weather-now-text { min-width: 0; }
+.weather-when {
+  font-size: .7rem; font-weight: 650; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.weather-temp { font-family: var(--font-serif); font-size: 1.7rem; line-height: 1.1; color: var(--ink); }
+.weather-short { font-size: .82rem; color: var(--ink-2); margin-top: 2px; }
+
+.weather-strip {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+  margin: 9px 0 11px;
+}
+.weather-chip {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 8px 4px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--line);
+}
+.weather-chip-when {
+  font-size: .63rem; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--ink-3); text-align: center; line-height: 1.2;
+}
+.weather-chip-glyph { width: 20px; height: 20px; color: var(--ink-2); }
+.weather-chip-glyph svg { width: 100%; height: 100%; }
+.weather-chip-temp { font-size: .88rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* Field notes */
+.note-list { display: grid; gap: 7px; margin-bottom: 10px; }
+.note {
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border-left: 2px solid var(--line-strong);
+}
+.note-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.note-date {
+  font-size: .7rem; font-weight: 600; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.note-head .icon-button { width: 22px; height: 22px; }
+.note-head .icon-button svg { width: 12px; height: 12px; }
+.note-text { margin: 2px 0 0; font-size: .85rem; line-height: 1.45; white-space: pre-line; }

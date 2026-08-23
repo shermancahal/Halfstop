@@ -439,6 +439,28 @@ export const OVERLAYS = [
   },
 ];
 
+/**
+ * Services asked "who manages the land here" when a pin is selected.
+ *
+ * Tried in order; the first that returns a feature wins. Any ArcGIS
+ * FeatureServer or MapServer layer works — append `/query` is added for you, so
+ * give the URL down to the layer index (…/FeatureServer/0).
+ *
+ * None of these could be reached from the sandbox this was built in. If the
+ * Details panel reports a service error, open the URL in a browser: agency GIS
+ * endpoints move, and the fix is almost always a new URL here.
+ */
+export const LAND_LOOKUPS = [
+  {
+    name: 'PAD-US',
+    url: 'https://services.arcgis.com/v01gqwM5QqNysAAi/ArcGIS/rest/services/PADUS4_0Fee/FeatureServer/0',
+  },
+  {
+    name: 'BLM surface management',
+    url: 'https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_LimitedScale/MapServer/0',
+  },
+];
+
 /** Colour ramp for tracks that carry no colour of their own. */
 export const TRACK_COLORS = [
   '#c2410c', '#1d4ed8', '#15803d', '#a21caf', '#0f766e',
@@ -447,5 +469,5 @@ export const TRACK_COLORS = [
 
 export default {
   SITE, MAPBOX_TOKEN, SUPABASE_URL, SUPABASE_KEY, MAP_ENGINE, DEFAULT_VIEW, DEFAULT_UNITS,
-  BASEMAPS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN, OVERLAYS, TRACK_COLORS,
+  BASEMAPS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN, OVERLAYS, TRACK_COLORS, LAND_LOOKUPS,
 };

@@ -31,6 +31,7 @@ import { Account, isConfigured as accountsAvailable } from './lib/account.js';
 import {
   formatDD, formatDMS, formatDDM, toUTM, distanceBearing, compassPoint, sunTimes, reverseGeocode,
 } from './lib/place.js';
+import { landManager, forecast, weatherClass } from './lib/lookup.js';
 import { describeSync } from './lib/sync.js';
 import {
   putPhoto, photoURL, deletePhoto, pruneUnreferenced, fetchLinkedPhoto, formatBytes, PHOTO_TYPES,
@@ -1424,6 +1425,10 @@ function renderPinDetails(folder, item) {
       : el('p', { class: 'hint', style: 'margin:0', text: sun.note }),
   ]));
 
+  dom.details.append(landSection([lon, lat]));
+  dom.details.append(weatherSection([lon, lat]));
+  dom.details.append(notesSection(folder, item));
+
   /* place — network, so appended when it arrives */
   const placeSection = el('div', { class: 'panel-section' }, [
     el('h2', { class: 'panel-title', text: 'Nearest place' }),
@@ -1443,6 +1448,175 @@ function renderPinDetails(folder, item) {
     if (!rows.length) { placeSection.remove(); return; }
     placeBody.replaceWith(el('div', {}, rows));
   });
+}
+
+/* ---------------- details: land, weather, notes ---------------- */
+
+/** Small helper for a section that fills in once a network call returns. */
+function pendingSection(title, run) {
+  const section = el('div', { class: 'panel-section' }, [
+    el('h2', { class: 'panel-title', text: title }),
+  ]);
+  const body = el('div', {}, [el('p', { class: 'hint', style: 'margin:0', text: 'Looking up…' })]);
+  section.append(body);
+  run(body, section);
+  return section;
+}
+
+/** Who manages the land under the pin. */
+function landSection(position) {
+  return pendingSection('Land manager', async (body, section) => {
+    const result = await landManager(position);
+
+    if (!result.ok) {
+      body.replaceChildren(el('p', {
+        class: 'hint', style: 'margin:0',
+        text: `Could not determine this — ${result.reason}.`,
+      }));
+      return;
+    }
+
+    const rows = [];
+    if (result.agency) rows.push(detailRow('Agency', result.agency, { copy: result.agency }));
+    if (result.unit) rows.push(detailRow('Unit', result.unit, { copy: result.unit }));
+    if (result.access) rows.push(detailRow('Access', result.access));
+    if (!rows.length) { section.remove(); return; }
+
+    rows.push(el('p', { class: 'source-note', text: `Source: ${result.source}` }));
+    body.replaceChildren(...rows);
+  });
+}
+
+/**
+ * Compact forecast strip.
+ *
+ * The first period gets a headline card; the next few are chips. The NWS splits
+ * its periods into day and night, so "3 days" is really six entries — showing
+ * them as a row keeps the panel short without dropping the overnight lows,
+ * which are the ones that decide whether you are warm enough.
+ */
+function weatherSection(position) {
+  return pendingSection('Weather', async (body, section) => {
+    const result = await forecast(position);
+
+    if (!result.ok) {
+      body.replaceChildren(el('p', { class: 'hint', style: 'margin:0', text: `No forecast — ${result.reason}.` }));
+      return;
+    }
+
+    const [now, ...rest] = result.periods;
+    const card = el('div', { class: `weather-now is-${weatherClass(now.short)}` }, [
+      el('div', { class: 'weather-glyph', html: weatherGlyph(weatherClass(now.short)) }),
+      el('div', { class: 'weather-now-text' }, [
+        el('div', { class: 'weather-when', text: now.name }),
+        el('div', { class: 'weather-temp', text: `${now.temperature}°${now.unit}` }),
+        el('div', { class: 'weather-short', text: now.short }),
+      ]),
+    ]);
+
+    const strip = el('div', { class: 'weather-strip' }, rest.slice(0, 4).map((period) => el('div', {
+      class: 'weather-chip', title: period.detailed,
+    }, [
+      el('span', { class: 'weather-chip-when', text: period.name.replace(/ (Night|Afternoon)$/, ' $1') }),
+      el('span', { class: 'weather-chip-glyph', html: weatherGlyph(weatherClass(period.short)) }),
+      el('span', { class: 'weather-chip-temp', text: `${period.temperature}°` }),
+    ])));
+
+    const facts = [];
+    if (now.wind) facts.push(detailRow('Wind', now.wind));
+    if (Number.isFinite(now.precipitation)) facts.push(detailRow('Rain', `${now.precipitation}%`));
+
+    body.replaceChildren(
+      card,
+      strip,
+      ...facts,
+      el('p', { class: 'source-note', text: result.place ? `NWS · ${result.place}` : 'National Weather Service' }),
+    );
+  });
+}
+
+/** Weather glyphs, drawn inline so the forecast works with no images to load. */
+function weatherGlyph(kind) {
+  const wrap = (paths) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+  const cloud = '<path d="M7 18h10a4 4 0 0 0 .5-8 6 6 0 0 0-11.4 1.6A3.5 3.5 0 0 0 7 18Z"/>';
+  switch (kind) {
+    case 'clear': return wrap('<circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2M12 19.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2.5 12h2M19.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>');
+    case 'partly': return wrap('<circle cx="8.5" cy="8" r="3.2"/><path d="M8.5 2.6v1.6M3.6 8H2M4.8 4.3 3.7 3.2M13.4 8H15"/>' + cloud);
+    case 'rain': return wrap(cloud + '<path d="M9 21v-1.5M13 21.5v-2M17 21v-1.5"/>');
+    case 'thunder': return wrap(cloud + '<path d="M13 19.5h-2.5l3-4.5H10"/>');
+    case 'snow': return wrap(cloud + '<path d="M9 20.5h.01M13 21h.01M17 20.5h.01"/>');
+    case 'fog': return wrap(cloud + '<path d="M5 21h6M14 21h5"/>');
+    case 'wind': return wrap('<path d="M3 8h11a3 3 0 1 0-3-3"/><path d="M3 13h15a3 3 0 1 1-3 3"/><path d="M3 18h8"/>');
+    default: return wrap(cloud);
+  }
+}
+
+/**
+ * Dated field notes, newest first.
+ *
+ * Append-only: "gate locked 3/24" and "gate open 9/25" are both true, and
+ * letting the second overwrite the first would lose the fact that it changed —
+ * which is exactly the thing worth knowing next time.
+ */
+function notesSection(folder, item) {
+  const section = el('div', { class: 'panel-section' });
+  const notes = item.feature.properties.log || [];
+
+  section.append(el('h2', { class: 'panel-title' }, [
+    el('span', { text: 'Field notes' }),
+    notes.length ? el('span', { class: 'count', text: String(notes.length) }) : null,
+  ]));
+
+  const list = el('div', { class: 'note-list' });
+
+  const paint = () => {
+    const current = [...(item.feature.properties.log || [])].sort((a, b) => b.at - a.at);
+    list.replaceChildren();
+    if (!current.length) {
+      list.append(el('p', {
+        class: 'hint', style: 'margin:0 0 9px',
+        text: 'Nothing recorded yet. Notes are dated and kept, so you can see how a place changes.',
+      }));
+      return;
+    }
+    for (const note of current) {
+      list.append(el('div', { class: 'note' }, [
+        el('div', { class: 'note-head' }, [
+          el('span', { class: 'note-date', text: new Date(note.at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) }),
+          el('button', {
+            class: 'icon-button', type: 'button', title: 'Delete this note',
+            'aria-label': 'Delete this note', html: icons.close,
+            onclick: () => { state.folders.removeNote(folder.id, item.id, note.id); paint(); },
+          }),
+        ]),
+        el('p', { class: 'note-text', text: note.text }),
+      ]));
+    }
+  };
+
+  const field = el('textarea', {
+    class: 'style-desc', rows: '2', 'aria-label': 'New field note',
+    placeholder: 'Gate locked · creek up · good camp on the left…',
+  });
+  const add = () => {
+    const text = field.value.trim();
+    if (!text) return;
+    state.folders.addNote(folder.id, item.id, text);
+    field.value = '';
+    paint();
+  };
+
+  section.append(list, field, el('div', { class: 'picker-row', style: 'margin-top:7px' }, [
+    el('button', { class: 'button button-secondary button-small', type: 'button', text: 'Add note', onclick: add }),
+  ]));
+
+  // Ctrl/Cmd+Enter to file a note without reaching for the button.
+  field.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); add(); }
+  });
+
+  paint();
+  return section;
 }
 
 /** Stats for a loaded file: distance, elevation profile, feature lists. */

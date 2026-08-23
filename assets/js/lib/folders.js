@@ -59,6 +59,9 @@ function packFeature(feature, { keepTimes = false } = {}) {
       // Photo ids only — the images themselves live in IndexedDB (lib/photos.js),
       // because a single phone photo would exhaust the localStorage budget.
       photos: Array.isArray(props.photos) ? props.photos.slice(0, 24) : [],
+      // Append-only field notes. What makes a waypoint worth more in year three
+      // than year one is the record of what it was like each time you were here.
+      log: Array.isArray(props.log) ? props.log.slice(-200) : [],
       time: Number.isFinite(props.time) ? props.time : null,
       sourceName: props.sourceName || props.source || '',
       distance_m: Number.isFinite(props.distance_m) ? props.distance_m : null,
@@ -352,6 +355,35 @@ export class FolderStore {
     const text = String(description ?? '').trim().slice(0, 4000);
     if (item.feature.properties.description === text) return false;
     item.feature.properties.description = text;
+    this.emit(folderId);
+    return true;
+  }
+
+  /**
+   * Append a dated note to a pin.
+   *
+   * Append-only on purpose: "gate locked 3/24" and "gate open 9/25" are both
+   * true, and overwriting the first loses the fact that it changed.
+   */
+  addNote(folderId, itemId, text, at = Date.now()) {
+    const folder = this.get(folderId);
+    const item = folder?.items.find((entry) => entry.id === itemId);
+    const body = String(text ?? '').trim().slice(0, 2000);
+    if (!item || !body) return null;
+
+    const note = { id: makeId('n'), at, text: body };
+    item.feature.properties.log = [...(item.feature.properties.log || []), note].slice(-200);
+    this.emit(folderId);
+    return note;
+  }
+
+  removeNote(folderId, itemId, noteId) {
+    const folder = this.get(folderId);
+    const item = folder?.items.find((entry) => entry.id === itemId);
+    if (!item) return false;
+    const before = (item.feature.properties.log || []).length;
+    item.feature.properties.log = (item.feature.properties.log || []).filter((note) => note.id !== noteId);
+    if (item.feature.properties.log.length === before) return false;
     this.emit(folderId);
     return true;
   }
