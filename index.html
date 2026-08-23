@@ -28,7 +28,7 @@
         <a href="./" class="is-active">Map</a>
         <a href="library.html">Library</a>
       </nav>
-      <button class="button button-ghost button-small" id="units-toggle" type="button" title="Switch units">mi / ft</button>
+      <button class="button button-ghost button-small" id="units-toggle" type="button" title="Switch units">mi&nbsp;/&nbsp;ft</button>
       <button class="icon-button" id="fit-button" type="button" title="Zoom to all loaded maps" aria-label="Zoom to all loaded maps">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V5a2 2 0 0 1 2-2h3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2h-3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/></svg>
       </button>
@@ -45,6 +45,9 @@
   <div class="app-body">
 
     <aside class="panel" id="panel" aria-label="Map controls">
+      <button class="panel-close" id="panel-close" type="button" aria-label="Close the panel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
       <div class="panel-tabs" role="tablist">
         <button class="panel-tab" role="tab" data-tab="layers" aria-selected="false" aria-controls="tab-layers" type="button">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
@@ -68,11 +71,18 @@
 
         <div id="tab-layers" role="tabpanel" hidden>
           <div class="panel-section">
-            <h2 class="panel-title">Basemap</h2>
+            <h2 class="panel-title">
+              <span>Map</span>
+              <span class="count">pick one</span>
+            </h2>
             <div id="basemap-list"></div>
           </div>
           <div class="panel-section">
-            <h2 class="panel-title">Overlays</h2>
+            <h2 class="panel-title">
+              <span>Add on top</span>
+              <span class="count" id="overlay-count"></span>
+            </h2>
+            <p class="hint" style="margin:-4px 0 10px">Overlays stack over the map above. Each has its own opacity.</p>
             <div id="overlay-list"></div>
           </div>
         </div>

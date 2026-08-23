@@ -69,6 +69,9 @@ html, body { height: 100%; overflow: hidden; }
 .layer-group-label:first-child { margin-top: 0; }
 
 .opacity-row { display: flex; align-items: center; gap: 9px; padding: 2px 9px 8px 34px; }
+/* Without this the explicit display beats [hidden], so every overlay shows a
+   slider whether or not it is switched on. */
+.opacity-row[hidden] { display: none; }
 .opacity-row input[type="range"] { flex: 1; accent-color: var(--clay); height: 3px; }
 .opacity-row output { font-size: .74rem; color: var(--ink-3); width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
 
@@ -187,7 +190,15 @@ html, body { height: 100%; overflow: hidden; }
     box-shadow: var(--shadow-lg);
     transform: translateX(0); transition: transform .18s ease;
   }
-  .panel[hidden] { display: flex; transform: translateX(-102%); }
+  /* [hidden] is overridden above so the panel can slide rather than vanish.
+     That leaves it rendered, so visibility:hidden is what actually removes it
+     from hit-testing, the tab order and the accessibility tree — without it a
+     closed panel still catches taps and keyboard focus off-screen. It is
+     delayed so the slide-out animation still plays. */
+  .panel[hidden] {
+    display: flex; transform: translateX(-102%); visibility: hidden;
+    transition: transform .18s ease, visibility 0s .18s;
+  }
   .panel-toggle { display: inline-flex; }
 }
 @media (min-width: 821px) {
@@ -377,3 +388,88 @@ html, body { height: 100%; overflow: hidden; }
 }
 :root[data-theme="dark"] .layer-badge.is-broken,
 :root:not([data-theme="light"]) .layer-badge.is-broken { color: #f0806f; }
+
+/* ==========================================================================
+   Compact layer rows — descriptions fold away behind (i)
+   ========================================================================== */
+
+.layer-row {
+  display: flex; align-items: center; gap: 4px;
+  border-radius: var(--radius); border: 1px solid transparent;
+}
+.layer-row:hover { background: var(--paper-2); }
+.layer-row.is-selected { background: var(--clay-soft); border-color: color-mix(in srgb, var(--clay) 28%, transparent); }
+
+.layer-row .layer-option {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px;
+  padding: 9px; margin: 0; border: 0; background: none; cursor: pointer; border-radius: var(--radius);
+}
+.layer-row .layer-option:hover { background: none; }
+.layer-option-name { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; min-width: 0; }
+.layer-option-label { font-size: .92rem; font-weight: 500; }
+
+.layer-info {
+  flex: none; width: 28px; height: 28px; margin-right: 5px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: 0; border-radius: 50%;
+  color: var(--ink-3); cursor: pointer;
+}
+.layer-info svg { width: 15px; height: 15px; }
+.layer-info:hover { background: var(--paper-3); color: var(--ink); }
+.layer-info.is-open { background: var(--clay-soft); color: var(--clay); }
+
+.layer-desc {
+  margin: -2px 9px 8px 38px; padding: 8px 11px;
+  font-size: .81rem; line-height: 1.45; color: var(--ink-2);
+  background: var(--surface-2); border-left: 2px solid var(--line-strong);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+/* ==========================================================================
+   Mobile: the panel is an overlay, so it must get out of the way
+   ========================================================================== */
+
+.panel-close { display: none; }
+
+@media (max-width: 820px) {
+  /* The floating buttons and the hamburger both sit under the open panel —
+     the hamburger was landing on top of the "Layers" tab label. The panel has
+     its own close button, so neither is needed while it is open. */
+  .app.is-panel-open .map-quick-controls,
+  .app.is-panel-open .panel-toggle { display: none; }
+
+  .panel { width: min(92vw, 380px); box-shadow: var(--shadow-lg); }
+
+  .panel-close {
+    position: absolute; top: 6px; right: 6px; z-index: 3;
+    display: flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; padding: 0;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 50%; color: var(--ink-2); cursor: pointer;
+  }
+  .panel-close svg { width: 16px; height: 16px; }
+  .panel-tabs { padding-right: 44px; }
+  .panel-tab { font-size: .74rem; padding: 11px 2px 9px; }
+
+  /* Touch targets, and room for the tab bar of the phone browser. */
+  .layer-row .layer-option { padding: 12px 9px; }
+  .layer-info { width: 34px; height: 34px; }
+  .panel-scroll { padding-bottom: 28px; }
+
+  /* Header: the brand was wrapping onto two lines and pushing the controls. */
+  .site-header .wrap { gap: 8px; padding: 0 10px; }
+  .brand-mark { width: 26px; height: 26px; }
+  .brand-name { font-size: .9rem; white-space: nowrap; }
+  .brand-parent { display: none; }
+  .nav { gap: 0; }
+  .nav a { padding: 6px 7px; font-size: .82rem; }
+  #units-toggle { padding: 6px 8px; font-size: .78rem; white-space: nowrap; }
+  .site-header .icon-button { width: 30px; height: 30px; }
+  .site-header .icon-button svg { width: 16px; height: 16px; }
+}
+
+/* Very narrow: drop the wordmark to the icon alone and shed optional buttons. */
+@media (max-width: 430px) {
+  .brand-text { display: none; }
+  #download-button, #fit-button { display: none; }
+}

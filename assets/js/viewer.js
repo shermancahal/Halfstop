@@ -131,6 +131,10 @@ async function main() {
     refreshFolderData();
     if (state.folders.lastError) toast(state.folders.lastError, { tone: 'error', timeout: 10000 });
   });
+  // On a phone the panel covers the map, so the map is what you should land on.
+  // Desktop has room for both, so it stays open there.
+  setPanelOpen(!window.matchMedia('(max-width: 820px)').matches);
+
   wirePanel();
   wireFolders();
   wireDropzone();
@@ -322,7 +326,13 @@ function wirePanel() {
     tab.addEventListener('click', () => selectTab(tab.dataset.tab));
   }
   document.getElementById('panel-toggle')?.addEventListener('click', () => {
-    dom.panel.hidden = !dom.panel.hidden;
+    setPanelOpen(dom.panel.hidden);
+  });
+  document.getElementById('panel-close')?.addEventListener('click', () => setPanelOpen(false));
+
+  // Escape closes the panel on phones, where it is a full-screen overlay.
+  window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !dom.panel.hidden && isNarrow()) setPanelOpen(false);
   });
   dom.unitsToggle?.addEventListener('click', () => {
     state.units = state.units === 'imperial' ? 'metric' : 'imperial';
@@ -336,6 +346,20 @@ function wirePanel() {
   document.getElementById('share-button')?.addEventListener('click', shareView);
   document.getElementById('download-button')?.addEventListener('click', downloadVisible);
   document.getElementById('fit-button')?.addEventListener('click', fitAll);
+}
+
+const isNarrow = () => window.matchMedia('(max-width: 820px)').matches;
+
+/**
+ * Open or close the side panel.
+ *
+ * The floating map buttons live in the same corner the panel covers, so they
+ * are hidden whenever it is open rather than left floating on top of it.
+ */
+function setPanelOpen(open) {
+  dom.panel.hidden = !open;
+  dom.app.classList.toggle('is-panel-open', open);
+  document.getElementById('panel-toggle')?.setAttribute('aria-expanded', String(open));
 }
 
 function selectTab(name) {
@@ -353,7 +377,7 @@ function selectTab(name) {
  */
 function openTab(name) {
   selectTab(name);
-  if (dom.panel.hidden) dom.panel.hidden = false;
+  if (dom.panel.hidden) setPanelOpen(true);
   dom.panel.querySelector(`.panel-tab[data-tab="${name}"]`)?.focus();
 }
 
@@ -413,21 +437,20 @@ function renderLayersTab() {
     dom.basemapList.append(el('div', { class: 'layer-group-label', text: group }));
     for (const basemap of entries) {
       const selected = basemap.id === state.basemapId;
-      dom.basemapList.append(el('label', { class: `layer-option${selected ? ' is-selected' : ''}` }, [
-        el('input', {
+      dom.basemapList.append(layerRow({
+        entry: basemap,
+        selected,
+        control: el('input', {
           type: 'radio', name: 'basemap', value: basemap.id, checked: selected,
           onchange: () => setBasemap(basemap.id),
         }),
-        el('span', { class: 'layer-option-text' }, [
-          el('span', { class: 'layer-option-name' }, [
-            el('span', { text: basemap.name }),
-            layerBadge(basemap),
-          ]),
-          el('span', { class: 'layer-option-desc', text: basemap.description || '' }),
-        ]),
-      ]));
+      }));
     }
   }
+
+  const activeCount = OVERLAYS.filter((o) => state.overlays.get(o.id)?.visible).length;
+  const counter = document.getElementById('overlay-count');
+  if (counter) counter.textContent = activeCount ? `${activeCount} on` : '';
 
   dom.overlayList.replaceChildren();
   for (const overlay of OVERLAYS) {
@@ -449,27 +472,70 @@ function renderLayersTab() {
     ]);
 
     dom.overlayList.append(
-      el('label', { class: 'layer-option' }, [
-        el('input', {
+      layerRow({
+        entry: overlay,
+        selected: entry.visible,
+        control: el('input', {
           type: 'checkbox', checked: entry.visible,
           onchange: (event) => {
             entry.visible = event.target.checked;
             opacityRow.hidden = !entry.visible;
             if (entry.visible) addOverlayLayer(overlay); else removeOverlayLayer(overlay.id);
+            renderLayersTab();
             writeURL();
           },
         }),
-        el('span', { class: 'layer-option-text' }, [
-          el('span', { class: 'layer-option-name' }, [
-            el('span', { text: overlay.name }),
-            layerBadge(overlay),
-          ]),
-          el('span', { class: 'layer-option-desc', text: overlay.description || '' }),
-        ]),
-      ]),
+      }),
       opacityRow,
     );
   }
+}
+
+/**
+ * One layer row: control, name, and an info button that reveals the
+ * description.
+ *
+ * The descriptions were previously always visible, which on a phone turned
+ * every layer into a three-line paragraph and made the list unscannable. They
+ * are worth keeping — they are how you tell USGS Topo from Esri Topo — so they
+ * fold away behind (i) rather than being deleted.
+ */
+function layerRow({ entry, selected, control }) {
+  const description = entry.description || '';
+  const descriptionNode = description
+    ? el('p', { class: 'layer-desc', hidden: true, text: description })
+    : null;
+
+  const info = descriptionNode
+    ? el('button', {
+      class: 'layer-info', type: 'button',
+      'aria-expanded': 'false', 'aria-label': `About ${entry.name}`,
+      title: `About ${entry.name}`,
+      html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 16.5v-5"/><path d="M12 8h.01"/></svg>',
+      onclick: (event) => {
+        const open = descriptionNode.hidden;
+        descriptionNode.hidden = !open;
+        event.currentTarget.setAttribute('aria-expanded', String(open));
+        event.currentTarget.classList.toggle('is-open', open);
+      },
+    })
+    : null;
+
+  const row = el('div', { class: `layer-row${selected ? ' is-selected' : ''}` }, [
+    el('label', { class: 'layer-option' }, [
+      control,
+      el('span', { class: 'layer-option-name' }, [
+        el('span', { class: 'layer-option-label', text: entry.name }),
+        layerBadge(entry),
+      ]),
+    ]),
+    info,
+  ]);
+
+  if (!descriptionNode) return row;
+  const wrap = document.createDocumentFragment();
+  wrap.append(row, descriptionNode);
+  return wrap;
 }
 
 /** Small marker beside a layer name: unverified endpoint, or one that is failing. */
