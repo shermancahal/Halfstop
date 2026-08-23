@@ -159,6 +159,19 @@ restrict it to your domain in the Mapbox account settings so it cannot be reused
 elsewhere. Set `MAP_ENGINE` to `'mapbox'` or `'maplibre'` to override the
 automatic choice.
 
+### Photos on pins
+
+Photos attach to a saved pin and are stored in IndexedDB, not localStorage — a
+single phone photo would exhaust the few megabytes localStorage allows and take
+the folders down with it. The pin records only photo ids; images up to 8 MB each
+are held separately, and orphans are swept on load.
+
+Import offers "also download photos the file links to". Expect it to fail for
+GaiaGPS: a browser may not read another site's images unless that site sends
+CORS headers, and Gaia does not. The attempt is still worth making for
+permissive hosts, and the failure says exactly why rather than going quiet. Add
+those photos from your device instead.
+
 ### Adding a custom layer
 
 Append to `BASEMAPS` or `OVERLAYS`. Any XYZ raster tile service works:

@@ -95,16 +95,24 @@ test('style: raster sources carry the fields the spec requires', () => {
 });
 
 test('style: bbox sources declare a square tile size', () => {
-  // A WMS/ArcGIS export request hard-codes its output size in the URL; if that
-  // disagrees with tileSize the tiles arrive stretched.
+  // A bbox request hard-codes its output size in the URL; if that disagrees
+  // with tileSize the tiles arrive stretched. The two dialects spell it
+  // differently — ArcGIS export uses size=W,H and WMS uses width=&height= —
+  // so accept either, but require one.
   const style = buildRasterStyle(rasterBasemaps[0], overlays());
   for (const [id, source] of Object.entries(style.sources)) {
     const bboxUrl = source.tiles.find((url) => url.includes('{bbox-epsg-3857}'));
     if (!bboxUrl) continue;
-    const declared = /[?&]size=(\d+),(\d+)/.exec(bboxUrl);
-    assert.ok(declared, `${id} bbox URL must declare an output size`);
-    assert.equal(Number(declared[1]), source.tileSize, `${id} width should match tileSize`);
-    assert.equal(Number(declared[2]), source.tileSize, `${id} height should match tileSize`);
+
+    const arcgis = /[?&]size=(\d+),(\d+)/.exec(bboxUrl);
+    const wms = [/[?&]width=(\d+)/.exec(bboxUrl), /[?&]height=(\d+)/.exec(bboxUrl)];
+    const size = arcgis ? [Number(arcgis[1]), Number(arcgis[2])]
+      : wms[0] && wms[1] ? [Number(wms[0][1]), Number(wms[1][1])]
+        : null;
+
+    assert.ok(size, `${id} bbox URL must declare an output size (size=W,H or width=&height=)`);
+    assert.equal(size[0], source.tileSize, `${id} width should match tileSize`);
+    assert.equal(size[1], source.tileSize, `${id} height should match tileSize`);
   }
 });
 

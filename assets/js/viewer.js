@@ -27,6 +27,9 @@ import {
   PIN_ICONS, DEFAULT_PIN_ICON, pinIconGroups, pinIconSVG, pinImageId, registerPinImages,
 } from './lib/pin-icons.js';
 import { toGPX } from './lib/gpx-write.js';
+import {
+  putPhoto, photoURL, deletePhoto, pruneUnreferenced, fetchLinkedPhoto, formatBytes, PHOTO_TYPES,
+} from './lib/photos.js';
 
 /* ------------------------------------------------------------------ state */
 
@@ -49,6 +52,8 @@ const state = {
   selection: new Set(),
   /** Tile health per configured layer id, so dead sources can be flagged. */
   layerHealth: new Map(),
+  /** { folderId, itemIds } while the pin editor is open, so re-renders keep it. */
+  openEditor: null,
 };
 
 const dom = {};
@@ -212,6 +217,9 @@ async function main() {
   renderLayersTab();
   renderFoldersTab();
   renderDropTarget();
+  // Photos whose pin was deleted linger in IndexedDB; clear them once per load
+  // rather than at deletion time, where a shared photo could be lost.
+  pruneUnreferenced(state.folders.referencedPhotoIds()).catch(() => {});
 
   // The catalogue is optional: the viewer still works as a drop-and-view tool.
   try {
@@ -1414,6 +1422,23 @@ function renderFoldersTab() {
   for (const folder of folders) {
     dom.folderList.append(renderFolder(folder));
   }
+
+  restoreOpenEditor();
+}
+
+/** Re-open the pin editor after a re-render, anchored to its row again. */
+function restoreOpenEditor() {
+  const open = state.openEditor;
+  if (!open) return;
+  const folder = state.folders.get(open.folderId);
+  if (!folder) { state.openEditor = null; return; }
+
+  const anchor = open.itemIds?.length === 1
+    ? dom.folderList.querySelector(`[data-item="${open.itemIds[0]}"]`)
+    : dom.folderList.querySelector(`[data-folder="${folder.id}"] .folder-head`);
+  if (!anchor) { state.openEditor = null; return; }
+
+  openStyleEditor(folder, open.itemIds, anchor);
 }
 
 function renderFolder(folder) {
@@ -1584,6 +1609,93 @@ function renderFolderItem(folder, item) {
   return wrap;
 }
 
+/**
+ * Photo strip for one pin: thumbnails of what is stored, plus an add button.
+ *
+ * Thumbnails come from object URLs, which are revoked when the strip is
+ * rebuilt — without that, every re-render would leak the whole image.
+ */
+function photoSection(folder, item) {
+  const section = el('div', {});
+  section.append(el('div', { class: 'style-label', text: 'Photos' }));
+
+  const strip = el('div', { class: 'photo-strip' });
+  const urls = [];
+
+  const paint = async () => {
+    for (const url of urls.splice(0)) URL.revokeObjectURL(url);
+    strip.replaceChildren();
+    const photos = item.feature.properties.photos || [];
+
+    for (const photo of photos) {
+      const tile = el('div', { class: 'photo-tile' });
+      const url = await photoURL(photo.id).catch(() => null);
+      if (url) {
+        urls.push(url);
+        tile.append(el('img', { src: url, alt: photo.caption || photo.name || 'Pin photo', loading: 'lazy' }));
+      } else {
+        // The record is gone from IndexedDB but the pin still points at it.
+        tile.append(el('span', { class: 'photo-missing', text: 'missing' }));
+      }
+      tile.append(el('button', {
+        class: 'photo-remove', type: 'button', title: 'Remove this photo',
+        'aria-label': `Remove ${photo.name || 'photo'}`, text: '×',
+        onclick: async () => {
+          state.folders.removePhoto(folder.id, item.id, photo.id);
+          await deletePhoto(photo.id).catch(() => {});
+          paint();
+        },
+      }));
+      strip.append(tile);
+    }
+
+    if (!photos.length) {
+      strip.append(el('p', { class: 'hint', style: 'margin:0', text: 'No photos on this pin yet.' }));
+    }
+  };
+
+  const picker = el('input', {
+    type: 'file', accept: PHOTO_TYPES.join(','), multiple: true, hidden: true,
+    onchange: async (event) => {
+      const files = [...event.target.files];
+      event.target.value = '';
+      const stored = [];
+      for (const file of files) {
+        try {
+          stored.push(await putPhoto(file, { name: file.name }));
+        } catch (error) {
+          toast(error.message, { tone: 'error', timeout: 9000 });
+        }
+      }
+      if (stored.length) {
+        state.folders.addPhotos(folder.id, item.id, stored);
+        toast(`Added ${stored.length} photo${stored.length === 1 ? '' : 's'}.`, { tone: 'ok' });
+      }
+      paint();
+    },
+  });
+
+  const actions = el('div', { class: 'picker-row', style: 'margin-top:8px' }, [
+    el('button', {
+      class: 'button button-secondary button-small', type: 'button', text: 'Add photos',
+      onclick: () => picker.click(),
+    }),
+  ]);
+
+  // A link the source file carried, e.g. a GaiaGPS photo page.
+  const link = item.feature.properties.link;
+  if (link) {
+    actions.append(el('a', {
+      class: 'button button-ghost button-small', href: link, target: '_blank', rel: 'noopener noreferrer',
+      text: 'Open source link',
+    }));
+  }
+
+  section.append(strip, picker, actions);
+  paint();
+  return section;
+}
+
 function focusFolderItem(item) {
   const feature = item.feature;
   if (feature.geometry?.type === 'Point') {
@@ -1630,6 +1742,11 @@ function clearSelection(folderId = null) {
  */
 function openStyleEditor(folder, itemIds, anchor) {
   dom.folderList.querySelectorAll('.style-editor').forEach((node) => node.remove());
+  // Saving anything calls emit(), which rebuilds the whole folder list and
+  // would take this editor with it. Remember what is open so the rebuild can
+  // put it back — otherwise adding a photo or renaming a pin closes the editor
+  // out from under you.
+  state.openEditor = { folderId: folder.id, itemIds };
 
   const single = Array.isArray(itemIds) && itemIds.length === 1;
   const target = single ? folder.items.find((item) => item.id === itemIds[0]) : null;
@@ -1667,6 +1784,8 @@ function openStyleEditor(folder, itemIds, anchor) {
       onchange: (event) => state.folders.describeItem(folder.id, target.id, event.target.value),
     }));
   }
+
+  if (single) editor.append(photoSection(folder, target));
 
   /* colour */
   editor.append(el('div', { class: 'style-label', text: 'Colour' }));
@@ -1732,11 +1851,13 @@ function openStyleEditor(folder, itemIds, anchor) {
         if (colorTouched || single) patch.color = chosenColor;
         if (iconTouched || single) patch.icon = chosenIcon;
         if (!Object.keys(patch).length) {
+          state.openEditor = null;
           editor.remove();
           toast('Pick a colour or an icon first.', { tone: 'info' });
           return;
         }
         const changed = state.folders.styleItems(folder.id, patch, itemIds);
+        state.openEditor = null;
         editor.remove();
         clearSelection(folder.id);
         renderFoldersTab();
@@ -1747,7 +1868,7 @@ function openStyleEditor(folder, itemIds, anchor) {
     }),
     el('button', {
       class: 'button button-ghost button-small', type: 'button', text: 'Cancel',
-      onclick: () => editor.remove(),
+      onclick: () => { state.openEditor = null; editor.remove(); },
     }),
   ]));
 
@@ -1800,6 +1921,11 @@ function toggleImportPicker() {
     el('span', { text: "Split into folders using the file's own folder names" }),
   ]);
 
+  const photoToggle = el('label', { class: 'picker-note', style: 'display:flex;gap:7px;align-items:center' }, [
+    el('input', { type: 'checkbox', id: 'import-photos' }),
+    el('span', { text: 'Also download photos the file links to' }),
+  ]);
+
   const picker = el('div', { class: 'picker' }, [
     el('h3', { text: 'Import into a folder' }),
     sourceSelect,
@@ -1807,6 +1933,7 @@ function toggleImportPicker() {
     targetSelect,
     nameField,
     byFolderToggle,
+    photoToggle,
     el('div', { class: 'picker-row' }, [
       el('button', {
         class: 'button button-primary button-small', type: 'button', text: 'Import',
@@ -1817,6 +1944,7 @@ function toggleImportPicker() {
             target: targetSelect.value,
             newName: nameField.value,
             splitByFolder: byFolderToggle.querySelector('input').checked,
+            withPhotos: photoToggle.querySelector('input').checked,
           });
           picker.remove();
         },
@@ -1844,7 +1972,50 @@ function selectFeatures(entry, what) {
   }));
 }
 
-function runImport({ entry, what, target, newName, splitByFolder }) {
+/**
+ * Download the photos an imported file links to.
+ *
+ * Most GaiaGPS links will fail: a browser may not read another site's images
+ * unless that site sends CORS headers, and Gaia does not. Rather than fail
+ * silently, this counts the outcomes and says exactly why.
+ */
+async function importLinkedPhotos(folderId) {
+  const folder = state.folders.get(folderId);
+  if (!folder) return;
+
+  const targets = folder.items.filter((item) => item.feature.properties.link);
+  if (!targets.length) {
+    toast('None of those waypoints linked to a photo.', { tone: 'info' });
+    return;
+  }
+
+  setStatus(true, `Fetching ${targets.length} linked photo${targets.length === 1 ? '' : 's'}…`);
+  let saved = 0;
+  const reasons = new Map();
+
+  for (const item of targets) {
+    const result = await fetchLinkedPhoto(item.feature.properties.link, {
+      name: item.feature.properties.name,
+    });
+    if (result.ok) {
+      state.folders.addPhotos(folder.id, item.id, [result.photo]);
+      saved++;
+    } else {
+      reasons.set(result.reason, (reasons.get(result.reason) || 0) + 1);
+    }
+  }
+  setStatus(false);
+
+  if (saved) toast(`Saved ${saved} photo${saved === 1 ? '' : 's'} into “${folder.name}”.`, { tone: 'ok' });
+  if (reasons.size) {
+    const [reason, count] = [...reasons.entries()].sort((a, b) => b[1] - a[1])[0];
+    toast(`${count} photo${count === 1 ? '' : 's'} could not be fetched — ${reason}. `
+      + 'Sites like GaiaGPS do not permit other sites to read their images; add those photos from your device instead.',
+    { tone: 'error', timeout: 15000 });
+  }
+}
+
+function runImport({ entry, what, target, newName, splitByFolder, withPhotos = false }) {
   if (!entry) return;
   const features = selectFeatures(entry, what);
   if (!features.length) {
@@ -1880,6 +2051,12 @@ function runImport({ entry, what, target, newName, splitByFolder }) {
     added = result.added;
     skipped = result.skipped;
     touched.add(folder.name);
+  }
+
+  if (withPhotos) {
+    for (const folder of state.folders.list()) {
+      if (touched.has(folder.name)) importLinkedPhotos(folder.id);
+    }
   }
 
   const where = touched.size === 1 ? `“${[...touched][0]}”` : `${touched.size} folders`;

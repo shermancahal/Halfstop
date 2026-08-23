@@ -56,6 +56,9 @@ function packFeature(feature, { keepTimes = false } = {}) {
       // GaiaGPS export arrives already styled rather than as identical dots.
       icon: props.icon || null,
       link: props.link || null,
+      // Photo ids only — the images themselves live in IndexedDB (lib/photos.js),
+      // because a single phone photo would exhaust the localStorage budget.
+      photos: Array.isArray(props.photos) ? props.photos.slice(0, 24) : [],
       time: Number.isFinite(props.time) ? props.time : null,
       sourceName: props.sourceName || props.source || '',
       distance_m: Number.isFinite(props.distance_m) ? props.distance_m : null,
@@ -301,6 +304,42 @@ export class FolderStore {
     item.feature.properties.description = text;
     this.emit();
     return true;
+  }
+
+  /** Attach stored photo ids to an item. */
+  addPhotos(folderId, itemId, photos) {
+    const folder = this.get(folderId);
+    const item = folder?.items.find((entry) => entry.id === itemId);
+    if (!item || !photos.length) return 0;
+    const existing = item.feature.properties.photos || [];
+    const seen = new Set(existing.map((photo) => photo.id));
+    const fresh = photos.filter((photo) => photo?.id && !seen.has(photo.id));
+    if (!fresh.length) return 0;
+    item.feature.properties.photos = [...existing, ...fresh].slice(0, 24);
+    this.emit();
+    return fresh.length;
+  }
+
+  removePhoto(folderId, itemId, photoId) {
+    const folder = this.get(folderId);
+    const item = folder?.items.find((entry) => entry.id === itemId);
+    if (!item) return false;
+    const before = (item.feature.properties.photos || []).length;
+    item.feature.properties.photos = (item.feature.properties.photos || []).filter((p) => p.id !== photoId);
+    if (item.feature.properties.photos.length === before) return false;
+    this.emit();
+    return true;
+  }
+
+  /** Every photo id referenced anywhere, for pruning orphans from IndexedDB. */
+  referencedPhotoIds() {
+    const ids = [];
+    for (const folder of this.folders) {
+      for (const item of folder.items) {
+        for (const photo of item.feature.properties.photos || []) if (photo?.id) ids.push(photo.id);
+      }
+    }
+    return ids;
   }
 
   renameItem(folderId, itemId, name) {
