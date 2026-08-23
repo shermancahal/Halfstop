@@ -128,6 +128,7 @@ async function main() {
   state.folders = new FolderStore();
   state.folders.onChange(() => {
     renderFoldersTab();
+    renderDropTarget();
     refreshFolderData();
     if (state.folders.lastError) toast(state.folders.lastError, { tone: 'error', timeout: 10000 });
   });
@@ -210,6 +211,7 @@ async function main() {
   }
   renderLayersTab();
   renderFoldersTab();
+  renderDropTarget();
 
   // The catalogue is optional: the viewer still works as a drop-and-view tool.
   try {
@@ -287,6 +289,7 @@ function cacheDom() {
   dom.folderTotals = document.getElementById('folder-totals');
   dom.newFolder = document.getElementById('new-folder');
   dom.importIntoFolder = document.getElementById('import-into-folder');
+  dom.dropTarget = document.getElementById('drop-target');
   dom.quickLayers = document.getElementById('quick-layers');
   dom.quickFolders = document.getElementById('quick-folders');
 }
@@ -506,18 +509,25 @@ function layerRow({ entry, selected, control }) {
     ? el('p', { class: 'layer-desc', hidden: true, text: description })
     : null;
 
+  // Hover reveals on a mouse; tap pins it open on touch, where hover does not
+  // exist. `pinned` keeps a clicked description open when the pointer leaves.
+  let pinned = false;
+  const setOpen = (open) => {
+    descriptionNode.hidden = !open;
+    info.setAttribute('aria-expanded', String(open));
+    info.classList.toggle('is-open', open);
+  };
+
   const info = descriptionNode
     ? el('button', {
       class: 'layer-info', type: 'button',
       'aria-expanded': 'false', 'aria-label': `About ${entry.name}`,
-      title: `About ${entry.name}`,
       html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 16.5v-5"/><path d="M12 8h.01"/></svg>',
-      onclick: (event) => {
-        const open = descriptionNode.hidden;
-        descriptionNode.hidden = !open;
-        event.currentTarget.setAttribute('aria-expanded', String(open));
-        event.currentTarget.classList.toggle('is-open', open);
-      },
+      onpointerenter: (event) => { if (event.pointerType === 'mouse' && !pinned) setOpen(true); },
+      onpointerleave: (event) => { if (event.pointerType === 'mouse' && !pinned) setOpen(false); },
+      onfocus: () => { if (!pinned) setOpen(true); },
+      onblur: () => { if (!pinned) setOpen(false); },
+      onclick: () => { pinned = !pinned; setOpen(pinned); },
     })
     : null;
 
@@ -919,6 +929,44 @@ async function loadFromCatalog(slug, { fit = true } = {}) {
 
 /* ------------------------------------------------------------------ file input */
 
+/**
+ * Populate the "send waypoints to" picker beside the drop zone.
+ *
+ * Opening a file and then separately filing its waypoints was two steps for
+ * what is nearly always one intent, so the destination is chosen up front.
+ */
+function renderDropTarget() {
+  if (!dom.dropTarget) return;
+  const previous = dom.dropTarget.value;
+  const folders = state.folders.list();
+  dom.dropTarget.replaceChildren(
+    el('option', { value: '', text: 'Just show it on the map' }),
+    ...folders.map((folder) => el('option', { value: folder.id, text: `File waypoints into “${folder.name}”` })),
+    el('option', { value: '__new__', text: 'File waypoints into a new folder' }),
+  );
+  if (previous && [...dom.dropTarget.options].some((o) => o.value === previous)) dom.dropTarget.value = previous;
+}
+
+/** Apply the drop-zone destination to a freshly opened document. */
+function fileOpenedDocument(entry) {
+  const choice = dom.dropTarget?.value;
+  if (!choice) return null;
+
+  const waypoints = entry.doc.geojson.features
+    .filter((feature) => feature.properties.kind === 'waypoint')
+    .map((feature) => ({ ...feature, properties: { ...feature.properties, sourceName: entry.name } }));
+  if (!waypoints.length) return null;
+
+  const folder = choice === '__new__' ? state.folders.create(entry.name) : state.folders.get(choice);
+  if (!folder) return null;
+
+  const { added, skipped } = state.folders.addFeatures(folder.id, waypoints);
+  // A new folder becomes the standing destination, which is what you want when
+  // opening several files that belong to the same trip.
+  if (choice === '__new__') { renderDropTarget(); dom.dropTarget.value = folder.id; }
+  return { folder, added, skipped };
+}
+
 function wireDropzone() {
   dom.dropzone?.addEventListener('click', () => dom.fileInput.click());
   dom.fileInput?.addEventListener('change', (event) => {
@@ -960,6 +1008,7 @@ async function handleFiles(files) {
 
   setStatus(true, `Reading ${accepted.length} file${accepted.length > 1 ? 's' : ''}…`);
   let bounds = null;
+  const filedInto = [];
   for (const file of accepted) {
     try {
       const isBinary = /\.kmz$/i.test(file.name);
@@ -969,7 +1018,9 @@ async function handleFiles(files) {
         toast(`“${file.name}” contained no mappable features.`, { tone: 'error' });
         continue;
       }
-      await addDocument({ name: doc.name || file.name, doc, origin: 'local', fit: false });
+      const entry = await addDocument({ name: doc.name || file.name, doc, origin: 'local', fit: false });
+      const filed = fileOpenedDocument(entry);
+      if (filed) filedInto.push(filed);
       bounds = bounds ? mergeBounds(bounds, doc.bbox) : doc.bbox;
     } catch (error) {
       toast(`${file.name}: ${error.message}`, { tone: 'error', timeout: 9000 });
@@ -978,13 +1029,21 @@ async function handleFiles(files) {
   setStatus(false);
   if (bounds) {
     fitTo(bounds);
-    const waypoints = [...state.documents.values()]
-      .filter((entry) => entry.origin === 'local')
-      .reduce((sum, entry) => sum + entry.doc.stats.waypointCount, 0);
-    toast(waypoints
-      ? `Loaded ${accepted.length} file${accepted.length > 1 ? 's' : ''}. Nothing was uploaded — open Folders to file its waypoints away.`
-      : `Loaded ${accepted.length} file${accepted.length > 1 ? 's' : ''}. These stay in your browser — nothing is uploaded.`,
-    { tone: 'ok', timeout: 9000 });
+    const loaded = `Loaded ${accepted.length} file${accepted.length > 1 ? 's' : ''}.`;
+    if (filedInto.length) {
+      const added = filedInto.reduce((sum, r) => sum + r.added, 0);
+      const names = [...new Set(filedInto.map((r) => r.folder.name))];
+      const where = names.length === 1 ? `“${names[0]}”` : `${names.length} folders`;
+      toast(`${loaded} Filed ${added} waypoint${added === 1 ? '' : 's'} into ${where}.`, { tone: 'ok', timeout: 9000 });
+    } else {
+      const waypoints = [...state.documents.values()]
+        .filter((entry) => entry.origin === 'local')
+        .reduce((sum, entry) => sum + entry.doc.stats.waypointCount, 0);
+      toast(waypoints
+        ? `${loaded} Nothing was uploaded — pick a destination above to file waypoints automatically.`
+        : `${loaded} These stay in your browser — nothing is uploaded.`,
+      { tone: 'ok', timeout: 9000 });
+    }
   }
   selectTab('details');
 }
@@ -1462,6 +1521,9 @@ function renderFolderItem(folder, item) {
   const meta = isWaypoint
     ? (props.symbol || props.sourceName || '')
     : (props.distance_m ? formatDistance(props.distance_m, state.units) : '');
+  // Descriptions come across from GaiaGPS on most waypoints and are the whole
+  // reason a pin is worth keeping — surface them rather than hiding them in a popup.
+  const blurb = String(props.description || '').trim();
 
   const key = selectionKey(folder.id, item.id);
   const color = props.color || folder.color;
@@ -1515,7 +1577,11 @@ function renderFolderItem(folder, item) {
       },
     }),
   ]);
-  return node;
+
+  if (!blurb) return node;
+  const wrap = document.createDocumentFragment();
+  wrap.append(node, el('p', { class: 'folder-item-desc', text: blurb, title: blurb }));
+  return wrap;
 }
 
 function focusFolderItem(item) {
@@ -1589,12 +1655,17 @@ function openStyleEditor(folder, itemIds, anchor) {
   editor.append(el('h3', { class: 'style-editor-title', text: heading }));
 
   if (single) {
-    const nameField = el('input', {
+    editor.append(el('input', {
       type: 'text', class: 'style-name', value: target.feature.properties.name,
-      'aria-label': 'Pin name',
+      'aria-label': 'Pin name', placeholder: 'Pin name',
       onchange: (event) => state.folders.renameItem(folder.id, target.id, event.target.value),
-    });
-    editor.append(nameField);
+    }));
+    editor.append(el('textarea', {
+      class: 'style-desc', rows: '3', 'aria-label': 'Pin description',
+      placeholder: 'Notes — road surface, access, what you found here…',
+      text: target.feature.properties.description || '',
+      onchange: (event) => state.folders.describeItem(folder.id, target.id, event.target.value),
+    }));
   }
 
   /* colour */

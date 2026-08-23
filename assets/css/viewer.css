@@ -473,3 +473,28 @@ html, body { height: 100%; overflow: hidden; }
   .brand-text { display: none; }
   #download-button, #fit-button { display: none; }
 }
+
+/* Destination picker beside the drop zone */
+.drop-target-label {
+  display: block; margin: 12px 0 5px;
+  font-size: .72rem; font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.drop-target {
+  width: 100%; font: inherit; font-size: .86rem; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm); padding: 8px 9px;
+}
+
+/* Saved pin notes, under the row */
+.folder-item-desc {
+  margin: -3px 9px 7px 40px; padding: 0;
+  font-size: .79rem; line-height: 1.45; color: var(--ink-3);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.style-desc {
+  width: 100%; font: inherit; font-size: .86rem; line-height: 1.45; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm); padding: 8px 9px; margin-top: 7px; resize: vertical;
+}

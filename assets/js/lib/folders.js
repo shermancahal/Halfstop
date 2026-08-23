@@ -291,6 +291,18 @@ export class FolderStore {
     return this.styleItems(folderId, { color: null, icon: null }, itemIds);
   }
 
+  /** Edit a saved item's notes. */
+  describeItem(folderId, itemId, description) {
+    const folder = this.get(folderId);
+    const item = folder?.items.find((entry) => entry.id === itemId);
+    if (!item) return false;
+    const text = String(description ?? '').trim().slice(0, 4000);
+    if (item.feature.properties.description === text) return false;
+    item.feature.properties.description = text;
+    this.emit();
+    return true;
+  }
+
   renameItem(folderId, itemId, name) {
     const folder = this.get(folderId);
     const item = folder?.items.find((entry) => entry.id === itemId);

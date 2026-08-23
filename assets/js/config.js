@@ -75,7 +75,7 @@ export const BASEMAPS = [
     id: 'usgs-topo',
     name: 'USGS Topo',
     group: 'Topographic',
-    description: 'The National Map — US Topo quads. Best general-purpose backcountry base.',
+    description: 'US Topo quads. Best all-round backcountry base.',
     tiles: ['https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}'],
     tileSize: 256,
     maxzoom: 16,
@@ -85,7 +85,7 @@ export const BASEMAPS = [
     id: 'usgs-imagery-topo',
     name: 'USGS Imagery + Topo',
     group: 'Topographic',
-    description: 'Aerial imagery with topographic labels and contours burned in.',
+    description: 'Aerial imagery with contours and labels burned in.',
     tiles: ['https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryTopo/MapServer/tile/{z}/{y}/{x}'],
     tileSize: 256,
     maxzoom: 16,
@@ -95,7 +95,7 @@ export const BASEMAPS = [
     id: 'opentopomap',
     name: 'OpenTopoMap',
     group: 'Topographic',
-    description: 'Contour-heavy topo rendering of OpenStreetMap data, with hillshading.',
+    description: 'Contour-heavy OSM topo with hillshading.',
     tiles: [
       'https://a.tile.opentopomap.org/{z}/{x}/{y}.png',
       'https://b.tile.opentopomap.org/{z}/{x}/{y}.png',
@@ -104,6 +104,16 @@ export const BASEMAPS = [
     tileSize: 256,
     maxzoom: 17,
     attribution: `${OSM_ATTRIBUTION}, <a href="https://opentopomap.org/">OpenTopoMap</a> (CC-BY-SA)`,
+  },
+  {
+    id: 'usgs-classic',
+    name: 'USGS Topo (classic)',
+    group: 'Topographic',
+    description: 'Scanned 7.5-minute quads — the classic 20th-century paper topo.',
+    tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}'],
+    tileSize: 256,
+    maxzoom: 15,
+    attribution: 'USGS quadrangles via <a href="https://www.esri.com/">Esri</a>',
   },
   {
     id: 'esri-imagery',
@@ -119,7 +129,7 @@ export const BASEMAPS = [
     id: 'cyclosm',
     name: 'Byways Topo',
     group: 'Topographic',
-    description: 'OpenStreetMap rendered for the outdoors — tracks, trail surfaces and land cover. The closest open equivalent to a Gaia-style topo.',
+    description: 'OSM rendered for the outdoors — tracks and surfaces.',
     tiles: [
       'https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
       'https://b.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
@@ -133,7 +143,7 @@ export const BASEMAPS = [
     id: 'esri-topo',
     name: 'Esri Topo',
     group: 'Topographic',
-    description: 'Worldwide topographic base with roads, boundaries and land cover.',
+    description: 'Worldwide topo with roads and land cover.',
     tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}'],
     tileSize: 256,
     maxzoom: 19,
@@ -143,7 +153,7 @@ export const BASEMAPS = [
     id: 'usgs-imagery',
     name: 'USGS Imagery',
     group: 'Imagery',
-    description: 'Aerial imagery from The National Map, without labels.',
+    description: 'Aerial imagery, no labels.',
     tiles: ['https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}'],
     tileSize: 256,
     maxzoom: 16,
@@ -153,7 +163,7 @@ export const BASEMAPS = [
     id: 'osm-hot',
     name: 'Humanitarian',
     group: 'Topographic',
-    description: 'OSM rendered with rural detail forward — unpaved surfaces, tracks and remote infrastructure show far more clearly than on the standard style.',
+    description: 'OSM with unpaved surfaces and remote tracks forward.',
     tiles: [
       'https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
       'https://b.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
@@ -166,7 +176,7 @@ export const BASEMAPS = [
     id: 'carto-light',
     name: 'Minimal Light',
     group: 'Road',
-    description: 'Pale, low-contrast base. Tracks and pins read clearly over it — the best choice when the data matters more than the map.',
+    description: 'Pale base — lets your tracks carry the map.',
     tiles: [
       'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
       'https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
@@ -179,7 +189,7 @@ export const BASEMAPS = [
     id: 'carto-dark',
     name: 'Minimal Dark',
     group: 'Road',
-    description: 'The dark counterpart. Easiest on the eyes at night and the natural partner to the app\u2019s dark theme.',
+    description: 'Dark base. Easiest at night.',
     tiles: [
       'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
       'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
@@ -192,7 +202,7 @@ export const BASEMAPS = [
     id: 'osm',
     name: 'Street',
     group: 'Road',
-    description: 'Standard OpenStreetMap — the most current road and address data.',
+    description: 'Standard OSM — the most current road data.',
     tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
     tileSize: 256,
     maxzoom: 19,
@@ -204,7 +214,7 @@ export const BASEMAPS = [
     id: 'mapbox-outdoors',
     name: 'Mapbox Outdoors',
     group: 'Mapbox',
-    description: 'Vector terrain style with contours and trails. Requires a Mapbox token.',
+    description: 'Vector terrain with contours and trails.',
     style: 'mapbox://styles/mapbox/outdoors-v12',
     requiresToken: true,
     attribution: '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> © OpenStreetMap',
@@ -213,7 +223,7 @@ export const BASEMAPS = [
     id: 'mapbox-satellite-streets',
     name: 'Mapbox Satellite Streets',
     group: 'Mapbox',
-    description: 'Mapbox imagery with road and place labels. Requires a Mapbox token.',
+    description: 'Mapbox imagery with road and place labels.',
     style: 'mapbox://styles/mapbox/satellite-streets-v12',
     requiresToken: true,
     attribution: '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> © OpenStreetMap © Maxar',
@@ -239,7 +249,7 @@ export const OVERLAYS = [
   {
     id: 'public-lands',
     name: 'Public lands',
-    description: 'Federal and state land ownership from the USGS Protected Areas Database (PAD-US).',
+    description: 'Federal and state land ownership (PAD-US).',
     // ArcGIS dynamic map services are requested by bounding box rather than by
     // tile index; both GL libraries substitute {bbox-epsg-3857} for a WMS-style
     // request. `unverified` shows a caveat in the layer picker.
@@ -253,9 +263,23 @@ export const OVERLAYS = [
     attribution: USGS_ATTRIBUTION,
   },
   {
+    id: 'wildfire',
+    name: 'Wildfire perimeters',
+    description: 'Current large-fire perimeters from NIFC.',
+    tiles: ['https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query'
+      + '?where=1%3D1&geometry={bbox-epsg-3857}&geometryType=esriGeometryEnvelope&inSR=3857&outSR=3857'
+      + '&f=image&size=256,256&transparent=true'],
+    tileSize: 256,
+    maxzoom: 14,
+    opacity: 0.6,
+    enabled: false,
+    unverified: true,
+    attribution: 'Fire perimeters © <a href="https://www.nifc.gov/">NIFC</a>',
+  },
+  {
     id: 'trails-hiking',
     name: 'Hiking routes',
-    description: 'Waymarked hiking and long-distance trail routes from OpenStreetMap.',
+    description: 'Waymarked hiking and long-distance routes.',
     tiles: ['https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png'],
     tileSize: 256,
     maxzoom: 18,
@@ -266,7 +290,7 @@ export const OVERLAYS = [
   {
     id: 'trails-cycling',
     name: 'Cycling routes',
-    description: 'Waymarked cycle route networks from OpenStreetMap.',
+    description: 'Waymarked cycle route networks.',
     tiles: ['https://tile.waymarkedtrails.org/cycling/{z}/{x}/{y}.png'],
     tileSize: 256,
     maxzoom: 18,
@@ -277,7 +301,7 @@ export const OVERLAYS = [
   {
     id: 'usgs-relief',
     name: 'Shaded relief',
-    description: 'USGS terrain relief. An alternative to the Esri hillshade below.',
+    description: 'USGS terrain relief.',
     tiles: ['https://basemap.nationalmap.gov/arcgis/rest/services/USGSShadedReliefOnly/MapServer/tile/{z}/{y}/{x}'],
     tileSize: 256,
     maxzoom: 16,
@@ -288,7 +312,7 @@ export const OVERLAYS = [
   {
     id: 'hillshade',
     name: 'Hillshade',
-    description: 'Terrain relief shading. Reads well under topo and street bases.',
+    description: 'Esri terrain relief. Reads well under topo.',
     tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}'],
     tileSize: 256,
     maxzoom: 16,
@@ -299,7 +323,7 @@ export const OVERLAYS = [
   {
     id: 'places',
     name: 'Labels & boundaries',
-    description: 'Place names, roads and administrative boundaries — useful over bare imagery.',
+    description: 'Place names and boundaries — good over bare imagery.',
     tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'],
     tileSize: 256,
     maxzoom: 16,
@@ -310,7 +334,7 @@ export const OVERLAYS = [
   {
     id: 'usgs-hydro',
     name: 'Hydrography',
-    description: 'Streams, rivers and water bodies from the National Hydrography Dataset.',
+    description: 'Streams, rivers and water bodies (NHD).',
     tiles: ['https://basemap.nationalmap.gov/arcgis/rest/services/USGSHydroCached/MapServer/tile/{z}/{y}/{x}'],
     tileSize: 256,
     maxzoom: 16,
