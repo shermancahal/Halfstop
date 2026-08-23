@@ -53,16 +53,16 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
           Layers
         </button>
-        <button class="panel-tab" role="tab" data-tab="maps" aria-selected="true" aria-controls="tab-maps" type="button">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 3-6 3v15l6-3 6 3 6-3V3l-6 3-6-3Z"/><path d="M9 3v15"/><path d="M15 6v15"/></svg>
-          Maps
-        </button>
-        <button class="panel-tab" role="tab" data-tab="folders" aria-selected="false" aria-controls="tab-folders" type="button">
+        <button class="panel-tab" role="tab" data-tab="folders" aria-selected="true" aria-controls="tab-folders" type="button">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h3.6a2 2 0 0 1 1.4.6L11.4 7H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
           Folders
         </button>
+        <button class="panel-tab" role="tab" data-tab="waypoints" aria-selected="false" aria-controls="tab-waypoints" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+          Waypoints
+        </button>
         <button class="panel-tab" role="tab" data-tab="details" aria-selected="false" aria-controls="tab-details" type="button">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 20 6.5-11 4 6 2.5-4L21 20H3Z"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 16.5v-5"/><path d="M12 8h.01"/></svg>
           Details
         </button>
       </div>
@@ -87,33 +87,7 @@
           </div>
         </div>
 
-        <div id="tab-maps" role="tabpanel">
-          <div class="panel-section">
-            <h2 class="panel-title">Published maps</h2>
-            <div id="catalog-list"></div>
-          </div>
-          <div class="panel-section">
-            <h2 class="panel-title">
-              <span>Loaded</span>
-              <span class="count" id="loaded-count"></span>
-            </h2>
-            <div id="loaded-list"></div>
-          </div>
-          <div class="panel-section">
-            <h2 class="panel-title">Open your own</h2>
-            <div class="dropzone" id="dropzone" role="button" tabindex="0">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
-              <b>Drop a file, or click to choose</b>
-              GPX · KML · KMZ · GeoJSON
-            </div>
-            <input type="file" id="file-input" multiple accept=".gpx,.kml,.kmz,.geojson,.json" hidden>
-            <label class="drop-target-label" for="drop-target">When a file opens</label>
-            <select id="drop-target" class="drop-target"></select>
-            <p class="hint" style="margin-top:10px">Files you open stay in your browser. Nothing is uploaded.</p>
-          </div>
-        </div>
-
-        <div id="tab-folders" role="tabpanel" hidden>
+        <div id="tab-folders" role="tabpanel">
           <div class="panel-section">
             <h2 class="panel-title">
               <span>Your folders</span>
@@ -129,11 +103,44 @@
             <h2 class="panel-title">Account</h2>
             <div id="account-panel"></div>
           </div>
+
+          <div class="panel-section">
+            <h2 class="panel-title">
+              <span>Opened files</span>
+              <span class="count" id="loaded-count"></span>
+            </h2>
+            <div id="loaded-list"></div>
+            <div class="dropzone" id="dropzone" role="button" tabindex="0" style="margin-top:11px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
+              <b>Drop a file, or click to choose</b>
+              GPX · KML · KMZ · GeoJSON
+            </div>
+            <input type="file" id="file-input" multiple accept=".gpx,.kml,.kmz,.geojson,.json" hidden>
+            <label class="drop-target-label" for="drop-target">When a file opens</label>
+            <select id="drop-target" class="drop-target"></select>
+            <div id="catalog-list" hidden></div>
+          </div>
           <div class="panel-section">
             <p class="hint" id="folder-storage-note">
               Folders are saved in this browser only — they are not uploaded, and they will not
               follow you to another device. Export a folder as GPX to keep or move it.
             </p>
+          </div>
+        </div>
+
+        <div id="tab-waypoints" role="tabpanel" hidden>
+          <div class="panel-section">
+            <h2 class="panel-title">
+              <span>All waypoints</span>
+              <span class="count" id="waypoint-count"></span>
+            </h2>
+            <div class="search-field" style="margin-bottom:9px">
+              <label class="visually-hidden" for="waypoint-search">Search waypoints</label>
+              <input type="search" id="waypoint-search" placeholder="Search by name or note…" autocomplete="off">
+            </div>
+            <label class="visually-hidden" for="waypoint-folder">Filter by folder</label>
+            <select id="waypoint-folder" class="drop-target" style="margin-bottom:11px"></select>
+            <div id="waypoint-list"></div>
           </div>
         </div>
 

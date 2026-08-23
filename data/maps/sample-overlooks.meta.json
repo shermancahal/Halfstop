@@ -1,6 +1,0 @@
-{
-  "title": "Sample Overlooks & Side Roads",
-  "description": "Demonstration KML with folders, shared styles, two side roads, a polygon and three points of interest — the KML features the parser handles beyond plain tracks.",
-  "region": "Sample data",
-  "tags": ["sample", "kml", "waypoints"]
-}

@@ -28,6 +28,9 @@ import {
 } from './lib/pin-icons.js';
 import { toGPX } from './lib/gpx-write.js';
 import { Account, isConfigured as accountsAvailable } from './lib/account.js';
+import {
+  formatDD, formatDMS, formatDDM, toUTM, distanceBearing, compassPoint, sunTimes, reverseGeocode,
+} from './lib/place.js';
 import { describeSync } from './lib/sync.js';
 import {
   putPhoto, photoURL, deletePhoto, pruneUnreferenced, fetchLinkedPhoto, formatBytes, PHOTO_TYPES,
@@ -59,6 +62,10 @@ const state = {
   account: null,
   /** Typed email, kept across re-renders so an error does not clear the form. */
   accountEmail: '',
+  /** { folderId, itemId } for the pin the Details tab is describing. */
+  selectedPin: null,
+  waypointQuery: '',
+  waypointFolderFilter: '',
 };
 
 const dom = {};
@@ -149,6 +156,7 @@ async function main() {
   });
   state.folders.onChange(() => {
     renderFoldersTab();
+    renderWaypointsTab();
     renderDropTarget();
     refreshFolderData();
     if (state.folders.lastError) toast(state.folders.lastError, { tone: 'error', timeout: 10000 });
@@ -232,6 +240,7 @@ async function main() {
   }
   renderLayersTab();
   renderFoldersTab();
+  renderWaypointsTab();
   renderDropTarget();
   renderAccount();
   state.account.init().catch((error) => console.warn('[account]', error.message));
@@ -295,13 +304,17 @@ function cacheDom() {
   dom.tabs = [...document.querySelectorAll('.panel-tab')];
   dom.tabPanels = {
     layers: document.getElementById('tab-layers'),
-    maps: document.getElementById('tab-maps'),
+    waypoints: document.getElementById('tab-waypoints'),
     folders: document.getElementById('tab-folders'),
     details: document.getElementById('tab-details'),
   };
   dom.basemapList = document.getElementById('basemap-list');
   dom.overlayList = document.getElementById('overlay-list');
   dom.catalogList = document.getElementById('catalog-list');
+  dom.waypointList = document.getElementById('waypoint-list');
+  dom.waypointSearch = document.getElementById('waypoint-search');
+  dom.waypointFolder = document.getElementById('waypoint-folder');
+  dom.waypointCount = document.getElementById('waypoint-count');
   dom.loadedList = document.getElementById('loaded-list');
   dom.loadedCount = document.getElementById('loaded-count');
   dom.details = document.getElementById('details-body');
@@ -373,6 +386,14 @@ function wirePanel() {
   });
   dom.quickLayers?.addEventListener('click', () => openTab('layers'));
   dom.quickFolders?.addEventListener('click', () => openTab('folders'));
+  dom.waypointSearch?.addEventListener('input', (event) => {
+    state.waypointQuery = event.target.value;
+    renderWaypointsTab();
+  });
+  dom.waypointFolder?.addEventListener('change', (event) => {
+    state.waypointFolderFilter = event.target.value;
+    renderWaypointsTab();
+  });
   document.getElementById('share-button')?.addEventListener('click', shareView);
   document.getElementById('download-button')?.addEventListener('click', downloadVisible);
   document.getElementById('fit-button')?.addEventListener('click', fitAll);
@@ -782,6 +803,13 @@ function bindFeatureInteractions(layerId) {
   });
 }
 
+/** Remember which saved pin the Details tab should describe, and show it. */
+function selectPin(folderId, itemId, { open = true } = {}) {
+  state.selectedPin = folderId && itemId ? { folderId, itemId } : null;
+  renderDetailsTab();
+  if (open) openTab('details');
+}
+
 function showFeaturePopup(feature, lngLat) {
   const props = feature.properties || {};
   const rows = [];
@@ -865,6 +893,11 @@ function savedItemActions(props, popup) {
     });
     children.push(select);
   }
+
+  children.push(el('button', {
+    type: 'button', text: 'Details',
+    onclick: () => { popup.remove(); selectPin(props.folderId, props.itemId); },
+  }));
 
   children.push(el('button', {
     type: 'button', text: 'Edit style',
@@ -1197,16 +1230,223 @@ function documentSummary(doc) {
 /* ------------------------------------------------------------------ details tab */
 
 function renderDetailsTab() {
-  const entry = state.documents.get(state.activeKey);
   dom.details.replaceChildren();
 
+  const pin = selectedPinRecord();
+  if (pin) { renderPinDetails(pin.folder, pin.item); return; }
+
+  const entry = state.documents.get(state.activeKey);
   if (!entry) {
     dom.details.append(el('div', { class: 'panel-section' }, [
-      el('p', { class: 'hint', text: 'Select or load a map to see its distance, elevation profile and waypoints.' }),
+      el('p', { class: 'hint', text: 'Click a waypoint on the map, or pick one from Waypoints, to see everything known about it.' }),
     ]));
     return;
   }
 
+  renderDocumentDetails(entry);
+}
+
+function selectedPinRecord() {
+  const selected = state.selectedPin;
+  if (!selected) return null;
+  const folder = state.folders.get(selected.folderId);
+  const item = folder?.items.find((entry) => entry.id === selected.itemId);
+  if (!folder || !item) { state.selectedPin = null; return null; }
+  return { folder, item };
+}
+
+/** One labelled row in the details list, with an optional copy button. */
+function detailRow(label, value, { copy = null } = {}) {
+  return el('div', { class: 'detail-line' }, [
+    el('span', { class: 'detail-line-label', text: label }),
+    el('span', { class: 'detail-line-value', text: value }),
+    copy
+      ? el('button', {
+        class: 'icon-button detail-copy', type: 'button',
+        title: `Copy ${label}`, 'aria-label': `Copy ${label}`,
+        html: icons.copy,
+        onclick: async (event) => {
+          const ok = await copyText(copy);
+          const button = event.currentTarget;
+          button.classList.toggle('is-done', ok);
+          if (ok) setTimeout(() => button.classList.remove('is-done'), 1400);
+        },
+      })
+      : null,
+  ]);
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('Copied.', { tone: 'ok', timeout: 2000 });
+    return true;
+  } catch {
+    toast(`Could not copy automatically. The value is: ${text}`, { tone: 'error', timeout: 12000 });
+    return false;
+  }
+}
+
+/**
+ * Everything known about one saved pin.
+ *
+ * Deliberately arithmetic-first: coordinates, elevation, UTM, sun times and
+ * bearing all work with no signal, which is exactly when this panel matters.
+ * The geocoded place name is the only part that needs the network, and it is
+ * appended when it arrives rather than blocking the rest.
+ */
+function renderPinDetails(folder, item) {
+  const props = item.feature.properties;
+  const position = item.feature.geometry?.coordinates || [];
+  const [lon, lat, elevation] = position;
+
+  /* header */
+  dom.details.append(el('div', { class: 'panel-section' }, [
+    el('div', { class: 'pin-head' }, [
+      el('span', {
+        class: 'pin-head-icon', style: `background:${props.color || folder.color}`,
+        html: pinIconSVG(props.icon || DEFAULT_PIN_ICON, { size: 18, stroke: 1.9 }),
+      }),
+      el('div', { style: 'min-width:0;flex:1' }, [
+        el('h2', { class: 'panel-title is-name', style: 'margin:0', text: props.name }),
+        el('div', { class: 'account-meta', text: folder.name }),
+      ]),
+    ]),
+    props.description ? el('p', { class: 'pin-description', text: props.description }) : null,
+    el('div', { class: 'picker-row', style: 'margin-top:11px' }, [
+      el('button', {
+        class: 'button button-secondary button-small', type: 'button', text: 'Zoom to',
+        onclick: () => focusFolderItem(item, folder.id),
+      }),
+      el('button', {
+        class: 'button button-secondary button-small', type: 'button', text: 'Edit',
+        onclick: () => {
+          openTab('folders');
+          renderFoldersTab();
+          const row = dom.folderList.querySelector(`[data-item="${item.id}"]`);
+          if (row) openStyleEditor(folder, [item.id], row);
+        },
+      }),
+    ]),
+  ]));
+
+  /* photos */
+  const photos = props.photos || [];
+  if (photos.length) {
+    const section = el('div', { class: 'panel-section' }, [
+      el('h2', { class: 'panel-title', text: `Photos (${photos.length})` }),
+    ]);
+    const strip = el('div', { class: 'photo-strip' });
+    section.append(strip);
+    dom.details.append(section);
+    (async () => {
+      for (const photo of photos) {
+        const url = await photoURL(photo.id).catch(() => null);
+        if (!url) continue;
+        strip.append(el('a', { class: 'photo-tile', href: url, target: '_blank', rel: 'noopener' }, [
+          el('img', { src: url, alt: photo.name || 'Pin photo', loading: 'lazy' }),
+        ]));
+      }
+    })();
+  }
+
+  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+
+  /* position */
+  const utm = toUTM([lon, lat]);
+  const position_section = el('div', { class: 'panel-section' }, [
+    el('h2', { class: 'panel-title' }, [
+      el('span', { text: 'Position' }),
+      el('button', {
+        class: 'button button-ghost button-small', type: 'button', text: 'Copy all',
+        title: 'Copy every coordinate format at once',
+        onclick: () => copyText([
+          props.name,
+          `Decimal:  ${formatDD([lon, lat])}`,
+          `DMS:      ${formatDMS([lon, lat])}`,
+          `DDM:      ${formatDDM([lon, lat])}`,
+          utm ? `UTM:      ${utm.toString()}` : null,
+          Number.isFinite(elevation) ? `Elevation: ${formatElevation(elevation, state.units)}` : null,
+          `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`,
+        ].filter(Boolean).join('\n')),
+      }),
+    ]),
+    detailRow('Decimal', formatDD([lon, lat]), { copy: formatDD([lon, lat]) }),
+    detailRow('DMS', formatDMS([lon, lat]), { copy: formatDMS([lon, lat]) }),
+    detailRow('Deg / min', formatDDM([lon, lat]), { copy: formatDDM([lon, lat]) }),
+    utm ? detailRow('UTM', utm.toString(), { copy: utm.toString() }) : null,
+    Number.isFinite(elevation) ? detailRow('Elevation', formatElevation(elevation, state.units)) : null,
+  ]);
+  dom.details.append(position_section);
+
+  /* where you are relative to it */
+  const relative = el('div', { class: 'panel-section' }, [
+    el('h2', { class: 'panel-title', text: 'From here' }),
+  ]);
+  const relativeBody = el('div', {}, [
+    el('p', { class: 'hint', style: 'margin:0', text: 'Waiting for your location…' }),
+  ]);
+  relative.append(relativeBody);
+  dom.details.append(relative);
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (fix) => {
+        const from = [fix.coords.longitude, fix.coords.latitude];
+        const { distance, bearing } = distanceBearing(from, [lon, lat]);
+        relativeBody.replaceChildren(
+          detailRow('Distance', formatDistance(distance, state.units)),
+          detailRow('Bearing', `${Math.round(bearing)}° ${compassPoint(bearing)}`),
+        );
+      },
+      () => {
+        relativeBody.replaceChildren(el('p', {
+          class: 'hint', style: 'margin:0',
+          text: 'Location unavailable — allow location access, and note this needs https.',
+        }));
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 },
+    );
+  } else {
+    relativeBody.replaceChildren(el('p', { class: 'hint', style: 'margin:0', text: 'This browser cannot report your location.' }));
+  }
+
+  /* daylight */
+  const sun = sunTimes([lon, lat]);
+  const clock = (date) => date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  dom.details.append(el('div', { class: 'panel-section' }, [
+    el('h2', { class: 'panel-title', text: 'Daylight today' }),
+    sun.sunrise
+      ? el('div', {}, [
+        detailRow('Sunrise', clock(sun.sunrise)),
+        detailRow('Sunset', clock(sun.sunset)),
+      ])
+      : el('p', { class: 'hint', style: 'margin:0', text: sun.note }),
+  ]));
+
+  /* place — network, so appended when it arrives */
+  const placeSection = el('div', { class: 'panel-section' }, [
+    el('h2', { class: 'panel-title', text: 'Nearest place' }),
+  ]);
+  const placeBody = el('p', { class: 'hint', style: 'margin:0', text: 'Looking up…' });
+  placeSection.append(placeBody);
+  dom.details.append(placeSection);
+
+  reverseGeocode([lon, lat]).then((place) => {
+    if (!place) {
+      placeSection.remove();
+      return;
+    }
+    const rows = [];
+    if (place.address) rows.push(detailRow('Address', place.address, { copy: place.address }));
+    if (place.context) rows.push(detailRow('Town', place.context, { copy: place.context }));
+    if (!rows.length) { placeSection.remove(); return; }
+    placeBody.replaceWith(el('div', {}, rows));
+  });
+}
+
+/** Stats for a loaded file: distance, elevation profile, feature lists. */
+function renderDocumentDetails(entry) {
   const { doc } = entry;
   const stats = doc.stats;
 
@@ -1259,6 +1499,7 @@ function renderDetailsTab() {
     ]),
   ]));
 }
+
 
 function sourceURLFor(entry) {
   const record = findMap(state.catalog, entry.slug);
@@ -1605,8 +1846,8 @@ function renderFolderItem(folder, item) {
     el('span', {
       class: 'folder-item-name', text: props.name, title: props.name,
       role: 'button', tabindex: '0',
-      onclick: () => focusFolderItem(item),
-      onkeydown: (event) => { if (event.key === 'Enter') focusFolderItem(item); },
+      onclick: () => focusFolderItem(item, folder.id),
+      onkeydown: (event) => { if (event.key === 'Enter') focusFolderItem(item, folder.id); },
     }),
     meta ? el('span', { class: 'folder-item-meta', text: meta }) : null,
     isWaypoint
@@ -1719,7 +1960,8 @@ function photoSection(folder, item) {
   return section;
 }
 
-function focusFolderItem(item) {
+function focusFolderItem(item, folderId = null) {
+  if (folderId) selectPin(folderId, item.id, { open: false });
   const feature = item.feature;
   if (feature.geometry?.type === 'Point') {
     state.map.easeTo({ center: feature.geometry.coordinates, zoom: Math.max(state.map.getZoom(), 14), duration: 600 });
@@ -1740,6 +1982,84 @@ function exportFolder(folder) {
   const filename = `${folder.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'folder'}.gpx`;
   downloadText(filename, toGPX(geojson, { name: folder.name }), 'application/gpx+xml');
   toast(`Exported ${geojson.features.length} item${geojson.features.length === 1 ? '' : 's'} as ${filename}.`, { tone: 'ok' });
+}
+
+/* ---------------- waypoints ---------------- */
+
+/**
+ * Every saved waypoint in one list, searchable and filterable by folder.
+ *
+ * The folder tree answers "what is in this trip"; this answers "where did I
+ * save that spring" — which is the question you actually have in the field, and
+ * which a tree makes you hunt for.
+ */
+function renderWaypointsTab() {
+  if (!dom.waypointList) return;
+
+  const folders = state.folders.list();
+  const needle = state.waypointQuery.trim().toLowerCase();
+
+  const rows = [];
+  for (const folder of folders) {
+    if (state.waypointFolderFilter && folder.id !== state.waypointFolderFilter) continue;
+    for (const item of folder.items) {
+      if (item.feature.properties.kind !== 'waypoint') continue;
+      if (needle) {
+        const haystack = `${item.feature.properties.name} ${item.feature.properties.description || ''}`.toLowerCase();
+        if (!haystack.includes(needle)) continue;
+      }
+      rows.push({ folder, item });
+    }
+  }
+
+  rows.sort((a, b) => a.item.feature.properties.name.localeCompare(b.item.feature.properties.name));
+
+  // Keep the folder filter in step without clobbering the current choice.
+  const previous = dom.waypointFolder.value;
+  dom.waypointFolder.replaceChildren(
+    el('option', { value: '', text: 'Every folder' }),
+    ...folders.map((folder) => el('option', { value: folder.id, text: folder.name })),
+  );
+  if (previous && folders.some((folder) => folder.id === previous)) dom.waypointFolder.value = previous;
+  dom.waypointFolder.hidden = folders.length < 2;
+
+  const total = folders.reduce((sum, folder) => sum + state.folders.counts(folder).waypoints, 0);
+  dom.waypointCount.textContent = needle || state.waypointFolderFilter
+    ? `${rows.length} of ${total}` : String(total);
+
+  dom.waypointList.replaceChildren();
+
+  if (!total) {
+    dom.waypointList.append(el('p', {
+      class: 'hint',
+      html: 'No saved waypoints yet. Open a GPX or KML file under <b>Folders</b>, or click a point on the map and save it.',
+    }));
+    return;
+  }
+  if (!rows.length) {
+    dom.waypointList.append(el('p', { class: 'hint', text: 'Nothing matches that search.' }));
+    return;
+  }
+
+  for (const { folder, item } of rows) {
+    const props = item.feature.properties;
+    const selected = state.selectedPin?.itemId === item.id;
+    dom.waypointList.append(el('div', {
+      class: `waypoint-row${selected ? ' is-selected' : ''}`,
+      role: 'button', tabindex: '0',
+      onclick: () => { focusFolderItem(item, folder.id); selectPin(folder.id, item.id); },
+      onkeydown: (event) => { if (event.key === 'Enter') { focusFolderItem(item, folder.id); selectPin(folder.id, item.id); } },
+    }, [
+      el('span', {
+        class: 'folder-item-icon', style: `background:${props.color || folder.color}`,
+        html: pinIconSVG(props.icon || DEFAULT_PIN_ICON, { size: 12, stroke: 2 }),
+      }),
+      el('span', { class: 'waypoint-text' }, [
+        el('span', { class: 'waypoint-name', text: props.name }),
+        el('span', { class: 'waypoint-folder', text: folder.name }),
+      ]),
+    ]));
+  }
 }
 
 /* ---------------- account ---------------- */

@@ -1,0 +1,1 @@
+Put GaiaGPS exports here (.gpx, .kml, .kmz, .geojson), then run: npm run build

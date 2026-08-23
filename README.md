@@ -90,6 +90,23 @@ from the geometry, using the same code the viewer runs in the browser.
 
 ---
 
+## The panel
+
+Four tabs:
+
+- **Layers** — the basemap (pick one) and overlays (stack any number).
+- **Folders** — your saved collection, plus the files you have opened this
+  session and the drop zone that files their waypoints away.
+- **Waypoints** — every saved waypoint in one flat searchable list. The folder
+  tree answers "what is in this trip"; this answers "where did I save that
+  spring", which is the question you actually have in the field.
+- **Details** — everything known about the selected pin: coordinates in four
+  formats with one-press copying, elevation, distance and bearing from where you
+  are, sunrise and sunset, and the nearest town and address.
+
+Everything in Details except the place lookup is arithmetic done on the device,
+which is deliberate: that panel is most useful where there is no signal.
+
 ## Folders and pin styling
 
 Folders are the map's own organiser, and they are entirely client-side.

@@ -531,3 +531,49 @@ html, body { height: 100%; overflow: hidden; }
 .account-who { flex: 1; min-width: 0; }
 .account-email { font-size: .88rem; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .account-meta { font-size: .76rem; color: var(--ink-3); }
+
+/* ==========================================================================
+   Waypoint index and pin details
+   ========================================================================== */
+
+.waypoint-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px; border-radius: var(--radius); cursor: pointer;
+  border: 1px solid transparent;
+}
+.waypoint-row:hover { background: var(--paper-2); }
+.waypoint-row.is-selected { background: var(--clay-soft); border-color: color-mix(in srgb, var(--clay) 26%, transparent); }
+.waypoint-text { display: flex; flex-direction: column; min-width: 0; }
+.waypoint-name { font-size: .89rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.waypoint-folder { font-size: .74rem; color: var(--ink-3); }
+
+.pin-head { display: flex; align-items: flex-start; gap: 11px; }
+.pin-head-icon {
+  width: 34px; height: 34px; border-radius: 50%; flex: none; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px rgba(0, 0, 0, .12);
+}
+.pin-description {
+  margin: 11px 0 0; font-size: .87rem; line-height: 1.5; color: var(--ink-2);
+  white-space: pre-line;
+}
+
+/* Label / value / copy, in a grid so the values line up down the panel. */
+.detail-line {
+  display: grid; grid-template-columns: 78px 1fr auto; gap: 8px;
+  align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line);
+}
+.detail-line:last-child { border-bottom: 0; }
+.detail-line-label { font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); }
+.detail-line-value {
+  font-size: .86rem; font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere; line-height: 1.35;
+}
+.detail-copy { width: 26px; height: 26px; }
+.detail-copy svg { width: 13px; height: 13px; }
+.detail-copy.is-done { color: var(--pine); background: var(--pine-soft); }
+
+@media (max-width: 820px) {
+  .detail-line { grid-template-columns: 72px 1fr auto; }
+  .waypoint-row { padding: 12px 9px; }
+}
