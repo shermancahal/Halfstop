@@ -519,3 +519,15 @@ html, body { height: 100%; overflow: hidden; }
   background: rgba(0, 0, 0, .55); border: 0; border-radius: 50%;
 }
 .photo-remove:hover { background: rgba(0, 0, 0, .8); }
+
+/* Account / sync */
+#account-panel input {
+  width: 100%; font: inherit; font-size: .88rem; color: var(--ink); margin-bottom: 7px;
+  background: var(--surface); border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm); padding: 8px 9px;
+}
+.account-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.account-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.account-who { flex: 1; min-width: 0; }
+.account-email { font-size: .88rem; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-meta { font-size: .76rem; color: var(--ink-3); }

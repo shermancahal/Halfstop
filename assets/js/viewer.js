@@ -27,6 +27,8 @@ import {
   PIN_ICONS, DEFAULT_PIN_ICON, pinIconGroups, pinIconSVG, pinImageId, registerPinImages,
 } from './lib/pin-icons.js';
 import { toGPX } from './lib/gpx-write.js';
+import { Account, isConfigured as accountsAvailable } from './lib/account.js';
+import { describeSync } from './lib/sync.js';
 import {
   putPhoto, photoURL, deletePhoto, pruneUnreferenced, fetchLinkedPhoto, formatBytes, PHOTO_TYPES,
 } from './lib/photos.js';
@@ -54,6 +56,9 @@ const state = {
   layerHealth: new Map(),
   /** { folderId, itemIds } while the pin editor is open, so re-renders keep it. */
   openEditor: null,
+  account: null,
+  /** Typed email, kept across re-renders so an error does not clear the form. */
+  accountEmail: '',
 };
 
 const dom = {};
@@ -131,6 +136,17 @@ async function main() {
   toast = createToaster(dom.toasts);
   initTheme(document.getElementById('theme-toggle'));
   state.folders = new FolderStore();
+  state.account = new Account(state.folders);
+  state.account.addEventListener('change', renderAccount);
+
+  state.folders.onChange((_store, folderId) => {
+    // Push the folder that changed straight away; a full sync still runs on
+    // sign-in and catches anything a failed push missed.
+    if (folderId && state.account?.user) {
+      const folder = state.folders.get(folderId);
+      if (folder) state.account.pushFolder(folder);
+    }
+  });
   state.folders.onChange(() => {
     renderFoldersTab();
     renderDropTarget();
@@ -217,6 +233,8 @@ async function main() {
   renderLayersTab();
   renderFoldersTab();
   renderDropTarget();
+  renderAccount();
+  state.account.init().catch((error) => console.warn('[account]', error.message));
   // Photos whose pin was deleted linger in IndexedDB; clear them once per load
   // rather than at deletion time, where a shared photo could be lost.
   pruneUnreferenced(state.folders.referencedPhotoIds()).catch(() => {});
@@ -298,6 +316,7 @@ function cacheDom() {
   dom.newFolder = document.getElementById('new-folder');
   dom.importIntoFolder = document.getElementById('import-into-folder');
   dom.dropTarget = document.getElementById('drop-target');
+  dom.account = document.getElementById('account-panel');
   dom.quickLayers = document.getElementById('quick-layers');
   dom.quickFolders = document.getElementById('quick-folders');
 }
@@ -1507,7 +1526,11 @@ function renderFolder(folder) {
           const message = counts.total
             ? `Delete “${folder.name}” and its ${counts.total} item${counts.total === 1 ? '' : 's'}? This cannot be undone.`
             : `Delete “${folder.name}”?`;
-          if (window.confirm(message)) state.folders.remove(folder.id);
+          if (!window.confirm(message)) return;
+        const tombstone = state.folders.remove(folder.id);
+        // Push the tombstone so other devices learn of the deletion; without it
+        // the folder would simply reappear on the next sync.
+        if (tombstone && state.account?.user) state.account.pushFolder(tombstone);
         },
       }),
     ]),
@@ -1717,6 +1740,111 @@ function exportFolder(folder) {
   const filename = `${folder.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'folder'}.gpx`;
   downloadText(filename, toGPX(geojson, { name: folder.name }), 'application/gpx+xml');
   toast(`Exported ${geojson.features.length} item${geojson.features.length === 1 ? '' : 's'} as ${filename}.`, { tone: 'ok' });
+}
+
+/* ---------------- account ---------------- */
+
+/**
+ * Sign-in panel and sync status.
+ *
+ * Rendered entirely from account state so there is one source of truth for
+ * what is on screen. When Supabase is not configured the section explains that
+ * folders are device-only rather than showing a sign-in form that cannot work.
+ */
+function renderAccount() {
+  if (!dom.account) return;
+  const account = state.account;
+  dom.account.replaceChildren();
+
+  if (!accountsAvailable()) {
+    dom.account.append(el('p', {
+      class: 'hint',
+      text: 'Accounts are not set up for this deployment, so folders stay in this browser.',
+    }));
+    return;
+  }
+
+  if (account.user) {
+    state.accountEmail = '';
+    const totals = state.folders.totals();
+    dom.account.append(
+      el('div', { class: 'account-row' }, [
+        el('div', { class: 'account-who' }, [
+          el('div', { class: 'account-email', text: account.user.email || 'Signed in' }),
+          el('div', {
+            class: 'account-meta',
+            text: account.status === 'syncing'
+              ? 'Syncing…'
+              : `${totals.folders} folder${totals.folders === 1 ? '' : 's'} synced`
+                + (account.lastSyncAt ? ` · ${new Date(account.lastSyncAt).toLocaleTimeString()}` : ''),
+          }),
+        ]),
+        el('button', {
+          class: 'button button-secondary button-small', type: 'button',
+          text: account.status === 'syncing' ? 'Syncing…' : 'Sync now',
+          disabled: account.status === 'syncing',
+          onclick: async () => {
+            const result = await account.sync();
+            if (result) toast(describeSync(result), { tone: 'ok' });
+          },
+        }),
+        el('button', {
+          class: 'button button-ghost button-small', type: 'button', text: 'Sign out',
+          onclick: () => account.signOut(),
+        }),
+      ]),
+    );
+    if (account.message) dom.account.append(el('p', { class: 'hint', text: account.message }));
+    return;
+  }
+
+  /* signed out */
+  const email = el('input', {
+    type: 'email', placeholder: 'you@example.com', autocomplete: 'email', 'aria-label': 'Email',
+    value: state.accountEmail,
+    oninput: (event) => { state.accountEmail = event.target.value; },
+  });
+  const password = el('input', { type: 'password', placeholder: 'Password', autocomplete: 'current-password', 'aria-label': 'Password' });
+  const busy = (on) => { for (const node of [email, password, ...buttons]) node.disabled = on; };
+
+  const run = async (action) => {
+    state.accountEmail = email.value.trim();
+    if (!state.accountEmail) { toast('Enter your email address first.', { tone: 'error' }); return; }
+    busy(true);
+    try {
+      await action();
+    } catch (error) {
+      toast(error.message, { tone: 'error', timeout: 10000 });
+    } finally {
+      // No re-render here: the account emits 'change' when the status actually
+      // moves, and rebuilding on every attempt would wipe the form mid-typing.
+      busy(false);
+    }
+  };
+
+  const buttons = [
+    el('button', {
+      class: 'button button-primary button-small', type: 'button', text: 'Sign in',
+      onclick: () => run(() => account.signIn(state.accountEmail, password.value)),
+    }),
+    el('button', {
+      class: 'button button-secondary button-small', type: 'button', text: 'Create account',
+      onclick: () => run(() => account.signUp(state.accountEmail, password.value)),
+    }),
+    el('button', {
+      class: 'button button-ghost button-small', type: 'button', text: 'Email me a link',
+      title: 'Sign in without a password',
+      onclick: () => run(() => account.signInWithLink(state.accountEmail)),
+    }),
+  ];
+
+  dom.account.append(
+    el('p', { class: 'hint', style: 'margin-bottom:10px', text: 'Sign in to keep your folders across devices.' }),
+    email,
+    password,
+    el('div', { class: 'account-actions' }, buttons),
+  );
+  if (account.message) dom.account.append(el('p', { class: 'hint', style: 'margin-top:9px', text: account.message }));
 }
 
 /* ---------------- pin styling ---------------- */

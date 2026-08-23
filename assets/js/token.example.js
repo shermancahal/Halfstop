@@ -16,3 +16,11 @@
  * basemaps with no account at all.
  */
 window.ABMAP_MAPBOX_TOKEN = '';
+
+/**
+ * Supabase, for optional accounts and folder sync. Leave empty to run without
+ * accounts. Use the PUBLISHABLE key (sb_publishable_… or the anon key) — never
+ * the secret key, which bypasses all row-level security.
+ */
+window.ABMAP_SUPABASE_URL = '';
+window.ABMAP_SUPABASE_KEY = '';

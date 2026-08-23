@@ -39,9 +39,28 @@ export const MAPBOX_TOKEN = readMapboxToken();
  * decide to rotate it.
  */
 function readMapboxToken() {
-  const injected = typeof globalThis === 'undefined' ? '' : globalThis.ABMAP_MAPBOX_TOKEN;
+  return readGlobal('ABMAP_MAPBOX_TOKEN');
+}
+
+/** Read a value token.js may have set, tolerating its absence entirely. */
+function readGlobal(name) {
+  const injected = typeof globalThis === 'undefined' ? '' : globalThis[name];
   return typeof injected === 'string' ? injected.trim() : '';
 }
+
+/**
+ * Supabase project, for optional accounts and folder sync.
+ *
+ * Both values live in assets/js/token.js with the Mapbox token, gitignored for
+ * the same reasons. The publishable key is designed to be readable in browser
+ * code and is safe here — the SECRET key never is: it bypasses row-level
+ * security entirely and must never appear in anything a browser downloads.
+ *
+ * Leave either empty and the app runs exactly as before, folders on the device
+ * only, with no sign-in button.
+ */
+export const SUPABASE_URL = readGlobal('ABMAP_SUPABASE_URL');
+export const SUPABASE_KEY = readGlobal('ABMAP_SUPABASE_KEY');
 
 /**
  * Rendering engine.
@@ -427,6 +446,6 @@ export const TRACK_COLORS = [
 ];
 
 export default {
-  SITE, MAPBOX_TOKEN, MAP_ENGINE, DEFAULT_VIEW, DEFAULT_UNITS,
+  SITE, MAPBOX_TOKEN, SUPABASE_URL, SUPABASE_KEY, MAP_ENGINE, DEFAULT_VIEW, DEFAULT_UNITS,
   BASEMAPS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN, OVERLAYS, TRACK_COLORS,
 };

@@ -117,6 +117,8 @@ export class FolderStore {
           visible: folder.visible !== false,
           collapsed: folder.collapsed === true,
           created: folder.created || null,
+          updatedAt: folder.updatedAt || 0,
+          deleted: folder.deleted === true,
           items: (Array.isArray(folder.items) ? folder.items : [])
             .filter((item) => item?.feature?.geometry)
             .map((item) => ({ id: item.id || makeId('i'), feature: item.feature })),
@@ -148,9 +150,42 @@ export class FolderStore {
     return () => this.listeners.delete(listener);
   }
 
-  emit() {
+  /**
+   * @param {string|null} folderId  the folder that changed, stamped as modified
+   */
+  emit(folderId = null) {
+    if (folderId) {
+      const folder = this.get(folderId);
+      // Sync compares these, so a change that does not move the clock is a
+      // change that will not travel.
+      if (folder) folder.updatedAt = Date.now();
+    }
     this.save();
-    for (const listener of this.listeners) listener(this);
+    for (const listener of this.listeners) listener(this, folderId);
+  }
+
+  /** Plain copy of every folder, for the sync merge. */
+  snapshot() {
+    return this.folders.map((folder) => ({ ...folder, items: folder.items.map((item) => ({ ...item })) }));
+  }
+
+  /** Replace the whole set, e.g. with the result of a sync merge. */
+  replaceAll(folders) {
+    this.folders = folders.map((folder, index) => ({
+      id: folder.id || makeId('f'),
+      name: clampName(folder.name, `Folder ${index + 1}`),
+      color: folder.color || FOLDER_COLORS[index % FOLDER_COLORS.length],
+      visible: folder.visible !== false,
+      collapsed: folder.collapsed === true,
+      created: folder.created || null,
+      updatedAt: folder.updatedAt || 0,
+      deleted: folder.deleted === true,
+      items: (Array.isArray(folder.items) ? folder.items : [])
+        .filter((item) => item?.feature?.geometry)
+        .map((item) => ({ id: item.id || makeId('i'), feature: item.feature })),
+    })).filter((folder) => !folder.deleted);
+    this.save();
+    for (const listener of this.listeners) listener(this, null);
   }
 
   /* ---------------- folders ---------------- */
@@ -171,6 +206,8 @@ export class FolderStore {
       visible,
       collapsed: false,
       created: Date.now(),
+      updatedAt: Date.now(),
+      deleted: false,
       items: [],
     };
     this.folders.push(folder);
@@ -189,7 +226,7 @@ export class FolderStore {
     const folder = this.get(id);
     if (!folder) return null;
     folder.name = clampName(name, folder.name);
-    this.emit();
+    this.emit(id);
     return folder;
   }
 
@@ -199,14 +236,24 @@ export class FolderStore {
     if (patch.color) folder.color = patch.color;
     if (typeof patch.visible === 'boolean') folder.visible = patch.visible;
     if (typeof patch.collapsed === 'boolean') folder.collapsed = patch.collapsed;
-    this.emit();
+    this.emit(id);
     return folder;
   }
 
+  /**
+   * Delete a folder.
+   *
+   * Returns a tombstone rather than nothing: sync needs to tell "deleted here"
+   * from "never seen on this device", and absence cannot express the
+   * difference. Callers push the tombstone so other devices learn about it.
+   */
   remove(id) {
-    const before = this.folders.length;
-    this.folders = this.folders.filter((folder) => folder.id !== id);
-    if (this.folders.length !== before) this.emit();
+    const folder = this.get(id);
+    if (!folder) return null;
+    this.folders = this.folders.filter((entry) => entry.id !== id);
+    const tombstone = { ...folder, items: [], deleted: true, updatedAt: Date.now() };
+    this.emit();
+    return tombstone;
   }
 
   /* ---------------- items ---------------- */
@@ -233,7 +280,7 @@ export class FolderStore {
       added++;
     }
 
-    if (added) this.emit();
+    if (added) this.emit(folderId);
     return { added, skipped };
   }
 
@@ -242,7 +289,7 @@ export class FolderStore {
     if (!folder) return;
     const before = folder.items.length;
     folder.items = folder.items.filter((item) => item.id !== itemId);
-    if (folder.items.length !== before) this.emit();
+    if (folder.items.length !== before) this.emit(folderId);
   }
 
   moveItem(itemId, fromFolderId, toFolderId) {
@@ -258,7 +305,10 @@ export class FolderStore {
     // Do not create a duplicate if the destination already holds the same point.
     const print = fingerprint(item.feature);
     if (!to.items.some((existing) => fingerprint(existing.feature) === print)) to.items.push(item);
-    this.emit();
+    // A move changes both folders, so both need their clock moved or sync will
+    // carry only half of it.
+    this.emit(fromFolderId);
+    this.emit(toFolderId);
     return true;
   }
 
@@ -285,7 +335,7 @@ export class FolderStore {
       if (touched) changed++;
     }
 
-    if (changed) this.emit();
+    if (changed) this.emit(folderId);
     return changed;
   }
 
@@ -302,7 +352,7 @@ export class FolderStore {
     const text = String(description ?? '').trim().slice(0, 4000);
     if (item.feature.properties.description === text) return false;
     item.feature.properties.description = text;
-    this.emit();
+    this.emit(folderId);
     return true;
   }
 
@@ -316,7 +366,7 @@ export class FolderStore {
     const fresh = photos.filter((photo) => photo?.id && !seen.has(photo.id));
     if (!fresh.length) return 0;
     item.feature.properties.photos = [...existing, ...fresh].slice(0, 24);
-    this.emit();
+    this.emit(folderId);
     return fresh.length;
   }
 
@@ -327,7 +377,7 @@ export class FolderStore {
     const before = (item.feature.properties.photos || []).length;
     item.feature.properties.photos = (item.feature.properties.photos || []).filter((p) => p.id !== photoId);
     if (item.feature.properties.photos.length === before) return false;
-    this.emit();
+    this.emit(folderId);
     return true;
   }
 
@@ -347,7 +397,7 @@ export class FolderStore {
     const item = folder?.items.find((entry) => entry.id === itemId);
     if (!item) return false;
     item.feature.properties.name = clampName(name, item.feature.properties.name);
-    this.emit();
+    this.emit(folderId);
     return true;
   }
 

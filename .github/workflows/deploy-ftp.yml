@@ -56,14 +56,19 @@ jobs:
         id: token
         env:
           MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
-          if [ -n "$MAPBOX_TOKEN" ]; then
-            printf "window.ABMAP_MAPBOX_TOKEN = '%s';\n" "$MAPBOX_TOKEN" > assets/js/token.js
-            echo "Mapbox token written from the secret (${#MAPBOX_TOKEN} characters)"
+          if [ -n "$MAPBOX_TOKEN" ] || [ -n "$SUPABASE_URL" ]; then
+            {
+              printf "window.ABMAP_MAPBOX_TOKEN = '%s';\n" "$MAPBOX_TOKEN"
+              printf "window.ABMAP_SUPABASE_URL = '%s';\n" "$SUPABASE_URL"
+              printf "window.ABMAP_SUPABASE_KEY = '%s';\n" "$SUPABASE_KEY"
+            } > assets/js/token.js
+            echo "Client config written: mapbox=${#MAPBOX_TOKEN} chars, supabase=${#SUPABASE_URL} chars"
             echo "skip=" >> "$GITHUB_OUTPUT"
           else
-            printf "window.ABMAP_MAPBOX_TOKEN = '';\n" > assets/js/token.js
-            echo "No MAPBOX_TOKEN secret set."
+            echo "No MAPBOX_TOKEN or SUPABASE_URL secret set."
             echo "Leaving any token.js already on the server alone, rather than blanking it."
             echo "skip=assets/js/token.js" >> "$GITHUB_OUTPUT"
           fi
