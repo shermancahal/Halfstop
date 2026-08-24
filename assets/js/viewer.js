@@ -14,7 +14,7 @@ import {
   DEFAULT_VIEW, DEFAULT_UNITS, TRACK_COLORS,
 } from './config.js';
 import {
-  loadEngine, buildRasterStyle, hasMapboxToken, overlayParts, overlayIdFromLayer,
+  loadEngine, buildRasterStyle, hasMapboxToken, overlayParts, overlayIdFromLayer, styleFor,
 } from './lib/engine.js';
 import { loadCatalog, findMap } from './lib/catalog.js';
 import { parseMapFile, linePositions } from './lib/parse.js';
@@ -213,9 +213,10 @@ async function main() {
   if (initial.units) state.units = initial.units;
 
   const basemap = basemapById(state.basemapId);
+  const initialStyle = styleFor(basemap, activeOverlays());
   state.map = new gl.Map({
     container: 'map',
-    style: basemap.style && hasMapboxToken() ? basemap.style : buildRasterStyle(basemap, activeOverlays()),
+    style: initialStyle.style,
     center: DEFAULT_VIEW.center,
     zoom: DEFAULT_VIEW.zoom,
     hash: 'view',
@@ -262,7 +263,7 @@ async function main() {
   wireMapClicks();
   // A Mapbox vector style starts without our overlays; the raster path bakes
   // them into the initial style, so this only has work to do in the former case.
-  if (basemap.style && hasMapboxToken()) {
+  if (initialStyle.vector) {
     for (const overlay of activeOverlays()) addOverlayLayer(overlay);
   }
   renderLayersTab();
@@ -873,13 +874,13 @@ function layerBadge(entry) {
 function setBasemap(id) {
   state.basemapId = id;
   const basemap = basemapById(id);
-  const useVectorStyle = Boolean(basemap.style) && hasMapboxToken();
+  const next = styleFor(basemap, activeOverlays());
 
   // A style swap wipes every source, so the data layers are rebuilt on the other
   // side of 'style.load'. The parsed documents live in memory, so this is cheap.
-  state.map.setStyle(useVectorStyle ? basemap.style : buildRasterStyle(basemap, activeOverlays()));
+  state.map.setStyle(next.style);
   state.map.once('style.load', () => {
-    if (useVectorStyle) for (const overlay of activeOverlays()) addOverlayLayer(overlay);
+    if (next.vector) for (const overlay of activeOverlays()) addOverlayLayer(overlay);
     addAppLayers();
     for (const entry of state.documents.values()) addDocumentLayers(entry);
     applyVisibility();

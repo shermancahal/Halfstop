@@ -8,6 +8,7 @@
  */
 
 import { MAPBOX_TOKEN, MAP_ENGINE } from '../config.js';
+import { bywaysStyle } from './byways-style.js';
 
 const MAPLIBRE_VERSION = '4.7.1';
 const MAPBOX_VERSION = '3.7.0';
@@ -123,6 +124,27 @@ export function overlayParts(overlay) {
 export function overlayIdFromLayer(layerId = '') {
   if (!layerId.startsWith(OVERLAY_LAYER_PREFIX)) return '';
   return layerId.slice(OVERLAY_LAYER_PREFIX.length).split('--')[0];
+}
+
+/**
+ * The style document for a basemap, and whether it is vector.
+ *
+ * Three cases, and the difference matters to the caller: a raster style bakes
+ * the overlays into the document, while both vector paths start with only the
+ * basemap's own layers and need overlays added once the style has loaded.
+ *
+ * @returns {{style: object|string, vector: boolean}}
+ */
+export function styleFor(basemap, overlays = []) {
+  if (basemap?.custom === 'byways' && MAPBOX_TOKEN) {
+    return { style: bywaysStyle(MAPBOX_TOKEN), vector: true };
+  }
+  if (basemap?.style && MAPBOX_TOKEN) {
+    return { style: basemap.style, vector: true };
+  }
+  // No token, or no vector rendering for this basemap: draw its raster tiles.
+  // A `custom` basemap always carries a raster fallback for exactly this.
+  return { style: buildRasterStyle(basemap, overlays), vector: false };
 }
 
 export function buildRasterStyle(basemap, overlays = []) {

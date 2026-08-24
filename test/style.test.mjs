@@ -16,8 +16,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildRasterStyle, overlayParts, overlayIdFromLayer } from '../assets/js/lib/engine.js';
+import { buildRasterStyle, overlayParts, overlayIdFromLayer, styleFor } from '../assets/js/lib/engine.js';
 import { BASEMAPS, OVERLAYS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN } from '../assets/js/config.js';
+import { bywaysStyle, PALETTE } from '../assets/js/lib/byways-style.js';
 
 const rasterBasemaps = BASEMAPS.filter((b) => b.tiles);
 const overlays = () => OVERLAYS.map((o) => ({ ...o }));
@@ -199,4 +200,141 @@ test('config: basemaps and overlays have unique ids and attribution', () => {
   for (const entry of [...BASEMAPS, ...OVERLAYS]) {
     assert.ok(entry.attribution, `"${entry.id}" is missing attribution, which the providers require`);
   }
+});
+
+/* ==========================================================================
+   Byways Topo — the one style this project owns
+   ========================================================================== */
+
+test('byways: no token means no vector style, and the raster fallback is used', () => {
+  // The style draws Mapbox's vector tiles. With no token there is nothing to
+  // draw, so the basemap has to fall back rather than render an empty map.
+  assert.equal(bywaysStyle(''), null);
+  assert.equal(bywaysStyle(undefined), null);
+
+  const byways = BASEMAPS.find((b) => b.id === 'byways-topo');
+  assert.ok(byways, 'the custom basemap should exist');
+  assert.ok(Array.isArray(byways.tiles) && byways.tiles.length, 'it needs a raster fallback');
+
+  const result = styleFor(byways, []);
+  assert.equal(result.vector, false, 'without a token this must be the raster path');
+  assert.equal(result.style.layers[0].id, 'basemap');
+});
+
+test('byways: glyphs and sprite are present and are real strings', () => {
+  // Learned the hard way: Mapbox GL validates the style and aborts loading on
+  // any error, and `glyphs: undefined` is an error. A style with label layers
+  // and no glyphs URL renders no labels at all, silently.
+  const style = bywaysStyle('pk.test');
+  assert.equal(typeof style.glyphs, 'string');
+  assert.ok(style.glyphs.includes('{fontstack}') && style.glyphs.includes('{range}'));
+  assert.equal(typeof style.sprite, 'string');
+  assert.ok(style.sprite.length > 0);
+
+  const symbolLayers = style.layers.filter((l) => l.type === 'symbol');
+  assert.ok(symbolLayers.length > 0, 'a topo without labels is not finished');
+});
+
+test('byways: every URL is https, never the mapbox:// scheme', () => {
+  // Only Mapbox GL resolves mapbox://. MapLibre would fail on it, and which
+  // engine runs is a deployment decision rather than this file's.
+  const style = bywaysStyle('pk.test');
+  const urls = [
+    style.glyphs, style.sprite,
+    ...Object.values(style.sources).flatMap((s) => s.tiles || []),
+  ];
+  for (const url of urls) {
+    assert.ok(url.startsWith('https://'), `expected https, got ${url}`);
+    assert.ok(!url.includes('mapbox://'), `mapbox:// will not resolve: ${url}`);
+  }
+});
+
+test('byways: the token reaches every source, and is URL-encoded', () => {
+  const style = bywaysStyle('pk.abc+def/ghi');
+  const encoded = encodeURIComponent('pk.abc+def/ghi');
+  const urls = [style.glyphs, style.sprite, ...Object.values(style.sources).flatMap((s) => s.tiles)];
+  for (const url of urls) {
+    assert.ok(url.includes(`access_token=${encoded}`), `token missing or raw in ${url}`);
+  }
+});
+
+test('byways: every layer points at a source that exists', () => {
+  const style = bywaysStyle('pk.test');
+  const names = new Set(Object.keys(style.sources));
+  for (const layer of style.layers) {
+    if (layer.type === 'background') continue;
+    assert.ok(names.has(layer.source), `${layer.id} references missing source ${layer.source}`);
+    assert.ok(layer['source-layer'], `${layer.id} needs a source-layer on a vector source`);
+  }
+});
+
+test('byways: layer ids are unique and ordering puts labels above roads', () => {
+  const style = bywaysStyle('pk.test');
+  const ids = style.layers.map((l) => l.id);
+  assert.equal(new Set(ids).size, ids.length, 'duplicate layer ids');
+
+  const lastRoad = ids.findLastIndex((id) => id.startsWith('road-') && !id.includes('label') && !id.includes('shield'));
+  const firstLabel = ids.findIndex((id) => id.startsWith('label-'));
+  assert.ok(firstLabel > lastRoad, 'labels must draw over the roads they name');
+});
+
+test('byways: road casings all draw before road fills', () => {
+  // One pass each, not casing-then-fill per class: otherwise a junction shows
+  // each road's outline cutting through its neighbour instead of one road
+  // passing over the other.
+  const ids = bywaysStyle('pk.test').layers.map((l) => l.id);
+  const lastCasing = ids.findLastIndex((id) => id.endsWith('-casing'));
+  const fills = ids.filter((id) => /^road-(motorway|trunk|primary|secondary|tertiary)$/.test(id));
+  assert.ok(fills.length >= 5, 'expected the full road hierarchy');
+  for (const fill of fills) {
+    assert.ok(ids.indexOf(fill) > lastCasing, `${fill} draws before a casing`);
+  }
+});
+
+test('byways: route shields build their image name from the feature', () => {
+  // The thing raster tiles cannot do. Mapbox Streets tags each road with the
+  // shield design and how many characters the number has; the sprite carries an
+  // image per combination. Concatenating them is what makes an I-40 marker look
+  // like an interstate marker.
+  const shield = bywaysStyle('pk.test').layers.find((l) => l.id === 'road-shield');
+  assert.ok(shield, 'no shield layer');
+  assert.equal(shield.type, 'symbol');
+
+  const image = JSON.stringify(shield.layout['icon-image']);
+  assert.ok(image.includes('shield'), 'the image name should come from the shield field');
+  assert.ok(image.includes('reflen'), 'and from how long the number is');
+  assert.ok(image.includes('coalesce'), 'an unknown design should fall back, not vanish');
+
+  assert.deepEqual(shield.layout['text-field'], ['get', 'ref'], 'the shield shows the route number');
+  assert.ok(shield.filter.flat(3).includes('ref'), 'only roads with a number get a shield');
+});
+
+test('byways: the road hierarchy is coloured by class, not uniformly', () => {
+  const style = bywaysStyle('pk.test');
+  const colourOf = (id) => style.layers.find((l) => l.id === id).paint['line-color'];
+  assert.notEqual(colourOf('road-motorway'), colourOf('road-trunk'));
+  assert.notEqual(colourOf('road-trunk'), colourOf('road-primary'));
+  assert.equal(colourOf('road-motorway'), PALETTE.interstate);
+  assert.equal(colourOf('road-trunk'), PALETTE.usRoute);
+});
+
+test('byways: tracks and paths are drawn, and drawn differently from streets', () => {
+  // The whole point of the map: it is for finding the road that is not paved.
+  const style = bywaysStyle('pk.test');
+  const track = style.layers.find((l) => l.id === 'road-track');
+  const path = style.layers.find((l) => l.id === 'road-path');
+  assert.ok(track && path);
+  assert.ok(track.paint['line-dasharray'], 'an unpaved track should not read as sealed');
+  assert.ok(path.paint['line-dasharray']);
+  assert.notEqual(track.paint['line-color'], PALETTE.minor);
+});
+
+test('byways: contours are present, with index lines heavier than the rest', () => {
+  const style = bywaysStyle('pk.test');
+  const plain = style.layers.find((l) => l.id === 'contour');
+  const index = style.layers.find((l) => l.id === 'contour-index');
+  assert.ok(plain && index, 'a topo needs contours');
+  assert.equal(plain.source, 'terrain');
+  assert.deepEqual(index.filter, ['==', ['get', 'index'], 5], 'index lines are every fifth');
+  assert.ok(index.minzoom < plain.minzoom, 'index lines should appear first when zooming in');
 });

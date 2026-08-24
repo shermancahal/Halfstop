@@ -91,8 +91,14 @@ const ESRI_ATTRIBUTION = 'Imagery © <a href="https://www.esri.com/">Esri</a>, M
  */
 export const BASEMAPS = [
   {
-    id: 'cyclosm',
+    id: 'byways-topo',
     name: 'Byways Topo',
+    // The one basemap this project owns. With a Mapbox token it renders from
+    // vector tiles through assets/js/lib/byways-style.js — our palette, our
+    // road hierarchy, real route shields. Without a token there is nothing to
+    // render vector tiles from, so it falls back to the CyclOSM raster below:
+    // the same idea, drawn by somebody else.
+    custom: 'byways',
     group: 'Topographic',
     description: 'OSM rendered for the outdoors — tracks and surfaces.',
     tiles: [
@@ -220,8 +226,8 @@ export const BASEMAPS = [
  * be what people see first rather than something they have to find. The two
  * constants are kept separate because a token still changes what is available.
  */
-export const DEFAULT_BASEMAP = 'cyclosm';
-export const DEFAULT_BASEMAP_WITH_TOKEN = 'cyclosm';
+export const DEFAULT_BASEMAP = 'byways-topo';
+export const DEFAULT_BASEMAP_WITH_TOKEN = 'byways-topo';
 
 /**
  * Overlays drawn on top of the basemap. Each is independently toggleable with
