@@ -245,6 +245,14 @@ async function main() {
     // worth seeing, because a style-level failure is otherwise silent.
     if (/Failed to fetch|NetworkError|AbortError/i.test(message)) return;
     console.error('[map]', message || event);
+    if (/401|403|unauthorized|forbidden|not authorized/i.test(message)) {
+      toast(
+        'Mapbox refused the request — the token is missing, expired, or restricted to other '
+        + 'web addresses. Check the URL restrictions on the token in your Mapbox account.',
+        { tone: 'error', timeout: 16000 },
+      );
+      return;
+    }
     if (/style|glyph|sprite|token|access/i.test(message)) {
       toast(`Map style problem: ${message}`, { tone: 'error', timeout: 12000 });
     }
@@ -262,11 +270,13 @@ async function main() {
   refreshFolderData();
   refreshRegionData();
   wireMapClicks();
+  exposeRoadInspector();
   // A Mapbox vector style starts without our overlays; the raster path bakes
   // them into the initial style, so this only has work to do in the former case.
   if (initialStyle.vector) {
     for (const overlay of activeOverlays()) addOverlayLayer(overlay);
   }
+  renderBuildStamp();
   renderLayersTab();
   renderOfflineTab();
   renderFoldersTab();
@@ -362,6 +372,7 @@ function cacheDom() {
   dom.account = document.getElementById('account-panel');
   dom.offline = document.getElementById('offline-panel');
   dom.offlineCount = document.getElementById('offline-count');
+  dom.buildStamp = document.getElementById('build-stamp');
   dom.quickLayers = document.getElementById('quick-layers');
   dom.quickFolders = document.getElementById('quick-folders');
 }
@@ -481,8 +492,12 @@ function setStatus(busy, text = 'Loading…') {
  * staring at an empty map wondering what they broke.
  */
 function noteLayerHealth(sourceId, ok) {
-  // A combined overlay reports health per source; both map back to one overlay.
-  const layerId = sourceId === 'basemap' ? state.basemapId : overlayIdFromLayer(sourceId);
+  // 'basemap' is our raster source; 'composite' and 'terrain' are the vector
+  // sources the Byways style declares. All three are the basemap as far as the
+  // user is concerned, and without this line a vector basemap that is failing
+  // authentication reports nothing at all — the map is simply empty.
+  const isBasemapSource = sourceId === 'basemap' || sourceId === 'composite' || sourceId === 'terrain';
+  const layerId = isBasemapSource ? state.basemapId : overlayIdFromLayer(sourceId);
   if (!layerId) return;
 
   const health = state.layerHealth.get(layerId) || { ok: 0, failed: 0 };
@@ -618,6 +633,92 @@ function legendList(entries, note = '') {
   const wrap = document.createDocumentFragment();
   wrap.append(list, el('p', { class: 'legend-note', text: note }));
   return wrap;
+}
+
+/**
+ * Show which build is running, at the foot of the panel.
+ *
+ * "The changes did not appear" has been the single most expensive question in
+ * this project, and every time it was ambiguous between three causes: the
+ * deploy did not run, it ran somewhere the site is not served from, or the
+ * browser is still holding old JavaScript. Printing the commit in the app makes
+ * the third one answerable at a glance and the other two answerable by
+ * comparison — no view-source, no deployed.txt, no guessing.
+ *
+ * Silently absent when there is no deployed.txt, which is the normal state for
+ * a local checkout.
+ */
+async function renderBuildStamp() {
+  if (!dom.buildStamp) return;
+  try {
+    const response = await fetch('deployed.txt', { cache: 'no-cache' });
+    if (!response.ok) return;
+
+    const fields = Object.fromEntries(
+      (await response.text()).split('\n')
+        .map((line) => line.split(':').map((part) => part.trim()))
+        .filter((pair) => pair.length >= 2)
+        .map(([key, ...rest]) => [key, rest.join(':').trim()]),
+    );
+
+    const commit = (fields.commit || '').slice(0, 7);
+    const built = fields.built || '';
+    if (!commit && !built) return;
+
+    dom.buildStamp.textContent = [commit && `build ${commit}`, built].filter(Boolean).join(' · ');
+    dom.buildStamp.title = Object.entries(fields).map(([k, v]) => `${k}: ${v}`).join('\n');
+    dom.buildStamp.hidden = false;
+  } catch {
+    // Offline, or a deployment without the stamp. Not worth reporting.
+  }
+}
+
+/**
+ * Report what the road data actually contains, on demand.
+ *
+ * Exposed as `abmapRoadFields()` in the browser console. It exists because the
+ * two worst mistakes in this project were both the same mistake: guessing what
+ * a data source called something instead of looking. Agency field names were
+ * guessed and matched nothing; USGS sub-layer indices were guessed and drew
+ * fire stations.
+ *
+ * Route shields are the next thing that needs this. Which `shield` values
+ * Mapbox actually tags roads with — and whether they distinguish one state's
+ * design from another's — decides how many shield designs are worth drawing,
+ * and it is not answerable from the documentation.
+ */
+function exposeRoadInspector() {
+  globalThis.abmapRoadFields = () => {
+    if (!styleReady()) return 'The map style is still loading — try again in a moment.';
+
+    const layers = state.map.getStyle().layers
+      .filter((layer) => layer['source-layer'] === 'road')
+      .map((layer) => layer.id)
+      .filter((id) => state.map.getLayer(id));
+
+    if (!layers.length) return 'No road layers in the current style — switch to Byways Topo.';
+
+    const features = state.map.queryRenderedFeatures({ layers });
+    const shields = new Map();
+    for (const feature of features) {
+      const props = feature.properties || {};
+      if (!props.ref) continue;
+      const key = props.shield || '(no shield field)';
+      if (!shields.has(key)) shields.set(key, new Set());
+      shields.get(key).add(`${props.ref} [${props.class}]`);
+    }
+
+    if (!shields.size) return 'No numbered roads on screen — pan to a highway and try again.';
+
+    return {
+      zoom: Number(state.map.getZoom().toFixed(1)),
+      roadsOnScreen: features.length,
+      shieldValues: Object.fromEntries(
+        [...shields].map(([shield, refs]) => [shield, [...refs].slice(0, 8)]),
+      ),
+      allFieldsOnOneRoad: features.find((f) => f.properties?.ref)?.properties || null,
+    };
+  };
 }
 
 /* ---------------- offline regions ---------------- */

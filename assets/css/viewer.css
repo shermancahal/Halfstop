@@ -773,3 +773,12 @@ html, body { height: 100%; overflow: hidden; }
 .panel-section.is-quiet { opacity: .72; }
 
 .legend-note { margin: 6px 0 0; font-size: .71rem; line-height: 1.45; color: var(--ink-3); }
+
+/* Which build is running. Small, permanent, and the answer to "did my change
+   deploy" without opening a second tab. */
+.build-stamp {
+  margin: 14px 4px 4px; padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: .68rem; letter-spacing: .03em; color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}

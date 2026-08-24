@@ -242,10 +242,16 @@ export const OVERLAYS = [
     id: 'recreation',
     legend: [
       { color: '#1B5E20', label: 'BLM recreation site' },
+      { color: '#4E342E', label: 'USGS: campground, trailhead, cabin or shelter' },
+      { color: '#6D4C41', label: 'USGS: ranger station, visitor centre or headquarters' },
+      { color: '#8D6E63', label: 'USGS: historic site, monument or point of interest' },
     ],
+    legendNote: 'Two services drawn together — BLM recreation sites and the USGS National Map '
+      + 'structures layers. Each draws in its own agency symbology; if one is down the other '
+      + 'still appears.',
     group: 'Land & access',
     name: 'Recreation sites',
-    description: 'Campgrounds, trailheads and facilities on BLM land.',
+    description: 'Campgrounds, trailheads, cabins, ranger stations and historic sites.',
     // Two agencies, one switch. Nobody planning a trip thinks "I want the BLM
     // campgrounds but not the Forest Service ones" — they want somewhere to
     // sleep. Each source is drawn as its own raster layer so they stack, and
@@ -256,18 +262,33 @@ export const OVERLAYS = [
         tiles: ['https://gis.blm.gov/arcgis/rest/services/recreation/BLM_Natl_Recreation_Site_Points/MapServer/export'
           + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'],
       },
-      // A second source belongs here — this is meant to span agencies — but the
-      // USGS structures layer that was here drew fire and police stations,
-      // because the sub-layer indices were guessed rather than checked. A wrong
-      // endpoint that draws the wrong thing convincingly is worse than none, so
-      // it is out until the right one is confirmed against the live service.
+      {
+        // The USGS structures sub-layers, read off the live service rather than
+        // guessed. The first attempt at this used 16, 17 and 18 — which are
+        // emergency services, so the map filled with fire and police stations.
+        // The indices are listed here by name so the next person can see what
+        // each number is instead of trusting the string.
+        //
+        //   24 Recreation            29 Picnic Areas
+        //   25 Campgrounds           30 Headquarters
+        //   26 Trailheads            31 Visitor / Information Centers
+        //   27 Cabins                32 Ranger Stations
+        //   28 Shelters              46 Historic Sites / Points of Interest
+        //                            47 National Symbols / Monuments
+        name: 'USGS National Map',
+        tiles: ['https://carto.nationalmap.gov/arcgis/rest/services/structures/MapServer/export'
+          + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=512,512&format=png32&transparent=true'
+          + '&layers=show:24,25,26,27,28,29,30,31,32,46,47&f=image'],
+        tileSize: 512,
+      },
     ],
     tileSize: 256,
     maxzoom: 16,
     opacity: 0.95,
     enabled: false,
     unverified: true,
-    attribution: 'Recreation sites © <a href="https://navigator.blm.gov/">BLM</a>',
+    attribution: 'Recreation sites © <a href="https://navigator.blm.gov/">BLM</a>, '
+      + '<a href="https://www.usgs.gov/programs/national-geospatial-program/national-map">USGS</a>',
   },
   {
     id: 'public-lands',

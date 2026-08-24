@@ -13,6 +13,7 @@
  */
 
 import { readFile, writeFile, mkdir, rm, readdir, stat } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,6 +26,9 @@ const ZIP_NAME = 'american-byways-maps.zip';
 
 /** Everything the deployed site needs, and nothing else. */
 const INCLUDE_FILES = ['index.html', 'library.html', 'map.html'];
+
+const textEncoder = new TextEncoder();
+const encoderFor = (text) => textEncoder.encode(text);
 const INCLUDE_DIRS = ['assets', 'data'];
 
 /** Never ship these, even from inside an included directory. */
@@ -219,26 +223,57 @@ async function main() {
 
   const staged = [];
 
+  const html = [];
   for (const name of INCLUDE_FILES) {
     const source = path.join(ROOT, name);
     if (!existsSync(source)) {
       console.error(`Missing required file: ${name}`);
       process.exit(1);
     }
-    staged.push({ name, data: new Uint8Array(await readFile(source)) });
+    html.push({ name, text: await readFile(source, 'utf8') });
   }
 
+  const assets = [];
   for (const dir of INCLUDE_DIRS) {
     const source = path.join(ROOT, dir);
     if (!existsSync(source)) continue;
     for (const file of await collect(source)) {
       const relative = path.relative(ROOT, file).split(path.sep).join('/');
-      staged.push({ name: relative, data: new Uint8Array(await readFile(file)) });
+      assets.push({ name: relative, data: new Uint8Array(await readFile(file)) });
     }
   }
 
+  // Cache-bust the scripts and stylesheets the pages load.
+  //
+  // Filenames here are stable — assets/js/viewer.js is always that — so a
+  // browser that has one cached will keep serving it, and the deploy that
+  // changed it appears to have done nothing. That failure is indistinguishable
+  // from a broken deploy, and this project has spent real time on the
+  // difference. Appending a hash of the file's own contents means the URL
+  // changes exactly when the file does: a changed file is always fetched, an
+  // unchanged one is still served from cache.
+  //
+  // A query string rather than a renamed file, so the paths on disk stay
+  // readable and a human can still find assets/js/viewer.js on the server.
+  const digest = (data) => createHash('sha256').update(data).digest('hex').slice(0, 8);
+  const versions = new Map(assets.map((asset) => [asset.name, digest(asset.data)]));
+
+  let stamped = 0;
+  for (const page of html) {
+    page.text = page.text.replace(/(src|href)="(assets\/[^"?#]+\.(?:js|css))"/g, (match, attr, href) => {
+      const version = versions.get(href);
+      if (!version) return match;
+      stamped += 1;
+      return `${attr}="${href}?v=${version}"`;
+    });
+  }
+
+  for (const page of html) staged.push({ name: page.name, data: encoderFor(page.text) });
+  staged.push(...assets);
+
   const bytes = staged.reduce((sum, entry) => sum + entry.data.length, 0);
   const encoder = new TextEncoder();
+  console.log(`  Cache-busted ${stamped} asset reference(s) across ${html.length} page(s).`);
 
   // token.js is gitignored, so it may not exist. Always emit one: the pages load
   // it with a plain <script> tag, and a missing file would 404 on every visit.
