@@ -85,3 +85,50 @@ test('every hex colour in a CSS value parses as one', async () => {
 
   assert.deepEqual(bad, [], `\n${bad.join('\n')}\n`);
 });
+
+/*
+ * The stray-word variant, which the two checks above cannot see.
+ *
+ * `color: #c4a straight;` and `background: #f0b councils;` are both a valid
+ * colour with a word stuck to it. The hex parses, so the hex check passes; the
+ * word is ASCII, so the character check passes; and CSS quietly drops the whole
+ * declaration, so the rule never applies and nothing says why. Both of those
+ * are real lines that were written here.
+ *
+ * Single-valued colour properties are the tight case: `color` takes one value
+ * and one value only, so a second token in one is always a mistake. Shorthands
+ * like `background` legitimately take several and are left alone.
+ */
+test('single-valued colour properties carry exactly one value', async () => {
+  const SINGLE = new Set([
+    'color', 'background-color', 'border-color', 'border-top-color',
+    'border-right-color', 'border-bottom-color', 'border-left-color',
+    'outline-color', 'fill', 'stroke', 'caret-color', 'text-decoration-color',
+    'column-rule-color', 'accent-color',
+  ]);
+
+  const bad = [];
+  for (const file of await sourceFiles('assets/css')) {
+    const text = await readFile(file, 'utf8');
+    for (const declaration of text.matchAll(/(?:^|[;{])\s*([-a-z]+)\s*:([^;{}]*)[;}]/g)) {
+      const [, property, rawValue] = declaration;
+      if (!SINGLE.has(property)) continue;
+
+      // Collapse functions to a single token before counting. Repeatedly,
+      // because `var(--a, var(--b))` nests, and drop `!important` — both are
+      // ordinary and neither is a second value.
+      let value = rawValue.replace(/!\s*important/gi, ' ');
+      for (let pass = 0; pass < 5; pass += 1) {
+        const collapsed = value.replace(/[a-z-]+\([^()]*\)/gi, 'fn');
+        if (collapsed === value) break;
+        value = collapsed;
+      }
+
+      if (value.trim().split(/\s+/).filter(Boolean).length > 1) {
+        bad.push(`${file}: ${property}: ${rawValue.trim()}`);
+      }
+    }
+  }
+
+  assert.deepEqual(bad, [], `\n${bad.join('\n')}\n`);
+});

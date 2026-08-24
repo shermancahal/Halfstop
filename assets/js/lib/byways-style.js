@@ -57,11 +57,16 @@ export const PALETTE = {
   hillshade: '#5A4834',
   boundary: '#64513B',
 
-  interstate: '#B05F66',     // primary arteries — the muted high-visibility red
-  usRoute: '#C97B3F',        // US routes, one step warmer
-  stateRoute: '#E0A94F',     // state routes — atlas gold
-  major: '#FFFFFF',
-  minor: '#FFFFFF',
+  // Road colours follow the atlas conventions rather than a scheme of their
+  // own: an interstate is blue on every US road map ever printed, a US route
+  // red, a state route amber. The first pass used three warm tones a step apart
+  // — rose, orange, gold — which was pleasant and told you nothing, because on
+  // parchment they read as one colour at speed.
+  interstate: '#2E5C9A',     // interstate blue
+  usRoute: '#C0392B',        // US routes — atlas red
+  stateRoute: '#E09B2D',     // state routes — atlas amber
+  major: '#FFFFFF',          // two-lane paved, white against its casing
+  minor: '#FDFBF6',
   unpaved: '#8C5A28',
   track: '#8C5A28',
   path: '#6B5335',
@@ -74,12 +79,27 @@ export const PALETTE = {
 };
 
 /** Ordered so the smallest roads are drawn first and the biggest end up on top. */
+/*
+ * The road hierarchy, and the thing this style is for.
+ *
+ * Widths were roughly half these and the result read as faint — a motorway at
+ * 1.6px on a parchment ground is a hairline, and at trip-planning zooms the
+ * whole network disappeared into the terrain. An atlas is read in a moving
+ * vehicle in bad light; the roads are the figure and everything else is the
+ * ground.
+ *
+ * Colours are the atlas convention rather than an invention: interstates in
+ * their own strong blue, US routes red, state routes amber, and everything
+ * paved below that in white with a dark casing so it reads as road rather than
+ * as a trail. The two-lane roads a byway actually runs on — secondary and
+ * tertiary — are deliberately not the thinnest thing on the map.
+ */
 const ROAD_CLASSES = {
-  motorway: { colour: PALETTE.interstate, base: 1.6, top: 8 },
-  trunk: { colour: PALETTE.usRoute, base: 1.4, top: 6.5 },
-  primary: { colour: PALETTE.stateRoute, base: 1.2, top: 5.5 },
-  secondary: { colour: PALETTE.major, base: 1, top: 4.5 },
-  tertiary: { colour: PALETTE.minor, base: 0.8, top: 3.8 },
+  motorway: { colour: PALETTE.interstate, base: 3.4, top: 13 },
+  trunk: { colour: PALETTE.usRoute, base: 2.8, top: 11 },
+  primary: { colour: PALETTE.stateRoute, base: 2.4, top: 9.5 },
+  secondary: { colour: PALETTE.major, base: 2, top: 8 },
+  tertiary: { colour: PALETTE.minor, base: 1.5, top: 6.5 },
 };
 
 /**
@@ -369,13 +389,31 @@ function roadLayers() {
       minzoom: className === 'motorway' ? 4 : className === 'trunk' ? 5 : 8,
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
-        'line-color': className === 'secondary' || className === 'tertiary'
-          ? PALETTE.casing
-          : PALETTE.casingDark,
-        'line-width': width(spec.base + 1.4, spec.top + 2.6),
+        /*
+         * Every class gets the dark casing, not just the coloured ones. White
+         * roads on parchment with a mid-brown edge were the faintest thing on
+         * the map, and secondary and tertiary are the two-lane roads a byway
+         * actually runs on — the ones that most need to be findable.
+         */
+        'line-color': PALETTE.casingDark,
+        'line-width': width(spec.base + 1.6, spec.top + 3.2),
       },
     });
   }
+
+  layers.push({
+    id: 'road-street-casing',
+    type: 'line',
+    source: 'composite',
+    'source-layer': 'road',
+    filter: ['match', ['get', 'class'], ['street', 'street_limited'], true, false],
+    minzoom: 11,
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': PALETTE.casing,
+      'line-width': ['interpolate', ['linear'], ['zoom'], 11, 1.6, 16, 5, 18, 7.5],
+    },
+  });
 
   for (const [className, spec] of Object.entries(ROAD_CLASSES)) {
     layers.push({
@@ -396,11 +434,11 @@ function roadLayers() {
     source: 'composite',
     'source-layer': 'road',
     filter: ['match', ['get', 'class'], ['street', 'street_limited'], true, false],
-    minzoom: 12,
+    minzoom: 11,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
       'line-color': PALETTE.minor,
-      'line-width': ['interpolate', ['linear'], ['zoom'], 12, 0.6, 16, 2.4, 18, 4],
+      'line-width': ['interpolate', ['linear'], ['zoom'], 11, 0.8, 16, 3.2, 18, 5.4],
     },
   });
 

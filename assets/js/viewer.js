@@ -44,6 +44,10 @@ import {
 } from './lib/sky.js';
 import { activeAlerts, describeMotion, alertsToGeoJSON } from './lib/storms.js';
 import {
+  runtimeLayers, runtimeSources, IS_LINE, IS_POLY, IS_POINT,
+  FOLDER_SOURCE, REGION_SOURCE, LIGHT_SOURCE, STORM_SOURCE, STORM_ARROW_IMAGE,
+} from './lib/runtime-layers.js';
+import {
   landManager, forecast, weatherClass, publicLand, elevation, skyCover,
 } from './lib/lookup.js';
 import { describeSync } from './lib/sync.js';
@@ -109,6 +113,10 @@ const state = {
   /** { folderId, itemId } for the pin the Details tab is describing. */
   selectedPin: null,
   waypointQuery: '',
+  /** Which page of the waypoint list is showing. Reset by search and filter. */
+  waypointPage: 0,
+  /** folderId -> how many of its items are currently revealed in the tree. */
+  folderReveal: new Map(),
   waypointFolderFilter: '',
   /** Saved offline regions, defined here and downloaded by the mobile app. */
   offline: null,
@@ -118,6 +126,8 @@ const state = {
   openLayerGroups: new Set(),
   /** Details sections the reader has collapsed, remembered across pins. */
   closedDetailSections: new Set(readClosedSections()),
+  /** Set when the chosen basemap could not render as itself, and why. */
+  basemapFallback: '',
   /** Which of the sky panels — twilight, moon, milkyway, lines — is open. */
   skyPanel: readSkyPanel(),
   /** Active NWS warnings for the selected pin, or null while unasked. */
@@ -204,18 +214,11 @@ const layerIdsFor = (key) => [
   `${key}-fill`, `${key}-fill-line`, `${key}-line-casing`, `${key}-line`, `${key}-point-halo`, `${key}-point`,
 ];
 
-const FOLDER_SOURCE = 'folders';
-const REGION_SOURCE = 'offline-regions';
-const LIGHT_SOURCE = 'light-directions';
-const STORM_SOURCE = 'storm-warnings';
 
 const FOLDER_LAYERS = [
   'folders-line-casing', 'folders-line', 'folders-point-halo', 'folders-point', 'folders-point-icon',
 ];
 
-const IS_LINE = ['match', ['geometry-type'], ['LineString', 'MultiLineString'], true, false];
-const IS_POLY = ['match', ['geometry-type'], ['Polygon', 'MultiPolygon'], true, false];
-const IS_POINT = ['match', ['geometry-type'], ['Point', 'MultiPoint'], true, false];
 
 function nextColor() {
   const color = TRACK_COLORS[state.colorCursor % TRACK_COLORS.length];
@@ -292,6 +295,7 @@ async function main() {
 
   const basemap = basemapById(state.basemapId);
   const initialStyle = styleFor(basemap, activeOverlays());
+  state.basemapFallback = initialStyle.fallback || '';
   state.map = new gl.Map({
     container: 'map',
     style: initialStyle.style,
@@ -532,10 +536,12 @@ function wirePanel() {
   dom.quickFolders?.addEventListener('click', () => openTab('folders'));
   dom.waypointSearch?.addEventListener('input', (event) => {
     state.waypointQuery = event.target.value;
+    state.waypointPage = 0;
     renderWaypointsTab();
   });
   dom.waypointFolder?.addEventListener('change', (event) => {
     state.waypointFolderFilter = event.target.value;
+    state.waypointPage = 0;
     renderWaypointsTab();
   });
   document.getElementById('share-button')?.addEventListener('click', shareView);
@@ -622,6 +628,28 @@ function activeOverlays() {
 
 function renderLayersTab() {
   dom.basemapList.replaceChildren();
+
+  /*
+   * Say when the map on screen is not the map that was chosen.
+   *
+   * Without a Mapbox token Byways Topo cannot render — it is a vector style —
+   * and falls back to a raster cycling map. That is a reasonable fallback and
+   * an unreasonable thing to do quietly: the panel said Byways Topo, the screen
+   * showed lavender motorways and no route shields, and the only way to find
+   * out why was to ask.
+   */
+  if (state.basemapFallback) {
+    dom.basemapList.append(el('div', { class: 'basemap-fallback' }, [
+      el('span', { class: 'basemap-fallback-mark', text: '!' }),
+      el('div', {}, [
+        el('div', { text: state.basemapFallback }),
+        el('div', {
+          class: 'basemap-fallback-fix',
+          text: 'Set MAPBOX_TOKEN in the deploy secrets to get the real one.',
+        }),
+      ]),
+    ]));
+  }
 
   // Group by name rather than by position, so config order cannot produce two
   // headings with the same label.
@@ -2146,6 +2174,7 @@ function setBasemap(id) {
   state.basemapId = id;
   const basemap = basemapById(id);
   const next = styleFor(basemap, activeOverlays());
+  state.basemapFallback = next.fallback || '';
 
   // A style swap wipes every source, so the data layers are rebuilt on the other
   // side of 'style.load'. The parsed documents live in memory, so this is cheap.
@@ -2237,173 +2266,16 @@ function addAppLayers() {
   // every registered image, and a layer naming an image that is not there draws
   // nothing and says nothing — so re-register on every style load.
   registerShieldImages(state.map, { state: state.shieldState });
+
   const empty = { type: 'geojson', data: { type: 'FeatureCollection', features: [] } };
-  if (!state.map.getSource('scratch-highlight')) state.map.addSource('scratch-highlight', empty);
-  if (!state.map.getSource('scratch-cursor')) state.map.addSource('scratch-cursor', empty);
-  if (!state.map.getSource(FOLDER_SOURCE)) state.map.addSource(FOLDER_SOURCE, empty);
-  if (!state.map.getSource(REGION_SOURCE)) state.map.addSource(REGION_SOURCE, empty);
-  if (!state.map.getSource(LIGHT_SOURCE)) state.map.addSource(LIGHT_SOURCE, empty);
-
-  // Sun and moon bearings. Drawn over everything, because the whole point is to
-  // read them against the terrain — a line hidden under a road layer answers
-  // nothing. Warm for the sun, cool for the moon, dashed so they never read as
-  // a route you could drive.
-  if (!state.map.getSource(STORM_SOURCE)) state.map.addSource(STORM_SOURCE, empty);
-
-  // Warned areas and where the storm is heading. Under the light lines, over
-  // everything else: this is weather laid on the world, not a route through it.
-  if (!state.map.getLayer('storm-area')) {
-    state.map.addLayer({
-      id: 'storm-area', type: 'fill', source: STORM_SOURCE,
-      filter: ['==', ['get', 'kind'], 'area'],
-      paint: {
-        'fill-color': ['match', ['get', 'severity'], 'Extreme', '#b3261e', 'Severe', '#d97706', '#6b7280'],
-        'fill-opacity': 0.16,
-      },
-    });
-  }
-  if (!state.map.getLayer('storm-outline')) {
-    state.map.addLayer({
-      id: 'storm-outline', type: 'line', source: STORM_SOURCE,
-      filter: ['==', ['get', 'kind'], 'area'],
-      paint: {
-        'line-color': ['match', ['get', 'severity'], 'Extreme', '#b3261e', 'Severe', '#d97706', '#6b7280'],
-        'line-width': 1.8,
-      },
-    });
-  }
-  if (!state.map.getLayer('storm-motion')) {
-    state.map.addLayer({
-      id: 'storm-motion', type: 'line', source: STORM_SOURCE,
-      filter: ['==', ['get', 'kind'], 'motion'],
-      layout: { 'line-cap': 'round' },
-      paint: {
-        'line-color': '#b3261e',
-        'line-width': ['interpolate', ['linear'], ['zoom'], 6, 2.4, 12, 4],
-        'line-opacity': 0.95,
-      },
-    });
-  }
-  if (!state.map.getLayer('storm-head')) {
-    state.map.addLayer({
-      id: 'storm-head', type: 'symbol', source: STORM_SOURCE,
-      filter: ['==', ['get', 'kind'], 'head'],
-      layout: {
-        'icon-image': STORM_ARROW_IMAGE,
-        'icon-size': ['interpolate', ['linear'], ['zoom'], 6, 0.6, 12, 0.95],
-        'icon-rotate': ['get', 'bearing'],
-        'icon-rotation-alignment': 'map',
-        'icon-allow-overlap': true,
-      },
-    });
-  }
-  if (!state.map.getLayer('storm-motion-label')) {
-    state.map.addLayer({
-      id: 'storm-motion-label', type: 'symbol', source: STORM_SOURCE,
-      filter: ['==', ['get', 'kind'], 'motion'],
-      layout: {
-        'symbol-placement': 'line-center',
-        'text-field': ['get', 'label'],
-        'text-size': 11.5,
-        'text-offset': [0, -0.9],
-      },
-      paint: {
-        'text-color': '#8c1d18',
-        'text-halo-color': 'rgba(255,255,255,0.95)',
-        'text-halo-width': 2.2,
-      },
-    });
+  for (const id of runtimeSources()) {
+    if (!state.map.getSource(id)) state.map.addSource(id, empty);
   }
 
-  // A white casing under every line. Without one these were being drawn over a
-  // topo map whose contours are the same weight and a similar warmth, and the
-  // report was simply that they were hard to see — which they were. A casing
-  // gives each line its own ground to sit on whatever it crosses.
-  if (!state.map.getLayer('light-line-casing')) {
-    state.map.addLayer({
-      id: 'light-line-casing', type: 'line', source: LIGHT_SOURCE,
-      layout: { 'line-cap': 'round' },
-      paint: {
-        'line-color': 'rgba(255,255,255,0.85)',
-        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 5.5, 14, 8],
-        'line-opacity': 0.9,
-      },
-    });
-  }
-
-  // Sun, moon and galactic core bearings, drawn over everything: the whole
-  // point is to read them against the terrain, and a line hidden under a road
-  // layer answers nothing. Warm for the sun, cool for the moon, violet for the
-  // core. Rise and set bearings are dashed so they never read as a route you
-  // could drive; where a body is right now is solid, because that one you can
-  // check by looking up.
-  if (!state.map.getLayer('light-line')) {
-    state.map.addLayer({
-      id: 'light-line', type: 'line', source: LIGHT_SOURCE,
-      layout: { 'line-cap': 'round' },
-      paint: {
-        'line-color': ['match', ['get', 'body'], 'moon', '#3d6ea8', 'core', '#7b4fa8', '#d87708'],
-        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2.8, 14, 4.2],
-        'line-dasharray': ['case', ['get', 'now'], ['literal', [1, 0]], ['literal', [2.2, 1.3]]],
-        'line-opacity': 1,
-      },
-    });
-  }
-  if (!state.map.getLayer('light-label')) {
-    state.map.addLayer({
-      id: 'light-label', type: 'symbol', source: LIGHT_SOURCE,
-      layout: {
-        'symbol-placement': 'line-center',
-        'text-field': ['get', 'label'],
-        'text-size': 12.5,
-        'text-offset': [0, -0.9],
-        'text-allow-overlap': false,
-      },
-      paint: {
-        'text-color': ['match', ['get', 'body'], 'moon', '#274b75', 'core', '#57327d', '#8f5206'],
-        'text-halo-color': 'rgba(255,255,255,0.95)',
-        'text-halo-width': 2.2,
-      },
-    });
-  }
-
-  // Region outlines sit under everything else the app draws: they are context
-  // for where your maps stop, not something to read a route through.
-  if (!state.map.getLayer('region-fill')) {
-    state.map.addLayer({
-      id: 'region-fill', type: 'fill', source: REGION_SOURCE,
-      paint: {
-        'fill-color': '#1d4ed8',
-        'fill-opacity': ['case', ['get', 'highlight'], 0.18, 0.05],
-      },
-    });
-  }
-  if (!state.map.getLayer('region-line')) {
-    state.map.addLayer({
-      id: 'region-line', type: 'line', source: REGION_SOURCE,
-      paint: {
-        'line-color': '#1d4ed8',
-        'line-width': ['case', ['get', 'highlight'], 2.6, 1.4],
-        'line-dasharray': [3, 2],
-      },
-    });
-  }
-
-  if (!state.map.getLayer('scratch-highlight-line')) {
-    state.map.addLayer({
-      id: 'scratch-highlight-line', type: 'line', source: 'scratch-highlight', filter: IS_LINE,
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': '#ffffff', 'line-width': 9, 'line-opacity': 0.55, 'line-blur': 1 },
-    });
-  }
-  if (!state.map.getLayer('scratch-cursor-point')) {
-    state.map.addLayer({
-      id: 'scratch-cursor-point', type: 'circle', source: 'scratch-cursor',
-      paint: {
-        'circle-radius': 6, 'circle-color': '#ffffff',
-        'circle-stroke-color': '#b4441f', 'circle-stroke-width': 3,
-      },
-    });
+  // The definitions live in lib/runtime-layers.js so the validator can read
+  // them. Adding them is all that is left here.
+  for (const layer of runtimeLayers()) {
+    if (!state.map.getLayer(layer.id)) state.map.addLayer(layer);
   }
 }
 
@@ -2613,8 +2485,17 @@ function selectPin(folderId, itemId, { open = true } = {}) {
   if (open) openTab('details');
 }
 
-function showFeaturePopup(feature, lngLat) {
-  const props = feature.properties || {};
+function showFeaturePopup(feature, lngLat, { edit = false, identity = null } = {}) {
+  /*
+   * Identity is passed in, not read off the feature.
+   *
+   * `folderId` and `itemId` are stamped on in toGeoJSON, for the copy that goes
+   * to the map source — the stored feature carries neither. So a popup opened
+   * from the folder tree or the waypoint list looked at a pin that was plainly
+   * already filed and offered to file it, because from here it was
+   * indistinguishable from a dropped marker.
+   */
+  const props = { ...(feature.properties || {}), ...(identity || {}) };
   const rows = [];
   // Values arriving from a GL query are stringified; values from our own state
   // are not. Normalise before testing them.
@@ -2647,10 +2528,93 @@ function showFeaturePopup(feature, lngLat) {
     .setLngLat(feature.geometry?.type === 'Point' ? feature.geometry.coordinates : lngLat);
 
   content.append(props.itemId
-    ? savedItemActions(props, popup)
+    ? savedItemActions(props, popup, content)
     : saveToFolderActions(feature, popup));
 
   popup.setDOMContent(content).addTo(state.map);
+
+  // Opened from an edit button rather than from the map: skip the read-only
+  // step nobody asked for.
+  if (edit && props.itemId) openPopupEditor(content, props, popup);
+}
+
+/**
+ * Rename a pin, rewrite its note, and restyle it, without leaving the map.
+ *
+ * Replaces the popup's own body rather than opening a second surface: there is
+ * one thing being edited and it is the thing under the cursor.
+ *
+ * `host` is the node this file put inside the popup, never the popup's own
+ * container — that also holds the close button, and under a stubbed engine it
+ * can turn out to be document.body.
+ */
+function openPopupEditor(host, props, popup) {
+  if (!host || host.querySelector('.popup-edit')) return;
+
+  const folder = state.folders.get(props.folderId);
+  const current = folder?.items.find((item) => item.id === props.itemId);
+  if (!current) return;
+
+  const live = current.feature.properties;
+  const name = el('input', {
+    type: 'text', class: 'popup-edit-name', value: live.name || '', 'aria-label': 'Name',
+  });
+  const description = el('textarea', {
+    class: 'popup-edit-note', rows: '3', 'aria-label': 'Note',
+    placeholder: 'What is here, where to park, what to watch for…',
+  });
+  description.value = live.description || '';
+
+  let icon = live.icon || DEFAULT_PIN_ICON;
+  let colour = live.color || folder.color;
+
+  const swatches = el('div', { class: 'popup-edit-colours' }, FOLDER_COLORS.map((value) => {
+    const button = el('button', {
+      class: `popup-swatch${value === colour ? ' is-on' : ''}`,
+      type: 'button', style: `background:${value}`,
+      'aria-label': `Colour ${value}`,
+      onclick: () => {
+        colour = value;
+        for (const node of swatches.children) node.classList.toggle('is-on', node === button);
+      },
+    });
+    return button;
+  }));
+
+  // Grouped, because a flat list of every symbol is unreadable and the groups
+  // are how anyone looks for one — "somewhere under Water".
+  const iconPicker = el('select', { class: 'popup-edit-icon', 'aria-label': 'Symbol' },
+    [...pinIconGroups()].map(([group, choices]) => el('optgroup', { label: group },
+      choices.map((choice) => el('option', {
+        value: choice.id, text: choice.name, selected: choice.id === icon,
+      })))));
+  iconPicker.addEventListener('change', () => { icon = iconPicker.value; });
+
+  const form = el('div', { class: 'popup-edit' }, [
+    name,
+    description,
+    el('div', { class: 'popup-edit-row' }, [iconPicker]),
+    swatches,
+    el('div', { class: 'popup-actions' }, [
+      el('button', {
+        type: 'button', class: 'is-primary', text: 'Save',
+        onclick: () => {
+          state.folders.editItem(props.folderId, props.itemId, {
+            name: name.value,
+            description: description.value,
+          });
+          state.folders.styleItems(props.folderId, { color: colour, icon }, [props.itemId]);
+          popup.remove();
+          toast('Pin updated.', { tone: 'ok' });
+        },
+      }),
+      el('button', { type: 'button', text: 'Cancel', onclick: () => popup.remove() }),
+    ]),
+  ]);
+
+  host.replaceChildren(form);
+  name.focus();
+  name.select();
 }
 
 /** Actions for a feature that is not yet in a folder: pick one and save. */
@@ -2680,7 +2644,7 @@ function saveToFolderActions(feature, popup) {
 }
 
 /** Actions for a feature already saved in a folder. */
-function savedItemActions(props, popup) {
+function savedItemActions(props, popup, content) {
   const folders = state.folders.list().filter((folder) => folder.id !== props.folderId);
   const children = [];
 
@@ -2702,18 +2666,17 @@ function savedItemActions(props, popup) {
     onclick: () => { popup.remove(); selectPin(props.folderId, props.itemId); },
   }));
 
+  /*
+   * Edit here, on the pin, rather than by jumping to its row in the list.
+   *
+   * The old button opened the Folders tab, re-rendered it and anchored an
+   * editor to the matching row — fine with a dozen pins and useless with a
+   * thousand, which is what a GaiaGPS export actually contains. The pin is
+   * already on screen and already the thing you are pointing at.
+   */
   children.push(el('button', {
-    type: 'button', text: 'Edit style',
-    onclick: () => {
-      const folder = state.folders.get(props.folderId);
-      popup.remove();
-      openTab('folders');
-      if (!folder) return;
-      // Re-render first so the row the editor anchors to exists.
-      renderFoldersTab();
-      const row = dom.folderList.querySelector(`[data-item="${props.itemId}"]`);
-      if (row) openStyleEditor(folder, [props.itemId], row);
-    },
+    type: 'button', text: 'Edit',
+    onclick: () => openPopupEditor(content, props, popup),
   }));
 
   children.push(el('button', {
@@ -3551,8 +3514,6 @@ function stormSection(position) {
  * along a line or centre one on it, neither of which is an arrow — so the tip
  * is its own point feature with its own image, rotated to the bearing.
  */
-const STORM_ARROW_IMAGE = 'abmap-storm-arrow';
-
 function rasterizeStormArrow({ pixelRatio = 2 } = {}) {
   const size = 22;
   const canvas = document.createElement('canvas');
@@ -3949,9 +3910,20 @@ function renderFolder(folder) {
       html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
       onclick: () => state.folders.update(folder.id, { collapsed: !folder.collapsed }),
     }),
-    el('input', {
-      type: 'checkbox', checked: folder.visible, 'aria-label': `Show ${folder.name} on the map`,
-      onchange: (event) => state.folders.update(folder.id, { visible: event.target.checked }),
+    /*
+     * An eye, not a checkbox. A checkbox beside a name in a list of names reads
+     * as "selected", which is what the checkbox on each pin below it actually
+     * means — so the same control did two different jobs one level apart. An
+     * eye only ever means one thing.
+     */
+    el('button', {
+      class: `icon-button folder-eye${folder.visible ? '' : ' is-hidden'}`,
+      type: 'button',
+      title: folder.visible ? `Hide ${folder.name} on the map` : `Show ${folder.name} on the map`,
+      'aria-label': folder.visible ? `Hide ${folder.name} on the map` : `Show ${folder.name} on the map`,
+      'aria-pressed': String(folder.visible),
+      html: folder.visible ? icons.eye : icons.eyeOff,
+      onclick: () => state.folders.update(folder.id, { visible: !folder.visible }),
     }),
     el('button', {
       class: 'folder-swatch', type: 'button', style: `background:${folder.color}`,
@@ -4012,7 +3984,29 @@ function renderFolder(folder) {
   if (!folder.items.length) {
     body.append(el('p', { class: 'folder-empty', text: 'Empty — drag items here, or import from a loaded map.' }));
   } else {
-    for (const item of folder.items) body.append(renderFolderItem(folder, item));
+    /*
+     * Reveal a folder's contents in chunks rather than all at once.
+     *
+     * A GaiaGPS export runs to four figures — one folder here holds 1,320 —
+     * and building that many rows makes the panel slow to open and slow on
+     * every re-render after, of which there is one per checkbox tick. Paging is
+     * wrong for a tree you are dragging things around inside, so this grows
+     * instead: the rest is one click away and the count says what is waiting.
+     */
+    const shown = state.folderReveal.get(folder.id) || FOLDER_REVEAL_STEP;
+    for (const item of folder.items.slice(0, shown)) body.append(renderFolderItem(folder, item));
+
+    const hidden = folder.items.length - shown;
+    if (hidden > 0) {
+      body.append(el('button', {
+        class: 'folder-more', type: 'button',
+        text: `Show ${Math.min(hidden, FOLDER_REVEAL_STEP)} more — ${hidden} not shown`,
+        onclick: () => {
+          state.folderReveal.set(folder.id, shown + FOLDER_REVEAL_STEP);
+          renderFoldersTab();
+        },
+      }));
+    }
   }
 
   // Folders are drop targets so items can be dragged between them.
@@ -4191,12 +4185,15 @@ function photoSection(folder, item) {
   return section;
 }
 
-function focusFolderItem(item, folderId = null) {
+function focusFolderItem(item, folderId = null, { edit = false } = {}) {
   if (folderId) selectPin(folderId, item.id, { open: false });
   const feature = item.feature;
   if (feature.geometry?.type === 'Point') {
     state.map.easeTo({ center: feature.geometry.coordinates, zoom: Math.max(state.map.getZoom(), 14), duration: 600 });
-    showFeaturePopup(feature, feature.geometry.coordinates);
+    showFeaturePopup(feature, feature.geometry.coordinates, {
+      edit,
+      identity: folderId ? { folderId, itemId: item.id } : null,
+    });
   } else {
     const bounds = geojsonBounds({ type: 'FeatureCollection', features: [feature] });
     if (boundsAreValid(bounds)) fitTo(bounds);
@@ -4272,25 +4269,110 @@ function renderWaypointsTab() {
     return;
   }
 
-  for (const { folder, item } of rows) {
-    const props = item.feature.properties;
-    const selected = state.selectedPin?.itemId === item.id;
-    dom.waypointList.append(el('div', {
-      class: `waypoint-row${selected ? ' is-selected' : ''}`,
-      role: 'button', tabindex: '0',
-      onclick: () => { focusFolderItem(item, folder.id); selectPin(folder.id, item.id); },
-      onkeydown: (event) => { if (event.key === 'Enter') { focusFolderItem(item, folder.id); selectPin(folder.id, item.id); } },
-    }, [
-      el('span', {
-        class: 'folder-item-icon', style: `background:${props.color || folder.color}`,
-        html: pinIconSVG(props.icon || DEFAULT_PIN_ICON, { size: 12, stroke: 2 }),
-      }),
-      el('span', { class: 'waypoint-text' }, [
-        el('span', { class: 'waypoint-name', text: props.name }),
-        el('span', { class: 'waypoint-folder', text: folder.name }),
-      ]),
-    ]));
+  /*
+   * Paged, because a real GaiaGPS export is not a short list.
+   *
+   * One folder here holds 1,320 waypoints. Rendering that as 1,320 cards makes
+   * the panel slow to open, slow to scroll and impossible to find anything in —
+   * and every re-render, of which there is one per selection change, pays for
+   * all of it again. Thirty at a time keeps the DOM small, and the search above
+   * is the tool for reaching across pages.
+   */
+  const pages = Math.max(1, Math.ceil(rows.length / WAYPOINT_PAGE_SIZE));
+  const page = Math.min(Math.max(0, state.waypointPage), pages - 1);
+  if (page !== state.waypointPage) state.waypointPage = page;
+
+  const from = page * WAYPOINT_PAGE_SIZE;
+  const visible = rows.slice(from, from + WAYPOINT_PAGE_SIZE);
+
+  for (const { folder, item } of visible) {
+    dom.waypointList.append(waypointCard(folder, item));
   }
+
+  if (pages > 1) dom.waypointList.append(waypointPager(page, pages, rows.length, from, visible.length));
+}
+
+/** How many waypoint cards render at once. */
+const WAYPOINT_PAGE_SIZE = 30;
+
+/** How many folder rows appear before "show more", and how many each click adds. */
+const FOLDER_REVEAL_STEP = 40;
+
+/**
+ * One waypoint, as a card.
+ *
+ * The symbol goes beside the name as a mark rather than being spelled out in a
+ * column of text — "Waterfall" written next to a waterfall icon is the icon
+ * said twice — and the description gets its own line, since on an imported pin
+ * that note is usually the only thing distinguishing it from the forty others
+ * on the same creek.
+ */
+function waypointCard(folder, item) {
+  const props = item.feature.properties;
+  const selected = state.selectedPin?.itemId === item.id;
+  const blurb = String(props.description || '').trim();
+
+  const open = () => { focusFolderItem(item, folder.id); selectPin(folder.id, item.id); };
+
+  return el('div', {
+    class: `waypoint-card${selected ? ' is-selected' : ''}`,
+    role: 'button', tabindex: '0',
+    onclick: open,
+    onkeydown: (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); } },
+  }, [
+    el('span', {
+      class: 'waypoint-mark', style: `background:${props.color || folder.color}`,
+      title: props.symbol || '',
+      html: pinIconSVG(props.icon || DEFAULT_PIN_ICON, { size: 14, stroke: 2 }),
+    }),
+    el('div', { class: 'waypoint-body' }, [
+      el('div', { class: 'waypoint-head' }, [
+        el('span', { class: 'waypoint-name', text: props.name, title: props.name }),
+      ]),
+      blurb ? el('p', { class: 'waypoint-blurb', text: blurb }) : null,
+      el('div', { class: 'waypoint-foot' }, [
+        el('span', { class: 'waypoint-folder', text: folder.name }),
+        props.symbol ? el('span', { class: 'waypoint-symbol', text: props.symbol }) : null,
+      ]),
+    ]),
+    el('button', {
+      class: 'icon-button waypoint-edit', type: 'button',
+      title: `Edit ${props.name}`, 'aria-label': `Edit ${props.name}`,
+      html: icons.brush,
+      onclick: (event) => {
+        // The card behind this button opens the pin; the button opens it ready
+        // to edit, on the map, where the pin you are changing is visible.
+        event.stopPropagation();
+        focusFolderItem(item, folder.id, { edit: true });
+      },
+    }),
+  ]);
+}
+
+/** Page controls, stating what you are looking at rather than only its number. */
+function waypointPager(page, pages, total, from, shown) {
+  const go = (next) => {
+    state.waypointPage = Math.min(Math.max(0, next), pages - 1);
+    renderWaypointsTab();
+    dom.waypointList.scrollTop = 0;
+  };
+
+  return el('div', { class: 'waypoint-pager' }, [
+    el('button', {
+      class: 'button button-ghost button-small', type: 'button', text: 'Previous',
+      disabled: page === 0 || undefined,
+      onclick: () => go(page - 1),
+    }),
+    el('span', {
+      class: 'waypoint-pager-note',
+      text: `${from + 1}–${from + shown} of ${total}`,
+    }),
+    el('button', {
+      class: 'button button-ghost button-small', type: 'button', text: 'Next',
+      disabled: page >= pages - 1 || undefined,
+      onclick: () => go(page + 1),
+    }),
+  ]);
 }
 
 /* ---------------- account ---------------- */

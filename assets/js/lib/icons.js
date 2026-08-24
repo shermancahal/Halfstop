@@ -11,6 +11,7 @@ export const icons = {
   upload: svg('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>'),
   target: svg('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/>'),
   trash: svg('<path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>'),
+  eyeOff: svg('<path d="M10.6 6.2A9.6 9.6 0 0 1 12 6c6.4 0 10 7 10 7a17 17 0 0 1-2.7 3.6"/><path d="M6.3 6.4A17 17 0 0 0 2 13s3.6 7 10 7a9.5 9.5 0 0 0 4.3-1"/><path d="M9.9 10.1a3 3 0 0 0 4.2 4.2"/><path d="M3 3l18 18"/>'),
   eye: svg('<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>'),
   menu: svg('<path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/>'),
   close: svg('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),

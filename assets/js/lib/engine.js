@@ -137,14 +137,29 @@ export function overlayIdFromLayer(layerId = '') {
  */
 export function styleFor(basemap, overlays = []) {
   if (basemap?.custom === 'byways' && MAPBOX_TOKEN) {
-    return { style: bywaysStyle(MAPBOX_TOKEN), vector: true };
+    return { style: bywaysStyle(MAPBOX_TOKEN), vector: true, fallback: '' };
   }
   if (basemap?.style && MAPBOX_TOKEN) {
-    return { style: basemap.style, vector: true };
+    return { style: basemap.style, vector: true, fallback: '' };
   }
-  // No token, or no vector rendering for this basemap: draw its raster tiles.
-  // A `custom` basemap always carries a raster fallback for exactly this.
-  return { style: buildRasterStyle(basemap, overlays), vector: false };
+
+  /*
+   * No token: raster tiles instead.
+   *
+   * `fallback` exists because this substitution used to be silent, and a silent
+   * substitution is a lie the interface tells. Byways Topo without a token
+   * renders CyclOSM — somebody else's cycling map, with pale lavender
+   * motorways, no route shields and none of our palette — while the panel went
+   * on calling it Byways Topo. The report that came back was that the style had
+   * a cycling layer on it and the colours were wrong, which is exactly right
+   * and had nothing to do with the style.
+   */
+  const fallback = basemap?.custom && !MAPBOX_TOKEN
+    ? 'Byways Topo renders from vector tiles and needs a Mapbox token.'
+      + ' Showing CyclOSM raster instead — different colours, and no route shields.'
+    : '';
+
+  return { style: buildRasterStyle(basemap, overlays), vector: false, fallback };
 }
 
 export function buildRasterStyle(basemap, overlays = []) {

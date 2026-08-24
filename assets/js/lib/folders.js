@@ -433,6 +433,34 @@ export class FolderStore {
     return true;
   }
 
+  /**
+   * Edit a pin's own text: what it is called and what you wrote about it.
+   *
+   * Separate from `styleItems`, which is about colour and icon. This is the
+   * part you change standing at the spot — a name that was "Waypoint 214" when
+   * it came out of the GPS, and a note about where the pull-off actually is.
+   *
+   * @returns {boolean} whether an item was found and changed.
+   */
+  editItem(folderId, itemId, { name, description } = {}) {
+    const folder = this.get(folderId);
+    const item = folder?.items.find((entry) => entry.id === itemId);
+    if (!item) return false;
+
+    const props = item.feature.properties;
+    if (name !== undefined) props.name = clampName(name, props.name);
+    // An emptied description is a deletion, not a no-op — but undefined means
+    // "not editing this field", which is a different thing entirely.
+    if (description !== undefined) {
+      const text = String(description).trim().slice(0, 4000);
+      if (text) props.description = text;
+      else delete props.description;
+    }
+
+    this.emit(folderId);
+    return true;
+  }
+
   /* ---------------- reads ---------------- */
 
   /** All items across every folder, each tagged with its folder for rendering. */

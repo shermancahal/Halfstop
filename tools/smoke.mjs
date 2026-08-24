@@ -34,6 +34,7 @@ import path from 'node:path';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FIXTURE = path.join(ROOT, 'test', 'fixtures', 'smoke.gpx');
+const MANY = path.join(ROOT, 'test', 'fixtures', 'many.gpx');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -280,7 +281,7 @@ check('waypoints repaired after a silent diff', afterDiff.folderFeatures, afterI
 console.log('\nThe sky panels open, and the open one is remembered');
 await page.click('.panel-tab[data-tab="waypoints"]');
 await page.waitForTimeout(300);
-await page.locator('.waypoint-row').first().click();
+await page.locator('.waypoint-card').first().click();
 await page.waitForTimeout(900);
 
 check('no panel is open to begin with', await page.locator('.sky-panel').count(), 0);
@@ -314,7 +315,7 @@ await page.reload({ waitUntil: 'networkidle' });
 await page.waitForTimeout(1200);
 await page.click('.panel-tab[data-tab="waypoints"]');
 await page.waitForTimeout(300);
-await page.locator('.waypoint-row').first().click();
+await page.locator('.waypoint-card').first().click();
 await page.waitForTimeout(900);
 check('the open panel survives a reload', await page.locator('.moon-card').count(), 1);
 
@@ -339,7 +340,7 @@ check('every storm feature has a layer that draws it',
 console.log('\nCollapsed Details sections survive a reload');
 await page.click('.panel-tab[data-tab="waypoints"]');
 await page.waitForTimeout(300);
-await page.locator('.waypoint-row').first().click();
+await page.locator('.waypoint-card').first().click();
 await page.waitForTimeout(900);
 const sunMoon = () => page.locator('.detail-block').filter({ hasText: 'For photographers' }).first();
 await page.locator('.detail-block-summary', { hasText: /For photographers/i }).click();
@@ -350,13 +351,95 @@ await page.reload({ waitUntil: 'networkidle' });
 await page.waitForTimeout(1200);
 await page.click('.panel-tab[data-tab="waypoints"]');
 await page.waitForTimeout(300);
-await page.locator('.waypoint-row').first().click();
+await page.locator('.waypoint-card').first().click();
 await page.waitForTimeout(900);
 check('it is still closed after a reload', await sunMoon().evaluate((node) => node.open), false);
 check('sections never collapsed stay open',
   await page.locator('.detail-block').filter({ hasText: 'Field notes' }).first()
     .evaluate((node) => node.open),
   true);
+
+/*
+ * A real GaiaGPS export runs to four figures of waypoints. Rendering all of
+ * them makes the panel slow to open and slow on every re-render after, so both
+ * lists cap what they build — the flat list by page, the tree by growing.
+ */
+console.log('\nLong lists stay short');
+await page.setInputFiles('#file-input', MANY);
+await page.waitForTimeout(1400);
+await page.click('#import-ask button:has-text("New folder")').catch(() => {});
+await page.waitForTimeout(900);
+
+await page.click('.panel-tab[data-tab="waypoints"]');
+await page.waitForTimeout(500);
+const firstPage = await page.locator('.waypoint-card').count();
+check('the flat list renders one page, not the lot', firstPage <= 30 && firstPage > 0, true);
+check('and says where you are in it',
+  /1–30 of \d+/.test(await page.locator('.waypoint-pager').innerText()), true);
+
+await page.locator('.waypoint-pager button', { hasText: 'Next' }).click();
+await page.waitForTimeout(400);
+check('Next advances', /31–60 of \d+/.test(await page.locator('.waypoint-pager').innerText()), true);
+
+// Searching from page 3 must not land on an empty page.
+await page.evaluate(() => {
+  const box = document.querySelector('#waypoint-search');
+  box.value = 'Creamery';
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+});
+await page.waitForTimeout(400);
+const found = await page.locator('.waypoint-card').count();
+check('a search from a later page still shows results', found > 0, true);
+check('and the cards carry the note that tells them apart',
+  await page.locator('.waypoint-blurb').count() > 0, true);
+
+await page.click('.panel-tab[data-tab="folders"]');
+await page.waitForTimeout(500);
+// Per folder, not across the panel: a second folder from an earlier step is
+// still open below this one.
+// Addressed by position, not by "the one with a show-more button": clicking
+// that button is what removes it, so the locator would stop matching.
+const big = page.locator('.folder').filter({ has: page.locator('.folder-more') }).first();
+const bigId = await big.getAttribute('data-folder');
+const folder = page.locator(`.folder[data-folder="${bigId}"]`);
+const rows = await folder.locator('.folder-item').count();
+check('the tree caps what it builds', rows <= 40 && rows > 0, true);
+const more = folder.locator('.folder-more');
+check('and offers the rest', await more.count(), 1);
+await more.click();
+await page.waitForTimeout(400);
+check('which grows it', await folder.locator('.folder-item').count() > rows, true);
+
+console.log('\nA folder is shown or hidden with an eye, not a checkbox');
+const eye = page.locator('.folder-eye').first();
+check('the eye is there', await eye.count(), 1);
+check('and starts visible', await eye.getAttribute('aria-pressed'), 'true');
+await eye.click();
+await page.waitForTimeout(300);
+check('clicking hides the folder', await page.locator('.folder-eye').first().getAttribute('aria-pressed'), 'false');
+await page.locator('.folder-eye').first().click();
+await page.waitForTimeout(300);
+
+console.log('\nA pin is edited on the map, not by hunting for its row');
+await page.click('.panel-tab[data-tab="waypoints"]');
+await page.waitForTimeout(400);
+await page.locator('.waypoint-edit').first().click();
+await page.waitForTimeout(700);
+check('the editor opens on the pin', await page.locator('.popup-edit').count(), 1);
+await page.locator('.popup-edit-name').fill('Renamed on the map');
+await page.locator('.popup-edit button', { hasText: 'Save' }).click();
+await page.waitForTimeout(600);
+
+// Searched for rather than looked for in place: the list is sorted by name and
+// paged, so a rename moves the pin to a different page by definition.
+await page.evaluate(() => {
+  const box = document.querySelector('#waypoint-search');
+  box.value = 'Renamed on the map';
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+});
+await page.waitForTimeout(400);
+check('and the new name reaches the list',
+  await page.locator('.waypoint-card', { hasText: 'Renamed on the map' }).count(), 1);
 
 console.log('\nThe build stamp is readable');
 const stamp = (await page.locator('#build-stamp').innerText().catch(() => '')).trim();

@@ -258,3 +258,52 @@ test('gpx-write: an empty collection is still a valid document', () => {
   assert.match(gpx, /<\/gpx>/);
   assert.equal(parseGPX(gpx).geojson.features.length, 0);
 });
+
+test('editItem changes the text you write, not the styling', () => {
+  const store = new FolderStore({ storage: memoryStorage() });
+  const folder = store.create('Trip');
+  store.addFeatures(folder.id, [{
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [-84, 35] },
+    properties: { name: 'Waypoint 214', kind: 'waypoint', color: '#123456', icon: 'water' },
+  }]);
+
+  const [item] = store.get(folder.id).items;
+  assert.equal(store.editItem(folder.id, item.id, {
+    name: 'Spring below the ford',
+    description: 'Runs clear all summer.',
+  }), true);
+
+  const props = store.get(folder.id).items[0].feature.properties;
+  assert.equal(props.name, 'Spring below the ford');
+  assert.equal(props.description, 'Runs clear all summer.');
+  // Styling is styleItems' job and must survive a text edit untouched.
+  assert.equal(props.color, '#123456');
+  assert.equal(props.icon, 'water');
+});
+
+test('an emptied description is a deletion, an absent one is not an edit', () => {
+  const store = new FolderStore({ storage: memoryStorage() });
+  const folder = store.create('Trip');
+  store.addFeatures(folder.id, [{
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [-84, 35] },
+    properties: { name: 'Pin', kind: 'waypoint', description: 'Something here.' },
+  }]);
+  const [item] = store.get(folder.id).items;
+
+  // Renaming without touching the note must not silently discard it.
+  store.editItem(folder.id, item.id, { name: 'Renamed' });
+  assert.equal(store.get(folder.id).items[0].feature.properties.description, 'Something here.');
+
+  // Clearing the box is a deletion, and leaves no empty string behind.
+  store.editItem(folder.id, item.id, { description: '   ' });
+  assert.ok(!('description' in store.get(folder.id).items[0].feature.properties));
+});
+
+test('editItem reports a miss rather than throwing', () => {
+  const store = new FolderStore({ storage: memoryStorage() });
+  const folder = store.create('Trip');
+  assert.equal(store.editItem(folder.id, 'nope', { name: 'x' }), false);
+  assert.equal(store.editItem('nope', 'nope', { name: 'x' }), false);
+});
