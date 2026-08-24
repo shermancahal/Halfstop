@@ -259,7 +259,9 @@ check('no panel is open to begin with', await page.locator('.sky-panel').count()
 await page.locator('.sky-tab', { hasText: /Milky Way/ }).click();
 await page.waitForTimeout(400);
 check('the Milky Way panel opens', await page.locator('.core-rows').count() > 0, true);
-check('its ceiling is stated', /never rises higher/.test(await page.locator('.sky-panel').innerText()), true);
+const mwText = await page.locator('.sky-panel').innerText();
+check('it leads with how much of the band is up', /Most of the band up\s*\n?\s*\d+%/.test(mwText), true);
+check('and says what the percentage measures', /above the horizon/.test(mwText), true);
 
 await page.locator('.sky-tab', { hasText: /^Moon/ }).click();
 await page.waitForTimeout(400);

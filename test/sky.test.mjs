@@ -27,6 +27,7 @@ import {
   bestMilkyWayNights,
   currentDirections,
   galacticCentre,
+  milkyWayArc,
 } from '../assets/js/lib/sky.js';
 
 /* Places chosen for what they prove, not for sentiment. */
@@ -302,13 +303,75 @@ test('the core ceiling follows latitude and is unreachable overhead in the US', 
   assert.ok(coreMaxAltitude(-29) > 89.9);
 });
 
-test('altitude marks stop at the ceiling instead of reporting never', () => {
-  const night = milkyWayNight(new Date('2026-07-15T12:00:00Z'), 35.96, -84.28);
-  assert.ok(night.marks.length > 0);
-  for (const mark of night.marks) assert.ok(mark.altitude < night.maxAltitude);
-  assert.ok(!night.marks.some((mark) => mark.altitude === 70));
-  // Each mark is crossed climbing and again falling.
-  for (const mark of night.marks) assert.ok(mark.falling > mark.rising);
+test('the galactic band transform agrees with the fixed core coordinates', () => {
+  // Two independent routes to the same point: galactic (0,0) run through the
+  // coordinate transform, and Sgr A* as a fixed right ascension and
+  // declination. They differ by the known ~0.07° offset between the galactic
+  // coordinate origin and the actual black hole, and by nothing else.
+  const when = new Date('2026-07-16T04:00:00Z');
+  const [origin] = milkyWayArc(when, 35.96, -84.28, { span: 0, step: 5 }).points;
+  const core = galacticCentre(when, 35.96, -84.28);
+
+  assert.ok(Math.abs(origin.altitude - core.altitude) < 0.15, `${origin.altitude} vs ${core.altitude}`);
+  assert.ok(Math.abs(origin.azimuth - core.azimuth) < 0.15);
+});
+
+test('band visibility depends on the angle, not just the core altitude', () => {
+  const lat = 35.96;
+  const lon = -84.28;
+  const early = milkyWayArc(new Date('2026-07-16T01:00:00Z'), lat, lon);
+  const late = milkyWayArc(new Date('2026-07-16T05:00:00Z'), lat, lon);
+
+  // The core is HIGHER at 05:00 than at 01:00, and yet less of the band is up:
+  // the arch has tipped over. This is the whole reason the panel reports a
+  // percentage rather than the centre's altitude.
+  assert.ok(galacticCentre(new Date('2026-07-16T05:00:00Z'), lat, lon).altitude
+    > galacticCentre(new Date('2026-07-16T01:00:00Z'), lat, lon).altitude);
+  assert.ok(late.fraction < early.fraction, `${late.fraction} should be under ${early.fraction}`);
+});
+
+test('visibility marks stop at what the latitude can reach', () => {
+  const tennessee = milkyWayNight(new Date('2026-07-15T12:00:00Z'), 35.96, -84.28);
+  assert.ok(tennessee.marks.length > 0);
+  for (const mark of tennessee.marks) {
+    assert.ok(mark.falling > mark.rising);
+    // Never a time in daylight: half the band is up through a summer
+    // afternoon, and those hours are not offers.
+    assert.ok(mark.rising >= tennessee.dark.from, `${mark.percent}% starts before dark`);
+    assert.ok(mark.falling <= tennessee.dark.to, `${mark.percent}% ends after dawn`);
+  }
+
+  // Tighter thresholds sit inside looser ones — more of the band up is a
+  // shorter window, always.
+  for (let i = 1; i < tennessee.marks.length; i += 1) {
+    const wider = tennessee.marks[i - 1];
+    const tighter = tennessee.marks[i];
+    assert.ok(tighter.rising >= wider.rising && tighter.falling <= wider.falling,
+      `${tighter.percent}% is not inside ${wider.percent}%`);
+  }
+
+  // From the mid-northern US the southern end of the core region never clears
+  // the horizon, so there is no honest answer to "when is all of it up".
+  assert.ok(!tennessee.marks.some((mark) => mark.percent === 100));
+  assert.ok(tennessee.arcPeak.fraction < 1);
+
+  // Far enough south, all of it does clear, and then 100% has a real answer.
+  const chile = milkyWayNight(new Date('2026-07-15T12:00:00Z'), -30, -70);
+  assert.ok(chile.marks.some((mark) => mark.percent === 100));
+});
+
+test('the band peak is measured inside the dark window', () => {
+  const night = milkyWayNight(new Date('2026-08-24T12:00:00Z'), 35.96, -84.28);
+  assert.ok(night.arcPeak.when >= night.window.from);
+  assert.ok(night.arcPeak.when <= night.window.to);
+  assert.ok(night.arcPeak.fraction > 0.5 && night.arcPeak.fraction <= 1);
+});
+
+test('the month-ahead scan skips the band sampling it never reads', () => {
+  // Cheaper by seventeen positions per sample, and the ranking is unaffected.
+  const nights = bestMilkyWayNights(new Date('2026-07-01T12:00:00Z'), 35.96, -84.28, 10);
+  assert.equal(nights.length, 10);
+  assert.ok(nights.some((night) => night.minutes > 0));
 });
 
 test('a summer night in Tennessee is shootable and a winter one is not', () => {

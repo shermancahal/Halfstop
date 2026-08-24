@@ -1539,16 +1539,23 @@ function milkyWayPanel(body, date, lat, lon) {
         : `${formatSpan(night.window.minutes)} dark — but the moon is up (${moonPercent}%)` }),
     ]),
     /*
-     * The peak inside the dark window, not the transit. By autumn the core
-     * transits before sunset, and a headline number you cannot photograph is
-     * worse than no headline number.
+     * How much of the arch is up, not how high its centre is.
+     *
+     * The centre's altitude is the wrong headline twice over. It says nothing
+     * about the angle the band makes with the horizon, which is what decides
+     * whether you are looking at a quarter of the Milky Way or all of it — and
+     * measured inside the dark window rather than across the night, because the
+     * arch is at its best long after the transit.
      */
-    el('div', { class: 'core-peak' }, [
-      el('div', { class: 'core-peak-value', text: `${Math.round((night.windowPeak || night).altitude ?? night.transitAltitude)}°` }),
-      el('div', { class: 'core-peak-note', text: night.windowPeak
-        ? `highest ${clockTime(night.windowPeak.when)}`
-        : `highest ${clockTime(night.transit)}` }),
-    ]),
+    night.arcPeak
+      ? el('div', { class: 'core-peak' }, [
+        el('div', { class: 'core-peak-value', text: `${Math.round(night.arcPeak.fraction * 100)}%` }),
+        el('div', { class: 'core-peak-note', text: `up at ${clockTime(night.arcPeak.when)}` }),
+      ])
+      : el('div', { class: 'core-peak' }, [
+        el('div', { class: 'core-peak-value', text: `${Math.round(night.transitAltitude)}°` }),
+        el('div', { class: 'core-peak-note', text: `highest ${clockTime(night.transit)}` }),
+      ]),
   ]));
 
   // Only worth a row of its own when it differs from the peak in the headline —
@@ -1556,16 +1563,23 @@ function milkyWayPanel(body, date, lat, lon) {
   const transitDiffers = night.windowPeak
     && Math.abs(night.windowPeak.altitude - night.transitAltitude) > 0.6;
 
+  const cap = night.marks.length ? night.marks[night.marks.length - 1].percent : 0;
+
   const rows = [
+    night.arcPeak
+      ? ['Most of the band up', `${Math.round(night.arcPeak.fraction * 100)}% at ${clockTime(night.arcPeak.when)}`]
+      : null,
     night.windowPeak
-      ? ['Best in the window', `${clockTime(night.windowPeak.when)} · ${Math.round(night.windowPeak.altitude)}° at ${Math.round(night.windowPeak.azimuth)}°`]
+      ? ['Core highest, in the dark', `${clockTime(night.windowPeak.when)} · ${Math.round(night.windowPeak.altitude)}° at ${Math.round(night.windowPeak.azimuth)}°`]
       : null,
     transitDiffers || !night.windowPeak
       ? ['Core transits', `${clockTime(night.transit)} · ${Math.round(night.transitAltitude)}° at ${Math.round(night.transitAzimuth)}° — before dark`]
       : null,
     ['Astronomical dark', night.dark ? `${clockTime(night.dark.from)} – ${clockTime(night.dark.to)}` : '—'],
     ['Moon', `${moonPercent}% · ${night.moon.name.toLowerCase()}`],
-    ['Ceiling here', `${Math.round(night.maxAltitude)}° — the core never rises higher from this latitude`],
+    cap && cap < 100
+      ? ['Ceiling here', `the southern end of the band never clears the horizon from this latitude`]
+      : null,
   ].filter(Boolean);
   body.append(el('div', { class: 'core-rows' }, rows.map(([label, value]) => el('div', { class: 'core-row' }, [
     el('span', { class: 'core-row-label', text: label }),
@@ -1574,13 +1588,20 @@ function milkyWayPanel(body, date, lat, lon) {
 
   if (night.marks.length) {
     body.append(el('div', { class: 'core-marks' }, [
-      el('div', { class: 'core-marks-label', text: 'Core passes' }),
+      el('div', { class: 'core-marks-label', text: 'Band above the horizon' }),
       ...night.marks.map((mark) => el('span', {
         class: 'core-mark',
-        text: `${mark.altitude}° ${clockTime(mark.rising)} / ${clockTime(mark.falling)}`,
+        text: `${mark.percent}% from ${clockTime(mark.rising)} to ${clockTime(mark.falling)}`,
       })),
     ]));
   }
+
+  body.append(el('p', {
+    class: 'source-note',
+    text: 'Percentages are how much of the bright core region — Scorpius and Sagittarius through'
+      + ' to Aquila — is above the horizon. That depends on the angle the band makes with the'
+      + ' horizon, not just how high its centre is.',
+  }));
 
   body.append(bestNightsList(date, lat, lon));
 }

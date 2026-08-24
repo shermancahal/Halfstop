@@ -533,6 +533,77 @@ export function galacticCentre(date, lat, lon) {
   };
 }
 
+/*
+ * Galactic to equatorial, so the band can be sampled rather than just its
+ * centre.
+ *
+ * The north galactic pole and the galactic longitude of the north celestial
+ * pole, J2000. These three numbers are the whole coordinate transform.
+ */
+const NGP_RA = 192.85948 * RAD;
+const NGP_DEC = 27.12825 * RAD;
+const NCP_LONGITUDE = 122.93192 * RAD;
+
+function galacticToEquatorial(galacticLongitude, galacticLatitude) {
+  const gap = NCP_LONGITUDE - galacticLongitude;
+  const sinB = Math.sin(galacticLatitude);
+  const cosB = Math.cos(galacticLatitude);
+
+  const dec = Math.asin(
+    Math.sin(NGP_DEC) * sinB + Math.cos(NGP_DEC) * cosB * Math.cos(gap),
+  );
+  const ra = NGP_RA + Math.atan2(
+    cosB * Math.sin(gap),
+    Math.cos(NGP_DEC) * sinB - Math.sin(NGP_DEC) * cosB * Math.cos(gap),
+  );
+
+  return { ra, dec };
+}
+
+/**
+ * How much of the Milky Way is above the horizon, as a fraction.
+ *
+ * "The Milky Way" here means the part worth driving out for: the bright core
+ * region either side of the galactic centre — Scorpius and Sagittarius through
+ * to Scutum and Aquila. Taken literally the Milky Way is a great circle right
+ * around the sky, and exactly half of a great circle is above the horizon at
+ * every instant from everywhere, which is a true statement that helps nobody.
+ *
+ * The band is sampled along the galactic equator and each sample tested against
+ * the horizon, so the answer accounts for the thing that actually decides it:
+ * the angle the band makes with the horizon. A band standing upright clears the
+ * horizon all at once; one lying flat comes up a piece at a time, which is why
+ * the same core altitude can mean a quarter of the arch or all of it.
+ *
+ * @returns {{fraction: number, points: object[], highest: object, lowest: object}}
+ */
+export function milkyWayArc(date, lat, lon, { span = 40, step = 5, minAltitude = 0 } = {}) {
+  const westLongitude = RAD * -lon;
+  const latitude = RAD * lat;
+  const sidereal = siderealTime(toDays(date), westLongitude);
+
+  const points = [];
+  for (let longitude = -span; longitude <= span; longitude += step) {
+    const { ra, dec } = galacticToEquatorial(longitude * RAD, 0);
+    const hourAngle = sidereal - ra;
+    points.push({
+      longitude,
+      azimuth: azimuthFromNorth(hourAngle, latitude, dec),
+      altitude: altitude(hourAngle, latitude, dec) / RAD,
+    });
+  }
+
+  const above = points.filter((point) => point.altitude > minAltitude);
+  const byAltitude = [...points].sort((a, b) => a.altitude - b.altitude);
+
+  return {
+    fraction: above.length / points.length,
+    points,
+    lowest: byAltitude[0],
+    highest: byAltitude[byAltitude.length - 1],
+  };
+}
+
 /**
  * The highest the core ever gets from a given latitude.
  *
@@ -558,7 +629,7 @@ export function coreMaxAltitude(lat) {
  * two-minute step lands within a minute of the truth, which is finer than the
  * horizon justifies.
  */
-function sampleNight(noon, lat, lon, stepMinutes) {
+function sampleNight(noon, lat, lon, stepMinutes, withArc) {
   const samples = [];
   const step = stepMinutes * 60000;
   const end = noon.valueOf() + DAY_MS;
@@ -570,6 +641,10 @@ function sampleNight(noon, lat, lon, stepMinutes) {
       core: galacticCentre(when, lat, lon),
       sun: sunPosition(when, lat, lon).altitude,
       moon: moonPosition(when, lat, lon).altitude,
+      // Seventeen extra positions per sample, so it is asked for rather than
+      // assumed: the month-ahead scan ranks nights on moonlight alone and would
+      // pay this cost forty times over for a number it never reads.
+      arc: withArc ? milkyWayArc(when, lat, lon).fraction : 0,
     });
   }
   return samples;
@@ -606,11 +681,11 @@ function windowOf(samples, test) {
  *   reason: string,
  * }}
  */
-export function milkyWayNight(date, lat, lon, { minAltitude = 10, stepMinutes = 2 } = {}) {
+export function milkyWayNight(date, lat, lon, { minAltitude = 10, stepMinutes = 2, arc = true } = {}) {
   const noon = new Date(date);
   noon.setHours(12, 0, 0, 0);
 
-  const samples = sampleNight(noon, lat, lon, stepMinutes);
+  const samples = sampleNight(noon, lat, lon, stepMinutes, arc);
   const ceiling = coreMaxAltitude(lat);
 
   const highest = samples.reduce(
@@ -625,21 +700,33 @@ export function milkyWayNight(date, lat, lon, { minAltitude = 10, stepMinutes = 
   const moonless = windowOf(samples, (s) => shootable(s) && s.moon < 0);
 
   /*
-   * "When will it be at 20°?" has two answers a night — once climbing, once
-   * falling — and only for altitudes the core actually reaches. Marks above the
-   * ceiling are dropped rather than reported as never, because the ceiling is
-   * shown alongside and says the same thing once.
+   * "When is three quarters of it up?" — asked of the band, not the centre.
+   *
+   * Each threshold has two answers a night, once as the arch rises and once as
+   * it tips back over. Thresholds the band never reaches from this latitude are
+   * dropped rather than reported as never: from the mid-northern US the
+   * southern end of the core region simply never clears the horizon, so 100%
+   * has no answer and printing one would be a lie.
    */
-  const marks = [10, 15, 20, 25, 30, 40, 50, 60, 70]
-    // Two degrees of headroom, not one hair: a mark the core grazes for four
-    // minutes at the top of its arc is arithmetically true and useless to plan
-    // around, and reads as a promise the sky does not keep.
-    .filter((mark) => mark <= ceiling - 2)
+  const afterDark = samples.filter((sample) => sample.sun <= ASTRONOMICAL_NIGHT);
+  const peakArc = arc && afterDark.length
+    ? Math.max(...afterDark.map((sample) => sample.arc))
+    : 0;
+
+  const marks = [25, 50, 75, 90, 100]
+    .filter((mark) => arc && mark <= Math.round(peakArc * 100))
     .map((mark) => {
-      const rising = samples.find((s) => s.core.altitude >= mark);
-      const falling = [...samples].reverse().find((s) => s.core.altitude >= mark);
+      /*
+       * Measured only where the sky is dark. Half the band is above the
+       * horizon through most of a summer afternoon, and a chip reading "75%
+       * from 5:22 PM" is technically true and actively misleading — it is a
+       * time you cannot use, printed next to times you can.
+       */
+      const test = (sample) => sample.arc * 100 >= mark;
+      const rising = afterDark.find(test);
+      const falling = [...afterDark].reverse().find(test);
       return rising && falling && falling.when > rising.when
-        ? { altitude: mark, rising: rising.when, falling: falling.when }
+        ? { percent: mark, rising: rising.when, falling: falling.when }
         : null;
     })
     .filter(Boolean);
@@ -657,6 +744,15 @@ export function milkyWayNight(date, lat, lon, { minAltitude = 10, stepMinutes = 
     : [];
   const windowPeak = inWindow.length
     ? inWindow.reduce((best, sample) => (sample.core.altitude > best.core.altitude ? sample : best))
+    : null;
+
+  /*
+   * The most of the band you can have at once, and when — measured inside the
+   * dark window rather than across the whole night, because the arch is at its
+   * best in the west long after the sky has started to grey in the east.
+   */
+  const arcPeak = arc && inWindow.length
+    ? inWindow.reduce((best, sample) => (sample.arc > best.arc ? sample : best))
     : null;
 
   const azimuthWhen = (test) => {
@@ -685,6 +781,9 @@ export function milkyWayNight(date, lat, lon, { minAltitude = 10, stepMinutes = 
     window,
     moonless,
     marks,
+    arcPeak: arcPeak
+      ? { when: arcPeak.when, fraction: arcPeak.arc, altitude: Math.round(arcPeak.core.altitude * 10) / 10 }
+      : null,
     windowPeak: windowPeak
       ? {
         when: windowPeak.when,
@@ -722,7 +821,7 @@ export function bestMilkyWayNights(date, lat, lon, nights = 30, options = {}) {
     night.setHours(12, 0, 0, 0);
     night.setDate(night.getDate() + offset);
 
-    const detail = milkyWayNight(night, lat, lon, { stepMinutes: 10, ...options });
+    const detail = milkyWayNight(night, lat, lon, { stepMinutes: 10, arc: false, ...options });
     results.push({
       date: night,
       minutes: detail.moonless?.minutes || 0,
