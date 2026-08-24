@@ -29,7 +29,9 @@ import {
   PIN_ICONS, DEFAULT_PIN_ICON, pinIconGroups, pinIconSVG, pinImageId, registerPinImages,
 } from './lib/pin-icons.js';
 import { toGPX } from './lib/gpx-write.js';
-import { registerShieldImages } from './lib/route-shields.js';
+import {
+  registerShieldImages, shieldImageExpression, shieldTextColour, stateDesign,
+} from './lib/route-shields.js';
 import { Account, isConfigured as accountsAvailable } from './lib/account.js';
 import {
   formatDD, formatDMS, formatDDM, toUTM, distanceBearing, compassPoint, sunTimes, reverseGeocode,
@@ -84,6 +86,8 @@ const state = {
   interactiveLayers: new Set(),
   /** Set once the out-of-range glyph warning has been logged, to log it once. */
   warnedGlyphRange: false,
+  /** Two-letter code for the state under the map centre, for route shields. */
+  shieldState: '',
   /** The dropped-pin popup, so a second click replaces it rather than stacking. */
   dropPopup: null,
   /** [lon, lat] of a place being described that is not a saved pin. */
@@ -287,6 +291,7 @@ async function main() {
   wireMapClicks();
   exposeRoadInspector();
   keepMapSized();
+  trackShieldState();
   // A Mapbox vector style starts without our overlays; the raster path bakes
   // them into the initial style, so this only has work to do in the former case.
   if (initialStyle.vector) {
@@ -764,6 +769,48 @@ function keepMapSized() {
   setTimeout(resize, 250);
 }
 
+/**
+ * Follow which state the map is over, and swap the route shields to match.
+ *
+ * State route markers differ per state — California's green spade, Utah's
+ * beehive, Pennsylvania's keystone — but the road data does not reliably say
+ * which state a road is in. Where the map is looking does, and a marker that
+ * matches the state you are panning through is correct everywhere except within
+ * a few miles of a border, which is a good trade for markers that are otherwise
+ * all identical rectangles.
+ *
+ * Debounced, cached by the geocoder, and skipped entirely when the state has
+ * not changed — so panning around one state costs nothing after the first
+ * lookup.
+ */
+function trackShieldState() {
+  let timer = null;
+
+  const update = async () => {
+    const centre = state.map.getCenter();
+    const place = await reverseGeocode([centre.lng, centre.lat]).catch(() => null);
+    const code = place?.regionCode || '';
+    if (!code || code === state.shieldState) return;
+
+    state.shieldState = code;
+    registerShieldImages(state.map, { state: code });
+
+    if (!styleReady() || !state.map.getLayer('road-shield')) return;
+    try {
+      state.map.setLayoutProperty('road-shield', 'icon-image', shieldImageExpression(code));
+      state.map.setPaintProperty('road-shield', 'text-color', shieldTextColour(code));
+    } catch (error) {
+      console.warn('[shields] could not update:', error.message);
+    }
+  };
+
+  state.map.on('moveend', () => {
+    clearTimeout(timer);
+    timer = setTimeout(update, 600);
+  });
+  update();
+}
+
 /* ---------------- offline regions ---------------- */
 
 /**
@@ -1104,7 +1151,7 @@ function addAppLayers() {
   // Route shields are images the style refers to by name. A style swap discards
   // every registered image, and a layer naming an image that is not there draws
   // nothing and says nothing — so re-register on every style load.
-  registerShieldImages(state.map);
+  registerShieldImages(state.map, { state: state.shieldState });
   const empty = { type: 'geojson', data: { type: 'FeatureCollection', features: [] } };
   if (!state.map.getSource('scratch-highlight')) state.map.addSource('scratch-highlight', empty);
   if (!state.map.getSource('scratch-cursor')) state.map.addSource('scratch-cursor', empty);

@@ -190,7 +190,7 @@ const geocodeCache = new Map();
  * else in this module works with neither. Results are cached per rounded
  * coordinate, since panning around one pin should not spend a request each time.
  *
- * @returns {Promise<{place: string, address: string, context: string}|null>}
+ * @returns {Promise<{place: string, address: string, context: string, regionCode: string}|null>}
  */
 export async function reverseGeocode([lon, lat]) {
   if (!MAPBOX_TOKEN) return null;
@@ -216,6 +216,10 @@ export async function reverseGeocode([lon, lat]) {
       address: address?.place_name?.split(',')[0] || '',
       place: place?.text || '',
       context: [place?.text, region?.text].filter(Boolean).join(', '),
+      // Two-letter state code, from Mapbox's ISO 3166-2 short code ("US-KY").
+      // Route shields are per-state, and the road data does not reliably say
+      // which state a road is in — where you are looking does.
+      regionCode: (region?.properties?.short_code || '').replace(/^US-/i, '').toUpperCase(),
     };
     geocodeCache.set(key, result);
     return result;

@@ -22,6 +22,7 @@ import { bywaysStyle, PALETTE } from '../assets/js/lib/byways-style.js';
 import {
   shieldDesign, shieldImageId, shieldImageIds, shieldImageExpression,
   rasterizeShield, SHIELD_DESIGNS, SHIELD_TEXT_COLOUR,
+  STATE_SHIELDS, stateDesign, statesWithShields, shieldTextColour,
 } from '../assets/js/lib/route-shields.js';
 
 const rasterBasemaps = BASEMAPS.filter((b) => b.tiles);
@@ -433,4 +434,73 @@ test('shields: rasterizing is skipped rather than thrown without a canvas', () =
   // These tests run in Node. The module must degrade rather than explode, so
   // that importing it anywhere is safe.
   assert.equal(rasterizeShield('interstate', 2), null);
+});
+
+/* ---- per-state shields ---- */
+
+test('shields: a state with no entry falls back rather than guessing', () => {
+  // The table was written without access to a reference. An honest generic
+  // marker beats a confidently wrong one, so anything unlisted falls back.
+  assert.equal(stateDesign('CA'), 'st-CA');
+  assert.equal(stateDesign('ca'), 'st-CA', 'case should not matter');
+  assert.equal(stateDesign('KY'), 'state');
+  assert.equal(stateDesign(''), 'state');
+  assert.equal(stateDesign(undefined), 'state');
+  assert.equal(stateDesign('XX'), 'state');
+});
+
+test('shields: every listed state has a shape the renderer knows how to draw', () => {
+  const drawable = new Set(['diamond', 'circle', 'spade', 'keystone', 'beehive',
+    'outline', 'sunflower', 'zia', 'flag-co', 'square']);
+  for (const [code, entry] of Object.entries(STATE_SHIELDS)) {
+    assert.ok(drawable.has(entry.shape), `${code} uses unknown shape "${entry.shape}"`);
+    assert.match(entry.bg, /^#[0-9a-f]{6}$/i, `${code} needs a background colour`);
+    assert.match(entry.fg, /^#[0-9a-f]{6}$/i, `${code} needs a number colour`);
+  }
+});
+
+test('shields: only the state branch of the expression varies', () => {
+  // Interstates and US routes look the same everywhere; swapping states must
+  // not disturb them.
+  const ca = JSON.stringify(shieldImageExpression('CA'));
+  const ut = JSON.stringify(shieldImageExpression('UT'));
+  assert.notEqual(ca, ut);
+  assert.ok(ca.includes('st-CA') && !ca.includes('st-UT'));
+  assert.ok(ut.includes('st-UT'));
+  for (const expression of [ca, ut]) {
+    assert.ok(expression.includes('us-interstate'), 'the interstate branch must survive');
+    assert.ok(expression.includes('"interstate"'));
+  }
+});
+
+test('shields: an unlisted state produces the same expression as no state at all', () => {
+  assert.equal(
+    JSON.stringify(shieldImageExpression('KY')),
+    JSON.stringify(shieldImageExpression('')),
+  );
+});
+
+test('shields: the number colour follows the shield it sits on', () => {
+  // Several state markers are dark — Arizona's black square, Idaho's black
+  // outline, South Carolina's blue disc — and a dark number on them is invisible.
+  assert.ok(JSON.stringify(shieldTextColour('AZ')).includes('#ffffff'));
+  assert.ok(JSON.stringify(shieldTextColour('SC')).includes('#ffffff'));
+
+  const light = shieldTextColour('NY');
+  assert.equal(light[light.length - 1], '#1c1c1c', 'a white marker takes a dark number');
+
+  for (const [code, entry] of Object.entries(STATE_SHIELDS)) {
+    if (!entry.confident) continue;
+    assert.ok(
+      JSON.stringify(shieldTextColour(code)).includes(entry.fg),
+      `${code}: the number colour should match the table`,
+    );
+  }
+});
+
+test('shields: statesWithShields lists only entries marked confident', () => {
+  const listed = statesWithShields();
+  assert.ok(listed.length > 0);
+  for (const code of listed) assert.equal(STATE_SHIELDS[code].confident, true);
+  assert.deepEqual(listed, [...listed].sort(), 'listed in a stable order');
 });
