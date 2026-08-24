@@ -789,3 +789,43 @@ html, body { height: 100%; overflow: hidden; }
   font-size: .7rem; font-weight: 700; font-variant-numeric: tabular-nums;
   background: rgba(0, 0, 0, .1); color: inherit;
 }
+
+/* ==========================================================================
+   "Where should these waypoints go?" — asked after an import, over the map
+   ========================================================================== */
+
+.import-ask {
+  position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%);
+  z-index: 18; max-width: min(520px, calc(100% - 32px));
+}
+.import-ask[hidden] { display: none; }
+
+.import-ask-card {
+  padding: 13px 15px; border-radius: var(--radius-md, 8px);
+  background: var(--surface); border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-lg, 0 8px 28px rgba(0, 0, 0, .18));
+}
+.import-ask-title {
+  margin: 0; font-size: .95rem; font-weight: 600; line-height: 1.3;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.import-ask-text { margin: 4px 0 11px; font-size: .8rem; color: var(--ink-3); line-height: 1.45; }
+.import-ask-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.import-ask-select {
+  min-width: 0; max-width: 190px; padding: 4px 7px; font: inherit; font-size: .82rem;
+  color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 5px;
+}
+
+@media (max-width: 560px) {
+  .import-ask { left: 12px; right: 12px; transform: none; max-width: none; bottom: 16px; }
+  .import-ask-actions .button { flex: 1 1 auto; }
+}
+
+/* Whose numbers are these? A file's totals are not a folder's. */
+.detail-scope {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 5px;
+  font-size: .7rem; font-weight: 600; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.detail-scope-mark { display: flex; }
+.detail-scope-mark svg { width: 12px; height: 12px; }

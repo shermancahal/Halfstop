@@ -26,11 +26,11 @@ import { el, escapeHTML, createToaster, downloadText, initTheme, formatDate } fr
 import { icons } from './lib/icons.js';
 import { FolderStore, FOLDER_COLORS } from './lib/folders.js';
 import {
-  PIN_ICONS, DEFAULT_PIN_ICON, pinIconGroups, pinIconSVG, pinImageId, registerPinImages,
+  PIN_ICONS, DEFAULT_PIN_ICON, pinIconGroups, pinIconSVG, pinImageId, registerPinImages, rasterizePinIcon,
 } from './lib/pin-icons.js';
 import { toGPX } from './lib/gpx-write.js';
 import {
-  registerShieldImages, shieldImageExpression, shieldTextColour, stateDesign,
+  registerShieldImages, shieldImageExpression, shieldTextColour, stateDesign, rasterizeShieldById,
 } from './lib/route-shields.js';
 import { Account, isConfigured as accountsAvailable } from './lib/account.js';
 import {
@@ -292,6 +292,7 @@ async function main() {
   exposeRoadInspector();
   exposeWaypointInspector();
   keepMapSized();
+  healMissingImages();
   trackShieldState();
   // A Mapbox vector style starts without our overlays; the raster path bakes
   // them into the initial style, so this only has work to do in the former case.
@@ -391,6 +392,7 @@ function cacheDom() {
   dom.newFolder = document.getElementById('new-folder');
   dom.importIntoFolder = document.getElementById('import-into-folder');
   dom.dropTarget = document.getElementById('drop-target');
+  dom.importAsk = document.getElementById('import-ask');
   dom.account = document.getElementById('account-panel');
   dom.offline = document.getElementById('offline-panel');
   dom.offlineCount = document.getElementById('offline-count');
@@ -870,6 +872,112 @@ function exposeWaypointInspector() {
                   : 'everything checks out — pins should be visible',
     };
   };
+}
+
+/**
+ * Generate any icon the style asks for and cannot find.
+ *
+ * A symbol layer whose `icon-image` names an image the map does not have draws
+ * the label and silently omits the icon — which is exactly what happened to the
+ * route shields after switching basemaps and back: numbers with no shield
+ * behind them, and nothing in the console. Registering images on style load is
+ * correct but racy, because the style can ask for one before, or after, or
+ * during that registration.
+ *
+ * This closes the race from the other end. GL tells us the id it wanted; we
+ * make it and hand it over. Nothing the style can name is now unavailable.
+ */
+function healMissingImages() {
+  state.map.on('styleimagemissing', (event) => {
+    const id = event?.id;
+    if (!id || state.map.hasImage?.(id)) return;
+
+    try {
+      let data = null;
+      if (id.startsWith('abmap-shield-')) {
+        data = rasterizeShieldById(id, { pixelRatio: 2 });
+      } else if (id.startsWith('pin-')) {
+        data = rasterizePinIcon(id.slice('pin-'.length), { pixelRatio: 2 });
+      }
+
+      if (data) {
+        state.map.addImage(id, data, { pixelRatio: 2 });
+        return;
+      }
+      // Worth one line: an id we cannot build means the style and this file
+      // disagree about what exists, which is a bug rather than a hiccup.
+      console.warn(`[map] the style asked for an image nothing can build: ${id}`);
+    } catch (error) {
+      console.warn(`[map] could not build image ${id}:`, error.message);
+    }
+  });
+}
+
+/**
+ * Ask where freshly imported waypoints should go.
+ *
+ * The drop zone has always carried a destination picker, but it sits above the
+ * button you just used and defaults to leaving everything loose on the map — so
+ * the common path was importing a file, seeing the waypoints, and having
+ * nothing saved. Pointing at the control in a toast does not help, because the
+ * moment you care about the choice is after the import, not before it.
+ *
+ * Dismissing is a real answer: features stay loaded and visible either way, and
+ * the file can be filed later from the drop zone.
+ */
+function askWhereToFile(entries, waypointCount) {
+  if (!dom.importAsk || !entries.length) return;
+
+  const close = () => { dom.importAsk.hidden = true; dom.importAsk.replaceChildren(); };
+  const waypointsFrom = (entry) => entry.doc.geojson.features
+    .filter((feature) => feature.properties.kind === 'waypoint')
+    .map((feature) => ({ ...feature, properties: { ...feature.properties, sourceName: entry.name } }));
+
+  const fileInto = (folderId) => {
+    let added = 0;
+    for (const entry of entries) {
+      const result = state.folders.addFeatures(folderId, waypointsFrom(entry));
+      added += result.added;
+    }
+    const folder = state.folders.get(folderId);
+    toast(`Filed ${added} waypoint${added === 1 ? '' : 's'} into “${folder.name}”.`, { tone: 'ok' });
+    close();
+    openTab('folders');
+  };
+
+  const folders = state.folders.list();
+  const names = entries.map((entry) => entry.name).join(', ');
+
+  const select = folders.length
+    ? el('select', { class: 'import-ask-select', 'aria-label': 'Folder to file into' },
+      folders.map((folder) => el('option', { value: folder.id, text: folder.name })))
+    : null;
+
+  dom.importAsk.replaceChildren(el('div', { class: 'import-ask-card' }, [
+    el('h2', { class: 'import-ask-title', text: `${waypointCount} waypoint${waypointCount === 1 ? '' : 's'} from ${names}` }),
+    el('p', { class: 'import-ask-text', text: 'Where should these go? Tracks and routes stay on the map either way.' }),
+    el('div', { class: 'import-ask-actions' }, [
+      el('button', {
+        class: 'button button-primary button-small', type: 'button',
+        text: folders.length ? 'New folder' : 'Save to a new folder',
+        onclick: () => {
+          const name = window.prompt('Name the new folder', entries[0].name) ;
+          if (name === null) return;
+          fileInto(state.folders.create(name.trim() || entries[0].name).id);
+        },
+      }),
+      select,
+      select ? el('button', {
+        class: 'button button-secondary button-small', type: 'button', text: 'Add to this folder',
+        onclick: () => fileInto(select.value),
+      }) : null,
+      el('button', {
+        class: 'button button-ghost button-small', type: 'button', text: 'Leave on the map',
+        onclick: close,
+      }),
+    ]),
+  ]));
+  dom.importAsk.hidden = false;
 }
 
 /* ---------------- offline regions ---------------- */
@@ -1724,6 +1832,7 @@ async function handleFiles(files) {
   setStatus(true, `Reading ${accepted.length} file${accepted.length > 1 ? 's' : ''}…`);
   let bounds = null;
   const filedInto = [];
+  const opened = [];   // loaded but not filed anywhere yet
   for (const file of accepted) {
     try {
       const isBinary = /\.kmz$/i.test(file.name);
@@ -1735,7 +1844,7 @@ async function handleFiles(files) {
       }
       const entry = await addDocument({ name: doc.name || file.name, doc, origin: 'local', fit: false });
       const filed = fileOpenedDocument(entry);
-      if (filed) filedInto.push(filed);
+      if (filed) filedInto.push(filed); else opened.push(entry);
       bounds = bounds ? mergeBounds(bounds, doc.bbox) : doc.bbox;
     } catch (error) {
       toast(`${file.name}: ${error.message}`, { tone: 'error', timeout: 9000 });
@@ -1754,10 +1863,13 @@ async function handleFiles(files) {
       const waypoints = [...state.documents.values()]
         .filter((entry) => entry.origin === 'local')
         .reduce((sum, entry) => sum + entry.doc.stats.waypointCount, 0);
-      toast(waypoints
-        ? `${loaded} Nothing was uploaded — pick a destination above to file waypoints automatically.`
-        : `${loaded} These stay in your browser — nothing is uploaded.`,
-      { tone: 'ok', timeout: 9000 });
+      if (waypoints) {
+        // Asking beats a toast pointing at a control you have not found yet.
+        askWhereToFile(opened, waypoints);
+        toast(loaded, { tone: 'ok', timeout: 5000 });
+      } else {
+        toast(`${loaded} These stay in your browser — nothing is uploaded.`, { tone: 'ok', timeout: 9000 });
+      }
     }
   }
   selectTab('details');
@@ -2398,7 +2510,20 @@ function renderDocumentDetails(entry) {
   if (stats.duration_s) statBlocks.push(['Moving time', formatDuration(stats.duration_s)]);
   if (stats.startTime) statBlocks.push(['Recorded', formatDate(stats.startTime)]);
 
+  // Say plainly that these are one opened file's totals. Read without that,
+  // a folder name above a distance and an ascent looks like the folder has a
+  // length and a climb — which it does not; the track inside it does. When the
+  // file holds several tracks the numbers are a sum, which is worth admitting.
+  const trackCount = stats.trackCount ?? 0;
+  const scope = trackCount > 1
+    ? `Totals across ${trackCount} tracks in this file`
+    : 'From this opened file';
+
   dom.details.append(el('div', { class: 'panel-section' }, [
+    el('div', { class: 'detail-scope' }, [
+      el('span', { class: 'detail-scope-mark', html: icons.file }),
+      el('span', { text: scope }),
+    ]),
     el('h2', { class: 'panel-title is-name', text: entry.name }),
     doc.description ? el('p', { class: 'hint', style: 'margin-bottom:14px', text: doc.description.slice(0, 320) }) : null,
     el('div', { class: 'detail-stats' }, statBlocks.map(([label, value]) => el('div', {}, [

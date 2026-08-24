@@ -453,6 +453,30 @@ export function rasterizeShield(design, length, { pixelRatio = 2 } = {}) {
 }
 
 /**
+ * Rebuild one shield from its image id.
+ *
+ * The counterpart to the style naming images it expects to exist. Ids look like
+ * `abmap-shield-us-3` or `abmap-shield-st-CA-2`, so the split is on the last
+ * dash — the design itself contains one.
+ *
+ * @returns {ImageData|null}
+ */
+export function rasterizeShieldById(id, options = {}) {
+  const prefix = 'abmap-shield-';
+  if (!String(id).startsWith(prefix)) return null;
+
+  const rest = id.slice(prefix.length);
+  const split = rest.lastIndexOf('-');
+  if (split < 1) return null;
+
+  const design = rest.slice(0, split);
+  const length = Number(rest.slice(split + 1));
+  if (!Number.isFinite(length)) return null;
+
+  return rasterizeShield(design, length, options);
+}
+
+/**
  * Register every shield image with a map.
  *
  * Idempotent, and safe to call after each style load — a style swap discards
