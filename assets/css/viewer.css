@@ -934,31 +934,62 @@ html, body { height: 100%; overflow: hidden; }
   font-size: .68rem; color: var(--ink-3); font-variant-numeric: tabular-nums;
 }
 
-.sky-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin: 12px 0 4px;
+/* The four times worth setting an alarm for, on two lines over a sky wash.
+   Same device as the weather card and for the same reason: the panel should
+   read before the text does. Warm at the sunrise end, cool at the sunset end,
+   so the two halves are the two ends of the day without a label saying so. */
+.light-hero {
+  margin: 12px 0 4px; border-radius: var(--radius);
+  border: 1px solid var(--line); overflow: hidden;
+  background: linear-gradient(135deg, #f6d9a8 0%, #eec98f 38%, #9fb6d4 72%, #7d97bd 100%);
+  --light-ink: #2a2b38; --light-ink-soft: #4b4f63;
 }
-.sky-cell {
-  padding: 8px 10px; border-radius: var(--radius-sm);
-  background: var(--surface-2); border: 1px solid var(--line);
+.light-row { display: grid; grid-template-columns: 1fr 1fr; }
+.light-row.is-secondary {
+  border-top: 1px solid rgba(255, 255, 255, .45);
+  background: rgba(255, 255, 255, .28);
 }
-.sky-cell-label {
-  font-size: .67rem; font-weight: 600; letter-spacing: .05em;
-  text-transform: uppercase; color: var(--ink-3);
+.light-half {
+  display: flex; align-items: center; gap: 9px; min-width: 0;
+  padding: 10px 11px;
 }
-.sky-cell-value {
-  font-family: var(--font-serif); font-size: 1.16rem; line-height: 1.2; margin-top: 2px;
-  font-variant-numeric: tabular-nums;
+.light-half + .light-half { border-left: 1px solid rgba(255, 255, 255, .45); }
+.light-glyph { flex: none; display: flex; color: var(--light-ink); }
+.light-glyph svg { display: block; }
+.light-text { min-width: 0; }
+.light-label {
+  font-size: .64rem; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--light-ink-soft);
 }
-.sky-cell-note { font-size: .69rem; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.light-time {
+  font-family: var(--font-serif); font-size: 1.12rem; line-height: 1.15;
+  color: var(--light-ink); font-variant-numeric: tabular-nums;
+}
+.light-note {
+  font-size: .68rem; color: var(--light-ink-soft); font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
-.sky-more { margin-top: 10px; }
-.sky-more > summary {
-  cursor: pointer; list-style: none;
-  font-size: .74rem; font-weight: 600; color: var(--ink-2); padding: 4px 0;
+/* Four things that are all "more about the sky here" used to be a text
+   dropdown, an always-open card and a lone button — three affordances for one
+   idea. One row of buttons, one box below. */
+.sky-tabs {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 12px 0 0;
 }
-.sky-more > summary::-webkit-details-marker { display: none; }
-.sky-more > summary::before { content: '▸ '; }
-.sky-more[open] > summary::before { content: '▾ '; }
+.sky-tab {
+  padding: 7px 9px; border-radius: var(--radius-sm);
+  border: 1px solid var(--line); background: var(--surface-2);
+  font: inherit; font-size: .74rem; font-weight: 600; color: var(--ink-2);
+  cursor: pointer; white-space: nowrap;
+}
+.sky-tab:hover { border-color: var(--line-strong); color: var(--ink); }
+.sky-tab.is-open {
+  background: var(--ink); border-color: var(--ink); color: var(--paper);
+}
+.sky-panel {
+  margin-top: 10px; padding: 11px; border-radius: var(--radius-sm);
+  border: 1px solid var(--line); background: var(--surface-2);
+}
 
 .sky-phases { display: grid; gap: 3px; margin: 4px 0 0; }
 .sky-phase {
@@ -978,7 +1009,7 @@ html, body { height: 100%; overflow: hidden; }
 
 /* The moon, drawn at the phase it is actually at. */
 .moon-card {
-  display: flex; align-items: center; gap: 12px; margin-top: 12px;
+  display: flex; align-items: center; gap: 12px;
   padding: 10px 12px; border-radius: var(--radius-sm);
   background: linear-gradient(140deg, #1d2436, #38415c);
   --moon-lit: #f4efe0; --moon-dark: #2b3247; --moon-edge: rgba(255, 255, 255, .28);
@@ -989,7 +1020,102 @@ html, body { height: 100%; overflow: hidden; }
 .moon-name { font-size: .92rem; font-weight: 600; color: #f2ede1; }
 .moon-meta { font-size: .74rem; color: #b9c0d2; font-variant-numeric: tabular-nums; }
 
-.sky-lines-toggle { width: 100%; margin-top: 12px; }
+.sky-lines-toggle { width: 100%; margin-bottom: 11px; }
+
+/* ---- severe weather ---- */
+
+/* Severity sets the edge, because the difference between a flood watch and a
+   tornado warning is the whole message and reading it should not require
+   reading the words. */
+.storm-card {
+  padding: 9px 11px; border-radius: var(--radius-sm); margin-bottom: 8px;
+  border: 1px solid var(--line); border-left: 4px solid var(--storm-edge, var(--ink-3));
+  background: var(--surface-2);
+}
+.storm-card.is-extreme { --storm-edge: #b3261e; }
+.storm-card.is-severe  { --storm-edge: #d97706; }
+.storm-card.is-moderate { --storm-edge: #b58900; }
+.storm-event { font-size: .84rem; font-weight: 600; color: var(--ink); }
+.storm-motion {
+  display: flex; align-items: center; gap: 6px; margin-top: 3px;
+  font-size: .78rem; color: var(--ink-2);
+}
+.storm-motion.is-quiet { color: var(--ink-3); font-size: .72rem; }
+.storm-arrow { display: flex; color: var(--storm-edge, var(--ink-2)); }
+.storm-area { font-size: .71rem; color: var(--ink-3); margin-top: 3px; }
+.storm-expires { font-size: .71rem; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+/* ---- the galactic core ---- */
+
+/* A night sky, because the thing being described is one. The wash carries the
+   verdict before the numbers do: a good night is deep and clear, a poor one is
+   washed out the way a moonlit sky actually is. */
+.core-hero {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 11px 12px; border-radius: var(--radius-sm);
+  background: linear-gradient(140deg, #10162b, #26315a 60%, #3c3a63);
+  color: #eae7f5;
+}
+.core-hero.is-fair { background: linear-gradient(140deg, #1c2036, #3a3f63 60%, #5b5680); }
+.core-hero.is-poor { background: linear-gradient(140deg, #34364a, #5c5d75 60%, #83829a); }
+.core-headline { min-width: 0; }
+.core-window {
+  font-family: var(--font-serif); font-size: 1.16rem; line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.core-window-note { font-size: .71rem; color: #c2bdd8; margin-top: 2px; }
+.core-peak { flex: none; text-align: right; }
+.core-peak-value {
+  font-family: var(--font-serif); font-size: 1.5rem; line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.core-peak-note { font-size: .66rem; color: #c2bdd8; margin-top: 3px; }
+
+.core-rows { display: grid; gap: 5px; margin-top: 11px; }
+.core-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  font-size: .75rem;
+}
+.core-row-label { display: flex; align-items: center; gap: 6px; color: var(--ink-3); flex: none; }
+.core-row-value {
+  color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums;
+}
+
+.core-marks { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin-top: 11px; }
+.core-marks-label {
+  width: 100%; font-size: .67rem; font-weight: 600; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.core-mark {
+  padding: 3px 7px; border-radius: 999px; font-size: .69rem;
+  border: 1px solid var(--line); background: var(--paper);
+  color: var(--ink-2); font-variant-numeric: tabular-nums;
+}
+
+.core-nights { margin-top: 13px; padding-top: 11px; border-top: 1px solid var(--line); }
+.core-nights-label {
+  font-size: .67rem; font-weight: 600; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--ink-3); margin-bottom: 5px;
+}
+.core-night {
+  display: grid; grid-template-columns: 1fr auto auto; gap: 10px;
+  padding: 3px 0; font-size: .75rem; font-variant-numeric: tabular-nums;
+}
+.core-night-date { color: var(--ink-2); }
+.core-night-span { color: var(--ink); font-weight: 600; }
+.core-night-moon { color: var(--ink-3); min-width: 62px; text-align: right; }
+
+/* Which line on the map is which. Matches the line colours exactly, because a
+   key whose colours are close but not equal is worse than none. */
+.dir-dot {
+  width: 9px; height: 9px; border-radius: 999px; flex: none;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .12);
+}
+.dir-dot.is-sun { background: #d87708; }
+.dir-dot.is-moon { background: #3d6ea8; }
+.dir-dot.is-core { background: #7b4fa8; }
+.dir-dot.is-now { box-shadow: 0 0 0 2px var(--paper), 0 0 0 3.5px currentColor; }
+
 
 /* ==========================================================================
    Account in the header

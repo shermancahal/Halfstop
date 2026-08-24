@@ -403,7 +403,7 @@ export const OVERLAYS = [
     ],
     group: 'Conditions',
     name: 'Weather radar',
-    description: 'Current precipitation from NOAA.',
+    description: 'Current precipitation from NOAA. Click a point for storm tracks.',
     tiles: ['https://nowcoast.noaa.gov/geoserver/weather_radar/wms'
       + '?service=WMS&version=1.3.0&request=GetMap&layers=base_reflectivity_mosaic'
       + '&styles=&crs=EPSG:3857&bbox={bbox-epsg-3857}&width=256&height=256&format=image/png&transparent=true'],

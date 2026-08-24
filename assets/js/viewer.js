@@ -38,8 +38,10 @@ import {
 } from './lib/place.js';
 import {
   sunTimes, sunPosition, moonTimes, moonPosition, moonIllumination,
-  lightPhases, lightDirections, destinationPoint,
+  lightPhases, lightDirections, currentDirections, destinationPoint,
+  milkyWayNight, bestMilkyWayNights,
 } from './lib/sky.js';
+import { activeAlerts, describeMotion, alertsToGeoJSON } from './lib/storms.js';
 import { landManager, forecast, weatherClass, publicLand, elevation } from './lib/lookup.js';
 import { describeSync } from './lib/sync.js';
 import {
@@ -58,6 +60,24 @@ import {
 // which threw a ReferenceError that the storage try/catch swallowed, so the
 // remembered sections silently came back empty on every load.
 const DETAIL_SECTIONS_KEY = 'ab-maps-details-closed-v1';
+const SKY_PANEL_KEY = 'ab-maps-sky-panel-v1';
+
+/** Which sky panel was last left open. '' means none. */
+function readSkyPanel() {
+  try {
+    return globalThis.localStorage?.getItem(SKY_PANEL_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+function rememberSkyPanel() {
+  try {
+    globalThis.localStorage?.setItem(SKY_PANEL_KEY, state.skyPanel || '');
+  } catch {
+    // Storage refused; the preference lasts for this session only.
+  }
+}
 
 const state = {
   gl: null,
@@ -95,6 +115,10 @@ const state = {
   openLayerGroups: new Set(),
   /** Details sections the reader has collapsed, remembered across pins. */
   closedDetailSections: new Set(readClosedSections()),
+  /** Which of the sky panels — twilight, moon, milkyway, lines — is open. */
+  skyPanel: readSkyPanel(),
+  /** Active NWS warnings for the selected pin, or null while unasked. */
+  storms: null,
   /** Layer ids that answer clicks, so a map click can tell "empty" from "a pin". */
   interactiveLayers: new Set(),
   /** Set once the out-of-range glyph warning has been logged, to log it once. */
@@ -180,6 +204,7 @@ const layerIdsFor = (key) => [
 const FOLDER_SOURCE = 'folders';
 const REGION_SOURCE = 'offline-regions';
 const LIGHT_SOURCE = 'light-directions';
+const STORM_SOURCE = 'storm-warnings';
 
 const FOLDER_LAYERS = [
   'folders-line-casing', 'folders-line', 'folders-point-halo', 'folders-point', 'folders-point-icon',
@@ -332,6 +357,7 @@ async function main() {
   refreshFolderData();
   refreshRegionData();
   refreshLightLines();
+  refreshStormData();
   wireMapClicks();
   exposeRoadInspector();
   exposeWaypointInspector();
@@ -949,6 +975,8 @@ function healMissingImages() {
         data = rasterizeShieldById(id, { pixelRatio: 2 });
       } else if (id.startsWith('pin-')) {
         data = rasterizePinIcon(id.slice('pin-'.length), { pixelRatio: 2 });
+      } else if (id === STORM_ARROW_IMAGE) {
+        data = rasterizeStormArrow({ pixelRatio: 2 });
       }
 
       if (data) {
@@ -1245,11 +1273,7 @@ function skySection(position) {
   const [lon, lat] = position;
   const date = new Date();
   const sun = sunTimes(date, lat, lon);
-  const moon = moonTimes(date, lat, lon);
-  const illumination = moonIllumination(date);
   const phases = lightPhases(date, lat, lon);
-  const now = sunPosition(date, lat, lon);
-  const moonNow = moonPosition(date, lat, lon);
 
   let section = null;
   const outer = collapsibleSection('sky', 'Sun & moon', (body) => { section = body; }, {
@@ -1265,64 +1289,188 @@ function skySection(position) {
     }));
   }
 
-  /* The day as a bar: night, twilight, golden, daylight, and back. */
-  if (phases.length) {
-    const first = phases[0].from.valueOf();
-    const last = phases[phases.length - 1].to.valueOf();
-    const total = last - first || 1;
+  section.append(dayBar(phases, date));
+  section.append(lightHero(sun, phases, lat, lon));
+  section.append(...skyPanels(position, date, phases));
 
-    const bar = el('div', { class: 'sky-bar' }, phases.map((phase) => el('span', {
-      class: `sky-band is-${phase.id.replace('-pm', '')}`,
-      style: `flex:${((phase.to - phase.from) / total) * 100}`,
-      title: `${phase.name} · ${clockTime(phase.from)}–${clockTime(phase.to)} · ${formatSpan(phase.minutes)}`,
-    })));
+  return outer;
+}
 
-    // Where we are in the day, so the bar reads as "now" rather than a diagram.
-    const elapsed = (date.valueOf() - first) / total;
-    if (elapsed >= 0 && elapsed <= 1) {
-      bar.append(el('span', { class: 'sky-now', style: `left:${elapsed * 100}%` }));
-    }
+/**
+ * The day as a bar: night, twilight, golden, daylight, and back.
+ */
+function dayBar(phases, date) {
+  if (!phases.length) return el('div');
 
-    section.append(
-      bar,
-      el('div', { class: 'sky-bar-ends' }, [
-        el('span', { text: clockTime(phases[0].from) }),
-        el('span', { text: clockTime(phases[phases.length - 1].to) }),
-      ]),
-    );
+  const first = phases[0].from.valueOf();
+  const last = phases[phases.length - 1].to.valueOf();
+  const total = last - first || 1;
+
+  const bar = el('div', { class: 'sky-bar' }, phases.map((phase) => el('span', {
+    class: `sky-band is-${phase.id.replace('-pm', '')}`,
+    style: `flex:${((phase.to - phase.from) / total) * 100}`,
+    title: `${phase.name} · ${clockTime(phase.from)}–${clockTime(phase.to)} · ${formatSpan(phase.minutes)}`,
+  })));
+
+  // Where we are in the day, so the bar reads as "now" rather than a diagram.
+  const elapsed = (date.valueOf() - first) / total;
+  if (elapsed >= 0 && elapsed <= 1) {
+    bar.append(el('span', { class: 'sky-now', style: `left:${elapsed * 100}%` }));
   }
 
-  /* The four times worth setting an alarm for. */
+  return el('div', {}, [
+    bar,
+    el('div', { class: 'sky-bar-ends' }, [
+      el('span', { text: clockTime(phases[0].from) }),
+      el('span', { text: clockTime(phases[phases.length - 1].to) }),
+    ]),
+  ]);
+}
+
+/**
+ * The four times worth setting an alarm for, on two lines over a sky wash.
+ *
+ * The wash is the same device the weather card uses, and for the same reason:
+ * the panel should read before the text does. Here it runs dawn-warm on the
+ * left to dusk-blue on the right, so the two halves are the two ends of the
+ * day without needing to be labelled as such.
+ */
+function lightHero(sun, phases, lat, lon) {
+  const bearing = (when) => (when ? `${Math.round(sunPosition(when, lat, lon).azimuth)}°` : '');
   const golden = phases.filter((phase) => phase.id.startsWith('golden'));
   const blue = phases.filter((phase) => phase.id.startsWith('blue'));
+  const evening = (list) => (list.length ? list[list.length - 1] : null);
 
-  section.append(el('div', { class: 'sky-grid' }, [
-    skyCell('Sunrise', clockTime(sun.sunrise), sun.sunrise && `${Math.round(sunPosition(sun.sunrise, lat, lon).azimuth)}°`),
-    skyCell('Sunset', clockTime(sun.sunset), sun.sunset && `${Math.round(sunPosition(sun.sunset, lat, lon).azimuth)}°`),
-    skyCell('Golden hour', golden.length ? formatSpan(golden[golden.length - 1].minutes) : '—',
-      golden.length ? `${clockTime(golden[golden.length - 1].from)}–${clockTime(golden[golden.length - 1].to)}` : ''),
-    skyCell('Blue hour', blue.length ? formatSpan(blue[blue.length - 1].minutes) : '—',
-      blue.length ? `${clockTime(blue[blue.length - 1].from)}–${clockTime(blue[blue.length - 1].to)}` : ''),
-  ]));
+  const goldenPM = evening(golden);
+  const bluePM = evening(blue);
 
-  section.append(el('details', { class: 'sky-more' }, [
-    el('summary', { text: 'Twilight in full' }),
-    el('div', { class: 'sky-phases' }, phases.map((phase) => el('div', { class: 'sky-phase' }, [
-      el('span', { class: `sky-swatch is-${phase.id.replace('-pm', '')}` }),
-      el('span', { class: 'sky-phase-name', text: phase.name }),
-      el('span', { class: 'sky-phase-time', text: `${clockTime(phase.from)}–${clockTime(phase.to)}` }),
-      el('span', { class: 'sky-phase-span', text: formatSpan(phase.minutes) }),
-    ]))),
-    el('p', {
-      class: 'source-note',
-      text: `Sun now ${now.altitude > 0 ? `${Math.round(now.altitude)}° up` : 'below the horizon'}, `
-        + `bearing ${Math.round(now.azimuth)}°.`,
-    }),
-  ]));
+  const half = (kind, glyph, label, time, note) => el('div', { class: `light-half is-${kind}` }, [
+    el('span', { class: 'light-glyph', html: glyph }),
+    el('div', { class: 'light-text' }, [
+      el('div', { class: 'light-label', text: label }),
+      el('div', { class: 'light-time', text: time }),
+      note ? el('div', { class: 'light-note', text: note }) : null,
+    ]),
+  ]);
 
-  /* The moon. */
+  return el('div', { class: 'light-hero' }, [
+    el('div', { class: 'light-row' }, [
+      half('rise', sunGlyph('rise'), 'Sunrise', clockTime(sun.sunrise), bearing(sun.sunrise)),
+      half('set', sunGlyph('set'), 'Sunset', clockTime(sun.sunset), bearing(sun.sunset)),
+    ]),
+    el('div', { class: 'light-row is-secondary' }, [
+      half('golden', sunGlyph('golden'), 'Golden hour',
+        goldenPM ? formatSpan(goldenPM.minutes) : '—',
+        goldenPM ? `${clockTime(goldenPM.from)}–${clockTime(goldenPM.to)}` : ''),
+      half('blue', sunGlyph('blue'), 'Blue hour',
+        bluePM ? formatSpan(bluePM.minutes) : '—',
+        bluePM ? `${clockTime(bluePM.from)}–${clockTime(bluePM.to)}` : ''),
+    ]),
+  ]);
+}
+
+/** Small sun/horizon marks for the hero. Drawn, not typed — no glyph coverage. */
+function sunGlyph(kind) {
+  const disc = kind === 'blue' ? '#8fb2d8' : kind === 'golden' ? '#f0a500' : '#f5b942';
+  const sky = kind === 'blue' ? '#2f4a68' : 'none';
+  const rays = kind === 'rise' || kind === 'set';
+  const spokes = rays
+    ? [0, 45, 90, 135, 180, 225, 270, 315]
+      .map((angle) => {
+        const rad = angle * Math.PI / 180;
+        const x1 = 12 + Math.cos(rad) * 7.5;
+        const y1 = 12 + Math.sin(rad) * 7.5;
+        const x2 = 12 + Math.cos(rad) * 10.5;
+        const y2 = 12 + Math.sin(rad) * 10.5;
+        return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"
+                 stroke="${disc}" stroke-width="1.6" stroke-linecap="round"/>`;
+      }).join('')
+    : '';
+
+  const horizon = kind === 'rise' || kind === 'set'
+    ? '<line x1="1" y1="17" x2="23" y2="17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity=".55"/>'
+    : '';
+  const arrow = kind === 'rise'
+    ? '<path d="M12 22.5 L12 19 M10 20.6 L12 18.6 L14 20.6" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
+    : kind === 'set'
+      ? '<path d="M12 18.6 L12 22.2 M10 20.4 L12 22.4 L14 20.4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
+      : '';
+
+  return `<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+    ${sky !== 'none' ? `<rect x="0" y="0" width="24" height="24" rx="5" fill="${sky}" opacity=".18"/>` : ''}
+    ${spokes}
+    <circle cx="12" cy="12" r="${rays ? 5.4 : 6.4}" fill="${disc}"/>
+    ${horizon}${arrow}
+  </svg>`;
+}
+
+/* ---------------- the four sky panels ---------------- */
+
+/**
+ * Twilight, moon, Milky Way and map lines, each behind its own button.
+ *
+ * These used to be a text dropdown, an always-open card and a lone button
+ * respectively — three different affordances for four things that are all
+ * "more detail about the sky here". One row of buttons, one box below, and
+ * which box you had open is remembered, because a photographer who cares about
+ * the moon cares about it at every pin.
+ */
+function skyPanels(position, date, phases) {
+  const [lon, lat] = position;
+  const open = state.skyPanel;
+
+  const tabs = [
+    { id: 'twilight', label: 'Twilight' },
+    { id: 'moon', label: `Moon ${Math.round(moonIllumination(date).fraction * 100)}%` },
+    { id: 'milkyway', label: 'Milky Way' },
+    { id: 'lines', label: 'On the map' },
+  ];
+
+  const row = el('div', { class: 'sky-tabs' }, tabs.map((tab) => el('button', {
+    class: `sky-tab${open === tab.id ? ' is-open' : ''}`,
+    type: 'button',
+    'aria-expanded': open === tab.id ? 'true' : 'false',
+    text: tab.label,
+    onclick: () => {
+      state.skyPanel = open === tab.id ? '' : tab.id;
+      rememberSkyPanel();
+      renderDetailsTab();
+    },
+  })));
+
+  const body = el('div', { class: 'sky-panel' });
+  if (open === 'twilight') twilightPanel(body, phases, date, lat, lon);
+  else if (open === 'moon') moonPanel(body, date, lat, lon);
+  else if (open === 'milkyway') milkyWayPanel(body, date, lat, lon);
+  else if (open === 'lines') linesPanel(body, position, date);
+
+  return open ? [row, body] : [row];
+}
+
+function twilightPanel(body, phases, date, lat, lon) {
+  const now = sunPosition(date, lat, lon);
+
+  body.append(el('div', { class: 'sky-phases' }, phases.map((phase) => el('div', { class: 'sky-phase' }, [
+    el('span', { class: `sky-swatch is-${phase.id.replace('-pm', '')}` }),
+    el('span', { class: 'sky-phase-name', text: phase.name }),
+    el('span', { class: 'sky-phase-time', text: `${clockTime(phase.from)}–${clockTime(phase.to)}` }),
+    el('span', { class: 'sky-phase-span', text: formatSpan(phase.minutes) }),
+  ]))));
+
+  body.append(el('p', {
+    class: 'source-note',
+    text: `Sun now ${now.altitude > 0 ? `${Math.round(now.altitude)}° up` : `${Math.round(-now.altitude)}° below the horizon`}, `
+      + `bearing ${Math.round(now.azimuth)}°.`,
+  }));
+}
+
+function moonPanel(body, date, lat, lon) {
+  const moon = moonTimes(date, lat, lon);
+  const illumination = moonIllumination(date);
+  const moonNow = moonPosition(date, lat, lon);
   const percent = Math.round(illumination.fraction * 100);
-  section.append(el('div', { class: 'moon-card' }, [
+
+  body.append(el('div', { class: 'moon-card' }, [
     el('span', { class: 'moon-face', html: moonGlyph(illumination) }),
     el('div', { class: 'moon-text' }, [
       el('div', { class: 'moon-name', text: illumination.name }),
@@ -1342,24 +1490,195 @@ function skySection(position) {
     ]),
   ]));
 
-  /* And the part only a map can answer. */
-  const directions = lightDirections(date, lat, lon);
-  if (directions.length) {
-    const active = state.lightLines?.key === position.join(',');
-    section.append(el('button', {
-      class: `button ${active ? 'button-secondary' : 'button-ghost'} button-small sky-lines-toggle`,
-      type: 'button',
-      text: active ? 'Hide light directions' : 'Show light directions on the map',
-      onclick: () => toggleLightLines(position, directions),
-    }));
-    section.append(el('p', {
-      class: 'source-note',
-      text: directions.map((d) => `${d.name} ${Math.round(d.azimuth)}°`).join(' · '),
-    }));
+  /*
+   * Which way the phase is going is what decides whether to shoot this week or
+   * next, and it is the one thing a percentage alone cannot tell you.
+   *
+   * `phase` runs 0 at new through 0.5 at full and back to 1, so the distance to
+   * either is just the gap around that circle times a synodic month.
+   */
+  const SYNODIC_DAYS = 29.53;
+  const ahead = (target) => Math.max(1, Math.round(((target - illumination.phase + 1) % 1) * SYNODIC_DAYS));
+  body.append(el('p', {
+    class: 'source-note',
+    text: illumination.waxing
+      ? `Brighter each night — full in about ${ahead(0.5)} days.`
+      : `Darker each night — new moon in about ${ahead(0)} days.`,
+  }));
+}
+
+/**
+ * The galactic core: whether it is up, when, how high, and which nights.
+ *
+ * The altitude ceiling is stated first and deliberately. From the continental
+ * US the core never climbs more than about 25° above the southern horizon, and
+ * a panel that quietly listed no times above that would read as broken rather
+ * than as astronomy.
+ */
+function milkyWayPanel(body, date, lat, lon) {
+  const night = milkyWayNight(date, lat, lon);
+
+  if (!night.possible) {
+    body.append(el('p', { class: 'hint', style: 'margin:0', text: capitalise(night.reason) }));
+    if (night.maxAltitude > 5) body.append(nextCoreNight(date, lat, lon));
+    return;
   }
 
-  return outer;
+  const moonPercent = Math.round(night.moon.fraction * 100);
+  const quality = night.moonless
+    ? (night.moonless.minutes >= 120 ? 'good' : 'fair')
+    : 'poor';
+
+  body.append(el('div', { class: `core-hero is-${quality}` }, [
+    el('div', { class: 'core-headline' }, [
+      el('div', { class: 'core-window', text: night.moonless
+        ? `${clockTime(night.moonless.from)} – ${clockTime(night.moonless.to)}`
+        : `${clockTime(night.window.from)} – ${clockTime(night.window.to)}` }),
+      el('div', { class: 'core-window-note', text: night.moonless
+        ? `${formatSpan(night.moonless.minutes)} of dark, moonless sky`
+        : `${formatSpan(night.window.minutes)} dark — but the moon is up (${moonPercent}%)` }),
+    ]),
+    /*
+     * The peak inside the dark window, not the transit. By autumn the core
+     * transits before sunset, and a headline number you cannot photograph is
+     * worse than no headline number.
+     */
+    el('div', { class: 'core-peak' }, [
+      el('div', { class: 'core-peak-value', text: `${Math.round((night.windowPeak || night).altitude ?? night.transitAltitude)}°` }),
+      el('div', { class: 'core-peak-note', text: night.windowPeak
+        ? `highest ${clockTime(night.windowPeak.when)}`
+        : `highest ${clockTime(night.transit)}` }),
+    ]),
+  ]));
+
+  // Only worth a row of its own when it differs from the peak in the headline —
+  // otherwise it says the same thing twice.
+  const transitDiffers = night.windowPeak
+    && Math.abs(night.windowPeak.altitude - night.transitAltitude) > 0.6;
+
+  const rows = [
+    night.windowPeak
+      ? ['Best in the window', `${clockTime(night.windowPeak.when)} · ${Math.round(night.windowPeak.altitude)}° at ${Math.round(night.windowPeak.azimuth)}°`]
+      : null,
+    transitDiffers || !night.windowPeak
+      ? ['Core transits', `${clockTime(night.transit)} · ${Math.round(night.transitAltitude)}° at ${Math.round(night.transitAzimuth)}° — before dark`]
+      : null,
+    ['Astronomical dark', night.dark ? `${clockTime(night.dark.from)} – ${clockTime(night.dark.to)}` : '—'],
+    ['Moon', `${moonPercent}% · ${night.moon.name.toLowerCase()}`],
+    ['Ceiling here', `${Math.round(night.maxAltitude)}° — the core never rises higher from this latitude`],
+  ].filter(Boolean);
+  body.append(el('div', { class: 'core-rows' }, rows.map(([label, value]) => el('div', { class: 'core-row' }, [
+    el('span', { class: 'core-row-label', text: label }),
+    el('span', { class: 'core-row-value', text: value }),
+  ]))));
+
+  if (night.marks.length) {
+    body.append(el('div', { class: 'core-marks' }, [
+      el('div', { class: 'core-marks-label', text: 'Core passes' }),
+      ...night.marks.map((mark) => el('span', {
+        class: 'core-mark',
+        text: `${mark.altitude}° ${clockTime(mark.rising)} / ${clockTime(mark.falling)}`,
+      })),
+    ]));
+  }
+
+  body.append(bestNightsList(date, lat, lon));
 }
+
+/** When the core next becomes a night-time object, for the months it is not. */
+function nextCoreNight(date, lat, lon) {
+  const nights = bestMilkyWayNights(date, lat, lon, 200);
+  const next = nights.find((entry) => entry.possible);
+  return el('p', {
+    class: 'source-note',
+    text: next
+      ? `Back in the night sky around ${next.date.toLocaleDateString([], { month: 'long', day: 'numeric' })}.`
+      : 'Not a night-time object from here for the next six months.',
+  });
+}
+
+/**
+ * The next new-moon window, which is what "when should I drive out" means.
+ *
+ * Ranked by moonless dark hours, not by date: the moon is the only thing that
+ * changes materially over a month and it is perfectly predictable, so this is
+ * answerable weeks ahead in a way cloud never will be.
+ */
+function bestNightsList(date, lat, lon) {
+  const nights = bestMilkyWayNights(date, lat, lon, 45).filter((night) => night.minutes > 0);
+
+  /*
+   * Longest moonless window first, and a darker moon breaks the tie.
+   *
+   * The tie-break is not decoration. Late in the season the core sets before
+   * the moon can matter, so a fortnight of nights all cap out at the same two
+   * hours — ranked on length alone the list returns whichever five come first
+   * in the calendar rather than the ones nearest new moon. Less illuminated
+   * also means less residual sky glow in the hour either side of the window.
+   */
+  const best = [...nights]
+    .sort((a, b) => b.minutes - a.minutes || a.moon.fraction - b.moon.fraction)
+    .slice(0, 5)
+    .sort((a, b) => a.date - b.date);
+
+  const wrap = el('div', { class: 'core-nights' });
+  if (!best.length) {
+    wrap.append(el('p', { class: 'source-note', text: 'No moonless dark windows in the next six weeks.' }));
+    return wrap;
+  }
+
+  wrap.append(el('div', { class: 'core-nights-label', text: 'Best nights ahead' }));
+  for (const night of best) {
+    wrap.append(el('div', { class: 'core-night' }, [
+      el('span', { class: 'core-night-date', text: night.date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) }),
+      el('span', { class: 'core-night-span', text: formatSpan(night.minutes) }),
+      el('span', { class: 'core-night-moon', text: `${Math.round(night.moon.fraction * 100)}% moon` }),
+    ]));
+  }
+  wrap.append(el('p', {
+    class: 'source-note',
+    text: 'Every window above is already moonless — the percentage is that night\u2019s phase,'
+      + ' which sets how much glow is left either side of it. Cloud is the other half of the'
+      + ' answer and is not knowable this far out; the forecast above covers the near nights.',
+  }));
+  return wrap;
+}
+
+/** Draw bearings on the map: where things rise, set, and are right now. */
+function linesPanel(body, position, date) {
+  const [lon, lat] = position;
+  const directions = lightDirections(date, lat, lon);
+  const current = currentDirections(date, lat, lon);
+  const all = [...directions, ...current];
+
+  if (!all.length) {
+    body.append(el('p', { class: 'hint', style: 'margin:0', text: 'Nothing is above the horizon to point at.' }));
+    return;
+  }
+
+  const active = state.lightLines?.key === position.join(',');
+  body.append(el('button', {
+    class: `button ${active ? 'button-secondary' : 'button-primary'} button-small sky-lines-toggle`,
+    type: 'button',
+    text: active ? 'Hide the lines' : 'Draw the lines on the map',
+    onclick: () => toggleLightLines(position, all),
+  }));
+
+  body.append(el('div', { class: 'core-rows' }, all.map((entry) => el('div', { class: 'core-row' }, [
+    el('span', { class: 'core-row-label' }, [
+      el('span', { class: `dir-dot is-${entry.body}${entry.now ? ' is-now' : ''}` }),
+      el('span', { text: entry.name }),
+    ]),
+    el('span', {
+      class: 'core-row-value',
+      text: entry.now
+        ? `${Math.round(entry.azimuth)}° · ${Math.round(entry.altitude)}° up`
+        : `${Math.round(entry.azimuth)}° · ${clockTime(entry.at)}`,
+    }),
+  ]))));
+}
+
+const capitalise = (text = '') => text.charAt(0).toUpperCase() + text.slice(1);
 
 function skyCell(label, value, note) {
   return el('div', { class: 'sky-cell' }, [
@@ -1410,6 +1729,7 @@ function refreshLightLines() {
       type: 'Feature',
       properties: {
         body: direction.body,
+        now: !!direction.now,
         label: `${direction.name} ${Math.round(direction.azimuth)}°`,
       },
       geometry: {
@@ -1703,6 +2023,7 @@ function setBasemap(id) {
     refreshFolderData();
     refreshRegionData();
     refreshLightLines();
+    refreshStormData();
   });
   renderLayersTab();
   // The size estimate depends on whether the new basemap is vector or raster.
@@ -1782,15 +2103,104 @@ function addAppLayers() {
   // read them against the terrain — a line hidden under a road layer answers
   // nothing. Warm for the sun, cool for the moon, dashed so they never read as
   // a route you could drive.
+  if (!state.map.getSource(STORM_SOURCE)) state.map.addSource(STORM_SOURCE, empty);
+
+  // Warned areas and where the storm is heading. Under the light lines, over
+  // everything else: this is weather laid on the world, not a route through it.
+  if (!state.map.getLayer('storm-area')) {
+    state.map.addLayer({
+      id: 'storm-area', type: 'fill', source: STORM_SOURCE,
+      filter: ['==', ['get', 'kind'], 'area'],
+      paint: {
+        'fill-color': ['match', ['get', 'severity'], 'Extreme', '#b3261e', 'Severe', '#d97706', '#6b7280'],
+        'fill-opacity': 0.16,
+      },
+    });
+  }
+  if (!state.map.getLayer('storm-outline')) {
+    state.map.addLayer({
+      id: 'storm-outline', type: 'line', source: STORM_SOURCE,
+      filter: ['==', ['get', 'kind'], 'area'],
+      paint: {
+        'line-color': ['match', ['get', 'severity'], 'Extreme', '#b3261e', 'Severe', '#d97706', '#6b7280'],
+        'line-width': 1.8,
+      },
+    });
+  }
+  if (!state.map.getLayer('storm-motion')) {
+    state.map.addLayer({
+      id: 'storm-motion', type: 'line', source: STORM_SOURCE,
+      filter: ['==', ['get', 'kind'], 'motion'],
+      layout: { 'line-cap': 'round' },
+      paint: {
+        'line-color': '#b3261e',
+        'line-width': ['interpolate', ['linear'], ['zoom'], 6, 2.4, 12, 4],
+        'line-opacity': 0.95,
+      },
+    });
+  }
+  if (!state.map.getLayer('storm-head')) {
+    state.map.addLayer({
+      id: 'storm-head', type: 'symbol', source: STORM_SOURCE,
+      filter: ['==', ['get', 'kind'], 'head'],
+      layout: {
+        'icon-image': STORM_ARROW_IMAGE,
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 6, 0.6, 12, 0.95],
+        'icon-rotate': ['get', 'bearing'],
+        'icon-rotation-alignment': 'map',
+        'icon-allow-overlap': true,
+      },
+    });
+  }
+  if (!state.map.getLayer('storm-motion-label')) {
+    state.map.addLayer({
+      id: 'storm-motion-label', type: 'symbol', source: STORM_SOURCE,
+      filter: ['==', ['get', 'kind'], 'motion'],
+      layout: {
+        'symbol-placement': 'line-center',
+        'text-field': ['get', 'label'],
+        'text-size': 11.5,
+        'text-offset': [0, -0.9],
+      },
+      paint: {
+        'text-color': '#8c1d18',
+        'text-halo-color': 'rgba(255,255,255,0.95)',
+        'text-halo-width': 2.2,
+      },
+    });
+  }
+
+  // A white casing under every line. Without one these were being drawn over a
+  // topo map whose contours are the same weight and a similar warmth, and the
+  // report was simply that they were hard to see — which they were. A casing
+  // gives each line its own ground to sit on whatever it crosses.
+  if (!state.map.getLayer('light-line-casing')) {
+    state.map.addLayer({
+      id: 'light-line-casing', type: 'line', source: LIGHT_SOURCE,
+      layout: { 'line-cap': 'round' },
+      paint: {
+        'line-color': 'rgba(255,255,255,0.85)',
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 5.5, 14, 8],
+        'line-opacity': 0.9,
+      },
+    });
+  }
+
+  // Sun, moon and galactic core bearings, drawn over everything: the whole
+  // point is to read them against the terrain, and a line hidden under a road
+  // layer answers nothing. Warm for the sun, cool for the moon, violet for the
+  // core. Rise and set bearings are dashed so they never read as a route you
+  // could drive; where a body is right now is solid, because that one you can
+  // check by looking up.
   if (!state.map.getLayer('light-line')) {
     state.map.addLayer({
       id: 'light-line', type: 'line', source: LIGHT_SOURCE,
       layout: { 'line-cap': 'round' },
       paint: {
-        'line-color': ['match', ['get', 'body'], 'moon', '#5b7fa8', '#e08a1e'],
-        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.6, 14, 2.6],
-        'line-dasharray': [2.5, 1.5],
-        'line-opacity': 0.95,
+        'line-color': ['match', ['get', 'body'], 'moon', '#3d6ea8', 'core', '#7b4fa8', '#d87708'],
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2.8, 14, 4.2],
+        'line-dasharray': ['case', ['get', 'now'], ['literal', [1, 0]], ['literal', [2.2, 1.3]]],
+        'line-opacity': 1,
       },
     });
   }
@@ -1800,13 +2210,14 @@ function addAppLayers() {
       layout: {
         'symbol-placement': 'line-center',
         'text-field': ['get', 'label'],
-        'text-size': 11,
-        'text-offset': [0, -0.8],
+        'text-size': 12.5,
+        'text-offset': [0, -0.9],
+        'text-allow-overlap': false,
       },
       paint: {
-        'text-color': ['match', ['get', 'body'], 'moon', '#3f5f83', '#a3620d'],
-        'text-halo-color': 'rgba(255,255,255,0.9)',
-        'text-halo-width': 1.6,
+        'text-color': ['match', ['get', 'body'], 'moon', '#274b75', 'core', '#57327d', '#8f5206'],
+        'text-halo-color': 'rgba(255,255,255,0.95)',
+        'text-halo-width': 2.2,
       },
     });
   }
@@ -2629,6 +3040,7 @@ function renderPointDetails(position) {
 
   dom.details.append(landSection(position));
   dom.details.append(weatherSection(position));
+  dom.details.append(stormSection(position));
 }
 
 function renderPinDetails(folder, item) {
@@ -2752,6 +3164,7 @@ function renderPinDetails(folder, item) {
 
   dom.details.append(landSection([lon, lat]));
   dom.details.append(weatherSection([lon, lat]));
+  dom.details.append(stormSection([lon, lat]));
   dom.details.append(notesSection(folder, item));
 
   /* place — network, so appended when it arrives */
@@ -2915,6 +3328,130 @@ function weatherGlyph(kind) {
  * letting the second overwrite the first would lose the fact that it changed —
  * which is exactly the thing worth knowing next time.
  */
+/**
+ * Active severe weather here, and which way the storm is going.
+ *
+ * The radar overlay draws where rain is now. This is the other half — the
+ * National Weather Service publishes a storm motion vector with every severe
+ * thunderstorm and tornado warning, computed from consecutive radar scans, and
+ * it is the only free source that answers "where will this be in half an hour"
+ * without differencing radar frames in a browser.
+ *
+ * Quiet when nothing is warned, which is almost always. A section that says
+ * "no warnings" on every pin trains you to stop reading it.
+ */
+function stormSection(position) {
+  return pendingSection('Storm warnings', async (body, section) => {
+    const result = await activeAlerts(position);
+
+    if (!result.ok) {
+      body.replaceChildren(el('p', { class: 'hint', style: 'margin:0', text: `Could not check — ${result.reason}.` }));
+      section.classList.add('is-quiet');
+      return;
+    }
+
+    if (!result.alerts.length) {
+      body.replaceChildren(el('p', { class: 'hint', style: 'margin:0', text: 'No active warnings here.' }));
+      section.classList.add('is-quiet');
+      state.storms = null;
+      refreshStormData();
+      return;
+    }
+
+    body.replaceChildren();
+    for (const alert of result.alerts) {
+      const motion = alert.motion ? describeMotion(alert.motion) : '';
+      body.append(el('div', { class: `storm-card is-${alert.severity.toLowerCase()}` }, [
+        el('div', { class: 'storm-event', text: alert.event }),
+        motion
+          ? el('div', { class: 'storm-motion' }, [
+            el('span', { class: 'storm-arrow', html: arrowGlyph(alert.motion.headingDegrees) }),
+            el('span', { text: `Moving ${motion}` }),
+          ])
+          : el('div', { class: 'storm-motion is-quiet', text: 'No storm motion published for this one.' }),
+        el('div', { class: 'storm-area', text: alert.areaDescription }),
+        alert.expires
+          ? el('div', { class: 'storm-expires', text: `Until ${clockTime(new Date(alert.expires))}` })
+          : null,
+      ]));
+    }
+
+    const tracked = result.alerts.filter((alert) => alert.geometry);
+    if (tracked.length) {
+      const showing = state.storms?.key === position.join(',');
+      body.append(el('button', {
+        class: `button ${showing ? 'button-secondary' : 'button-primary'} button-small sky-lines-toggle`,
+        type: 'button',
+        text: showing ? 'Hide the warning areas' : 'Show the warning areas on the map',
+        onclick: () => {
+          state.storms = showing ? null : { key: position.join(','), alerts: tracked };
+          refreshStormData();
+          renderDetailsTab();
+        },
+      }));
+    }
+
+    body.append(el('p', {
+      class: 'source-note',
+      text: 'Storm motion is the National Weather Service\u2019s own vector, from consecutive radar'
+        + ' scans. Only warned storms carry one — ordinary rain on the radar has no published track.',
+    }));
+  }, 'storms');
+}
+
+/**
+ * The arrowhead at the end of a storm track, drawn on canvas.
+ *
+ * A line layer cannot put a mark only at its end — GL will repeat a symbol
+ * along a line or centre one on it, neither of which is an arrow — so the tip
+ * is its own point feature with its own image, rotated to the bearing.
+ */
+const STORM_ARROW_IMAGE = 'abmap-storm-arrow';
+
+function rasterizeStormArrow({ pixelRatio = 2 } = {}) {
+  const size = 22;
+  const canvas = document.createElement('canvas');
+  canvas.width = size * pixelRatio;
+  canvas.height = size * pixelRatio;
+
+  const context = canvas.getContext('2d');
+  context.scale(pixelRatio, pixelRatio);
+  context.beginPath();
+  context.moveTo(11, 2);
+  context.lineTo(19, 19);
+  context.lineTo(11, 15);
+  context.lineTo(3, 19);
+  context.closePath();
+
+  context.fillStyle = '#b3261e';
+  context.strokeStyle = 'rgba(255,255,255,0.9)';
+  context.lineWidth = 1.6;
+  context.stroke();
+  context.fill();
+
+  return context.getImageData(0, 0, canvas.width, canvas.height);
+}
+
+/** A triangle pointing along a bearing, for the direction of travel. */
+function arrowGlyph(bearing) {
+  return `<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"
+    style="transform:rotate(${Math.round(bearing)}deg)">
+    <path d="M8 1.5 L13 14 L8 11 L3 14 Z" fill="currentColor"/>
+  </svg>`;
+}
+
+/** Push warning polygons and motion arrows to the map. */
+function refreshStormData() {
+  if (!styleReady()) { whenStyleReady(refreshStormData); return; }
+
+  const source = state.map.getSource(STORM_SOURCE);
+  if (!source) return;
+
+  source.setData(state.storms
+    ? alertsToGeoJSON(state.storms.alerts, destinationPoint, { minutes: 30 })
+    : { type: 'FeatureCollection', features: [] });
+}
+
 function notesSection(folder, item) {
   const notes = item.feature.properties.log || [];
   let section = null;

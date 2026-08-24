@@ -14,8 +14,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  sunPosition, sunTimes, moonPosition, moonIllumination, moonTimes,
-  lightPhases, lightDirections, destinationPoint,
+  sunPosition,
+  sunTimes,
+  moonPosition,
+  moonIllumination,
+  moonTimes,
+  lightPhases,
+  lightDirections,
+  destinationPoint,
+  milkyWayNight,
+  coreMaxAltitude,
+  bestMilkyWayNights,
+  currentDirections,
+  galacticCentre,
 } from '../assets/js/lib/sky.js';
 
 /* Places chosen for what they prove, not for sentiment. */
@@ -262,4 +273,103 @@ test('geometry: longitude stays in range when a line crosses the antimeridian', 
   const [lon] = destinationPoint([179.9, 60], 90, 200);
   assert.ok(lon >= -180 && lon <= 180, `longitude ${lon} left the valid range`);
   assert.ok(lon < 0, 'crossing east from 179.9° should wrap to a negative longitude');
+});
+
+/* ------------------------------------------------------------- milky way */
+
+test('the galactic core transits due south at the closed-form altitude', () => {
+  // 90 - |lat - dec| is the textbook transit altitude for a fixed star, and the
+  // sampled search has to land on it or the sampling is wrong.
+  for (const lat of [25, 35.96, 45]) {
+    const night = milkyWayNight(new Date('2026-07-15T12:00:00Z'), lat, -84.28);
+    assert.ok(
+      Math.abs(night.transitAltitude - night.maxAltitude) < 0.2,
+      `lat ${lat}: transit ${night.transitAltitude} vs ceiling ${night.maxAltitude}`,
+    );
+    assert.ok(
+      Math.abs(night.transitAzimuth - 180) < 3,
+      `lat ${lat}: transits at ${night.transitAzimuth}, not due south`,
+    );
+  }
+});
+
+test('the core ceiling follows latitude and is unreachable overhead in the US', () => {
+  assert.ok(Math.abs(coreMaxAltitude(36) - 24.99) < 0.05);
+  assert.ok(Math.abs(coreMaxAltitude(45) - 15.99) < 0.05);
+  // The point of surfacing this at all: asking for 70° has no answer up here.
+  assert.ok(coreMaxAltitude(36) < 70);
+  // South of the core's declination it passes north of overhead again.
+  assert.ok(coreMaxAltitude(-29) > 89.9);
+});
+
+test('altitude marks stop at the ceiling instead of reporting never', () => {
+  const night = milkyWayNight(new Date('2026-07-15T12:00:00Z'), 35.96, -84.28);
+  assert.ok(night.marks.length > 0);
+  for (const mark of night.marks) assert.ok(mark.altitude < night.maxAltitude);
+  assert.ok(!night.marks.some((mark) => mark.altitude === 70));
+  // Each mark is crossed climbing and again falling.
+  for (const mark of night.marks) assert.ok(mark.falling > mark.rising);
+});
+
+test('a summer night in Tennessee is shootable and a winter one is not', () => {
+  const summer = milkyWayNight(new Date('2026-07-15T12:00:00Z'), 35.96, -84.28);
+  assert.equal(summer.possible, true);
+  assert.equal(summer.reason, '');
+  assert.ok(summer.window.minutes > 120);
+
+  const winter = milkyWayNight(new Date('2026-12-15T12:00:00Z'), 35.96, -84.28);
+  assert.equal(winter.possible, false);
+  assert.match(winter.reason, /daylight/);
+});
+
+test('the moonless window is never longer than the dark window that contains it', () => {
+  for (const day of ['2026-07-01', '2026-07-13', '2026-07-28', '2026-09-10']) {
+    const night = milkyWayNight(new Date(`${day}T12:00:00Z`), 35.96, -84.28);
+    if (!night.window) continue;
+    assert.ok(night.window.minutes <= night.dark.minutes, day);
+    if (night.moonless) assert.ok(night.moonless.minutes <= night.window.minutes, day);
+  }
+});
+
+test('the best nights over a month land on the new moon', () => {
+  const nights = bestMilkyWayNights(new Date('2026-07-01T12:00:00Z'), 35.96, -84.28, 40);
+  assert.equal(nights.length, 40);
+
+  const best = [...nights].sort((a, b) => b.minutes - a.minutes)[0];
+  assert.ok(best.moon.fraction < 0.15, `best night moon is ${best.moon.fraction}`);
+
+  // Full moon nights give nothing, which is the whole reason to plan around it.
+  const full = nights.find((night) => night.moon.fraction > 0.98);
+  assert.equal(full.minutes, 0);
+});
+
+test('current directions only name what is actually above the horizon', () => {
+  const midnight = currentDirections(new Date('2026-07-16T04:00:00Z'), 35.96, -84.28);
+  assert.ok(midnight.every((entry) => entry.altitude > 0));
+  assert.ok(midnight.some((entry) => entry.body === 'core'));
+  assert.ok(!midnight.some((entry) => entry.body === 'sun'), 'the sun is not up at local midnight');
+
+  const noon = currentDirections(new Date('2026-07-15T17:00:00Z'), 35.96, -84.28);
+  assert.ok(noon.some((entry) => entry.body === 'sun'));
+});
+
+test('the peak inside the window is not the transit once autumn arrives', () => {
+  // In June the core transits during astronomical dark, so the two agree.
+  const june = milkyWayNight(new Date('2026-06-20T12:00:00Z'), 35.96, -84.28);
+  assert.ok(Math.abs(june.windowPeak.altitude - june.transitAltitude) < 0.6);
+
+  // By October it transits before sunset: the transit is still 25°, but the
+  // best you can actually photograph once dark is far lower. Reporting the
+  // transit as the headline would promise a sky nobody can shoot.
+  const october = milkyWayNight(new Date('2026-10-10T12:00:00Z'), 35.96, -84.28);
+  assert.ok(Math.abs(october.transitAltitude - october.maxAltitude) < 0.2);
+  assert.ok(october.windowPeak.altitude < october.transitAltitude - 5,
+    `window peak ${october.windowPeak.altitude} vs transit ${october.transitAltitude}`);
+  assert.ok(october.windowPeak.when >= october.window.from);
+  assert.ok(october.windowPeak.when <= october.window.to);
+});
+
+test('a night with no shootable window has no window peak', () => {
+  const winter = milkyWayNight(new Date('2026-12-15T12:00:00Z'), 35.96, -84.28);
+  assert.equal(winter.windowPeak, null);
 });

@@ -134,8 +134,28 @@ page.on('pageerror', (error) => consoleErrors.push(`pageerror: ${error.message}`
 page.on('console', (message) => { if (message.type() === 'error' && !/404/.test(message.text())) consoleErrors.push(message.text()); });
 page.on('dialog', (dialog) => dialog.accept('Smoke folder'));
 
+/*
+ * A warning shaped exactly like the live one, including the motion field whose
+ * convention this whole feature turns on: 245DEG is where the storm is coming
+ * from, so the arrow and the words both have to say northeast.
+ */
+const ALERTS = {
+  features: [{
+    geometry: { type: 'Polygon', coordinates: [[[-84.5, 35.7], [-83.9, 35.7], [-83.9, 36.2], [-84.5, 36.2], [-84.5, 35.7]]] },
+    properties: {
+      id: 'smoke-1', event: 'Severe Thunderstorm Warning', severity: 'Severe',
+      areaDesc: 'Anderson, Knox, Roane counties, TN',
+      expires: '2026-08-24T02:15:00-04:00',
+      parameters: { eventMotionDescription: ['2026-08-24T01:24:00-00:00...storm...245DEG...41KT...LAT...LON 3821 8454'] },
+    },
+  }],
+};
+
 await page.route('**/*', async (route) => {
   const url = route.request().url();
+  if (/alerts\/active/.test(url)) {
+    return route.fulfill({ status: 200, contentType: 'application/geo+json', body: JSON.stringify(ALERTS) });
+  }
   // deployed.txt is written by the deploy workflow, so it never exists locally.
   // Serving a realistic one keeps this a test of whether the stamp renders
   // rather than a test of whether someone has run a deploy.
@@ -224,6 +244,54 @@ check('waypoints repaired after a silent diff', afterDiff.folderFeatures, afterI
  * whatever the first render happened to show. Both only appear across a real
  * reload, so the check is here.
  */
+/*
+ * The sky panels: four buttons, one box, and which box you left open is
+ * remembered. Same reload trap as the collapsed sections above, so it gets the
+ * same treatment — the memory is the part that breaks, not the rendering.
+ */
+console.log('\nThe sky panels open, and the open one is remembered');
+await page.click('.panel-tab[data-tab="waypoints"]');
+await page.waitForTimeout(300);
+await page.locator('.waypoint-row').first().click();
+await page.waitForTimeout(900);
+
+check('no panel is open to begin with', await page.locator('.sky-panel').count(), 0);
+await page.locator('.sky-tab', { hasText: /Milky Way/ }).click();
+await page.waitForTimeout(400);
+check('the Milky Way panel opens', await page.locator('.core-rows').count() > 0, true);
+check('its ceiling is stated', /never rises higher/.test(await page.locator('.sky-panel').innerText()), true);
+
+await page.locator('.sky-tab', { hasText: /^Moon/ }).click();
+await page.waitForTimeout(400);
+check('switching tabs swaps the box', await page.locator('.moon-card').count(), 1);
+check('only one box at a time', await page.locator('.sky-panel').count(), 1);
+
+await page.reload({ waitUntil: 'networkidle' });
+await page.waitForTimeout(1200);
+await page.click('.panel-tab[data-tab="waypoints"]');
+await page.waitForTimeout(300);
+await page.locator('.waypoint-row').first().click();
+await page.waitForTimeout(900);
+check('the open panel survives a reload', await page.locator('.moon-card').count(), 1);
+
+console.log('\nA warned storm reports its heading and draws it');
+const stormText = await page.locator('.detail-block').filter({ hasText: 'Storm warnings' }).first().innerText();
+check('the warning is named', /Severe Thunderstorm Warning/.test(stormText), true);
+// 245DEG is the direction it is coming FROM. Getting this backwards would send
+// someone straight into the storm, so it is checked in words, not degrees.
+check('the heading is read the right way round', /Moving northeast at 47 mph/.test(stormText), true);
+
+await page.locator('button', { hasText: 'Show the warning areas on the map' }).click();
+await page.waitForTimeout(500);
+const storm = await page.evaluate(() => {
+  const data = window.__map.getSource('storm-warnings')?._d;
+  return (data?.features || []).map((feature) => feature.properties.kind);
+});
+check('the area, the track and its head all reach the map', storm, ['area', 'motion', 'head']);
+const stormLayers = await page.evaluate(() => window.__map.layerIds().filter((id) => id.startsWith('storm')));
+check('every storm feature has a layer that draws it',
+  stormLayers.sort(), ['storm-area', 'storm-head', 'storm-motion', 'storm-motion-label', 'storm-outline']);
+
 console.log('\nCollapsed Details sections survive a reload');
 await page.click('.panel-tab[data-tab="waypoints"]');
 await page.waitForTimeout(300);

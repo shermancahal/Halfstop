@@ -331,6 +331,8 @@ tools/
   build-dist.mjs            stages an upload-ready copy in dist/
   zip.mjs                   dependency-free ZIP writer used by build-dist
   serve.mjs                 local dev server
+assets/js/lib/sky.js        sun, moon and galactic core positions and times
+assets/js/lib/storms.js     NWS warnings and published storm motion
 test/parsers.test.mjs       parser and geometry tests
 test/folders.test.mjs       folder store and GPX writer tests
 ```
