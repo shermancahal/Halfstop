@@ -777,8 +777,14 @@ html, body { height: 100%; overflow: hidden; }
 /* Which build is running. Small, permanent, and the answer to "did my change
    deploy" without opening a second tab. */
 .build-stamp {
-  margin: 14px 4px 4px; padding-top: 10px;
+  /* Stuck to the foot of the panel rather than sitting at the end of the
+     scroll. At the end of a long Layers tab it is below eleven basemaps and
+     five overlay groups, which is the same as not being there — and the whole
+     point of it is being findable without looking for it. */
+  position: sticky; bottom: 0; z-index: 2;
+  margin: 14px -14px -14px; padding: 7px 14px;
   border-top: 1px solid var(--line);
+  background: var(--surface);
   font-size: .68rem; letter-spacing: .03em; color: var(--ink-3);
   font-variant-numeric: tabular-nums;
 }

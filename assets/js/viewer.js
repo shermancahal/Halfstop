@@ -126,7 +126,32 @@ function styleReady() {
 /** Run now if the style is ready, otherwise once it next finishes loading. */
 function whenStyleReady(run) {
   if (styleReady()) { run(); return; }
-  state.map?.once('style.load', () => run());
+  const map = state.map;
+  if (!map) return;
+
+  // Waiting on 'style.load' is the obvious thing and it is wrong, because this
+  // is most often called from inside a 'style.load' handler: isStyleLoaded()
+  // stays false there until the new style's sources have loaded too, so the
+  // work defers to an event that has already fired and will not fire again.
+  //
+  // Every layer this app owns went through here after a basemap switch, which
+  // is why switching a basemap made saved pins, imported tracks and the region
+  // outlines all disappear at once, silently, with the map itself fine.
+  //
+  // 'styledata' fires repeatedly while a style settles, so re-checking on each
+  // one gets there; 'idle' is the backstop for a style that settles without
+  // another styledata.
+  let done = false;
+  const attempt = () => {
+    if (done || !styleReady()) return;
+    done = true;
+    map.off('styledata', attempt);
+    map.off('idle', attempt);
+    run();
+  };
+
+  map.on('styledata', attempt);
+  map.on('idle', attempt);
 }
 
 /** Basemaps needing a Mapbox token are hidden entirely when none is configured. */
@@ -690,6 +715,9 @@ async function renderBuildStamp() {
     if (!commit && !built) return;
 
     dom.buildStamp.textContent = [commit && `build ${commit}`, built].filter(Boolean).join(' · ');
+    // Also in the console, so it can be read from a screenshot of the console
+    // or copied into a bug report without hunting for it in the panel.
+    console.info(`[build] ${Object.entries(fields).map(([k, v]) => `${k}=${v}`).join(' ')}`);
     dom.buildStamp.title = Object.entries(fields).map(([k, v]) => `${k}: ${v}`).join('\n');
     dom.buildStamp.hidden = false;
   } catch {
@@ -1007,7 +1035,7 @@ function regionBoundsLabel({ west, south, east, north }) {
 
 /** Push region outlines to the map, marking the highlighted one. */
 function refreshRegionData() {
-  if (!styleReady()) return;
+  if (!styleReady()) { whenStyleReady(refreshRegionData); return; }
   try {
     const source = state.map.getSource(REGION_SOURCE);
     if (!source) return;
@@ -1445,7 +1473,7 @@ function removeDocumentLayers(key) {
 }
 
 function applyVisibility() {
-  if (!styleReady()) return;
+  if (!styleReady()) { whenStyleReady(applyVisibility); return; }
   for (const entry of state.documents.values()) {
     const visibility = entry.visible ? 'visible' : 'none';
     for (const id of layerIdsFor(entry.key)) {
@@ -2699,7 +2727,7 @@ function raiseFolderLayers() {
 }
 
 function refreshFolderData() {
-  if (!styleReady()) return;
+  if (!styleReady()) { whenStyleReady(refreshFolderData); return; }
   try {
     const source = state.map.getSource(FOLDER_SOURCE);
     if (source) source.setData(state.folders.toGeoJSON({ visibleOnly: true }));

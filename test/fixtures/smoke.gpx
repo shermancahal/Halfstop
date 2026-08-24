@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="test" xmlns="http://www.topografix.com/GPX/1/1">
+  <wpt lat="35.9606" lon="-84.2807"><name>Creamery Falls</name><sym>Waterfall</sym><desc>Base of the falls</desc></wpt>
+  <wpt lat="35.9700" lon="-84.2900"><name>Trailhead</name><sym>Trailhead</sym></wpt>
+  <trk><name>East Stony Creek</name><trkseg>
+    <trkpt lat="35.9606" lon="-84.2807"><ele>400</ele></trkpt>
+    <trkpt lat="35.9650" lon="-84.2850"><ele>460</ele></trkpt>
+    <trkpt lat="35.9700" lon="-84.2900"><ele>520</ele></trkpt>
+  </trkseg></trk>
+</gpx>
