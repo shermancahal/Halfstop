@@ -271,6 +271,69 @@ export function weatherClass(short = '') {
   return 'cloud';
 }
 
+/**
+ * Hourly cloud cover, for deciding whether tonight is worth driving out for.
+ *
+ * The plain forecast gives prose — "Mostly Clear then Partly Cloudy" — which is
+ * unusable for scoring a two-hour window at one in the morning. The gridpoint
+ * endpoint behind that forecast publishes the raw `skyCover` series the words
+ * were written from: percentages, hour by hour, a week out.
+ *
+ * Values arrive as ISO 8601 intervals — "2026-08-24T01:00:00+00:00/PT3H" means
+ * this value holds for three hours — so each is expanded into the hours it
+ * covers rather than being read as a single point.
+ *
+ * @returns {Promise<{ok: true, hours: {at: Date, cover: number}[]}
+ *                 | {ok: false, reason: string}>}
+ */
+export async function skyCover([lon, lat]) {
+  const point = await fetchJSON(`${WEATHER_ROOT}/points/${lat.toFixed(4)},${lon.toFixed(4)}`);
+
+  if (!point.ok) {
+    if (point.status === 404) {
+      return { ok: false, reason: 'the National Weather Service only covers the United States' };
+    }
+    return { ok: false, reason: point.reason };
+  }
+
+  const gridURL = point.data?.properties?.forecastGridData;
+  if (!gridURL) return { ok: false, reason: 'no gridded forecast is published for this point' };
+
+  const grid = await fetchJSON(gridURL);
+  if (!grid.ok) return { ok: false, reason: grid.reason };
+
+  const values = grid.data?.properties?.skyCover?.values || [];
+  if (!values.length) return { ok: false, reason: 'no cloud cover is published for this point' };
+
+  const hours = [];
+  for (const entry of values) {
+    const [start, duration] = String(entry.validTime || '').split('/');
+    const from = new Date(start);
+    if (!Number.isFinite(from.valueOf())) continue;
+
+    const span = parseISODuration(duration);
+    for (let hour = 0; hour < span; hour += 1) {
+      hours.push({ at: new Date(from.valueOf() + hour * 3600000), cover: entry.value ?? null });
+    }
+  }
+
+  return { ok: true, hours };
+}
+
+/**
+ * Hours in an ISO 8601 duration like PT6H, P1DT3H, PT30M.
+ *
+ * Only whole hours matter here — the series is hourly at its finest — so a
+ * sub-hour duration still covers the hour it starts in.
+ */
+export function parseISODuration(duration = '') {
+  const match = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?)?$/.exec(duration.trim());
+  if (!match) return 1;
+  const [, days, hours, minutes] = match;
+  const total = (Number(days || 0) * 24) + Number(hours || 0) + (Number(minutes || 0) / 60);
+  return Math.max(1, Math.round(total));
+}
+
 /* ------------------------------------------------------------------ elevation */
 
 /**

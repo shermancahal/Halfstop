@@ -28,6 +28,7 @@ import {
   currentDirections,
   galacticCentre,
   milkyWayArc,
+  nightQuality,
 } from '../assets/js/lib/sky.js';
 
 /* Places chosen for what they prove, not for sentiment. */
@@ -435,4 +436,92 @@ test('the peak inside the window is not the transit once autumn arrives', () => 
 test('a night with no shootable window has no window peak', () => {
   const winter = milkyWayNight(new Date('2026-12-15T12:00:00Z'), 35.96, -84.28);
   assert.equal(winter.windowPeak, null);
+});
+
+/* ------------------------------------------------------ how good a night is */
+
+const hourly = (from, hours, cover) => Array.from({ length: hours }, (unused, index) => ({
+  at: new Date(from.valueOf() + index * 3600000),
+  cover: typeof cover === 'function' ? cover(index) : cover,
+}));
+
+test('a night with no cloud data reports no percentage at all', () => {
+  // The trap this guards: scoring the moon alone and presenting it as the
+  // whole answer. A clear-looking 100% under an overcast sky sends someone out
+  // for nothing, so with no cloud figure there is no figure.
+  const night = milkyWayNight(new Date('2026-07-13T12:00:00Z'), 35.96, -84.28);
+  const quality = nightQuality(night, null);
+
+  assert.equal(quality.score, null);
+  assert.equal(quality.cloudCover, null);
+  assert.match(quality.verdict, /moon/i);
+});
+
+test('cloud and moon both pull the score down, and together compound', () => {
+  const newMoon = milkyWayNight(new Date('2026-07-13T12:00:00Z'), 35.96, -84.28);
+  const fullMoon = milkyWayNight(new Date('2026-07-28T12:00:00Z'), 35.96, -84.28);
+
+  const clearFor = (night) => hourly(new Date(night.window.from.valueOf() - 3600000), 14, 5);
+  const overcastFor = (night) => hourly(new Date(night.window.from.valueOf() - 3600000), 14, 95);
+
+  const best = nightQuality(newMoon, clearFor(newMoon));
+  const clouded = nightQuality(newMoon, overcastFor(newMoon));
+  const moonlit = nightQuality(fullMoon, clearFor(fullMoon));
+
+  assert.ok(best.score > 0.85, `clear new moon scored ${best.score}`);
+  assert.ok(clouded.score < 0.15, `overcast new moon scored ${clouded.score}`);
+  assert.ok(moonlit.score < best.score, 'a full moon must score below a new one');
+  assert.equal(best.verdict, 'Excellent');
+  assert.equal(clouded.verdict, 'Not tonight');
+});
+
+test('a stale cloud reading is not used', () => {
+  // Hours from a different night are not evidence about this one.
+  const night = milkyWayNight(new Date('2026-07-13T12:00:00Z'), 35.96, -84.28);
+  const elsewhere = hourly(new Date('2026-09-01T00:00:00Z'), 14, 5);
+  assert.equal(nightQuality(night, elsewhere).cloudCover, null);
+});
+
+test('a uniformly clear window has no better part — it is all the best part', () => {
+  /*
+   * Floating-point drift used to shatter the "above average" run on a window
+   * where every sample scored the same, so a perfect night reported no best
+   * stretch at all. The whole window is the answer there.
+   */
+  const night = milkyWayNight(new Date('2026-07-13T12:00:00Z'), 35.96, -84.28);
+  const quality = nightQuality(night, hourly(new Date(night.window.from.valueOf() - 3600000), 14, 5));
+
+  assert.ok(quality.best, 'a clear night must name a best stretch');
+  assert.equal(quality.best.from.valueOf(), night.window.from.valueOf());
+  assert.equal(quality.best.to.valueOf(), night.window.to.valueOf());
+});
+
+test('a window that clears halfway through narrows to the clear half', () => {
+  const night = milkyWayNight(new Date('2026-07-13T12:00:00Z'), 35.96, -84.28);
+  const start = new Date(night.window.from.valueOf() - 3600000);
+  const clearing = hourly(start, 14, (index) => (index < 4 ? 90 : 10));
+
+  const quality = nightQuality(night, clearing);
+  assert.ok(quality.best.from > night.window.from, 'the best stretch starts after the cloud clears');
+});
+
+test('shooting moments name only what tonight actually offers', () => {
+  const night = milkyWayNight(new Date('2026-08-24T12:00:00Z'), 35.96, -84.28);
+
+  assert.ok(night.moments.length >= 2 && night.moments.length <= 5);
+  assert.equal(night.moments.filter((moment) => moment.primary).length, 1);
+  assert.equal(night.moments[0].id, 'peak');
+
+  for (const moment of night.moments) {
+    assert.ok(moment.why && moment.why.length > 10, `${moment.id} needs a reason`);
+    assert.ok(moment.when >= night.dark.from && moment.when <= night.dark.to,
+      `${moment.id} falls outside astronomical dark`);
+  }
+
+  // Two entries on the same minute are one entry with two names.
+  const plain = night.moments.filter((moment) => !moment.until);
+  for (let i = 1; i < plain.length; i += 1) {
+    assert.ok(Math.abs(plain[i].when - plain[i - 1].when) >= 15 * 60000,
+      `${plain[i].id} duplicates ${plain[i - 1].id}`);
+  }
 });

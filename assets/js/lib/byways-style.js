@@ -145,8 +145,18 @@ export function bywaysStyle(token) {
       ...waterLayers(),
       ...roadLayers(),
       ...boundaryLayers(),
-      ...labelLayers(),
+      /*
+       * Shields BEFORE the other labels, and the order is the whole fix.
+       *
+       * GL resolves symbol collisions in layer order: whatever is placed first
+       * keeps its spot and everything after it moves or disappears. With
+       * shields last, every water name, summit, road name and place label got
+       * there first, and on any map with labels on it the shields were the
+       * thing that gave way — which is exactly backwards for a road map, where
+       * the shield is the most useful label on the road.
+       */
       ...shieldLayers(),
+      ...labelLayers(),
     ],
     attribution: '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> '
       + '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -555,13 +565,25 @@ function shieldLayers() {
         'text-size': ['interpolate', ['linear'], ['zoom'], 6, 9, 12, 11],
         'text-rotation-alignment': 'viewport',
         'text-anchor': 'center',
-        // The shield is the point; let it push other labels aside rather than
-        // being the thing that gets dropped when the map is busy.
-        'icon-allow-overlap': false,
+        /*
+         * The shield and its number are one thing and are drawn on the same
+         * terms. They were not: the number was set to ignore collisions
+         * entirely while the shield behind it was not, so wherever the shield
+         * lost a collision the bare number stayed — which is precisely the
+         * "the shields turned into text labels" that got reported.
+         *
+         * Both now always draw, and neither ignores placement, so other labels
+         * route around them instead of over them.
+         */
+        'icon-allow-overlap': true,
         'icon-ignore-placement': false,
         'text-allow-overlap': true,
-        'text-ignore-placement': true,
+        'text-ignore-placement': false,
         'text-optional': false,
+        'icon-optional': false,
+        // An interstate marker outranks a county route when they land together.
+        'symbol-sort-key': ['match', ['get', 'class'],
+          'motorway', 1, 'trunk', 2, 'primary', 3, 4],
       },
       paint: { 'text-color': SHIELD_TEXT_COLOUR },
     },

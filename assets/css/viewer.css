@@ -1058,6 +1058,9 @@ html, body { height: 100%; overflow: hidden; }
 }
 .core-hero.is-fair { background: linear-gradient(140deg, #1c2036, #3a3f63 60%, #5b5680); }
 .core-hero.is-poor { background: linear-gradient(140deg, #34364a, #5c5d75 60%, #83829a); }
+/* No cloud forecast yet, or none published here. Deliberately not the "good"
+   wash: an unknown sky should not look like a clear one. */
+.core-hero.is-unknown { background: linear-gradient(140deg, #232838, #3d4258 60%, #545a72); }
 .core-headline { min-width: 0; }
 .core-window {
   font-family: var(--font-serif); font-size: 1.16rem; line-height: 1.2;
@@ -1070,6 +1073,48 @@ html, body { height: 100%; overflow: hidden; }
   font-variant-numeric: tabular-nums;
 }
 .core-peak-note { font-size: .66rem; color: #c2bdd8; margin-top: 3px; }
+
+.core-verdict {
+  font-size: .68rem; font-weight: 700; letter-spacing: .07em;
+  text-transform: uppercase; color: #d8d3ec; margin-bottom: 3px;
+}
+
+/* The "why this time" box. Folded away because the card above answers "is
+   tonight worth it" and this answers "what time do I set the alarm for" — a
+   question you only ask once the first one comes back yes. */
+.core-guide { margin-top: 11px; }
+.core-guide-summary {
+  display: flex; align-items: center; gap: 7px; cursor: pointer; list-style: none;
+  padding: 7px 9px; border-radius: var(--radius-sm);
+  border: 1px solid var(--line); background: var(--paper);
+  font-size: .76rem; font-weight: 600; color: var(--ink-2);
+}
+.core-guide-summary::-webkit-details-marker { display: none; }
+.core-guide-summary:hover { border-color: var(--line-strong); color: var(--ink); }
+.core-guide-mark {
+  flex: none; width: 15px; height: 15px; border-radius: 999px;
+  display: grid; place-items: center;
+  background: var(--ink-3); color: var(--paper);
+  font-size: .6rem; font-weight: 700; font-style: italic;
+}
+.core-guide[open] .core-guide-summary { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.core-guide-body {
+  padding: 10px 9px; border: 1px solid var(--line); border-top: 0;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm); background: var(--paper);
+}
+.core-moment {
+  display: grid; grid-template-columns: 78px 1fr; gap: 9px;
+  padding: 6px 0; border-top: 1px solid var(--line);
+}
+.core-moment:first-child { border-top: 0; padding-top: 0; }
+.core-moment-time {
+  font-size: .74rem; font-weight: 600; color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.core-moment.is-primary .core-moment-time { color: var(--accent, var(--ink)); }
+.core-moment.is-primary .core-moment-name { font-weight: 700; }
+.core-moment-name { font-size: .76rem; color: var(--ink); }
+.core-moment-why { font-size: .7rem; color: var(--ink-3); margin-top: 1px; }
 
 .core-rows { display: grid; gap: 5px; margin-top: 11px; }
 .core-row {
@@ -1098,12 +1143,16 @@ html, body { height: 100%; overflow: hidden; }
   text-transform: uppercase; color: var(--ink-3); margin-bottom: 5px;
 }
 .core-night {
-  display: grid; grid-template-columns: 1fr auto auto; gap: 10px;
+  display: grid; grid-template-columns: 1fr auto auto auto; gap: 10px;
   padding: 3px 0; font-size: .75rem; font-variant-numeric: tabular-nums;
 }
 .core-night-date { color: var(--ink-2); }
 .core-night-span { color: var(--ink); font-weight: 600; }
 .core-night-moon { color: var(--ink-3); min-width: 62px; text-align: right; }
+/* Blank for every night the forecast does not reach, which is most of them —
+   an empty cell says "not known" more honestly than a dash would. */
+.core-night-cloud { color: var(--ink-3); min-width: 58px; text-align: right; }
+.core-night-cloud.is-clear { color: #2f7d5c; font-weight: 600; }
 
 /* Which line on the map is which. Matches the line colours exactly, because a
    key whose colours are close but not equal is worse than none. */

@@ -151,8 +151,36 @@ const ALERTS = {
   }],
 };
 
+/*
+ * A gridded sky-cover series shaped like the NWS one, clouding over toward
+ * dawn — enough for the Milky Way card to produce a real percentage rather
+ * than falling back to its moon-only wording.
+ */
+const SKY_COVER = Array.from({ length: 48 }, (unused, index) => ({
+  validTime: `${new Date(Date.UTC(2026, 7, 24, index - 12)).toISOString().replace('.000Z', '+00:00')}/PT1H`,
+  value: index < 18 ? 10 : 85,
+}));
+
 await page.route('**/*', async (route) => {
   const url = route.request().url();
+  if (/\/points\//.test(url)) {
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/geo+json',
+      body: JSON.stringify({ properties: {
+        forecast: `${URL_UNDER_TEST}forecast`,
+        forecastGridData: `${URL_UNDER_TEST}gridpoint`,
+        relativeLocation: { properties: { city: 'Oak Ridge', state: 'TN' } },
+      } }),
+    });
+  }
+  if (/gridpoint/.test(url)) {
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/geo+json',
+      body: JSON.stringify({ properties: { skyCover: { values: SKY_COVER } } }),
+    });
+  }
   if (/alerts\/active/.test(url)) {
     return route.fulfill({ status: 200, contentType: 'application/geo+json', body: JSON.stringify(ALERTS) });
   }
@@ -263,6 +291,20 @@ const mwText = await page.locator('.sky-panel').innerText();
 check('it leads with how much of the band is up', /Most of the band up\s*\n?\s*\d+%/.test(mwText), true);
 check('and says what the percentage measures', /above the horizon/.test(mwText), true);
 
+// The headline is the reason to go or not go, and it is only allowed to state
+// a percentage once cloud cover has actually arrived.
+await page.waitForFunction(() => /sky quality/.test(document.querySelector('.core-hero')?.textContent || ''), null, { timeout: 5000 })
+  .catch(() => {});
+const heroText = await page.locator('.core-hero').innerText();
+check('the headline scores the night', /\d+%\s*\n?\s*sky quality/.test(heroText), true);
+check('and shows the cloud it used', /% cloud/.test(heroText), true);
+
+await page.locator('.core-guide-summary').click();
+await page.waitForTimeout(300);
+const moments = await page.locator('.core-moment-name').allInnerTexts();
+check('the guide names the classic moment first', moments[0], 'Core at its highest');
+check('and offers others without padding the list', moments.length > 1 && moments.length <= 5, true);
+
 await page.locator('.sky-tab', { hasText: /^Moon/ }).click();
 await page.waitForTimeout(400);
 check('switching tabs swaps the box', await page.locator('.moon-card').count(), 1);
@@ -299,8 +341,8 @@ await page.click('.panel-tab[data-tab="waypoints"]');
 await page.waitForTimeout(300);
 await page.locator('.waypoint-row').first().click();
 await page.waitForTimeout(900);
-const sunMoon = () => page.locator('.detail-block').filter({ hasText: 'Sun & moon' }).first();
-await page.locator('.detail-block-summary', { hasText: /Sun & moon/i }).click();
+const sunMoon = () => page.locator('.detail-block').filter({ hasText: 'For photographers' }).first();
+await page.locator('.detail-block-summary', { hasText: /For photographers/i }).click();
 await page.waitForTimeout(300);
 check('collapsing closes the section', await sunMoon().evaluate((node) => node.open), false);
 

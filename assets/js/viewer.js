@@ -31,6 +31,7 @@ import {
 import { toGPX } from './lib/gpx-write.js';
 import {
   registerShieldImages, shieldImageExpression, shieldTextColour, stateDesign, rasterizeShieldById,
+  shieldImageIdFor,
 } from './lib/route-shields.js';
 import { Account, isConfigured as accountsAvailable } from './lib/account.js';
 import {
@@ -39,10 +40,12 @@ import {
 import {
   sunTimes, sunPosition, moonTimes, moonPosition, moonIllumination,
   lightPhases, lightDirections, currentDirections, destinationPoint,
-  milkyWayNight, bestMilkyWayNights,
+  milkyWayNight, bestMilkyWayNights, nightQuality,
 } from './lib/sky.js';
 import { activeAlerts, describeMotion, alertsToGeoJSON } from './lib/storms.js';
-import { landManager, forecast, weatherClass, publicLand, elevation } from './lib/lookup.js';
+import {
+  landManager, forecast, weatherClass, publicLand, elevation, skyCover,
+} from './lib/lookup.js';
 import { describeSync } from './lib/sync.js';
 import {
   OfflineStore, MAX_ZOOM as OFFLINE_MAX_ZOOM, TILE_BUDGET,
@@ -811,9 +814,38 @@ function exposeRoadInspector() {
 
     if (!shields.size) return 'No numbered roads on screen — pan to a highway and try again.';
 
+    /*
+     * Both halves of "why is there no shield here".
+     *
+     * A shield needs the data to carry `shield`/`ref`/`reflen` AND the image
+     * the expression builds from them to be registered AND the symbol to
+     * survive collision against every other label. Each half fails silently and
+     * looks identical from the outside — a road with no marker on it — so
+     * asking the map which one it is beats guessing, twice over now.
+     */
+    const shieldLayer = state.map.getLayer('road-shield');
+    const wanted = new Map();
+    for (const feature of features) {
+      const props = feature.properties || {};
+      if (!props.ref) continue;
+      const id = shieldImageIdFor(props.shield, props.reflen, state.shieldState);
+      wanted.set(id, (wanted.get(id) || 0) + 1);
+    }
+
+    const missing = [...wanted.keys()].filter((id) => !state.map.hasImage?.(id));
+    const drawn = shieldLayer ? state.map.queryRenderedFeatures({ layers: ['road-shield'] }).length : 0;
+
     return {
       zoom: Number(state.map.getZoom().toFixed(1)),
       roadsOnScreen: features.length,
+      shieldLayerPresent: !!shieldLayer,
+      shieldsDrawn: drawn,
+      imagesWanted: Object.fromEntries(wanted),
+      imagesMissing: missing.length ? missing : 'none — every image the data asks for is registered',
+      verdict: !shieldLayer ? 'No shield layer — switch to Byways Topo.'
+        : missing.length ? 'Images are missing; the numbers will draw without markers.'
+          : drawn ? 'Shields are being drawn.'
+            : 'Images are fine and nothing is drawn — the symbols are losing collisions.',
       shieldValues: Object.fromEntries(
         [...shields].map(([shield, refs]) => [shield, [...refs].slice(0, 8)]),
       ),
@@ -1276,7 +1308,7 @@ function skySection(position) {
   const phases = lightPhases(date, lat, lon);
 
   let section = null;
-  const outer = collapsibleSection('sky', 'Sun & moon', (body) => { section = body; }, {
+  const outer = collapsibleSection('sky', 'For photographers', (body) => { section = body; }, {
     count: date.toLocaleDateString([], { month: 'short', day: 'numeric' }),
   });
 
@@ -1371,8 +1403,7 @@ function lightHero(sun, phases, lat, lon) {
 
 /** Small sun/horizon marks for the hero. Drawn, not typed — no glyph coverage. */
 function sunGlyph(kind) {
-  const disc = kind === 'blue' ? '#8fb2d8' : kind === 'golden' ? '#f0a500' : '#f5b942';
-  const sky = kind === 'blue' ? '#2f4a68' : 'none';
+  const disc = kind === 'blue' ? '#5b82b5' : kind === 'golden' ? '#f0a500' : '#f5b942';
   const rays = kind === 'rise' || kind === 'set';
   const spokes = rays
     ? [0, 45, 90, 135, 180, 225, 270, 315]
@@ -1397,7 +1428,6 @@ function sunGlyph(kind) {
       : '';
 
   return `<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
-    ${sky !== 'none' ? `<rect x="0" y="0" width="24" height="24" rx="5" fill="${sky}" opacity=".18"/>` : ''}
     ${spokes}
     <circle cx="12" cy="12" r="${rays ? 5.4 : 6.4}" fill="${disc}"/>
     ${horizon}${arrow}
@@ -1420,7 +1450,7 @@ function skyPanels(position, date, phases) {
   const open = state.skyPanel;
 
   const tabs = [
-    { id: 'twilight', label: 'Twilight' },
+    { id: 'twilight', label: 'Light phases' },
     { id: 'moon', label: `Moon ${Math.round(moonIllumination(date).fraction * 100)}%` },
     { id: 'milkyway', label: 'Milky Way' },
     { id: 'lines', label: 'On the map' },
@@ -1524,45 +1554,33 @@ function milkyWayPanel(body, date, lat, lon) {
     return;
   }
 
+  /*
+   * The headline is the chance of actually seeing it, which needs cloud cover,
+   * which needs the network. So the card is built from the astronomy first —
+   * moon and window, known instantly and offline — and refined when the
+   * forecast lands. It never shows a percentage it cannot stand behind: with
+   * no cloud data it reports the moon and says that is all it knows.
+   */
+  const hero = el('div', { class: 'core-hero' });
+  body.append(hero);
+  renderCoreHero(hero, night, null);
+
+  const nights = el('div');
+  const cloudReady = skyCover([lon, lat]).then(
+    (result) => (result.ok ? result.hours : null),
+    () => null,
+  );
+
+  cloudReady.then((cover) => {
+    if (hero.isConnected) renderCoreHero(hero, night, cover);
+    if (nights.isConnected) nights.replaceChildren(bestNightsList(date, lat, lon, cover));
+  });
+
+  body.append(shootingWindow(night));
+
   const moonPercent = Math.round(night.moon.fraction * 100);
-  const quality = night.moonless
-    ? (night.moonless.minutes >= 120 ? 'good' : 'fair')
-    : 'poor';
-
-  body.append(el('div', { class: `core-hero is-${quality}` }, [
-    el('div', { class: 'core-headline' }, [
-      el('div', { class: 'core-window', text: night.moonless
-        ? `${clockTime(night.moonless.from)} – ${clockTime(night.moonless.to)}`
-        : `${clockTime(night.window.from)} – ${clockTime(night.window.to)}` }),
-      el('div', { class: 'core-window-note', text: night.moonless
-        ? `${formatSpan(night.moonless.minutes)} of dark, moonless sky`
-        : `${formatSpan(night.window.minutes)} dark — but the moon is up (${moonPercent}%)` }),
-    ]),
-    /*
-     * How much of the arch is up, not how high its centre is.
-     *
-     * The centre's altitude is the wrong headline twice over. It says nothing
-     * about the angle the band makes with the horizon, which is what decides
-     * whether you are looking at a quarter of the Milky Way or all of it — and
-     * measured inside the dark window rather than across the night, because the
-     * arch is at its best long after the transit.
-     */
-    night.arcPeak
-      ? el('div', { class: 'core-peak' }, [
-        el('div', { class: 'core-peak-value', text: `${Math.round(night.arcPeak.fraction * 100)}%` }),
-        el('div', { class: 'core-peak-note', text: `up at ${clockTime(night.arcPeak.when)}` }),
-      ])
-      : el('div', { class: 'core-peak' }, [
-        el('div', { class: 'core-peak-value', text: `${Math.round(night.transitAltitude)}°` }),
-        el('div', { class: 'core-peak-note', text: `highest ${clockTime(night.transit)}` }),
-      ]),
-  ]));
-
-  // Only worth a row of its own when it differs from the peak in the headline —
-  // otherwise it says the same thing twice.
   const transitDiffers = night.windowPeak
     && Math.abs(night.windowPeak.altitude - night.transitAltitude) > 0.6;
-
   const cap = night.marks.length ? night.marks[night.marks.length - 1].percent : 0;
 
   const rows = [
@@ -1578,9 +1596,10 @@ function milkyWayPanel(body, date, lat, lon) {
     ['Astronomical dark', night.dark ? `${clockTime(night.dark.from)} – ${clockTime(night.dark.to)}` : '—'],
     ['Moon', `${moonPercent}% · ${night.moon.name.toLowerCase()}`],
     cap && cap < 100
-      ? ['Ceiling here', `the southern end of the band never clears the horizon from this latitude`]
+      ? ['Ceiling here', 'the southern end of the band never clears the horizon from this latitude']
       : null,
   ].filter(Boolean);
+
   body.append(el('div', { class: 'core-rows' }, rows.map(([label, value]) => el('div', { class: 'core-row' }, [
     el('span', { class: 'core-row-label', text: label }),
     el('span', { class: 'core-row-value', text: value }),
@@ -1603,7 +1622,89 @@ function milkyWayPanel(body, date, lat, lon) {
       + ' horizon, not just how high its centre is.',
   }));
 
-  body.append(bestNightsList(date, lat, lon));
+  nights.append(bestNightsList(date, lat, lon, null));
+  body.append(nights);
+}
+
+/**
+ * The headline card: how likely you are to see it, and when.
+ *
+ * Rebuilt in place rather than patched, because the moon-only version and the
+ * moon-and-cloud version say different things in different words and stitching
+ * one into the other would leave stale text behind.
+ */
+function renderCoreHero(hero, night, cover) {
+  const quality = nightQuality(night, cover);
+  const percent = quality.score === null ? null : Math.round(quality.score * 100);
+
+  const band = percent === null ? 'unknown'
+    : percent >= 75 ? 'good' : percent >= 30 ? 'fair' : 'poor';
+  hero.className = `core-hero is-${band}`;
+
+  const when = quality.best || night.moonless || night.window;
+  const detail = [
+    `${formatSpan(night.window.minutes)} dark`,
+    night.moonless && night.moonless.minutes < night.window.minutes
+      ? `moon up part of it (${Math.round(night.moon.fraction * 100)}%)`
+      : `moon ${Math.round(night.moon.fraction * 100)}%`,
+    quality.cloudCover === null ? 'cloud unknown' : `${quality.cloudCover}% cloud`,
+  ].filter(Boolean).join(' · ');
+
+  hero.replaceChildren(
+    el('div', { class: 'core-headline' }, [
+      el('div', { class: 'core-verdict', text: quality.verdict }),
+      el('div', { class: 'core-window', text: `${clockTime(when.from)} – ${clockTime(when.to)}` }),
+      el('div', { class: 'core-window-note', text: detail }),
+    ]),
+    percent === null
+      ? el('div', { class: 'core-peak' }, [
+        el('div', { class: 'core-peak-value', text: `${Math.round((night.arcPeak?.fraction || 0) * 100)}%` }),
+        el('div', { class: 'core-peak-note', text: 'of the band up' }),
+      ])
+      : el('div', { class: 'core-peak' }, [
+        el('div', { class: 'core-peak-value', text: `${percent}%` }),
+        el('div', { class: 'core-peak-note', text: 'sky quality' }),
+      ]),
+  );
+}
+
+/**
+ * When to actually press the shutter, and why each moment is worth it.
+ *
+ * Folded away by default: the headline answers "is tonight worth it", and this
+ * answers "what time do I set the alarm for", which is a question you only ask
+ * once the first one comes back yes.
+ */
+function shootingWindow(night) {
+  const box = el('details', { class: 'core-guide' }, [
+    el('summary', { class: 'core-guide-summary' }, [
+      el('span', { class: 'core-guide-mark', text: 'i' }),
+      el('span', { text: 'Best times to shoot' }),
+    ]),
+  ]);
+
+  const list = el('div', { class: 'core-guide-body' });
+  for (const moment of night.moments) {
+    list.append(el('div', { class: `core-moment${moment.primary ? ' is-primary' : ''}` }, [
+      el('div', { class: 'core-moment-time', text: moment.until
+        ? `${clockTime(moment.when)}–${clockTime(moment.until)}`
+        : clockTime(moment.when) }),
+      el('div', { class: 'core-moment-text' }, [
+        el('div', { class: 'core-moment-name', text: moment.name }),
+        el('div', { class: 'core-moment-why', text: moment.why }),
+      ]),
+    ]));
+  }
+
+  list.append(el('p', {
+    class: 'source-note',
+    text: 'Shoot the core between roughly 15 and 30 seconds at the widest aperture your lens has —'
+      + ' longer and the stars trail. Everything above assumes you are away from town lights;'
+      + ' the moon and the cloud are only two thirds of the problem.',
+  }));
+
+  box.append(list);
+  return box;
 }
 
 /** When the core next becomes a night-time object, for the months it is not. */
@@ -1625,7 +1726,7 @@ function nextCoreNight(date, lat, lon) {
  * changes materially over a month and it is perfectly predictable, so this is
  * answerable weeks ahead in a way cloud never will be.
  */
-function bestNightsList(date, lat, lon) {
+function bestNightsList(date, lat, lon, cover) {
   const nights = bestMilkyWayNights(date, lat, lon, 45).filter((night) => night.minutes > 0);
 
   /*
@@ -1650,17 +1751,29 @@ function bestNightsList(date, lat, lon) {
 
   wrap.append(el('div', { class: 'core-nights-label', text: 'Best nights ahead' }));
   for (const night of best) {
+    /*
+     * Cloud where the forecast reaches, moon everywhere. The forecast runs
+     * about a week and the list runs six, so most rows will never have a cloud
+     * figure — and a row showing one is saying something the rows below it
+     * genuinely cannot.
+     */
+    const clouds = cover ? nightCloudCover(night.window, cover) : null;
+
     wrap.append(el('div', { class: 'core-night' }, [
       el('span', { class: 'core-night-date', text: night.date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) }),
       el('span', { class: 'core-night-span', text: formatSpan(night.minutes) }),
       el('span', { class: 'core-night-moon', text: `${Math.round(night.moon.fraction * 100)}% moon` }),
+      el('span', {
+        class: `core-night-cloud${clouds !== null && clouds <= 30 ? ' is-clear' : ''}`,
+        text: clouds === null ? '' : `${clouds}% cloud`,
+      }),
     ]));
   }
   wrap.append(el('p', {
     class: 'source-note',
-    text: 'Every window above is already moonless — the percentage is that night\u2019s phase,'
-      + ' which sets how much glow is left either side of it. Cloud is the other half of the'
-      + ' answer and is not knowable this far out; the forecast above covers the near nights.',
+    text: 'Every window above is already moonless — the moon percentage is that night\u2019s'
+      + ' phase, which sets how much glow is left either side of it. Cloud is shown for the'
+      + ' nights the forecast reaches, about a week out; blank means nobody knows yet.',
   }));
   return wrap;
 }
@@ -1700,6 +1813,17 @@ function linesPanel(body, position, date) {
 }
 
 const capitalise = (text = '') => text.charAt(0).toUpperCase() + text.slice(1);
+
+/** Mean cloud cover across a window, or null when the forecast does not reach it. */
+function nightCloudCover(window, cover) {
+  if (!window || !cover?.length) return null;
+
+  const inside = cover.filter((hour) => hour.cover !== null
+    && hour.at >= window.from && hour.at <= window.to);
+  if (!inside.length) return null;
+
+  return Math.round(inside.reduce((total, hour) => total + hour.cover, 0) / inside.length);
+}
 
 function skyCell(label, value, note) {
   return el('div', { class: 'sky-cell' }, [

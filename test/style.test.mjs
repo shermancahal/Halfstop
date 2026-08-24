@@ -20,9 +20,20 @@ import { buildRasterStyle, overlayParts, overlayIdFromLayer, styleFor } from '..
 import { BASEMAPS, OVERLAYS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN } from '../assets/js/config.js';
 import { bywaysStyle, PALETTE } from '../assets/js/lib/byways-style.js';
 import {
-  shieldDesign, shieldImageId, shieldImageIds, shieldImageExpression,
-  rasterizeShield, SHIELD_DESIGNS, SHIELD_TEXT_COLOUR, SHAPE_NAMES,
-  STATE_SHIELDS, stateDesign, statesWithShields, shieldTextColour,
+  shieldDesign,
+  shieldImageId,
+  shieldImageIds,
+  shieldImageExpression,
+  rasterizeShield,
+  SHIELD_DESIGNS,
+  SHIELD_TEXT_COLOUR,
+  SHAPE_NAMES,
+  STATE_SHIELDS,
+  stateDesign,
+  statesWithShields,
+  shieldTextColour,
+  shieldImageIdFor,
+  shieldDesignsFor,
 } from '../assets/js/lib/route-shields.js';
 
 const rasterBasemaps = BASEMAPS.filter((b) => b.tiles);
@@ -520,4 +531,102 @@ test('shields: every state and DC has a marker, listed in a stable order', () =>
   assert.equal(STATE_SHIELDS.OH.shape, 'square', 'Ohio is a square, not an outline');
   assert.equal(STATE_SHIELDS.AZ.bg, '#ffffff', 'Arizona is white, not black');
   assert.equal(STATE_SHIELDS.TX.shape, 'square', 'Texas is a square with lettering, not an outline');
+});
+
+test('route shields are placed before every other label layer', () => {
+  /*
+   * Not cosmetic ordering — GL resolves symbol collisions in layer order, so
+   * whatever comes first keeps its position and the rest give way. With shields
+   * last they lost to every water name and place label on the map, which on a
+   * road map is exactly the wrong way round.
+   */
+  const style = bywaysStyle('pk.test');
+  const symbols = style.layers.filter((layer) => layer.type === 'symbol').map((layer) => layer.id);
+  const shield = symbols.indexOf('road-shield');
+
+  assert.ok(shield >= 0, 'the shield layer exists');
+  const labelsAfter = symbols.slice(shield + 1);
+  assert.ok(labelsAfter.includes('label-place'), 'place labels come after shields');
+  assert.ok(!symbols.slice(0, shield).some((id) => id.startsWith('label-')),
+    `these labels are placed before shields and will win against them: ${symbols.slice(0, shield)}`);
+});
+
+test('a shield and the number on it obey the same collision rules', () => {
+  // A number set to ignore collisions while its shield is not is how shields
+  // "turn into text labels": the icon is dropped and the bare ref stays.
+  const style = bywaysStyle('pk.test');
+  const { layout } = style.layers.find((layer) => layer.id === 'road-shield');
+
+  assert.equal(layout['icon-allow-overlap'], layout['text-allow-overlap']);
+  assert.equal(layout['icon-ignore-placement'], layout['text-ignore-placement']);
+  assert.equal(layout['text-optional'], false);
+  assert.equal(layout['icon-optional'], false);
+});
+
+test('the diagnostic and the style agree on every image id', () => {
+  /*
+   * These were two hand-written copies of one mapping, and they disagreed: the
+   * diagnostic built its ids from the raw Mapbox `shield` value while the style
+   * collapsed that value to a design first. Every road would have been reported
+   * as missing an image it never asked for. Both are now generated from one
+   * table; this walks the expression by hand to prove it.
+   */
+  const state = 'TN';
+  // ['concat', 'abmap-shield-', <match>, '-', <reflen>]
+  const expression = shieldImageExpression(state);
+  const match = expression[2];
+
+  const evaluate = (shield) => {
+    for (let i = 2; i < match.length - 1; i += 2) {
+      if (match[i].includes(shield)) return match[i + 1];
+    }
+    return match[match.length - 1];
+  };
+
+  for (const shield of [
+    'us-interstate', 'us-interstate-duplex', 'us-highway', 'us-highway-business',
+    'us-state', 'us-state-duplex', 'something-unknown', '',
+  ]) {
+    const fromStyle = `abmap-shield-${evaluate(shield)}-3`;
+    assert.equal(shieldImageIdFor(shield, 3, state), fromStyle, `disagreement on "${shield}"`);
+  }
+});
+
+test('every image the style can ask for is one the module can draw', () => {
+  // A shield the expression names and nothing registers renders as a bare
+  // number — the exact "shields turned into text labels" failure.
+  const registrable = new Set(shieldImageIds({ state: 'TN' }));
+  for (const shield of ['us-interstate', 'us-highway', 'us-state', 'unknown']) {
+    for (const length of [2, 3, 4]) {
+      const id = shieldImageIdFor(shield, length, 'TN');
+      assert.ok(registrable.has(id), `${id} is asked for but never registered`);
+    }
+  }
+});
+
+test('the id list and the registrar walk the same designs', () => {
+  /*
+   * These two kept their own copies of the design list and the copies
+   * disagreed: the registrar added the current state's own marker, the
+   * enumeration did not. Nothing broke visibly — a missing image self-heals
+   * through styleimagemissing — but any check written against the enumeration
+   * was blind to exactly the state shields the feature exists for. One shared
+   * list now, and this asserts the enumeration is built from it.
+   */
+  for (const state of ['', 'TN', 'CA', 'ZZ']) {
+    const designs = shieldDesignsFor(state);
+    const ids = shieldImageIds({ state });
+
+    assert.equal(ids.length, designs.length * 3, `state "${state}": three widths per design`);
+    for (const design of designs) {
+      for (const length of [2, 3, 4]) {
+        assert.ok(ids.includes(shieldImageId(design, length)),
+          `state "${state}": ${design} at width ${length} is registered but not listed`);
+      }
+    }
+  }
+
+  // A state with its own marker gets one more design than one without.
+  assert.equal(shieldDesignsFor('TN').length, shieldDesignsFor('').length + 1);
+  assert.equal(shieldDesignsFor('ZZ').length, shieldDesignsFor('').length);
 });

@@ -466,7 +466,7 @@ export function currentDirections(date, lat, lon) {
   return [
     { id: 'sun-now', name: 'Sun now', body: 'sun', now: true, at: date, ...sun },
     { id: 'moon-now', name: 'Moon now', body: 'moon', now: true, at: date, ...moon },
-    { id: 'core-now', name: 'Core now', body: 'core', now: true, at: date, ...core },
+    { id: 'core-now', name: 'Milky Way now', body: 'core', now: true, at: date, ...core },
   ]
     .filter((entry) => entry.altitude > 0)
     .map((entry) => ({
@@ -755,6 +755,89 @@ export function milkyWayNight(date, lat, lon, { minAltitude = 10, stepMinutes = 
     ? inWindow.reduce((best, sample) => (sample.arc > best.arc ? sample : best))
     : null;
 
+  /*
+   * The moments worth setting an alarm for, beyond "when is it highest".
+   *
+   * Photographers do not all want the same instant. The core at its highest is
+   * the most detail and the least atmosphere to shoot through, and it is the
+   * answer most of the time — but an arch panorama wants the band at its most
+   * complete, a landscape foreground wants the core sitting low over the
+   * terrain, and anyone who cannot stay out all night wants to know the
+   * earliest moment the sky is properly dark.
+   *
+   * Only moments that exist tonight are returned. A list padded with
+   * unavailable options is worse than a short one.
+   */
+  const inDark = (sample) => sample.sun <= ASTRONOMICAL_NIGHT;
+  const usable = samples.filter((sample) => inDark(sample) && sample.core.altitude >= 0);
+
+  const runWhere = (test) => {
+    let from = null;
+    let to = null;
+    for (const sample of usable) {
+      if (test(sample)) {
+        if (!from) from = sample.when;
+        to = sample.when;
+      } else if (from) break;
+    }
+    return from && to && to > from ? { from, to } : null;
+  };
+
+  const lowRun = runWhere((sample) => sample.core.altitude >= 4 && sample.core.altitude <= 15);
+  const moonCrossing = (() => {
+    for (let i = 1; i < samples.length; i += 1) {
+      const before = samples[i - 1];
+      const after = samples[i];
+      if (!inDark(after)) continue;
+      if (before.moon >= 0 && after.moon < 0) return { when: after.when, setting: true };
+      if (before.moon < 0 && after.moon >= 0) return { when: after.when, setting: false };
+    }
+    return null;
+  })();
+
+  const moments = [
+    windowPeak && {
+      id: 'peak', primary: true, name: 'Core at its highest',
+      when: windowPeak.when,
+      why: 'Most detail, and the least atmosphere to shoot through.',
+    },
+    arcPeak && Math.abs(arcPeak.when - (windowPeak?.when ?? 0)) > 20 * 60000 && {
+      id: 'arch', name: 'Most of the band up',
+      when: arcPeak.when,
+      why: `${Math.round(arcPeak.fraction * 100)}% of the core region above the horizon — the moment for an arch panorama.`,
+    },
+    lowRun && {
+      id: 'low', name: 'Core low over the landscape',
+      when: lowRun.from, until: lowRun.to,
+      why: 'Between 4° and 15° up, so the core sits on the terrain rather than over your head.',
+    },
+    moonCrossing && {
+      id: 'moon', name: moonCrossing.setting ? 'Moon sets' : 'Moon rises',
+      when: moonCrossing.when,
+      why: moonCrossing.setting
+        ? 'The sky darkens from here — this is when the good part starts.'
+        : 'Sky glow rises from here — shoot before it.',
+    },
+    dark && {
+      id: 'dark', name: 'Sky fully dark',
+      when: dark.from,
+      why: 'Astronomical twilight ends. The earliest the band reads properly on a sensor.',
+    },
+  ]
+    .filter(Boolean)
+    /*
+     * Two entries pointing at the same minute are one entry with two names.
+     * In midsummer the band peaks the instant the sky goes dark, so "most of
+     * the band up" and "sky fully dark" both landed on 2:42 and the list read
+     * as padding. A moment with a range of its own always survives — it is
+     * saying something different even when it starts at the same time.
+     */
+    .filter((moment, index, all) => moment.until || moment.primary || !all.some(
+      (other, otherIndex) => otherIndex < index && !other.until
+        && Math.abs(other.when - moment.when) < 15 * 60000,
+    ))
+    .slice(0, 5);
+
   const azimuthWhen = (test) => {
     const hit = samples.find(test);
     return hit ? Math.round(hit.core.azimuth * 10) / 10 : null;
@@ -781,6 +864,7 @@ export function milkyWayNight(date, lat, lon, { minAltitude = 10, stepMinutes = 
     window,
     moonless,
     marks,
+    moments,
     arcPeak: arcPeak
       ? { when: arcPeak.when, fraction: arcPeak.arc, altitude: Math.round(arcPeak.core.altitude * 10) / 10 }
       : null,
@@ -799,6 +883,130 @@ export function milkyWayNight(date, lat, lon, { minAltitude = 10, stepMinutes = 
     })(),
     reason,
   };
+}
+
+/**
+ * How good a night this actually is, as a percentage.
+ *
+ * Three things decide whether you see the Milky Way, and only one of them is
+ * astronomy. The sky has to be dark — handled already, by the window itself.
+ * The moon has to be out of the way. And it has to be clear, which is the one
+ * that most often ruins the trip and the one no amount of orbital mechanics
+ * will tell you.
+ *
+ * Scored across the window minute by minute rather than as an average of
+ * averages, because the shape matters: a window whose first half is overcast
+ * and second half clear is a night worth driving to, and one that is uniformly
+ * half-clouded is not, and a single mean cannot tell them apart.
+ *
+ * `cover` is an optional hour-by-hour cloud series. Without it the score is
+ * moon-only and says so, rather than quietly assuming clear skies — an
+ * optimistic default here sends someone out under an overcast sky.
+ *
+ * @returns {{score: number, verdict: string, moonScore: number,
+ *            cloudScore: number|null, cloudCover: number|null, best: object|null}}
+ */
+export function nightQuality(night, cover = null) {
+  const window = night?.window;
+  if (!window) {
+    return { score: null, verdict: 'No window tonight', moonScore: 0, cloudScore: null, cloudCover: null, best: null };
+  }
+
+  const coverAt = (when) => {
+    if (!cover?.length) return null;
+    let closest = null;
+    let gap = Infinity;
+    for (const hour of cover) {
+      const distance = Math.abs(hour.at - when);
+      if (distance < gap && hour.cover !== null) {
+        gap = distance;
+        closest = hour.cover;
+      }
+    }
+    // More than 90 minutes from the nearest reading is not a reading.
+    return gap <= 5400000 ? closest : null;
+  };
+
+  const step = 300000;   // five minutes
+  const samples = [];
+  for (let time = window.from.valueOf(); time <= window.to.valueOf(); time += step) {
+    const when = new Date(time);
+    const moonUp = night.moonless
+      ? when < night.moonless.from || when > night.moonless.to
+      : true;
+
+    /*
+     * A full moon up is close to fatal; a thin crescent barely matters. The
+     * 0.85 leaves a floor: even under a full moon the brightest parts of the
+     * band are still there, which is why people photograph it anyway.
+     */
+    const moonScore = moonUp ? 1 - 0.85 * night.moon.fraction : 1;
+    const clouds = coverAt(when);
+    samples.push({ when, moonScore, cloudScore: clouds === null ? null : 1 - clouds / 100 });
+  }
+
+  const mean = (values) => (values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0);
+  const moonScore = mean(samples.map((sample) => sample.moonScore));
+  const measured = samples.filter((sample) => sample.cloudScore !== null);
+  const cloudScore = measured.length ? mean(measured.map((sample) => sample.cloudScore)) : null;
+
+  const score = cloudScore === null ? null : moonScore * cloudScore;
+
+  /*
+   * The best stretch inside the window: the longest run scoring above the
+   * window's own average, which is what "come at this time" actually means.
+   *
+   * A uniform night is the case to be careful with. When every sample scores
+   * the same, floating-point drift puts the mean a hair above some of them and
+   * the run shatters — so a perfectly clear, moonless night reported no best
+   * stretch at all, which is the opposite of the truth. A window that barely
+   * varies has no better part: the whole of it is the best part.
+   */
+  const scored = samples.map((sample) => ({
+    when: sample.when,
+    value: sample.moonScore * (sample.cloudScore === null ? 1 : sample.cloudScore),
+  }));
+  const values = scored.map((entry) => entry.value);
+  const spread = Math.max(...values) - Math.min(...values);
+
+  let best = null;
+  if (spread < 0.05) {
+    best = { from: window.from, to: window.to, peak: Math.max(...values) };
+  } else {
+    const threshold = mean(values);
+    let run = null;
+    for (const entry of [...scored, null]) {
+      if (entry && entry.value >= threshold) {
+        run = run || { from: entry.when, to: entry.when, peak: entry.value };
+        run.to = entry.when;
+        run.peak = Math.max(run.peak, entry.value);
+      } else if (run) {
+        if (!best || run.to - run.from > best.to - best.from) best = run;
+        run = null;
+      }
+    }
+  }
+
+  return {
+    score,
+    verdict: verdictFor(score === null ? moonScore : score, cloudScore),
+    moonScore,
+    cloudScore,
+    cloudCover: cloudScore === null ? null : Math.round((1 - cloudScore) * 100),
+    best: best && best.to > best.from ? best : null,
+  };
+}
+
+function verdictFor(score, cloudScore) {
+  if (cloudScore === null) {
+    // Without cloud data the word would overstate what is known.
+    return score >= 0.75 ? 'Moon is out of the way' : score >= 0.4 ? 'Moon interferes' : 'Moon washes it out';
+  }
+  if (score >= 0.75) return 'Excellent';
+  if (score >= 0.55) return 'Good';
+  if (score >= 0.3) return 'Fair';
+  if (score >= 0.12) return 'Poor';
+  return 'Not tonight';
 }
 
 /**

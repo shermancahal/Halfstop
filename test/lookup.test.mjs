@@ -14,7 +14,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { landManager, forecast, weatherClass, expandAgency } from '../assets/js/lib/lookup.js';
+import {
+  landManager,
+  forecast,
+  weatherClass,
+  expandAgency,
+  parseISODuration,
+} from '../assets/js/lib/lookup.js';
 
 /** Replace global fetch for one test, restoring it afterwards. */
 function withFetch(handler, run) {
@@ -235,4 +241,21 @@ test('weather: conditions classify by severity, not by first match', () => {
   assert.equal(weatherClass('Sunny'), 'clear');
   assert.equal(weatherClass('Patchy Fog'), 'fog');
   assert.equal(weatherClass(''), 'cloud');
+});
+
+/* --------------------------------------------------------------- sky cover */
+
+test('an ISO 8601 duration becomes whole hours', () => {
+  // NWS gridpoint values carry the span they hold for, and a six-hour value has
+  // to fill six hours or a night-time window falls into a gap and scores as
+  // unknown when the forecast plainly covers it.
+  assert.equal(parseISODuration('PT1H'), 1);
+  assert.equal(parseISODuration('PT6H'), 6);
+  assert.equal(parseISODuration('P1DT3H'), 27);
+  assert.equal(parseISODuration('P2D'), 48);
+  // Sub-hour values still cover the hour they start in rather than vanishing.
+  assert.equal(parseISODuration('PT30M'), 1);
+  // Anything unparseable is one hour, never zero — zero would drop the reading.
+  assert.equal(parseISODuration(''), 1);
+  assert.equal(parseISODuration('nonsense'), 1);
 });

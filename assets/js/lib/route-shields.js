@@ -45,10 +45,37 @@ export function shieldImageId(design, length) {
   return `abmap-shield-${design}-${clamped}`;
 }
 
-/** Every image id this module can register, for tests and for the style. */
-export function shieldImageIds() {
+/**
+ * The designs in play when looking at a given state.
+ *
+ * The four base designs plus that state's own marker, if it has one.
+ * Registering only the state on screen keeps this to fifteen small images
+ * rather than a hundred and fifty, and re-registering at a border costs three
+ * canvas draws.
+ *
+ * Shared, because the registrar and the enumeration of what it registers each
+ * had their own copy of this list and the copies disagreed — the enumeration
+ * left out the state marker, so every check written against it was blind to
+ * precisely the shields the feature exists for.
+ */
+export function shieldDesignsFor(state = '') {
+  const designs = [...SHIELD_DESIGNS];
+  const forState = stateDesign(state);
+  if (forState !== 'state') designs.push(forState);
+  return designs;
+}
+
+/**
+ * Every image id that would be registered for a given state.
+ *
+ * Takes the same options as `registerShieldImages` and enumerates the same
+ * set, because it exists to be checked against it. It used to ignore its
+ * argument and return only the four base designs, which made it silently wrong
+ * about exactly the case that matters — a state with a marker of its own.
+ */
+export function shieldImageIds({ state = '' } = {}) {
   const ids = [];
-  for (const design of SHIELD_DESIGNS) {
+  for (const design of shieldDesignsFor(state)) {
     for (let length = MIN_LEN; length <= MAX_LEN; length += 1) ids.push(shieldImageId(design, length));
   }
   return ids;
@@ -485,15 +512,7 @@ export function rasterizeShieldById(id, options = {}) {
 export function registerShieldImages(map, { pixelRatio = 2, state = '' } = {}) {
   let added = 0;
 
-  // The four base designs, plus the current state's if it has one. Registering
-  // only the state you are looking at keeps this to fifteen small images rather
-  // than a hundred and fifty, and the state is re-registered as you cross a
-  // border — which costs three canvas draws.
-  const designs = [...SHIELD_DESIGNS];
-  const forState = stateDesign(state);
-  if (forState !== 'state') designs.push(forState);
-
-  for (const design of designs) {
+  for (const design of shieldDesignsFor(state)) {
     for (let length = MIN_LEN; length <= MAX_LEN; length += 1) {
       const id = shieldImageId(design, length);
       if (map.hasImage && map.hasImage(id)) continue;
@@ -517,6 +536,46 @@ export function registerShieldImages(map, { pixelRatio = 2, state = '' } = {}) {
  * actually generated so a seven-character route reference lands on the widest
  * image rather than on a name that does not exist.
  */
+/*
+ * The one table both the style expression and any code asking "which image
+ * would this road get" are built from.
+ *
+ * Two hand-written copies of this mapping is how a diagnostic ends up
+ * confidently reporting images as missing that were never asked for — it built
+ * `abmap-shield-us-interstate-2` from the raw Mapbox field while the style
+ * asked for `abmap-shield-interstate-2`. Generating both from one list makes
+ * that particular disagreement impossible rather than merely unlikely.
+ *
+ * `LOCAL` stands in for "whatever design the state we are looking at uses",
+ * which is resolved per-caller.
+ */
+const LOCAL = Symbol('local state design');
+
+const SHIELD_MATCH = [
+  {
+    design: 'interstate',
+    values: ['us-interstate', 'us-interstate-business', 'us-interstate-duplex', 'us-interstate-truck'],
+  },
+  {
+    design: 'us',
+    values: ['us-highway', 'us-highway-business', 'us-highway-duplex', 'us-highway-truck', 'us-highway-alternate'],
+  },
+  { design: LOCAL, values: ['us-state', 'us-state-duplex'] },
+];
+
+/** The design a road with this `shield` value gets, from the map's state. */
+export function designForShield(shield, state = '') {
+  const local = stateDesign(state);
+  const arm = SHIELD_MATCH.find((entry) => entry.values.includes(String(shield || '').toLowerCase()));
+  const design = arm ? arm.design : LOCAL;
+  return design === LOCAL ? local : design;
+}
+
+/** The image id a road would ask for — the same one the style expression builds. */
+export function shieldImageIdFor(shield, reflen, state = '') {
+  return shieldImageId(designForShield(shield, state), reflen);
+}
+
 export function shieldImageExpression(state = '') {
   // Interstates and US routes look the same in every state, so only the state
   // branch varies. Which state that is comes from where the map is looking
@@ -530,9 +589,7 @@ export function shieldImageExpression(state = '') {
     'abmap-shield-',
     [
       'match', ['get', 'shield'],
-      ['us-interstate', 'us-interstate-business', 'us-interstate-duplex', 'us-interstate-truck'], 'interstate',
-      ['us-highway', 'us-highway-business', 'us-highway-duplex', 'us-highway-truck', 'us-highway-alternate'], 'us',
-      ['us-state', 'us-state-duplex'], local,
+      ...SHIELD_MATCH.flatMap((arm) => [arm.values, arm.design === LOCAL ? local : arm.design]),
       local,
     ],
     '-',
