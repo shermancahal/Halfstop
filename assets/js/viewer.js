@@ -82,6 +82,8 @@ const state = {
   openLayerGroups: new Set(),
   /** Layer ids that answer clicks, so a map click can tell "empty" from "a pin". */
   interactiveLayers: new Set(),
+  /** Set once the out-of-range glyph warning has been logged, to log it once. */
+  warnedGlyphRange: false,
   /** The dropped-pin popup, so a second click replaces it rather than stacking. */
   dropPopup: null,
   /** [lon, lat] of a place being described that is not a saved pin. */
@@ -244,6 +246,19 @@ async function main() {
     // Individual tile 404s are noisy and self-correcting; everything else is
     // worth seeing, because a style-level failure is otherwise silent.
     if (/Failed to fetch|NetworkError|AbortError/i.test(message)) return;
+
+    // "glyphs > 65535 not supported" means a label contains a character outside
+    // the Basic Multilingual Plane, which the glyph pipeline cannot fetch. It
+    // fires once per affected tile, it is not caused by anything the reader did
+    // or can fix, and the only consequence is that one label does not draw. It
+    // belongs in the console, not over the map.
+    if (/glyphs > \d+ not supported/i.test(message)) {
+      if (!state.warnedGlyphRange) {
+        state.warnedGlyphRange = true;
+        console.warn('[map] a label uses characters outside the fetchable glyph range; that label will not draw.');
+      }
+      return;
+    }
     console.error('[map]', message || event);
     if (/401|403|unauthorized|forbidden|not authorized/i.test(message)) {
       toast(
@@ -271,6 +286,7 @@ async function main() {
   refreshRegionData();
   wireMapClicks();
   exposeRoadInspector();
+  keepMapSized();
   // A Mapbox vector style starts without our overlays; the raster path bakes
   // them into the initial style, so this only has work to do in the former case.
   if (initialStyle.vector) {
@@ -719,6 +735,33 @@ function exposeRoadInspector() {
       allFieldsOnOneRoad: features.find((f) => f.properties?.ref)?.properties || null,
     };
   };
+}
+
+/**
+ * Keep the GL canvas the same size as its container.
+ *
+ * GL sizes its drawing buffer when the map is created and, depending on engine
+ * version, may not notice the container changing afterwards. When it misses
+ * one, the canvas keeps its old dimensions and the difference shows as a dead
+ * band along an edge where the map simply stops — no error, and easy to read
+ * as a CSS problem when it is not one.
+ *
+ * A ResizeObserver on the container catches every cause at once: the window,
+ * the panel opening, browser chrome retracting on a phone, a font loading and
+ * shifting the header.
+ */
+function keepMapSized() {
+  const container = state.map.getContainer?.();
+  const resize = () => { try { state.map.resize(); } catch { /* torn down */ } };
+
+  if (container && typeof ResizeObserver === 'function') {
+    new ResizeObserver(resize).observe(container);
+  }
+  window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', resize);
+  // One more after layout settles, for the case where the observer is not
+  // available and the first frame was measured too early.
+  setTimeout(resize, 250);
 }
 
 /* ---------------- offline regions ---------------- */

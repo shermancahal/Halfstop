@@ -782,3 +782,10 @@ html, body { height: 100%; overflow: hidden; }
   font-size: .68rem; letter-spacing: .03em; color: var(--ink-3);
   font-variant-numeric: tabular-nums;
 }
+
+/* Repeat count on a toast that is still firing */
+.toast-count {
+  flex: none; padding: 1px 6px; border-radius: 999px;
+  font-size: .7rem; font-weight: 700; font-variant-numeric: tabular-nums;
+  background: rgba(0, 0, 0, .1); color: inherit;
+}

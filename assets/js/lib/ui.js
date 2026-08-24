@@ -58,19 +58,54 @@ const ICON_SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const ICON_MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>';
 
 /** Transient message stack anchored over the map. */
+/**
+ * Toasts, with repeats collapsed.
+ *
+ * A map fires the same error once per failing tile, so a single bad glyph or a
+ * dead tile server produced a stack of five identical messages covering the
+ * map — the notification became the problem. An identical message still
+ * showing is now counted rather than repeated, and its timer restarts so the
+ * count stays visible while it is still happening.
+ */
 export function createToaster(container) {
+  const live = new Map();   // message -> { node, count, badge, timer }
+
   return function toast(message, { tone = 'info', timeout = 6000 } = {}) {
-    const node = el('div', { class: `toast is-${tone}`, role: tone === 'error' ? 'alert' : 'status' }, [
+    const existing = live.get(message);
+    if (existing) {
+      existing.count += 1;
+      existing.badge.textContent = `×${existing.count}`;
+      existing.badge.hidden = false;
+      clearTimeout(existing.timer);
+      if (timeout) {
+        existing.timer = setTimeout(() => { existing.node.remove(); live.delete(message); }, timeout);
+      }
+      return existing.node;
+    }
+
+    const badge = el('span', { class: 'toast-count', hidden: true });
+    const entry = { count: 1, badge, timer: null };
+
+    const dismiss = () => {
+      clearTimeout(entry.timer);
+      entry.node.remove();
+      live.delete(message);
+    };
+
+    entry.node = el('div', { class: `toast is-${tone}`, role: tone === 'error' ? 'alert' : 'status' }, [
       el('span', { text: message }),
+      badge,
       el('button', {
         class: 'icon-button', 'aria-label': 'Dismiss',
         html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
-        onclick: () => node.remove(),
+        onclick: dismiss,
       }),
     ]);
-    container.append(node);
-    if (timeout) setTimeout(() => node.remove(), timeout);
-    return node;
+
+    container.append(entry.node);
+    live.set(message, entry);
+    if (timeout) entry.timer = setTimeout(dismiss, timeout);
+    return entry.node;
   };
 }
 

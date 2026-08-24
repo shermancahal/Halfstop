@@ -82,6 +82,17 @@ const ROAD_CLASSES = {
   tertiary: { colour: PALETTE.minor, base: 0.8, top: 3.8 },
 };
 
+/**
+ * The name to draw for a feature.
+ *
+ * `name_en` first, falling back to the local name. Two reasons: a US atlas
+ * reads better in one script, and Mapbox GL cannot fetch glyphs for characters
+ * above U+FFFF — it raises "glyphs > 65535 not supported" once per affected
+ * tile and draws nothing for that label. Preferring the Latin name avoids most
+ * of those before they happen.
+ */
+const LABEL_NAME = ['coalesce', ['get', 'name_en'], ['get', 'name']];
+
 const FONT = ['DIN Pro Regular', 'Arial Unicode MS Regular'];
 const FONT_BOLD = ['DIN Pro Bold', 'Arial Unicode MS Bold'];
 
@@ -428,7 +439,7 @@ function labelLayers() {
       filter: ['match', ['get', 'class'], ['lake', 'ocean', 'sea', 'river'], true, false],
       minzoom: 7,
       layout: {
-        'text-field': ['get', 'name'],
+        'text-field': LABEL_NAME,
         'text-font': FONT,
         'text-size': ['interpolate', ['linear'], ['zoom'], 7, 10, 14, 13],
         'text-max-width': 8,
@@ -447,7 +458,7 @@ function labelLayers() {
       filter: ['match', ['get', 'class'], ['landform'], true, false],
       minzoom: 11,
       layout: {
-        'text-field': ['get', 'name'],
+        'text-field': LABEL_NAME,
         'text-font': FONT,
         'text-size': 11,
         'text-offset': [0, 0.6],
@@ -469,7 +480,7 @@ function labelLayers() {
       minzoom: 13,
       layout: {
         'symbol-placement': 'line',
-        'text-field': ['get', 'name'],
+        'text-field': LABEL_NAME,
         'text-font': FONT,
         'text-size': ['interpolate', ['linear'], ['zoom'], 13, 9, 18, 12],
       },
@@ -485,7 +496,7 @@ function labelLayers() {
       source: 'composite',
       'source-layer': 'place_label',
       layout: {
-        'text-field': ['get', 'name'],
+        'text-field': LABEL_NAME,
         'text-font': FONT_BOLD,
         'text-size': [
           'interpolate', ['linear'], ['zoom'],
