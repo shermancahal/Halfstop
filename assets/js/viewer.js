@@ -290,6 +290,7 @@ async function main() {
   refreshRegionData();
   wireMapClicks();
   exposeRoadInspector();
+  exposeWaypointInspector();
   keepMapSized();
   trackShieldState();
   // A Mapbox vector style starts without our overlays; the raster path bakes
@@ -809,6 +810,66 @@ function trackShieldState() {
     timer = setTimeout(update, 600);
   });
   update();
+}
+
+/**
+ * Report why saved waypoints are or are not on the map.
+ *
+ * `abmapWaypointStatus()` in the browser console. "Waypoints do not show" has
+ * at least six distinct causes — nothing saved, the folder hidden, the data
+ * never reaching the source, the layers missing after a style swap, the pin
+ * images not registered, or the pins simply being off screen — and they look
+ * identical from the outside. This separates them in one call rather than one
+ * round trip each.
+ */
+function exposeWaypointInspector() {
+  globalThis.abmapWaypointStatus = () => {
+    const folders = state.folders.list();
+    const saved = folders.reduce((sum, folder) => sum + folder.items.length, 0);
+    const visible = folders.filter((folder) => folder.visible);
+
+    const report = {
+      foldersSaved: folders.length,
+      waypointsSaved: saved,
+      foldersVisible: visible.length,
+      hiddenFolders: folders.filter((f) => !f.visible).map((f) => f.name),
+      storageWorking: Boolean(state.folders.storage),
+    };
+
+    if (!styleReady()) return { ...report, map: 'the style is still loading' };
+
+    const source = state.map.getSource(FOLDER_SOURCE);
+    const data = state.folders.toGeoJSON({ visibleOnly: true });
+    const layers = FOLDER_LAYERS.filter((id) => state.map.getLayer(id));
+    const images = PIN_ICONS.filter((icon) => state.map.hasImage?.(pinImageId(icon.id))).length;
+
+    // Off-screen is the most common answer and the least alarming one, so say
+    // it plainly rather than leaving "everything looks fine" as the verdict.
+    const bounds = state.map.getBounds();
+    const inView = data.features.filter((feature) => {
+      const [lon, lat] = feature.geometry?.coordinates || [];
+      return Number.isFinite(lon) && lon >= bounds.getWest() && lon <= bounds.getEast()
+        && lat >= bounds.getSouth() && lat <= bounds.getNorth();
+    }).length;
+
+    return {
+      ...report,
+      sourceExists: Boolean(source),
+      featuresForTheMap: data.features.length,
+      featuresInView: inView,
+      layersPresent: `${layers.length} of ${FOLDER_LAYERS.length}`,
+      missingLayers: FOLDER_LAYERS.filter((id) => !state.map.getLayer(id)),
+      pinImagesRegistered: images,
+      basemap: state.basemapId,
+      verdict: saved === 0 ? 'nothing is saved yet'
+        : !visible.length ? 'every folder is switched off in the Folders tab'
+          : !source ? 'the map has no folder source — a style swap did not finish'
+            : layers.length < FOLDER_LAYERS.length ? 'some pin layers are missing'
+              : !images ? 'pin images are not registered'
+                : inView === 0 ? 'they are saved and drawn, but none are in the current view'
+                  : 'everything checks out — pins should be visible',
+    };
+  };
 }
 
 /* ---------------- offline regions ---------------- */

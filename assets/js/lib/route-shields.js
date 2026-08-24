@@ -65,51 +65,80 @@ export function shieldImageIds() {
  * are the same picture. Simplifying is the correct answer here, not a
  * compromise.
  *
- * `confident` marks the entries I am sure of. The rest fall back to the plain
- * rounded rectangle, which is what a large number of states genuinely use, so
- * the fallback is a real answer rather than a placeholder. This file could not
- * be checked against a reference while it was written — nothing outside this
- * machine was reachable — and a wrong shield asserted confidently is worse than
- * an honest generic one.
+ * Read off a reference sheet of the real markers rather than recalled, after a
+ * first pass from memory got a third of them wrong — Florida is an outline and
+ * not a circle, Ohio a square and not an outline, Arizona white and not black.
+ * Anything not listed falls back to the plain rounded rectangle.
+ *
+ * Lettering on the real signs (MONTANA, TEXAS, the Nebraska wagon, the
+ * Washington profile) is deliberately dropped: at twenty pixels it is a smudge
+ * that competes with the route number, which is the part you need.
  *
  * Adding a state is one line. Correcting one is one word.
  */
 export const STATE_SHIELDS = {
-  /* Distinctive silhouettes — these are the ones worth the drawing */
-  CA: { shape: 'spade', bg: '#0b6b3a', fg: '#ffffff', confident: true },
-  PA: { shape: 'keystone', bg: '#ffffff', fg: '#1c1c1c', confident: true },
-  UT: { shape: 'beehive', bg: '#ffffff', fg: '#1c1c1c', confident: true },
-  NM: { shape: 'zia', bg: '#ffffff', fg: '#b0202f', confident: true },
-  CO: { shape: 'flag-co', bg: '#ffffff', fg: '#1c1c1c', confident: true },
-  MI: { shape: 'diamond', bg: '#ffffff', fg: '#1c1c1c', confident: true },
-  KS: { shape: 'sunflower', bg: '#f2c744', fg: '#1c1c1c', confident: true },
-  WY: { shape: 'square', bg: '#f2c744', fg: '#1c1c1c', confident: true },
-  AZ: { shape: 'square', bg: '#1c1c1c', fg: '#ffffff', confident: true },
-
-  /* State outlines, simplified to a recognisable blob */
-  OH: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c', confident: true },
-  NV: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c', confident: true },
-  ID: { shape: 'outline', bg: '#1c1c1c', fg: '#ffffff', confident: true },
-  TX: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c', confident: true },
-  LA: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c', confident: true },
-  NE: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c', confident: true },
-  WA: { shape: 'circle', bg: '#1c1c1c', fg: '#ffffff', confident: true },
+  /* Plain squares — the most common marker by a wide margin */
+  AL: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
+  AZ: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
+  CT: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
+  GA: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
+  HI: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
+  IL: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
+  IN: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
+  ME: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
+  MD: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
+  MA: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
+  MT: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
+  NE: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
+  NV: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
+  NY: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
+  OH: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
+  RI: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
+  TN: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
+  TX: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
+  WV: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
+  WI: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
+  WA: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
 
   /* Circles */
-  DE: { shape: 'circle', bg: '#ffffff', fg: '#1c1c1c', confident: true },
-  NJ: { shape: 'circle', bg: '#ffffff', fg: '#1c1c1c', confident: true },
-  FL: { shape: 'circle', bg: '#ffffff', fg: '#1c1c1c', confident: true },
-  AL: { shape: 'circle', bg: '#ffffff', fg: '#1c1c1c', confident: true },
-  SC: { shape: 'circle', bg: '#1e4b8f', fg: '#ffffff', confident: true },
-
-  /* Squares and rectangles */
-  NY: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c', confident: true },
-  MT: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c', confident: true },
-  IL: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c', confident: true },
-  IN: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c', confident: true },
+  DE: { shape: 'circle', bg: '#ffffff', fg: '#1c1c1c' },
+  IA: { shape: 'circle', bg: '#ffffff', fg: '#1c1c1c' },
+  KY: { shape: 'circle', bg: '#ffffff', fg: '#1c1c1c' },
+  MS: { shape: 'circle', bg: '#ffffff', fg: '#1c1c1c' },
+  NJ: { shape: 'circle', bg: '#ffffff', fg: '#1c1c1c' },
+  VA: { shape: 'circle', bg: '#ffffff', fg: '#1c1c1c' },
 
   /* Diamonds */
-  NC: { shape: 'diamond', bg: '#ffffff', fg: '#1c1c1c', confident: true },
+  MI: { shape: 'diamond', bg: '#ffffff', fg: '#1c1c1c' },
+  NC: { shape: 'diamond', bg: '#ffffff', fg: '#1c1c1c' },
+
+  /* State outlines — simplified; at this size the silhouette is all that reads */
+  AK: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c' },
+  AR: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c' },
+  DC: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c' },
+  FL: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c' },
+  MO: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c' },
+  NH: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c' },
+  ND: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c' },
+  OK: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c' },
+  ID: { shape: 'outline', bg: '#1c1c1c', fg: '#ffffff' },
+  LA: { shape: 'outline', bg: '#0b6b3a', fg: '#ffffff' },
+  SD: { shape: 'outline', bg: '#0b6b3a', fg: '#ffffff' },
+
+  /* The distinctive ones, and the reason this was worth doing at all */
+  CA: { shape: 'spade', bg: '#0b6b3a', fg: '#ffffff' },
+  PA: { shape: 'keystone', bg: '#ffffff', fg: '#1c1c1c' },
+  UT: { shape: 'beehive', bg: '#ffffff', fg: '#1c1c1c' },
+  NM: { shape: 'zia', bg: '#ffffff', fg: '#b0202f' },
+  CO: { shape: 'flag-co', bg: '#ffffff', fg: '#1c1c1c' },
+  KS: { shape: 'sunflower', bg: '#f2c744', fg: '#1c1c1c' },
+  OR: { shape: 'shield', bg: '#ffffff', fg: '#1c1c1c' },
+
+  /* Coloured plates */
+  WY: { shape: 'square', bg: '#f2c744', fg: '#1c1c1c' },
+  MN: { shape: 'square', bg: '#1e4b8f', fg: '#ffffff' },
+  VT: { shape: 'square', bg: '#0b6b3a', fg: '#ffffff' },
+  SC: { shape: 'square', bg: '#ffffff', fg: '#1e4b8f' },
 };
 
 /**
@@ -120,13 +149,12 @@ export const STATE_SHIELDS = {
  */
 export function stateDesign(code = '') {
   const key = String(code).trim().toUpperCase();
-  const entry = STATE_SHIELDS[key];
-  return entry && entry.confident ? `st-${key}` : 'state';
+  return STATE_SHIELDS[key] ? `st-${key}` : 'state';
 }
 
 /** Every state currently drawn with its own marker, for tests and for docs. */
 export function statesWithShields() {
-  return Object.keys(STATE_SHIELDS).filter((code) => STATE_SHIELDS[code].confident).sort();
+  return Object.keys(STATE_SHIELDS).sort();
 }
 
 /* ------------------------------------------------------------------ drawing */
@@ -337,7 +365,11 @@ const SHAPE_PATHS = {
   zia: circlePath,
   'flag-co': (ctx, w, h) => roundedRect(ctx, 1, 1, w - 2, h - 2, 2),
   square: (ctx, w, h) => roundedRect(ctx, 1, 1.5, w - 2, h - 3, 1.5),
+  shield: (ctx, w, h) => usRoutePath(ctx, w, h),
 };
+
+/** The shapes the renderer can draw, so the table cannot name one it cannot. */
+export const SHAPE_NAMES = Object.keys(SHAPE_PATHS);
 
 const SHAPE_DECORATIONS = {
   beehive: (ctx, w, h, entry) => beehiveDecoration(ctx, w, h, entry.fg),
@@ -492,7 +524,7 @@ export function shieldImageExpression(state = '') {
  */
 export function shieldTextColour(state = '') {
   const entry = STATE_SHIELDS[String(state).trim().toUpperCase()];
-  const localText = entry && entry.confident ? entry.fg : '#1c1c1c';
+  const localText = entry ? entry.fg : '#1c1c1c';
 
   return [
     'match', ['get', 'shield'],
