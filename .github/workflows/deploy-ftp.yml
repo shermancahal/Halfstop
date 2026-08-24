@@ -21,6 +21,15 @@ on:
       - main
       - 'claude/**'
   workflow_dispatch:
+    inputs:
+      clean_slate:
+        description: >-
+          Delete everything in the target directory first, then upload the whole
+          site. Use when the server contents are wrong, or when the sync-state
+          file no longer matches what is actually there. Check FTP_DIR before
+          running this: it deletes whatever that directory holds.
+        type: boolean
+        default: false
 
 concurrency:
   group: ftp-deploy
@@ -76,6 +85,20 @@ jobs:
       - name: Stage the upload package
         run: npm run build && node tools/build-dist.mjs
 
+      - name: Stamp the build
+        # Shipped as deployed.txt. The site carries no version marker anywhere
+        # else, so without this the only way to tell which commit is live is to
+        # read the markup and infer — which is exactly how a stale deploy hides
+        # for two days.
+        run: |
+          {
+            echo "commit: $GITHUB_SHA"
+            echo "branch: $GITHUB_REF_NAME"
+            echo "run:    $GITHUB_RUN_NUMBER"
+            echo "built:  $(date -u '+%Y-%m-%d %H:%M:%SZ')"
+          } > dist/deployed.txt
+          cat dist/deployed.txt
+
       - name: Check the FTP secrets are present
         id: guard
         env:
@@ -115,7 +138,7 @@ jobs:
           timeout: 120000
           # Only transfers what actually changed, tracked by a manifest the
           # action leaves on the server.
-          dangerous-clean-slate: false
+          dangerous-clean-slate: ${{ inputs.clean_slate == true }}
           exclude: |
             **/.git*
             **/.git*/**
@@ -138,7 +161,7 @@ jobs:
           protocol: ftps
           security: loose
           timeout: 180000
-          dangerous-clean-slate: false
+          dangerous-clean-slate: ${{ inputs.clean_slate == true }}
           exclude: |
             **/.git*
             **/.git*/**
