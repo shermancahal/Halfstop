@@ -18,15 +18,67 @@
  *
  *   npm install --no-save playwright && npm run smoke
  *
- * Requires the site served at http://127.0.0.1:8799/Map/ (see the README).
+ * It builds dist and serves that build itself, on a port the OS picks. That is
+ * not a convenience: pointing it at a server someone started earlier is how a
+ * whole afternoon went into "the fix did not work" when the fix was fine and
+ * the server was serving a copy of dist from before it. Set SMOKE_URL to test
+ * a deployed origin instead.
  */
 
 import { chromium } from 'playwright';
 import { fileURLToPath } from 'node:url';
+import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 
-const URL_UNDER_TEST = process.env.SMOKE_URL || 'http://127.0.0.1:8799/Map/';
-const FIXTURE = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'test', 'fixtures', 'smoke.gpx');
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const FIXTURE = path.join(ROOT, 'test', 'fixtures', 'smoke.gpx');
+
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.geojson': 'application/geo+json; charset=utf-8',
+  '.gpx': 'application/gpx+xml; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.txt': 'text/plain; charset=utf-8',
+};
+
+/**
+ * Build dist and serve it under /Map/, the subpath GitHub Pages uses, so the
+ * relative asset paths resolve the same way they do in production.
+ */
+async function serveFreshBuild() {
+  execFileSync(process.execPath, [path.join(ROOT, 'tools', 'build-dist.mjs')], { stdio: 'ignore' });
+  const dist = path.join(ROOT, 'dist');
+
+  const server = createServer(async (request, response) => {
+    let name = decodeURIComponent(new URL(request.url, 'http://x').pathname);
+    name = name.startsWith('/Map/') ? name.slice(5) : name.replace(/^\//, '');
+    if (name === '' || name.endsWith('/')) name += 'index.html';
+    const file = path.join(dist, name);
+    if (!file.startsWith(dist)) return response.writeHead(403).end();
+    try {
+      const body = await readFile(file);
+      response.writeHead(200, {
+        'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream',
+        'Cache-Control': 'no-store',
+      }).end(body);
+    } catch {
+      response.writeHead(404).end('Not found');
+    }
+  });
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  return { server, url: `http://127.0.0.1:${server.address().port}/Map/` };
+}
+
+const external = process.env.SMOKE_URL;
+const hosted = external ? null : await serveFreshBuild();
+const URL_UNDER_TEST = external || hosted.url;
 
 const GL = `class E{constructor(){this._h={}}on(e,a,b){const f=b||a;
 if(typeof a==='string'){(this._h[e+':'+a]||=[]).push(f)}else{(this._h[e]||=[]).push(f)}return this}
@@ -84,7 +136,17 @@ page.on('dialog', (dialog) => dialog.accept('Smoke folder'));
 
 await page.route('**/*', async (route) => {
   const url = route.request().url();
-  if (url.startsWith('http://127.0.0.1')) return route.continue();
+  // deployed.txt is written by the deploy workflow, so it never exists locally.
+  // Serving a realistic one keeps this a test of whether the stamp renders
+  // rather than a test of whether someone has run a deploy.
+  if (/deployed\.txt/.test(url)) {
+    return route.fulfill({
+      status: 200,
+      contentType: 'text/plain',
+      body: 'commit: 0123456789abcdef\nbuilt: 2026-08-24T00:00:00Z\n',
+    });
+  }
+  if (url.startsWith(new URL(URL_UNDER_TEST).origin)) return route.continue();
   if (/\.css($|\?)/.test(url)) return route.fulfill({ status: 200, contentType: 'text/css', body: '' });
   if (/api\.mapbox\.com\/geocoding/.test(url)) {
     return route.fulfill({
@@ -153,11 +215,43 @@ const afterDiff = await state();
 check('layers repaired after a silent diff', afterDiff.folderLayers, afterImport.folderLayers);
 check('waypoints repaired after a silent diff', afterDiff.folderFeatures, afterImport.folderFeatures);
 
+/*
+ * The Details panel remembers which sections you fold away, and that memory
+ * broke twice in ways unit tests could not see: a `const` read from the module
+ * `state` literal above its own declaration (a temporal dead zone throw the
+ * storage try/catch swallowed), and the phantom `toggle` event a `<details
+ * open>` fires when the attribute is set, which overwrote the stored set with
+ * whatever the first render happened to show. Both only appear across a real
+ * reload, so the check is here.
+ */
+console.log('\nCollapsed Details sections survive a reload');
+await page.click('.panel-tab[data-tab="waypoints"]');
+await page.waitForTimeout(300);
+await page.locator('.waypoint-row').first().click();
+await page.waitForTimeout(900);
+const sunMoon = () => page.locator('.detail-block').filter({ hasText: 'Sun & moon' }).first();
+await page.locator('.detail-block-summary', { hasText: /Sun & moon/i }).click();
+await page.waitForTimeout(300);
+check('collapsing closes the section', await sunMoon().evaluate((node) => node.open), false);
+
+await page.reload({ waitUntil: 'networkidle' });
+await page.waitForTimeout(1200);
+await page.click('.panel-tab[data-tab="waypoints"]');
+await page.waitForTimeout(300);
+await page.locator('.waypoint-row').first().click();
+await page.waitForTimeout(900);
+check('it is still closed after a reload', await sunMoon().evaluate((node) => node.open), false);
+check('sections never collapsed stay open',
+  await page.locator('.detail-block').filter({ hasText: 'Field notes' }).first()
+    .evaluate((node) => node.open),
+  true);
+
 console.log('\nThe build stamp is readable');
 const stamp = (await page.locator('#build-stamp').innerText().catch(() => '')).trim();
 check('build stamp is shown', stamp.length > 0, true);
 
 await browser.close();
+hosted?.server.close();
 
 if (consoleErrors.length) {
   console.error('\nConsole errors:');

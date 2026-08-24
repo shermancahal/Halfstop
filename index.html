@@ -39,6 +39,11 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4"/><path d="m15.4 6.5-6.8 4"/></svg>
       </button>
       <button class="icon-button" id="theme-toggle" type="button" aria-label="Toggle theme"></button>
+      <div class="account-menu" id="account-menu" hidden>
+        <button class="account-trigger" id="account-trigger" type="button"
+                aria-haspopup="dialog" aria-expanded="false">Sign in</button>
+        <div class="account-drop" id="account-panel" role="dialog" aria-label="Account" hidden></div>
+      </div>
     </div>
   </header>
 
@@ -102,33 +107,28 @@
             </h2>
             <div class="folder-actions">
               <button class="button button-secondary button-small" id="new-folder" type="button">New folder</button>
-              <button class="button button-ghost button-small" id="import-into-folder" type="button" hidden>File from an open file…</button>
+              <button class="button button-ghost button-small" id="import-into-folder" type="button" hidden>Add from an open file…</button>
             </div>
             <div id="folder-list"></div>
           </div>
           <div class="panel-section">
-            <h2 class="panel-title">Account</h2>
-            <div id="account-panel"></div>
-          </div>
-
-          <div class="panel-section">
-            <h2 class="panel-title">
-              <span>Opened files</span>
-              <span class="count" id="loaded-count"></span>
-            </h2>
-            <div id="loaded-list"></div>
-            <div class="dropzone" id="dropzone" role="button" tabindex="0" style="margin-top:11px">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
-              <b>Drop a file, or click to choose</b>
-              GPX · KML · KMZ · GeoJSON
-            </div>
-            <input type="file" id="file-input" multiple accept=".gpx,.kml,.kmz,.geojson,.json" hidden>
-            <label class="drop-target-label" for="drop-target">When a file opens</label>
-            <select id="drop-target" class="drop-target"></select>
-            <div id="catalog-list" hidden></div>
-          </div>
-          <div class="panel-section">
-            <p class="hint" id="folder-storage-note">
+            <details class="files-block" id="files-block">
+              <summary class="files-summary">
+                <span>Open a file</span>
+                <span class="count" id="loaded-count"></span>
+              </summary>
+              <div class="dropzone" id="dropzone" role="button" tabindex="0">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
+                <b>Drop a file, or click to choose</b>
+                GPX · KML · KMZ · GeoJSON
+              </div>
+              <input type="file" id="file-input" multiple accept=".gpx,.kml,.kmz,.geojson,.json" hidden>
+              <label class="drop-target-label" for="drop-target">When a file opens</label>
+              <select id="drop-target" class="drop-target"></select>
+              <div id="loaded-list"></div>
+              <div id="catalog-list" hidden></div>
+            </details>
+            <p class="hint" id="folder-storage-note" style="margin-top:12px">
               Folders are saved in this browser only — they are not uploaded, and they will not
               follow you to another device. Export a folder as GPX to keep or move it.
             </p>

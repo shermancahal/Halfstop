@@ -42,6 +42,23 @@ npm run dist        # stage an upload-ready copy in dist/ (plus a .zip)
 npm test            # run the parser and geometry test suite
 ```
 
+Two further checks need tools installed, so they are not part of `npm test`:
+
+```bash
+npm run validate:style   # check the Byways Topo style against the GL style spec
+                         # needs: npm install --no-save @mapbox/mapbox-gl-style-spec
+
+npm run smoke            # drive the real app in a browser against a stubbed
+                         # map engine — basemap switches, saved pins, the
+                         # Details panel's memory across a reload
+                         # needs: npm install --no-save playwright
+```
+
+`npm run smoke` builds `dist/` and serves that build on a port it picks itself,
+so it always tests the current source. Set `SMOKE_URL` to point it at a deployed
+origin instead, and `CHROMIUM_PATH` if Playwright's browser lives somewhere it
+cannot find on its own.
+
 ---
 
 ## Publishing a map

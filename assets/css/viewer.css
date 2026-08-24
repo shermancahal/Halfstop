@@ -265,7 +265,7 @@ html, body { height: 100%; overflow: hidden; }
 
 .folder-empty { padding: 11px 12px; font-size: .8rem; color: var(--ink-3); }
 
-/* Inline picker used by "Import from a map…" and "Move to…" */
+/* Inline picker used by "Add from an open file…" and "Move to…" */
 .picker { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; margin-bottom: 12px; background: var(--surface-2); }
 .picker h3 { font-family: var(--font-sans); font-size: .78rem; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-3); margin: 0 0 9px; }
 .picker select, .picker input[type="text"] {
@@ -990,3 +990,75 @@ html, body { height: 100%; overflow: hidden; }
 .moon-meta { font-size: .74rem; color: #b9c0d2; font-variant-numeric: tabular-nums; }
 
 .sky-lines-toggle { width: 100%; margin-top: 12px; }
+
+/* ==========================================================================
+   Account in the header
+   ========================================================================== */
+
+.account-menu { position: relative; }
+.account-menu[hidden] { display: none; }
+
+.account-trigger {
+  padding: 5px 11px; font: inherit; font-size: .82rem; font-weight: 550;
+  color: var(--ink-2); background: transparent;
+  border: 1px solid var(--line); border-radius: 999px; cursor: pointer;
+  white-space: nowrap;
+}
+.account-trigger:hover { color: var(--ink); border-color: var(--line-strong); }
+/* Signed in reads as a state, not as an invitation. */
+.account-trigger.is-in { color: var(--clay-2); background: var(--clay-soft); border-color: transparent; }
+
+.account-drop {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 60;
+  width: min(300px, calc(100vw - 24px)); padding: 13px 14px;
+  background: var(--surface); border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md, 8px); box-shadow: var(--shadow-lg, 0 10px 30px rgba(0, 0, 0, .18));
+  text-align: left;
+}
+.account-drop[hidden] { display: none; }
+
+/* ==========================================================================
+   One "Open a file" block, and foldable detail sections
+   ========================================================================== */
+
+.files-block > summary,
+.detail-block-summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  cursor: pointer; list-style: none;
+}
+.files-block > summary::-webkit-details-marker,
+.detail-block-summary::-webkit-details-marker { display: none; }
+
+.files-block > summary {
+  padding: 9px 11px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--line);
+  font-size: .86rem; font-weight: 600;
+}
+.files-block > summary:hover { border-color: var(--line-strong); }
+.files-block > summary::before { content: '+ '; color: var(--ink-3); }
+.files-block[open] > summary::before { content: '– '; }
+.files-block[open] > summary { margin-bottom: 11px; }
+
+/* Each detail section folds, and stays folded — the panel is eight sections
+   long now and which of them matter is personal and stable. */
+.detail-block {
+  padding: 0 0 11px;
+  border-bottom: 1px solid var(--line);
+}
+.detail-block:last-of-type { border-bottom: 0; }
+.detail-block-summary {
+  padding: 12px 0 8px;
+  font-size: .74rem; font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.detail-block-summary:hover { color: var(--ink-2); }
+/* The only thing telling you a section folds, so it is drawn to be seen. */
+.detail-block-summary::after {
+  content: ''; flex: none; width: 0; height: 0; margin-left: auto;
+  border-left: 5px solid var(--ink-3);
+  border-top: 4.5px solid transparent; border-bottom: 4.5px solid transparent;
+  transition: transform .15s ease;
+}
+.detail-block-summary:hover::after { border-left-color: var(--ink-1); }
+.detail-block[open] > .detail-block-summary::after { transform: rotate(90deg); }
+.detail-block-summary .count { margin-left: 0; }

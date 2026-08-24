@@ -52,6 +52,13 @@ import {
 
 /* ------------------------------------------------------------------ state */
 
+// Declared up here with the other module constants, not beside the function
+// that uses it. `state` reads it while the module is still evaluating, and a
+// `const` further down the file is in the temporal dead zone at that moment —
+// which threw a ReferenceError that the storage try/catch swallowed, so the
+// remembered sections silently came back empty on every load.
+const DETAIL_SECTIONS_KEY = 'ab-maps-details-closed-v1';
+
 const state = {
   gl: null,
   map: null,
@@ -86,6 +93,8 @@ const state = {
   highlightRegion: '',
   /** Overlay category headings the user has opened, so re-renders keep them. */
   openLayerGroups: new Set(),
+  /** Details sections the reader has collapsed, remembered across pins. */
+  closedDetailSections: new Set(readClosedSections()),
   /** Layer ids that answer clicks, so a map click can tell "empty" from "a pin". */
   interactiveLayers: new Set(),
   /** Set once the out-of-range glyph warning has been logged, to log it once. */
@@ -171,6 +180,7 @@ const layerIdsFor = (key) => [
 const FOLDER_SOURCE = 'folders';
 const REGION_SOURCE = 'offline-regions';
 const LIGHT_SOURCE = 'light-directions';
+
 const FOLDER_LAYERS = [
   'folders-line-casing', 'folders-line', 'folders-point-halo', 'folders-point', 'folders-point-icon',
 ];
@@ -232,6 +242,7 @@ async function main() {
   wirePanel();
   wireFolders();
   wireDropzone();
+  wireAccountMenu();
   if (!state.folders.storage) {
     const note = document.getElementById('folder-storage-note');
     if (note) {
@@ -428,6 +439,9 @@ function cacheDom() {
   dom.dropTarget = document.getElementById('drop-target');
   dom.importAsk = document.getElementById('import-ask');
   dom.account = document.getElementById('account-panel');
+  dom.accountMenu = document.getElementById('account-menu');
+  dom.accountTrigger = document.getElementById('account-trigger');
+  dom.filesBlock = document.getElementById('files-block');
   dom.offline = document.getElementById('offline-panel');
   dom.offlineCount = document.getElementById('offline-count');
   dom.buildStamp = document.getElementById('build-stamp');
@@ -1060,6 +1074,118 @@ function keepAppLayersAlive() {
   state.map.on('idle', check);
 }
 
+/**
+ * The account menu in the header.
+ *
+ * Signing in is a thing you do twice and then forget about, so it does not
+ * deserve a permanent section in a panel you are reading to find a waypoint.
+ * A header button says whether you are signed in; clicking it drops the rest.
+ */
+function wireAccountMenu() {
+  const trigger = dom.accountTrigger;
+  const drop = dom.account;
+  if (!trigger || !drop) return;
+
+  const setOpen = (open) => {
+    drop.hidden = !open;
+    trigger.setAttribute('aria-expanded', String(open));
+  };
+
+  trigger.addEventListener('click', (event) => {
+    event.stopPropagation();
+    setOpen(drop.hidden);
+  });
+
+  // Click-away and Escape, because a dropdown that only closes by pressing the
+  // button again is a dropdown people leave open.
+  document.addEventListener('click', (event) => {
+    if (drop.hidden) return;
+    if (!dom.accountMenu?.contains(event.target)) setOpen(false);
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !drop.hidden) { setOpen(false); trigger.focus(); }
+  });
+  drop.addEventListener('click', (event) => event.stopPropagation());
+}
+
+/* ---------------- collapsible detail sections ---------------- */
+
+/**
+ * Which detail sections the reader has folded away.
+ *
+ * The Details panel grew from a few coordinate rows into eight sections — pin,
+ * coordinates, elevation, sun and moon, land, weather, notes, photos — and a
+ * panel you scroll past is a panel you stop reading. Which of those matters is
+ * personal and stable: a photographer wants sun and moon open every time, and
+ * someone planning a drive never wants it. So the choice is remembered rather
+ * than reset with each pin.
+ *
+ * Stored as the CLOSED set, so a section added later starts open and is
+ * discovered rather than hidden.
+ */
+function readClosedSections() {
+  try {
+    const raw = globalThis.localStorage?.getItem(DETAIL_SECTIONS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    // A browser refusing storage, or a corrupt value, is expected and survivable.
+    // Anything else is a bug being hidden — which is exactly what happened when
+    // this catch was bare, so it says so now.
+    if (!(error instanceof SyntaxError) && error.name !== 'SecurityError') {
+      console.warn('[details] could not read the remembered sections:', error.message);
+    }
+    return [];
+  }
+}
+
+function rememberClosedSections() {
+  try {
+    globalThis.localStorage?.setItem(
+      DETAIL_SECTIONS_KEY,
+      JSON.stringify([...state.closedDetailSections]),
+    );
+  } catch {
+    // Storage refused; the preference lasts for this session only.
+  }
+}
+
+/**
+ * Wrap a details-panel section so it can be folded away.
+ *
+ * `id` is what is remembered, so it has to be stable — not the pin's name.
+ */
+function collapsibleSection(id, title, buildBody, { count = '' } = {}) {
+  const open = !state.closedDetailSections.has(id);
+
+  const section = el('details', {
+    class: 'detail-block',
+    open,
+    // `<details open>` queues a toggle event when the attribute is set, and it
+    // is dispatched after this listener is attached — so every open section
+    // reports a "change" it never had, once per render. Those agree with what
+    // we already believe, so ignoring them costs nothing and saves a storage
+    // write per section per pin.
+    ontoggle: (event) => {
+      const nowClosed = !event.target.open;
+      if (nowClosed === state.closedDetailSections.has(id)) return;
+      if (nowClosed) state.closedDetailSections.add(id);
+      else state.closedDetailSections.delete(id);
+      rememberClosedSections();
+    },
+  }, [
+    el('summary', { class: 'detail-block-summary' }, [
+      el('span', { text: title }),
+      count ? el('span', { class: 'count', text: count }) : null,
+    ]),
+  ]);
+
+  const body = el('div', { class: 'detail-block-body' });
+  section.append(body);
+  buildBody(body);
+  return section;
+}
+
 /* ---------------- sun and moon ---------------- */
 
 const clockTime = (date) => (date
@@ -1125,12 +1251,10 @@ function skySection(position) {
   const now = sunPosition(date, lat, lon);
   const moonNow = moonPosition(date, lat, lon);
 
-  const section = el('div', { class: 'panel-section' }, [
-    el('h2', { class: 'panel-title' }, [
-      el('span', { text: 'Sun & moon' }),
-      el('span', { class: 'count', text: date.toLocaleDateString([], { month: 'short', day: 'numeric' }) }),
-    ]),
-  ]);
+  let section = null;
+  const outer = collapsibleSection('sky', 'Sun & moon', (body) => { section = body; }, {
+    count: date.toLocaleDateString([], { month: 'short', day: 'numeric' }),
+  });
 
   if (sun.polar) {
     section.append(el('p', {
@@ -1234,7 +1358,7 @@ function skySection(position) {
     }));
   }
 
-  return section;
+  return outer;
 }
 
 function skyCell(label, value, note) {
@@ -2654,12 +2778,15 @@ function renderPinDetails(folder, item) {
 /* ---------------- details: land, weather, notes ---------------- */
 
 /** Small helper for a section that fills in once a network call returns. */
-function pendingSection(title, run) {
-  const section = el('div', { class: 'panel-section' }, [
-    el('h2', { class: 'panel-title', text: title }),
-  ]);
-  const body = el('div', {}, [el('p', { class: 'hint', style: 'margin:0', text: 'Looking up…' })]);
-  section.append(body);
+function pendingSection(title, run, id = '') {
+  const key = id || `pending:${title}`;
+  let body = null;
+
+  const section = collapsibleSection(key, title, (target) => {
+    body = target;
+    body.append(el('p', { class: 'hint', style: 'margin:0', text: 'Looking up…' }));
+  });
+
   run(body, section);
   return section;
 }
@@ -2789,13 +2916,11 @@ function weatherGlyph(kind) {
  * which is exactly the thing worth knowing next time.
  */
 function notesSection(folder, item) {
-  const section = el('div', { class: 'panel-section' });
   const notes = item.feature.properties.log || [];
-
-  section.append(el('h2', { class: 'panel-title' }, [
-    el('span', { text: 'Field notes' }),
-    notes.length ? el('span', { class: 'count', text: String(notes.length) }) : null,
-  ]));
+  let section = null;
+  const outer = collapsibleSection('notes', 'Field notes', (body) => { section = body; }, {
+    count: notes.length ? String(notes.length) : '',
+  });
 
   const list = el('div', { class: 'note-list' });
 
@@ -2846,7 +2971,7 @@ function notesSection(folder, item) {
   });
 
   paint();
-  return section;
+  return outer;
 }
 
 /** Stats for a loaded file: distance, elevation profile, feature lists. */
@@ -3097,8 +3222,8 @@ function renderFoldersTab() {
   if (!folders.length) {
     dom.folderList.append(el('p', {
       class: 'hint',
-      html: 'No folders yet. Create one, then use <b>Import from a map…</b> to file waypoints into it — '
-        + 'or click any waypoint on the map and save it.',
+      html: 'No folders yet. Open a file above and you will be asked where to put it, '
+        + 'or click any point on the map and save it into one.',
     }));
     return;
   }
@@ -3499,6 +3624,19 @@ function renderAccount() {
   if (!dom.account) return;
   const account = state.account;
   dom.account.replaceChildren();
+
+  // The header shows state; the panel behind it holds the controls. Signed out
+  // this is one word, which is all it should ever have been — it was a whole
+  // panel section competing with folders for the reader's attention.
+  if (dom.accountMenu) dom.accountMenu.hidden = !accountsAvailable();
+  if (dom.accountTrigger) {
+    const email = account?.user?.email || '';
+    dom.accountTrigger.textContent = account?.user
+      ? (email ? email.split('@')[0].slice(0, 14) : 'Account')
+      : 'Sign in';
+    dom.accountTrigger.classList.toggle('is-in', Boolean(account?.user));
+    dom.accountTrigger.title = account?.user ? email : 'Sign in to sync folders between devices';
+  }
 
   if (!accountsAvailable()) {
     dom.account.append(el('p', {
