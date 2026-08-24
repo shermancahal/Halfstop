@@ -494,30 +494,51 @@ test('shields: an unlisted state produces the same expression as no state at all
   );
 });
 
-test('shields: the number colour follows the shield it sits on', () => {
-  // Several state markers are dark — Arizona's black square, Idaho's black
-  // outline, South Carolina's blue disc — and a dark number on them is invisible.
-  // The fallback arm of the expression is the state's own number colour, so
-  // assert on that rather than on the string containing white somewhere — the
-  // interstate arm is always white and would satisfy a looser check.
-  for (const code of ['ID', 'LA', 'SD', 'MN', 'VT']) {
-    const expression = shieldTextColour(code);
-    assert.equal(expression[expression.length - 1], STATE_SHIELDS[code].fg, `${code} number colour`);
-    assert.equal(STATE_SHIELDS[code].fg, '#ffffff', `${code} is a dark marker`);
-  }
-
-  const light = shieldTextColour('NY');
-  assert.equal(light[light.length - 1], '#1c1c1c', 'a white marker takes a dark number');
-  const carolina = shieldTextColour('SC');
-  assert.equal(carolina[carolina.length - 1], '#1e4b8f', 'South Carolina numbers are blue');
+test('shields: every number is readable on the marker it sits on', () => {
+  /*
+   * Asserted by contrast rather than by a list of states.
+   *
+   * The list version named Idaho and Louisiana as dark markers, and when the
+   * reference sheet said otherwise and they were corrected to white, the test
+   * failed for having memorised the bug. What actually has to hold is that the
+   * number contrasts with what is behind it — for every state, including ones
+   * added later — so that is what is checked.
+   */
+  const luminance = (hex) => {
+    const value = hex.replace('#', '');
+    const parts = value.length === 3
+      ? [...value].map((c) => parseInt(c + c, 16))
+      : [0, 2, 4].map((i) => parseInt(value.slice(i, i + 2), 16));
+    const [r, g, b] = parts.map((channel) => {
+      const linear = channel / 255;
+      return linear <= 0.03928 ? linear / 12.92 : ((linear + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contrast = (a, b) => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
 
   for (const [code, entry] of Object.entries(STATE_SHIELDS)) {
-    if (!entry.confident) continue;
-    assert.ok(
-      JSON.stringify(shieldTextColour(code)).includes(entry.fg),
-      `${code}: the number colour should match the table`,
-    );
+    // 4.5:1 is the ordinary text threshold. A route number is large and bold,
+    // but it is also read at speed on a busy map, so it does not get the
+    // large-text discount.
+    const ratio = contrast(entry.fg, entry.bg);
+    assert.ok(ratio >= 4.5, `${code}: ${entry.fg} on ${entry.bg} is only ${ratio.toFixed(1)}:1`);
+
+    // And the expression has to actually carry that colour, not merely have it
+    // written in the table.
+    const expression = shieldTextColour(code);
+    assert.equal(expression[expression.length - 1], entry.fg, `${code} number colour`);
   }
+
+  // The interstate arm is always white regardless of the state, so a check that
+  // merely looked for white somewhere in the expression would always pass.
+  const light = shieldTextColour('NY');
+  assert.equal(light[light.length - 1], '#1c1c1c', 'a white marker takes a dark number');
+  const dark = shieldTextColour('KY');
+  assert.equal(dark[dark.length - 1], '#ffffff', "Kentucky's black disc takes a white number");
 });
 
 test('shields: every state and DC has a marker, listed in a stable order', () => {

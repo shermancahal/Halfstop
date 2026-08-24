@@ -117,7 +117,7 @@ export const STATE_SHIELDS = {
   MA: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
   MT: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
   NE: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
-  NV: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
+  NV: { shape: 'square', bg: '#1c1c1c', fg: '#ffffff' },
   NY: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
   OH: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
   RI: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
@@ -130,17 +130,17 @@ export const STATE_SHIELDS = {
   /* Circles */
   DE: { shape: 'circle', bg: '#ffffff', fg: '#1c1c1c' },
   IA: { shape: 'circle', bg: '#ffffff', fg: '#1c1c1c' },
-  KY: { shape: 'circle', bg: '#ffffff', fg: '#1c1c1c' },
+  KY: { shape: 'circle', bg: '#1c1c1c', fg: '#ffffff' },
   MS: { shape: 'circle', bg: '#ffffff', fg: '#1c1c1c' },
   NJ: { shape: 'circle', bg: '#ffffff', fg: '#1c1c1c' },
   VA: { shape: 'circle', bg: '#ffffff', fg: '#1c1c1c' },
 
   /* Diamonds */
-  MI: { shape: 'diamond', bg: '#ffffff', fg: '#1c1c1c' },
-  NC: { shape: 'diamond', bg: '#ffffff', fg: '#1c1c1c' },
+  MI: { shape: 'diamond', bg: '#1c1c1c', fg: '#ffffff' },
+  NC: { shape: 'diamond', bg: '#1c1c1c', fg: '#ffffff' },
 
   /* State outlines — simplified; at this size the silhouette is all that reads */
-  AK: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c' },
+  AK: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
   AR: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c' },
   DC: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c' },
   FL: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c' },
@@ -148,8 +148,8 @@ export const STATE_SHIELDS = {
   NH: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c' },
   ND: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c' },
   OK: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c' },
-  ID: { shape: 'outline', bg: '#1c1c1c', fg: '#ffffff' },
-  LA: { shape: 'outline', bg: '#0b6b3a', fg: '#ffffff' },
+  ID: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c' },
+  LA: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c' },
   SD: { shape: 'outline', bg: '#0b6b3a', fg: '#ffffff' },
 
   /* The distinctive ones, and the reason this was worth doing at all */
@@ -165,7 +165,7 @@ export const STATE_SHIELDS = {
   WY: { shape: 'square', bg: '#f2c744', fg: '#1c1c1c' },
   MN: { shape: 'square', bg: '#1e4b8f', fg: '#ffffff' },
   VT: { shape: 'square', bg: '#0b6b3a', fg: '#ffffff' },
-  SC: { shape: 'square', bg: '#ffffff', fg: '#1e4b8f' },
+  SC: { shape: 'square', bg: '#1e4b8f', fg: '#ffffff' },
 };
 
 /**
@@ -209,31 +209,90 @@ function roundedRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+/*
+ * The two national shields.
+ *
+ * Both are anchored to the edges in pixels rather than in fractions of the
+ * width, and the reason is the widths: a two-digit shield is 22px across and a
+ * four-digit one is 33px, at the same height. Scaling the curves by width made
+ * a wide shield a stretched version of a narrow one — the corners flattened out
+ * and the foot spread until it read as a bowl. Real shields widen by extending
+ * the straight middle and leave the corners and the taper alone, which is what
+ * anchoring in pixels does.
+ */
+
 /**
- * The interstate outline: a rounded escutcheon, wider at the shoulders than the
- * foot. Approximated with curves rather than traced exactly — at 20 pixels the
- * silhouette is what reads, not the fidelity.
+ * The interstate shield: a flat top with rounded corners, straight sides down
+ * to the shoulder, then a long sweep in to a rounded point at the foot.
+ *
+ * The first version was a symmetric lens, round on top as well as underneath.
+ * That is not a shield — with a red bar across it, it read as a blue pill.
  */
 function interstatePath(ctx, w, h) {
-  const inset = 1.5;
+  const left = 1.2;
+  const right = w - 1.2;
+  const top = h * 0.07;
+  const shoulder = h * 0.34;
+  const radius = 3;
+  const centre = w / 2;
+
   ctx.beginPath();
-  ctx.moveTo(w / 2, inset);
-  ctx.bezierCurveTo(w * 0.78, inset, w - inset, h * 0.16, w - inset, h * 0.34);
-  ctx.bezierCurveTo(w - inset, h * 0.66, w * 0.72, h * 0.9, w / 2, h - inset);
-  ctx.bezierCurveTo(w * 0.28, h * 0.9, inset, h * 0.66, inset, h * 0.34);
-  ctx.bezierCurveTo(inset, h * 0.16, w * 0.22, inset, w / 2, inset);
+  ctx.moveTo(left + radius, top);
+  ctx.lineTo(right - radius, top);
+  ctx.quadraticCurveTo(right, top, right, top + radius);
+  ctx.lineTo(right, shoulder);
+  // Down the right and in to the point. The controls stay a fixed distance in
+  // from the edge so the taper keeps its angle at any width.
+  ctx.bezierCurveTo(right, h * 0.70, right - (right - centre) * 0.52, h * 0.90, centre + (right - centre) * 0.26, h * 0.965);
+  ctx.quadraticCurveTo(centre, h * 1.0, centre - (centre - left) * 0.26, h * 0.965);
+  ctx.bezierCurveTo(left + (centre - left) * 0.52, h * 0.90, left, h * 0.70, left, shoulder);
+  ctx.lineTo(left, top + radius);
+  ctx.quadraticCurveTo(left, top, left + radius, top);
   ctx.closePath();
 }
 
-/** The US route outline: a squarer shield with a flat top and a pointed foot. */
+/**
+ * The US route shield: two peaks at the top corners with a shallow dip between
+ * them, straight sides, and a rounded foot.
+ *
+ * The peaks are the identifying feature and were missing entirely — the old
+ * path ran a straight line across the top, which is a plain box that could be
+ * any state's marker. They are small and the dip between them is shallow;
+ * drawn deep, the shield reads as a heart.
+ */
 function usRoutePath(ctx, w, h) {
-  const inset = 1.5;
+  const left = 1.1;
+  const right = w - 1.1;
+  const centre = w / 2;
+
+  /*
+   * The peaks have to be big enough to survive being drawn 20 pixels tall.
+   *
+   * A first pass put them where they sit on the real sign — a dip about a
+   * fifteenth of the height below the crest — and at this size the outline
+   * stroke simply filled the gap in. What reads as two peaks on a road sign
+   * two feet across reads as a wobbly top edge on an icon, so the dip is
+   * exaggerated to about a fifth of the height. That is the difference between
+   * a marker you recognise at a glance and a rounded box.
+   */
+  const apexY = h * 0.015;
+  const dip = h * 0.18;
+  const inset = Math.min(w * 0.34, 9);
+
   ctx.beginPath();
-  ctx.moveTo(inset, inset + h * 0.08);
-  ctx.lineTo(w - inset, inset + h * 0.08);
-  ctx.lineTo(w - inset, h * 0.55);
-  ctx.quadraticCurveTo(w - inset, h * 0.82, w / 2, h - inset);
-  ctx.quadraticCurveTo(inset, h * 0.82, inset, h * 0.55);
+  ctx.moveTo(centre, dip);
+  // One cubic per hump, not two quadratics meeting at the apex: two of them
+  // join at a corner, and a corner at the top of a small shape is a cat's ear.
+  ctx.bezierCurveTo(centre - inset * 0.40, apexY, left + inset * 0.34, apexY, left, h * 0.31);
+  ctx.lineTo(left, h * 0.48);
+  // The foot narrows to about a third of the width before it rounds off.
+  // Running the side straight down and then turning hard gave a flat-bottomed
+  // tub; converging first is what makes it read as a shield.
+  ctx.bezierCurveTo(left, h * 0.74, left + (centre - left) * 0.40, h * 0.91, centre - (centre - left) * 0.30, h * 0.97);
+  ctx.quadraticCurveTo(centre, h * 1.005, centre + (right - centre) * 0.30, h * 0.97);
+  ctx.bezierCurveTo(right - (right - centre) * 0.40, h * 0.91, right, h * 0.74, right, h * 0.48);
+  ctx.lineTo(right, h * 0.31);
+  ctx.bezierCurveTo(right - inset * 0.34, apexY, centre + inset * 0.40, apexY, centre, dip);
   ctx.closePath();
 }
 
@@ -453,7 +512,7 @@ export function rasterizeShield(design, length, { pixelRatio = 2 } = {}) {
     ctx.save();
     ctx.clip();
     ctx.fillStyle = colours.crown;
-    ctx.fillRect(0, 0, width, HEIGHT * 0.3);
+    ctx.fillRect(0, 0, width, HEIGHT * 0.27);
     ctx.restore();
 
     interstatePath(ctx, width, HEIGHT);
@@ -465,7 +524,9 @@ export function rasterizeShield(design, length, { pixelRatio = 2 } = {}) {
     ctx.fillStyle = colours.fill;
     ctx.fill();
     ctx.strokeStyle = colours.stroke;
-    ctx.lineWidth = 1.3;
+    // Thinner than the others on purpose: this shape is nearly all outline, and
+    // a heavy one closes the notch between the peaks back up.
+    ctx.lineWidth = 1;
     ctx.stroke();
   } else {
     roundedRect(ctx, 1, 2, width - 2, HEIGHT - 4, design === 'state' ? 3 : 2.5);

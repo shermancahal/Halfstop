@@ -441,6 +441,72 @@ await page.waitForTimeout(400);
 check('and the new name reaches the list',
   await page.locator('.waypoint-card', { hasText: 'Renamed on the map' }).count(), 1);
 
+/*
+ * The two national shields, checked as pixels.
+ *
+ * Their silhouettes are the whole recognition and neither can be asserted from
+ * Node — they are drawn on a canvas. Both were wrong for a long time with
+ * nothing noticing: the interstate was a symmetric lens that read as a blue
+ * pill with a bar across it, and the US shield had a straight line across the
+ * top where its two peaks belong.
+ *
+ * Measured as a profile — the first filled row in each column — rather than by
+ * sampling fixed points, which is how the first version of this check went
+ * wrong: it probed where the peaks ought to be rather than looking for them.
+ * A shield "has peaks" if the top edge rises on both sides of a dip, wherever
+ * they happen to fall.
+ */
+console.log('\nThe national shields have the right silhouettes');
+const profiles = await page.evaluate(async () => {
+  const shields = await import('./assets/js/lib/route-shields.js');
+  const read = (design) => {
+    const data = shields.rasterizeShield(design, 2, { pixelRatio: 2 });
+    const columns = [];
+    for (let x = 0; x < data.width; x += 1) {
+      let first = -1;
+      for (let y = 0; y < data.height; y += 1) {
+        if (data.data[(y * data.width + x) * 4 + 3] > 40) { first = y; break; }
+      }
+      columns.push(first);
+    }
+    // Filled columns only: the outermost are empty at every row.
+    const filled = columns.map((row, x) => ({ row, x })).filter((entry) => entry.row >= 0);
+    const mid = Math.round(data.width / 2);
+    const half = Math.round(data.width * 0.15);
+    const lowest = (from, to) => Math.min(...filled.filter((e) => e.x >= from && e.x <= to).map((e) => e.row));
+
+    return {
+      height: data.height,
+      centre: columns[mid],
+      leftCrest: lowest(half, mid - 2),
+      rightCrest: lowest(mid + 2, data.width - half),
+      footWidth: (() => {
+        // How wide the shape still is near the bottom, as a fraction.
+        const y = Math.round(data.height * 0.9);
+        let count = 0;
+        for (let x = 0; x < data.width; x += 1) {
+          if (data.data[(y * data.width + x) * 4 + 3] > 40) count += 1;
+        }
+        return count / data.width;
+      })(),
+    };
+  };
+  return { interstate: read('interstate'), us: read('us') };
+});
+
+const us = profiles.us;
+check('the US shield rises to a peak left of centre', us.leftCrest < us.centre - 2, true);
+check('and to another on the right', us.rightCrest < us.centre - 2, true);
+
+const inter = profiles.interstate;
+check('the interstate top is flat instead',
+  Math.abs(inter.centre - Math.min(inter.leftCrest, inter.rightCrest)) <= 1, true);
+
+// Both narrow toward the foot rather than bottoming out square.
+for (const [name, shape] of Object.entries(profiles)) {
+  check(`the ${name} tapers`, shape.footWidth > 0.15 && shape.footWidth < 0.75, true);
+}
+
 console.log('\nThe build stamp is readable');
 const stamp = (await page.locator('#build-stamp').innerText().catch(() => '')).trim();
 check('build stamp is shown', stamp.length > 0, true);
