@@ -318,6 +318,7 @@ async function main() {
   exposeWaypointInspector();
   keepMapSized();
   healMissingImages();
+  keepAppLayersAlive();
   trackShieldState();
   // A Mapbox vector style starts without our overlays; the raster path bakes
   // them into the initial style, so this only has work to do in the former case.
@@ -1008,6 +1009,48 @@ function askWhereToFile(entries, waypointCount) {
   dom.importAsk.hidden = false;
 }
 
+/**
+ * Put our layers back whenever the map has lost them.
+ *
+ * A backstop, not the mechanism. The mechanism is the rebuild in setBasemap,
+ * and it has now been broken twice in ways that were invisible from the outside
+ * — a deferral waiting on an event that had already fired, and a style diff
+ * that silently skips the event entirely. Both had the same symptom: saved pins
+ * gone, map fine, console clean.
+ *
+ * So this watches for the state that should be impossible — a loaded style with
+ * no folder source — and repairs it. If the mechanism works, this never fires.
+ * If it breaks again for a third reason, the user sees a redraw instead of an
+ * empty map, and the console says it happened.
+ */
+function keepAppLayersAlive() {
+  let repairing = false;
+
+  const check = () => {
+    if (repairing || !styleReady()) return;
+    if (state.map.getSource(FOLDER_SOURCE)) return;
+
+    repairing = true;
+    console.warn('[map] the app layers went missing after a style change; rebuilding them.');
+    try {
+      addAppLayers();
+      for (const entry of state.documents.values()) addDocumentLayers(entry);
+      applyVisibility();
+      addFolderLayers();
+      refreshFolderData();
+      refreshRegionData();
+      registerShieldImages(state.map, { state: state.shieldState });
+    } catch (error) {
+      console.error('[map] rebuild failed:', error.message);
+    } finally {
+      repairing = false;
+    }
+  };
+
+  state.map.on('styledata', check);
+  state.map.on('idle', check);
+}
+
 /* ---------------- offline regions ---------------- */
 
 /**
@@ -1272,7 +1315,16 @@ function setBasemap(id) {
 
   // A style swap wipes every source, so the data layers are rebuilt on the other
   // side of 'style.load'. The parsed documents live in memory, so this is cheap.
-  state.map.setStyle(next.style);
+  //
+  // diff:false is load-bearing. By default GL tries to *diff* the two styles and
+  // apply the difference, and when that succeeds it never fires 'style.load' —
+  // it just removes the layers that are not in the new style, which is all of
+  // ours. The rebuild then waits forever on an event that is not coming, and
+  // saved pins and imported tracks vanish with the map looking perfectly
+  // healthy. Whether the diff succeeds depends on how alike the two styles are,
+  // which is why this looked intermittent: raster to raster diffs cleanly,
+  // raster to vector does not.
+  state.map.setStyle(next.style, { diff: false });
   state.map.once('style.load', () => {
     if (next.vector) for (const overlay of activeOverlays()) addOverlayLayer(overlay);
     addAppLayers();
@@ -2354,10 +2406,19 @@ function landSection(position) {
     const result = await landManager(position);
 
     if (!result.ok) {
-      body.replaceChildren(el('p', {
+      // "Nothing here" and "nothing could be asked" mean opposite things: the
+      // first is a working answer about private land, the second a broken
+      // configuration. Only the second is the reader's problem, and even then
+      // the service names belong in a tooltip rather than across the panel.
+      const nothingMapped = result.empty === true;
+      const note = el('p', {
         class: 'hint', style: 'margin:0',
-        text: `Could not determine this — ${result.reason}.`,
-      }));
+        text: nothingMapped
+          ? 'No public land mapped here — most likely private.'
+          : 'Could not check who manages this — the land-ownership services did not answer.',
+      });
+      if (result.unreachable?.length) note.title = `Not answering:\n${result.unreachable.join('\n')}`;
+      body.replaceChildren(note);
       return;
     }
 

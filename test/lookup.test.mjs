@@ -93,14 +93,70 @@ test('land: falls through to the next service when the first has no feature', ()
   );
 });
 
-test('land: reports why rather than returning a bare failure', () => withFetch(
+test('land: a service that answers with nothing is not reported as broken', () => withFetch(
   () => ({ features: [] }),
+  async () => {
+    // Every service answering and finding nothing is the ordinary case over
+    // private land. Reporting it as a list of failures made a working lookup
+    // read as a broken feature.
+    const result = await landManager(POINT);
+    assert.equal(result.ok, false);
+    assert.equal(result.empty, true);
+    assert.match(result.reason, /most likely private/);
+    assert.equal(result.unreachable.length, 0);
+    assert.ok(result.checked.length > 0, 'it should name what it asked');
+  },
+));
+
+test('land: a service that could not be asked is reported as such', () => withFetch(
+  () => ({ error: { message: 'Invalid URL' } }),
   async () => {
     const result = await landManager(POINT);
     assert.equal(result.ok, false);
-    assert.match(result.reason, /no match here/);
+    assert.equal(result.empty, false);
+    assert.match(result.reason, /no service could answer/);
+    assert.ok(result.unreachable.some((entry) => /Invalid URL/.test(entry)));
   },
 ));
+
+test('land: one broken service does not mask another answering correctly', () => {
+  // What was actually seen in the field: two services misconfigured, the third
+  // working and finding nothing. The verdict should come from the one that
+  // worked.
+  let call = 0;
+  return withFetch(
+    () => {
+      call += 1;
+      if (call === 1) return { error: { message: 'Invalid or missing input parameters.' } };
+      if (call === 2) return { error: { message: 'Invalid URL' } };
+      return { features: [] };
+    },
+    async () => {
+      const result = await landManager(POINT);
+      assert.equal(result.empty, true, 'the working service decides the verdict');
+      assert.match(result.reason, /most likely private/);
+      assert.equal(result.unreachable.length, 2, 'the broken ones are still recorded');
+    },
+  );
+});
+
+test('land: the query uses the JSON geometry form ArcGIS accepts everywhere', () => {
+  // BLM rejected the `x,y` shorthand with "Invalid or missing input
+  // parameters"; the explicit form with a spatial reference works.
+  let requested = '';
+  return withFetch(
+    (url) => { requested = url; return { features: [{ attributes: { Mang_Name: 'BLM' } }] }; },
+    async () => {
+      await landManager(POINT);
+      const geometry = JSON.parse(decodeURIComponent(/[?&]geometry=([^&]+)/.exec(requested)[1]));
+      assert.equal(geometry.x, POINT[0]);
+      assert.equal(geometry.y, POINT[1]);
+      assert.equal(geometry.spatialReference.wkid, 4326);
+      assert.match(requested, /geometryType=esriGeometryPoint/);
+      assert.match(requested, /where=1%3D1/, 'services that require a where clause need one');
+    },
+  );
+});
 
 test('land: agency codes expand, unknown ones pass through untouched', () => {
   assert.equal(expandAgency('NPS'), 'National Park Service');

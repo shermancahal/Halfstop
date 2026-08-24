@@ -592,22 +592,54 @@ html, body { height: 100%; overflow: hidden; }
   border: 1px solid var(--line);
   background: linear-gradient(135deg, var(--wash-a, var(--paper-2)), var(--wash-b, var(--surface-2)));
 }
-.weather-now.is-clear   { --wash-a: #fdf0d5; --wash-b: #fbe3b3; }
-.weather-now.is-partly  { --wash-a: #f4eee2; --wash-b: #e6ecf2; }
-.weather-now.is-cloud   { --wash-a: #eceef1; --wash-b: #dfe3e8; }
-.weather-now.is-rain    { --wash-a: #e2ebf3; --wash-b: #cddced; }
-.weather-now.is-thunder { --wash-a: #e6e3ef; --wash-b: #d2cde3; }
-.weather-now.is-snow    { --wash-a: #eef3f7; --wash-b: #dfe9f1; }
-.weather-now.is-fog     { --wash-a: #ecedee; --wash-b: #e0e2e4; }
-.weather-now.is-wind    { --wash-a: #e9f0ec; --wash-b: #d8e5dd; }
-
-/* Dark theme: the washes above are far too bright, so mute them heavily
-   rather than restating twelve gradients. */
-:root[data-theme="dark"] .weather-now,
-:root:not([data-theme="light"]) .weather-now {
-  background: var(--surface-2);
-  border-color: var(--line);
+/* The wash carries the forecast before you read a word of it, so these are
+   proper skies rather than tinted greys: a clear day is warm and bright, an
+   overcast one is flat and cool, a storm is dark. The glyph colour moves with
+   the wash — a yellow sun on a blue sky, not a grey sun on everything. */
+.weather-now.is-clear {
+  --wash-a: #8ec9f0; --wash-b: #ffe9b0; --glyph: #f0a500; --wash-ink: #24405a;
 }
+.weather-now.is-partly {
+  --wash-a: #9cc9e8; --wash-b: #eef1f4; --glyph: #e8a52c; --wash-ink: #2b4155;
+}
+.weather-now.is-cloud {
+  --wash-a: #c3ccd6; --wash-b: #e4e8ec; --glyph: #6d7c8a; --wash-ink: #2f3944;
+}
+.weather-now.is-rain {
+  --wash-a: #7d9cb8; --wash-b: #cfdbe6; --glyph: #2f6f9f; --wash-ink: #1f3446;
+}
+.weather-now.is-thunder {
+  --wash-a: #55607f; --wash-b: #9aa3bd; --glyph: #f2c744; --wash-ink: #ffffff;
+}
+.weather-now.is-snow {
+  --wash-a: #d8e6f2; --wash-b: #fbfdff; --glyph: #5f8bb0; --wash-ink: #2a3b4a;
+}
+.weather-now.is-fog {
+  --wash-a: #cfd3d6; --wash-b: #e9ebec; --glyph: #7b858c; --wash-ink: #333b41;
+}
+.weather-now.is-wind {
+  --wash-a: #a8c8bd; --wash-b: #e2ece7; --glyph: #3f7d68; --wash-ink: #23443a;
+}
+
+/* The card takes its text colour from the wash, so a dark storm sky keeps its
+   numbers readable instead of printing near-black on near-black. */
+.weather-now .weather-temp,
+.weather-now .weather-when { color: var(--wash-ink, var(--ink)); }
+.weather-now .weather-short { color: var(--wash-ink, var(--ink-2)); opacity: .85; }
+.weather-now .weather-glyph { color: var(--glyph, var(--ink-2)); }
+
+/* Dark theme: keep the hue, drop the brightness. The sky should still read as
+   a sky at night, just not glow. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .weather-now { filter: saturate(.82) brightness(.62); }
+  :root:not([data-theme="light"]) .weather-now .weather-temp,
+  :root:not([data-theme="light"]) .weather-now .weather-when,
+  :root:not([data-theme="light"]) .weather-now .weather-short { color: #f2ede3; }
+}
+:root[data-theme="dark"] .weather-now { filter: saturate(.82) brightness(.62); }
+:root[data-theme="dark"] .weather-now .weather-temp,
+:root[data-theme="dark"] .weather-now .weather-when,
+:root[data-theme="dark"] .weather-now .weather-short { color: #f2ede3; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .weather-now { background: var(--surface-2); }
 }

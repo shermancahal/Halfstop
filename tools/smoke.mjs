@@ -50,8 +50,15 @@ addSource(i,c){this._s.set(i,new Src(c.data))}getSource(i){return this._s.get(i)
 addLayer(l,b){if(b&&!this._l.has(b))throw new Error('before missing '+b);this._l.set(l.id,l)}
 getLayer(i){return this._l.get(i)}removeLayer(i){this._l.delete(i)}layerIds(){return [...this._l.keys()]}
 moveLayer(){}setPaintProperty(){}setLayoutProperty(){}
-setStyle(s){this._ready=false;this._apply(s);
-  setTimeout(()=>{this.fire('style.load');setTimeout(()=>{this._ready=true;this.fire('styledata');this.fire('idle')},30)},0)}
+setStyle(s,o){this._ready=false;
+  // Model both paths GL takes. With diff:true (the default) it applies the
+  // difference and NEVER fires 'style.load' — it just drops the layers that are
+  // not in the new style. Only a full reload fires it. Getting this wrong is
+  // what let a broken basemap switch pass a green smoke test.
+  const full=!o||o.diff===false;
+  this._apply(s);
+  setTimeout(()=>{if(full)this.fire('style.load');
+    setTimeout(()=>{this._ready=true;this.fire('styledata');this.fire('idle')},30)},0)}
 getStyle(){return{layers:[...this._l.values()]}}getBounds(){return new Bounds(-85,35,-83,37)}
 getZoom(){return 12}getCenter(){return{lng:-84.28,lat:35.96}}fitBounds(){}flyTo(){}easeTo(){}jumpTo(){}
 project(){return{x:0,y:0}}unproject(){return{lng:0,lat:0}}queryRenderedFeatures(){return[]}resize(){}remove(){}}
@@ -130,6 +137,21 @@ const afterVector = await state();
 check('waypoints survive switching back', afterVector.folderFeatures, afterImport.folderFeatures);
 check('folder layers survive switching back', afterVector.folderLayers, afterImport.folderLayers);
 check('region outlines survive', afterVector.regionLayers, afterImport.regionLayers);
+
+console.log('\nA style applied by diff (no style.load) must not lose the layers');
+await page.evaluate(() => {
+  // What GL does when it diffs: our layers are not in the new style, so they go.
+  for (const id of window.__map.layerIds()) {
+    if (/^(folders|scratch|region)/.test(id) || /-point$|-line$/.test(id)) window.__map.removeLayer(id);
+  }
+  window.__map.removeSource('folders');
+  window.__map.fire('styledata');
+  window.__map.fire('idle');
+});
+await page.waitForTimeout(600);
+const afterDiff = await state();
+check('layers repaired after a silent diff', afterDiff.folderLayers, afterImport.folderLayers);
+check('waypoints repaired after a silent diff', afterDiff.folderFeatures, afterImport.folderFeatures);
 
 console.log('\nThe build stamp is readable');
 const stamp = (await page.locator('#build-stamp').innerText().catch(() => '')).trim();

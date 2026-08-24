@@ -102,25 +102,39 @@ export function expandAgency(value) {
 export async function landManager([lon, lat]) {
   if (!LAND_LOOKUPS.length) return { ok: false, reason: 'no land-ownership service is configured' };
 
-  const failures = [];
+  // Two different outcomes wear the same failure today, and they mean opposite
+  // things. A service that answered and found nothing is working correctly —
+  // the point is simply not on land it maps. A service that could not be asked
+  // is a configuration problem. Reporting both as errors made a working lookup
+  // over private land read as a broken feature.
+  const unreachable = [];
+  const answeredEmpty = [];
 
   for (const service of LAND_LOOKUPS) {
+    // The explicit JSON geometry form rather than the `x,y` shorthand. Both are
+    // documented, but the shorthand relies on the service inferring the spatial
+    // reference and some reject it outright — BLM answered "Invalid or missing
+    // input parameters" to the short form and accepts this one. `where=1=1` is
+    // here for the same reason: harmless where it is redundant, required by
+    // services that will not run a query without a where clause.
+    const geometry = JSON.stringify({ x: lon, y: lat, spatialReference: { wkid: 4326 } });
     const url = `${service.url}/query`
-      + `?geometry=${encodeURIComponent(`${lon},${lat}`)}`
-      + '&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects'
-      + '&outFields=*&returnGeometry=false&outSR=4326&f=json';
+      + `?geometry=${encodeURIComponent(geometry)}`
+      + '&geometryType=esriGeometryPoint&spatialRel=esriSpatialRelIntersects'
+      + `&where=${encodeURIComponent('1=1')}`
+      + '&outFields=*&returnGeometry=false&f=json';
 
     const result = await fetchJSON(url);
-    if (!result.ok) { failures.push(`${service.name}: ${result.reason}`); continue; }
+    if (!result.ok) { unreachable.push(`${service.name} (${result.reason})`); continue; }
 
     // ArcGIS reports its own errors inside a 200 response.
     if (result.data?.error) {
-      failures.push(`${service.name}: ${result.data.error.message || 'service error'}`);
+      unreachable.push(`${service.name} (${result.data.error.message || 'service error'})`);
       continue;
     }
 
     const feature = (result.data?.features || [])[0];
-    if (!feature) { failures.push(`${service.name}: no match here`); continue; }
+    if (!feature) { answeredEmpty.push(service.name); continue; }
 
     const attributes = feature.attributes || {};
     return {
@@ -132,12 +146,28 @@ export async function landManager([lon, lat]) {
     };
   }
 
-  // Every failure, not just the first. These endpoints move without notice and
-  // each one fails differently — "Invalid URL" from ArcGIS means the service
-  // path is wrong, a timeout means it is up but slow, a CORS error means it
-  // cannot be called from a browser at all. Showing one and hiding the rest
-  // turns a fixable configuration problem into "the feature is broken".
-  return { ok: false, reason: failures.join('; ') || 'no service answered' };
+  // A service answering with nothing is the ordinary case over private land, so
+  // lead with that and mention the broken ones only as a footnote — they are
+  // for whoever maintains the configuration, not for someone standing at a pin.
+  if (answeredEmpty.length) {
+    return {
+      ok: false,
+      empty: true,
+      reason: 'no public land mapped at this point — most likely private',
+      checked: answeredEmpty,
+      unreachable,
+    };
+  }
+
+  return {
+    ok: false,
+    empty: false,
+    reason: unreachable.length
+      ? `no service could answer — ${unreachable.join('; ')}`
+      : 'no land-ownership service answered',
+    checked: [],
+    unreachable,
+  };
 }
 
 /**
