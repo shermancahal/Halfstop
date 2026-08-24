@@ -34,8 +34,12 @@ import {
 } from './lib/route-shields.js';
 import { Account, isConfigured as accountsAvailable } from './lib/account.js';
 import {
-  formatDD, formatDMS, formatDDM, toUTM, distanceBearing, compassPoint, sunTimes, reverseGeocode,
+  formatDD, formatDMS, formatDDM, toUTM, distanceBearing, compassPoint, reverseGeocode,
 } from './lib/place.js';
+import {
+  sunTimes, sunPosition, moonTimes, moonPosition, moonIllumination,
+  lightPhases, lightDirections, destinationPoint,
+} from './lib/sky.js';
 import { landManager, forecast, weatherClass, publicLand, elevation } from './lib/lookup.js';
 import { describeSync } from './lib/sync.js';
 import {
@@ -88,6 +92,8 @@ const state = {
   warnedGlyphRange: false,
   /** Two-letter code for the state under the map centre, for route shields. */
   shieldState: '',
+  /** { key, position, directions } while sun/moon bearings are drawn, else null. */
+  lightLines: null,
   /** The dropped-pin popup, so a second click replaces it rather than stacking. */
   dropPopup: null,
   /** [lon, lat] of a place being described that is not a saved pin. */
@@ -164,6 +170,7 @@ const layerIdsFor = (key) => [
 
 const FOLDER_SOURCE = 'folders';
 const REGION_SOURCE = 'offline-regions';
+const LIGHT_SOURCE = 'light-directions';
 const FOLDER_LAYERS = [
   'folders-line-casing', 'folders-line', 'folders-point-halo', 'folders-point', 'folders-point-icon',
 ];
@@ -313,6 +320,7 @@ async function main() {
   addFolderLayers();
   refreshFolderData();
   refreshRegionData();
+  refreshLightLines();
   wireMapClicks();
   exposeRoadInspector();
   exposeWaypointInspector();
@@ -1039,6 +1047,7 @@ function keepAppLayersAlive() {
       addFolderLayers();
       refreshFolderData();
       refreshRegionData();
+      refreshLightLines();
       registerShieldImages(state.map, { state: state.shieldState });
     } catch (error) {
       console.error('[map] rebuild failed:', error.message);
@@ -1049,6 +1058,242 @@ function keepAppLayersAlive() {
 
   state.map.on('styledata', check);
   state.map.on('idle', check);
+}
+
+/* ---------------- sun and moon ---------------- */
+
+const clockTime = (date) => (date
+  ? date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  : '—');
+
+/** "1h 47m", or "38m" when there is no hour to speak of. */
+function formatSpan(minutes) {
+  if (!Number.isFinite(minutes) || minutes <= 0) return '—';
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h ? `${h}h ${m}m` : `${m}m`;
+}
+
+/**
+ * A moon drawn at the phase it is actually at.
+ *
+ * The terminator is an ellipse, not a straight edge — that is the whole
+ * difference between a moon and a Pac-Man — so the lit part is a half disc
+ * plus or minus an ellipse whose width tracks the illuminated fraction.
+ */
+function moonGlyph({ phase, fraction }) {
+  const size = 34;
+  const r = 15;
+  const cx = 17;
+  const cy = 17;
+
+  // Which limb is lit: waxing moons are lit on the right in the northern sky.
+  const waxing = phase < 0.5;
+  const sweepOuter = waxing ? 1 : 0;
+  // The terminator bows one way before quarter and the other way after.
+  const bulge = Math.abs(2 * fraction - 1) * r;
+  const sweepInner = (fraction > 0.5) === waxing ? 1 : 0;
+
+  const lit = `M ${cx} ${cy - r} A ${r} ${r} 0 0 ${sweepOuter} ${cx} ${cy + r} `
+    + `A ${bulge.toFixed(2)} ${r} 0 0 ${sweepInner} ${cx} ${cy - r} Z`;
+
+  return `<svg viewBox="0 0 ${size} ${size}" aria-hidden="true">
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="var(--moon-dark)"/>
+    <path d="${lit}" fill="var(--moon-lit)"/>
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--moon-edge)" stroke-width="1"/>
+  </svg>`;
+}
+
+/**
+ * Sun, moon and the light between them.
+ *
+ * This replaces a two-row sunrise/sunset table. The rows were true and nearly
+ * useless: the times that decide a photograph are the ones either side of them
+ * — when blue hour starts, how long golden hour lasts, whether the moon will be
+ * up and how much of it will be lit.
+ *
+ * All of it is arithmetic on the device. It works with no signal, which is the
+ * condition under which someone is standing on a ridge deciding whether to wait.
+ */
+function skySection(position) {
+  const [lon, lat] = position;
+  const date = new Date();
+  const sun = sunTimes(date, lat, lon);
+  const moon = moonTimes(date, lat, lon);
+  const illumination = moonIllumination(date);
+  const phases = lightPhases(date, lat, lon);
+  const now = sunPosition(date, lat, lon);
+  const moonNow = moonPosition(date, lat, lon);
+
+  const section = el('div', { class: 'panel-section' }, [
+    el('h2', { class: 'panel-title' }, [
+      el('span', { text: 'Sun & moon' }),
+      el('span', { class: 'count', text: date.toLocaleDateString([], { month: 'short', day: 'numeric' }) }),
+    ]),
+  ]);
+
+  if (sun.polar) {
+    section.append(el('p', {
+      class: 'hint', style: 'margin:0 0 10px',
+      text: sun.polar === 'day'
+        ? 'The sun does not set here today — midnight sun.'
+        : 'The sun does not rise here today — polar night.',
+    }));
+  }
+
+  /* The day as a bar: night, twilight, golden, daylight, and back. */
+  if (phases.length) {
+    const first = phases[0].from.valueOf();
+    const last = phases[phases.length - 1].to.valueOf();
+    const total = last - first || 1;
+
+    const bar = el('div', { class: 'sky-bar' }, phases.map((phase) => el('span', {
+      class: `sky-band is-${phase.id.replace('-pm', '')}`,
+      style: `flex:${((phase.to - phase.from) / total) * 100}`,
+      title: `${phase.name} · ${clockTime(phase.from)}–${clockTime(phase.to)} · ${formatSpan(phase.minutes)}`,
+    })));
+
+    // Where we are in the day, so the bar reads as "now" rather than a diagram.
+    const elapsed = (date.valueOf() - first) / total;
+    if (elapsed >= 0 && elapsed <= 1) {
+      bar.append(el('span', { class: 'sky-now', style: `left:${elapsed * 100}%` }));
+    }
+
+    section.append(
+      bar,
+      el('div', { class: 'sky-bar-ends' }, [
+        el('span', { text: clockTime(phases[0].from) }),
+        el('span', { text: clockTime(phases[phases.length - 1].to) }),
+      ]),
+    );
+  }
+
+  /* The four times worth setting an alarm for. */
+  const golden = phases.filter((phase) => phase.id.startsWith('golden'));
+  const blue = phases.filter((phase) => phase.id.startsWith('blue'));
+
+  section.append(el('div', { class: 'sky-grid' }, [
+    skyCell('Sunrise', clockTime(sun.sunrise), sun.sunrise && `${Math.round(sunPosition(sun.sunrise, lat, lon).azimuth)}°`),
+    skyCell('Sunset', clockTime(sun.sunset), sun.sunset && `${Math.round(sunPosition(sun.sunset, lat, lon).azimuth)}°`),
+    skyCell('Golden hour', golden.length ? formatSpan(golden[golden.length - 1].minutes) : '—',
+      golden.length ? `${clockTime(golden[golden.length - 1].from)}–${clockTime(golden[golden.length - 1].to)}` : ''),
+    skyCell('Blue hour', blue.length ? formatSpan(blue[blue.length - 1].minutes) : '—',
+      blue.length ? `${clockTime(blue[blue.length - 1].from)}–${clockTime(blue[blue.length - 1].to)}` : ''),
+  ]));
+
+  section.append(el('details', { class: 'sky-more' }, [
+    el('summary', { text: 'Twilight in full' }),
+    el('div', { class: 'sky-phases' }, phases.map((phase) => el('div', { class: 'sky-phase' }, [
+      el('span', { class: `sky-swatch is-${phase.id.replace('-pm', '')}` }),
+      el('span', { class: 'sky-phase-name', text: phase.name }),
+      el('span', { class: 'sky-phase-time', text: `${clockTime(phase.from)}–${clockTime(phase.to)}` }),
+      el('span', { class: 'sky-phase-span', text: formatSpan(phase.minutes) }),
+    ]))),
+    el('p', {
+      class: 'source-note',
+      text: `Sun now ${now.altitude > 0 ? `${Math.round(now.altitude)}° up` : 'below the horizon'}, `
+        + `bearing ${Math.round(now.azimuth)}°.`,
+    }),
+  ]));
+
+  /* The moon. */
+  const percent = Math.round(illumination.fraction * 100);
+  section.append(el('div', { class: 'moon-card' }, [
+    el('span', { class: 'moon-face', html: moonGlyph(illumination) }),
+    el('div', { class: 'moon-text' }, [
+      el('div', { class: 'moon-name', text: illumination.name }),
+      el('div', { class: 'moon-meta', text: `${percent}% lit · ${illumination.waxing ? 'waxing' : 'waning'}` }),
+      el('div', {
+        class: 'moon-meta',
+        text: moon.alwaysUp ? 'Up all day'
+          : moon.alwaysDown ? 'Below the horizon all day'
+            : `Rises ${clockTime(moon.rise)} · sets ${clockTime(moon.set)}`,
+      }),
+      el('div', {
+        class: 'moon-meta',
+        text: moonNow.altitude > 0
+          ? `Up now, ${Math.round(moonNow.altitude)}° at ${Math.round(moonNow.azimuth)}°`
+          : 'Below the horizon now',
+      }),
+    ]),
+  ]));
+
+  /* And the part only a map can answer. */
+  const directions = lightDirections(date, lat, lon);
+  if (directions.length) {
+    const active = state.lightLines?.key === position.join(',');
+    section.append(el('button', {
+      class: `button ${active ? 'button-secondary' : 'button-ghost'} button-small sky-lines-toggle`,
+      type: 'button',
+      text: active ? 'Hide light directions' : 'Show light directions on the map',
+      onclick: () => toggleLightLines(position, directions),
+    }));
+    section.append(el('p', {
+      class: 'source-note',
+      text: directions.map((d) => `${d.name} ${Math.round(d.azimuth)}°`).join(' · '),
+    }));
+  }
+
+  return section;
+}
+
+function skyCell(label, value, note) {
+  return el('div', { class: 'sky-cell' }, [
+    el('div', { class: 'sky-cell-label', text: label }),
+    el('div', { class: 'sky-cell-value', text: value }),
+    note ? el('div', { class: 'sky-cell-note', text: note }) : null,
+  ]);
+}
+
+/**
+ * Draw lines from a point along the sunrise, sunset, moonrise and moonset
+ * bearings.
+ *
+ * The reason this belongs on a map rather than in the table above it: knowing
+ * the sun sets at 291° is not the same as seeing that 291° runs straight down
+ * the valley, or straight into the ridge behind you.
+ */
+function toggleLightLines(position, directions) {
+  if (state.lightLines?.key === position.join(',')) {
+    state.lightLines = null;
+    refreshLightLines();
+    renderDetailsTab();
+    return;
+  }
+
+  state.lightLines = { key: position.join(','), position, directions };
+  refreshLightLines();
+  renderDetailsTab();
+}
+
+function refreshLightLines() {
+  if (!styleReady()) { whenStyleReady(refreshLightLines); return; }
+
+  const source = state.map.getSource(LIGHT_SOURCE);
+  if (!source) return;
+
+  const lines = state.lightLines;
+  if (!lines) {
+    source.setData({ type: 'FeatureCollection', features: [] });
+    return;
+  }
+
+  // 40km is long enough to cross the horizon you can actually see from a ridge
+  // and short enough not to sweep across the whole map at trip-planning zooms.
+  source.setData({
+    type: 'FeatureCollection',
+    features: lines.directions.map((direction) => ({
+      type: 'Feature',
+      properties: {
+        body: direction.body,
+        label: `${direction.name} ${Math.round(direction.azimuth)}°`,
+      },
+      geometry: {
+        type: 'LineString',
+        coordinates: [lines.position, destinationPoint(lines.position, direction.azimuth, 40)],
+      },
+    })),
+  });
 }
 
 /* ---------------- offline regions ---------------- */
@@ -1333,6 +1578,7 @@ function setBasemap(id) {
     addFolderLayers();
     refreshFolderData();
     refreshRegionData();
+    refreshLightLines();
   });
   renderLayersTab();
   // The size estimate depends on whether the new basemap is vector or raster.
@@ -1406,6 +1652,40 @@ function addAppLayers() {
   if (!state.map.getSource('scratch-cursor')) state.map.addSource('scratch-cursor', empty);
   if (!state.map.getSource(FOLDER_SOURCE)) state.map.addSource(FOLDER_SOURCE, empty);
   if (!state.map.getSource(REGION_SOURCE)) state.map.addSource(REGION_SOURCE, empty);
+  if (!state.map.getSource(LIGHT_SOURCE)) state.map.addSource(LIGHT_SOURCE, empty);
+
+  // Sun and moon bearings. Drawn over everything, because the whole point is to
+  // read them against the terrain — a line hidden under a road layer answers
+  // nothing. Warm for the sun, cool for the moon, dashed so they never read as
+  // a route you could drive.
+  if (!state.map.getLayer('light-line')) {
+    state.map.addLayer({
+      id: 'light-line', type: 'line', source: LIGHT_SOURCE,
+      layout: { 'line-cap': 'round' },
+      paint: {
+        'line-color': ['match', ['get', 'body'], 'moon', '#5b7fa8', '#e08a1e'],
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.6, 14, 2.6],
+        'line-dasharray': [2.5, 1.5],
+        'line-opacity': 0.95,
+      },
+    });
+  }
+  if (!state.map.getLayer('light-label')) {
+    state.map.addLayer({
+      id: 'light-label', type: 'symbol', source: LIGHT_SOURCE,
+      layout: {
+        'symbol-placement': 'line-center',
+        'text-field': ['get', 'label'],
+        'text-size': 11,
+        'text-offset': [0, -0.8],
+      },
+      paint: {
+        'text-color': ['match', ['get', 'body'], 'moon', '#3f5f83', '#a3620d'],
+        'text-halo-color': 'rgba(255,255,255,0.9)',
+        'text-halo-width': 1.6,
+      },
+    });
+  }
 
   // Region outlines sit under everything else the app draws: they are context
   // for where your maps stop, not something to read a route through.
@@ -1779,6 +2059,7 @@ async function addDocument({ name, doc, origin, slug = null, fit = true }) {
   state.documents.set(key, entry);
   addDocumentLayers(entry);
   state.activeKey = key;
+  renderFoldersTab();   // the "file from an open file" button appears with the first file
 
   renderMapsTab();
   renderDetailsTab();
@@ -2220,14 +2501,7 @@ function renderPointDetails(position) {
     if (!result.ok && /no elevation data/.test(result.reason)) section.classList.add('is-quiet');
   }));
 
-  const sun = sunTimes(position);
-  const clock = (date) => date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  dom.details.append(el('div', { class: 'panel-section' }, [
-    el('h2', { class: 'panel-title', text: 'Daylight today' }),
-    sun.sunrise
-      ? el('div', {}, [detailRow('Sunrise', clock(sun.sunrise)), detailRow('Sunset', clock(sun.sunset))])
-      : el('p', { class: 'hint', style: 'margin:0', text: sun.note }),
-  ]));
+  dom.details.append(skySection(position));
 
   dom.details.append(landSection(position));
   dom.details.append(weatherSection(position));
@@ -2350,17 +2624,7 @@ function renderPinDetails(folder, item) {
   }
 
   /* daylight */
-  const sun = sunTimes([lon, lat]);
-  const clock = (date) => date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  dom.details.append(el('div', { class: 'panel-section' }, [
-    el('h2', { class: 'panel-title', text: 'Daylight today' }),
-    sun.sunrise
-      ? el('div', {}, [
-        detailRow('Sunrise', clock(sun.sunrise)),
-        detailRow('Sunset', clock(sun.sunset)),
-      ])
-      : el('p', { class: 'hint', style: 'margin:0', text: sun.note }),
-  ]));
+  dom.details.append(skySection([lon, lat]));
 
   dom.details.append(landSection([lon, lat]));
   dom.details.append(weatherSection([lon, lat]));
@@ -2481,7 +2745,7 @@ function weatherSection(position) {
     ]);
 
     const strip = el('div', { class: 'weather-strip' }, rest.slice(0, 4).map((period) => el('div', {
-      class: 'weather-chip', title: period.detailed,
+      class: `weather-chip is-${weatherClass(period.short)}`, title: period.detailed,
     }, [
       el('span', { class: 'weather-chip-when', text: period.name.replace(/ (Night|Afternoon)$/, ' $1') }),
       el('span', { class: 'weather-chip-glyph', html: weatherGlyph(weatherClass(period.short)) }),
@@ -2818,6 +3082,13 @@ function renderFoldersTab() {
   dom.folderTotals.textContent = totals.folders
     ? `${totals.waypoints} waypoint${totals.waypoints === 1 ? '' : 's'}${totals.tracks ? `, ${totals.tracks} track${totals.tracks === 1 ? '' : 's'}` : ''}`
     : '';
+
+  // Only offer to file from an open file when one is actually open. The button
+  // used to be permanently visible and answered a click with an error toast,
+  // which is a poor way to learn what a control is for. Its old label said
+  // "import from a map", where "a map" meant "a file you opened" — that is the
+  // app's word, not the reader's.
+  if (dom.importIntoFolder) dom.importIntoFolder.hidden = state.documents.size === 0;
 
   const existingPicker = dom.folderList.querySelector('.picker');
   dom.folderList.replaceChildren();

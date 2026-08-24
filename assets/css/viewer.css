@@ -671,6 +671,38 @@ html, body { height: 100%; overflow: hidden; }
 .weather-chip-glyph svg { width: 100%; height: 100%; }
 .weather-chip-temp { font-size: .88rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 
+/* The chips take the same sky colours as the headline card, at lower strength.
+   Four days of weather should be readable as a sequence — brightening, turning
+   — without reading a word of it. Full strength on something this small would
+   fight the numbers rather than support them. */
+.weather-chip.is-clear   { background: linear-gradient(160deg, #bfe0f5, #ffeec4); }
+.weather-chip.is-partly  { background: linear-gradient(160deg, #cbe3f4, #f2f5f7); }
+.weather-chip.is-cloud   { background: linear-gradient(160deg, #dbe1e8, #eef1f4); }
+.weather-chip.is-rain    { background: linear-gradient(160deg, #b3c9dc, #dee8f1); }
+.weather-chip.is-thunder { background: linear-gradient(160deg, #9098b4, #c2c8da); }
+.weather-chip.is-snow    { background: linear-gradient(160deg, #e6f0f8, #fdfeff); }
+.weather-chip.is-fog     { background: linear-gradient(160deg, #dfe2e4, #f0f1f2); }
+.weather-chip.is-wind    { background: linear-gradient(160deg, #cbe0d8, #eef4f1); }
+
+.weather-chip.is-clear   .weather-chip-glyph { color: #e09400; }
+.weather-chip.is-partly  .weather-chip-glyph { color: #d99a28; }
+.weather-chip.is-cloud   .weather-chip-glyph { color: #667583; }
+.weather-chip.is-rain    .weather-chip-glyph { color: #2f6f9f; }
+.weather-chip.is-thunder .weather-chip-glyph { color: #b8860b; }
+.weather-chip.is-snow    .weather-chip-glyph { color: #5f8bb0; }
+.weather-chip.is-fog     .weather-chip-glyph { color: #78828a; }
+.weather-chip.is-wind    .weather-chip-glyph { color: #3f7d68; }
+
+.weather-chip.is-thunder .weather-chip-when,
+.weather-chip.is-thunder .weather-chip-temp { color: #23283a; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .weather-chip { filter: saturate(.8) brightness(.66); }
+  :root:not([data-theme="light"]) .weather-chip * { color: #efe9de; }
+}
+:root[data-theme="dark"] .weather-chip { filter: saturate(.8) brightness(.66); }
+:root[data-theme="dark"] .weather-chip * { color: #efe9de; }
+
 /* Field notes */
 .note-list { display: grid; gap: 7px; margin-bottom: 10px; }
 .note {
@@ -867,3 +899,94 @@ html, body { height: 100%; overflow: hidden; }
 }
 .detail-scope-mark { display: flex; }
 .detail-scope-mark svg { width: 12px; height: 12px; }
+
+/* ==========================================================================
+   Sun & moon
+   ========================================================================== */
+
+/* The day as one bar. Reading a photographer's day is reading proportions —
+   how much golden hour there is relative to the twilight either side — and a
+   list of times does not show that at all. */
+.sky-bar {
+  position: relative; display: flex; height: 13px; margin: 2px 0 4px;
+  border-radius: 3px; overflow: hidden;
+  border: 1px solid var(--line);
+}
+.sky-band { display: block; min-width: 1px; }
+.sky-band.is-astronomical { background: #1b2440; }
+.sky-band.is-nautical     { background: #2c3f6b; }
+.sky-band.is-blue         { background: #3f63a8; }
+.sky-band.is-sunrise      { background: #d2743f; }
+.sky-band.is-sunset       { background: #d2743f; }
+.sky-band.is-golden       { background: #f0b429; }
+.sky-band.is-day          { background: #9ecbe8; }
+
+/* Where we are in the day. Without it the bar is a diagram; with it, it is a
+   clock you can read in one glance. */
+.sky-now {
+  position: absolute; top: -2px; bottom: -2px; width: 2px;
+  background: var(--ink); box-shadow: 0 0 0 1px rgba(255, 255, 255, .7);
+  transform: translateX(-1px);
+}
+
+.sky-bar-ends {
+  display: flex; justify-content: space-between;
+  font-size: .68rem; color: var(--ink-3); font-variant-numeric: tabular-nums;
+}
+
+.sky-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin: 12px 0 4px;
+}
+.sky-cell {
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--line);
+}
+.sky-cell-label {
+  font-size: .67rem; font-weight: 600; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.sky-cell-value {
+  font-family: var(--font-serif); font-size: 1.16rem; line-height: 1.2; margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.sky-cell-note { font-size: .69rem; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+.sky-more { margin-top: 10px; }
+.sky-more > summary {
+  cursor: pointer; list-style: none;
+  font-size: .74rem; font-weight: 600; color: var(--ink-2); padding: 4px 0;
+}
+.sky-more > summary::-webkit-details-marker { display: none; }
+.sky-more > summary::before { content: '▸ '; }
+.sky-more[open] > summary::before { content: '▾ '; }
+
+.sky-phases { display: grid; gap: 3px; margin: 4px 0 0; }
+.sky-phase {
+  display: grid; grid-template-columns: 10px 1fr auto auto; gap: 8px;
+  align-items: center; font-size: .75rem;
+}
+.sky-swatch { width: 10px; height: 10px; border-radius: 2px; }
+.sky-swatch.is-astronomical { background: #1b2440; }
+.sky-swatch.is-nautical     { background: #2c3f6b; }
+.sky-swatch.is-blue         { background: #3f63a8; }
+.sky-swatch.is-sunrise, .sky-swatch.is-sunset { background: #d2743f; }
+.sky-swatch.is-golden       { background: #f0b429; }
+.sky-swatch.is-day          { background: #9ecbe8; }
+.sky-phase-name { color: var(--ink-2); }
+.sky-phase-time, .sky-phase-span { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.sky-phase-span { min-width: 52px; text-align: right; }
+
+/* The moon, drawn at the phase it is actually at. */
+.moon-card {
+  display: flex; align-items: center; gap: 12px; margin-top: 12px;
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  background: linear-gradient(140deg, #1d2436, #38415c);
+  --moon-lit: #f4efe0; --moon-dark: #2b3247; --moon-edge: rgba(255, 255, 255, .28);
+}
+.moon-face { flex: none; width: 42px; height: 42px; }
+.moon-face svg { width: 100%; height: 100%; display: block; }
+.moon-text { min-width: 0; }
+.moon-name { font-size: .92rem; font-weight: 600; color: #f2ede1; }
+.moon-meta { font-size: .74rem; color: #b9c0d2; font-variant-numeric: tabular-nums; }
+
+.sky-lines-toggle { width: 100%; margin-top: 12px; }
