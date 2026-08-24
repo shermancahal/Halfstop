@@ -91,6 +91,20 @@ const ESRI_ATTRIBUTION = 'Imagery © <a href="https://www.esri.com/">Esri</a>, M
  */
 export const BASEMAPS = [
   {
+    id: 'cyclosm',
+    name: 'Byways Topo',
+    group: 'Topographic',
+    description: 'OSM rendered for the outdoors — tracks and surfaces.',
+    tiles: [
+      'https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
+      'https://b.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
+      'https://c.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
+    ],
+    tileSize: 256,
+    maxzoom: 18,
+    attribution: `${OSM_ATTRIBUTION}, tiles by <a href="https://www.cyclosm.org/">CyclOSM</a>`,
+  },
+  {
     id: 'usgs-topo',
     name: 'USGS Topo',
     group: 'Topographic',
@@ -109,20 +123,6 @@ export const BASEMAPS = [
     tileSize: 256,
     maxzoom: 16,
     attribution: USGS_ATTRIBUTION,
-  },
-  {
-    id: 'opentopomap',
-    name: 'OpenTopoMap',
-    group: 'Topographic',
-    description: 'Contour-heavy OSM topo with hillshading.',
-    tiles: [
-      'https://a.tile.opentopomap.org/{z}/{x}/{y}.png',
-      'https://b.tile.opentopomap.org/{z}/{x}/{y}.png',
-      'https://c.tile.opentopomap.org/{z}/{x}/{y}.png',
-    ],
-    tileSize: 256,
-    maxzoom: 17,
-    attribution: `${OSM_ATTRIBUTION}, <a href="https://opentopomap.org/">OpenTopoMap</a> (CC-BY-SA)`,
   },
   {
     id: 'usgs-classic',
@@ -145,30 +145,6 @@ export const BASEMAPS = [
     attribution: ESRI_ATTRIBUTION,
   },
   {
-    id: 'cyclosm',
-    name: 'Byways Topo',
-    group: 'Topographic',
-    description: 'OSM rendered for the outdoors — tracks and surfaces.',
-    tiles: [
-      'https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
-      'https://b.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
-      'https://c.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
-    ],
-    tileSize: 256,
-    maxzoom: 18,
-    attribution: `${OSM_ATTRIBUTION}, tiles by <a href="https://www.cyclosm.org/">CyclOSM</a>`,
-  },
-  {
-    id: 'esri-topo',
-    name: 'Esri Topo',
-    group: 'Topographic',
-    description: 'Worldwide topo with roads and land cover.',
-    tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}'],
-    tileSize: 256,
-    maxzoom: 19,
-    attribution: 'Map data © <a href="https://www.esri.com/">Esri</a> and the GIS community',
-  },
-  {
     id: 'usgs-imagery',
     name: 'USGS Imagery',
     group: 'Imagery',
@@ -177,19 +153,6 @@ export const BASEMAPS = [
     tileSize: 256,
     maxzoom: 16,
     attribution: USGS_ATTRIBUTION,
-  },
-  {
-    id: 'osm-hot',
-    name: 'Humanitarian',
-    group: 'Topographic',
-    description: 'OSM with unpaved surfaces and remote tracks forward.',
-    tiles: [
-      'https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
-      'https://b.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
-    ],
-    tileSize: 256,
-    maxzoom: 19,
-    attribution: `${OSM_ATTRIBUTION}, tiles by <a href="https://www.hotosm.org/">Humanitarian OSM Team</a>`,
   },
   {
     id: 'carto-light',
@@ -252,21 +215,68 @@ export const BASEMAPS = [
 /**
  * Default basemap when the URL does not name one.
  *
- * Two defaults, because the good answer differs: without a Mapbox account the
- * USGS quads are the best general-purpose base available, but once a token is
- * configured the Mapbox vector style is almost certainly what was wanted.
+ * Byways Topo either way. It is global, it shows unpaved surfaces and tracks
+ * better than the alternatives, and it is the one being refined — so it should
+ * be what people see first rather than something they have to find. The two
+ * constants are kept separate because a token still changes what is available.
  */
-export const DEFAULT_BASEMAP = 'usgs-topo';
-export const DEFAULT_BASEMAP_WITH_TOKEN = 'mapbox-outdoors';
+export const DEFAULT_BASEMAP = 'cyclosm';
+export const DEFAULT_BASEMAP_WITH_TOKEN = 'cyclosm';
 
 /**
  * Overlays drawn on top of the basemap. Each is independently toggleable with
  * its own opacity. Add your own by appending to this list — nothing else needs
  * to change.
  */
+// `legend` is a hand-written colour key. These are third-party raster tiles —
+// pixels, with no attribute data to read a key out of — so a layer whose
+// colours carry meaning has to say what they mean, or it is decoration.
 export const OVERLAYS = [
   {
+    id: 'recreation',
+    legend: [
+      { color: '#1B5E20', label: 'BLM site' },
+      { color: '#4E342E', label: 'USGS / Forest Service site' },
+    ],
+    group: 'Land & access',
+    name: 'Recreation sites',
+    description: 'Campgrounds, trailheads and facilities on federal land.',
+    // Two agencies, one switch. Nobody planning a trip thinks "I want the BLM
+    // campgrounds but not the Forest Service ones" — they want somewhere to
+    // sleep. Each source is drawn as its own raster layer so they stack, and
+    // one failing does not blank the other.
+    sources: [
+      {
+        name: 'BLM',
+        tiles: ['https://gis.blm.gov/arcgis/rest/services/recreation/BLM_Natl_Recreation_Site_Points/MapServer/export'
+          + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'],
+      },
+      {
+        name: 'USGS / USFS',
+        tiles: ['https://carto.nationalmap.gov/arcgis/rest/services/structures/MapServer/export'
+          + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true'
+          + '&layers=show:16,17,18&f=image'],
+      },
+    ],
+    tileSize: 256,
+    maxzoom: 16,
+    opacity: 0.95,
+    enabled: false,
+    unverified: true,
+    attribution: 'Recreation sites © <a href="https://navigator.blm.gov/">BLM</a>, '
+      + '<a href="https://www.usgs.gov/programs/national-geospatial-program/national-map">USGS</a>',
+  },
+  {
     id: 'public-lands',
+    legend: [
+      { color: '#FFE799', label: 'BLM' },
+      { color: '#9FD08F', label: 'Forest Service' },
+      { color: '#7FB2E5', label: 'National Park Service' },
+      { color: '#C9A0DC', label: 'Fish & Wildlife' },
+      { color: '#E8A87C', label: 'State' },
+      { color: '#D9D9D9', label: 'Private or unknown' },
+    ],
+    group: 'Land & access',
     name: 'Public lands',
     description: 'Who manages this land — BLM, USFS, NPS, state, private.',
     // BLM's cached Surface Management Agency layer: a proper tile service, not
@@ -280,20 +290,8 @@ export const OVERLAYS = [
     attribution: 'Surface management © <a href="https://navigator.blm.gov/">BLM</a>',
   },
   {
-    id: 'blm-recreation',
-    name: 'BLM recreation sites',
-    description: 'Campgrounds, trailheads and facilities on BLM land.',
-    tiles: ['https://gis.blm.gov/arcgis/rest/services/recreation/BLM_Natl_Recreation_Site_Points/MapServer/export'
-      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'],
-    tileSize: 256,
-    maxzoom: 16,
-    opacity: 0.95,
-    enabled: false,
-    unverified: true,
-    attribution: 'Recreation sites © <a href="https://navigator.blm.gov/">BLM</a>',
-  },
-  {
     id: 'usgs-contours',
+    group: 'Terrain',
     name: 'Contours',
     description: 'USGS contour lines — drape over imagery for relief.',
     tiles: ['https://carto.nationalmap.gov/arcgis/rest/services/contours/MapServer/export'
@@ -307,6 +305,7 @@ export const OVERLAYS = [
   },
   {
     id: 'usgs-transport',
+    group: 'Routes',
     name: 'Roads & trails (USGS)',
     description: 'USGS transportation network, including forest routes.',
     tiles: ['https://carto.nationalmap.gov/arcgis/rest/services/transportation/MapServer/export'
@@ -320,6 +319,11 @@ export const OVERLAYS = [
   },
   {
     id: 'wildfire',
+    legend: [
+      { color: '#D84315', label: 'Active perimeter' },
+      { color: '#8D6E63', label: 'Recently burned' },
+    ],
+    group: 'Conditions',
     name: 'Wildfire perimeters',
     description: 'Current large-fire perimeters from NIFC.',
     tiles: ['https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query'
@@ -334,6 +338,12 @@ export const OVERLAYS = [
   },
   {
     id: 'usfs-mvum',
+    legend: [
+      { color: '#2E7D32', label: 'Open to all vehicles' },
+      { color: '#F9A825', label: 'Seasonal — check dates' },
+      { color: '#C62828', label: 'Highway-legal vehicles only' },
+    ],
+    group: 'Land & access',
     name: 'Forest roads (MVUM)',
     description: 'Which Forest Service roads are legally open, and to what.',
     tiles: ['https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_01/MapServer/export'
@@ -347,6 +357,14 @@ export const OVERLAYS = [
   },
   {
     id: 'radar',
+    legend: [
+      { color: '#7FD4F5', label: 'Light' },
+      { color: '#2E9BD6', label: 'Moderate' },
+      { color: '#1F6FB2', label: 'Heavy' },
+      { color: '#F2C744', label: 'Very heavy' },
+      { color: '#D9534F', label: 'Intense / hail' },
+    ],
+    group: 'Conditions',
     name: 'Weather radar',
     description: 'Current precipitation from NOAA.',
     tiles: ['https://nowcoast.noaa.gov/geoserver/weather_radar/wms'
@@ -361,6 +379,7 @@ export const OVERLAYS = [
   },
   {
     id: 'cell-coverage',
+    group: 'Conditions',
     name: 'Cell coverage',
     description: 'Reported mobile broadband coverage (FCC).',
     tiles: ['https://broadbandmap.fcc.gov/nbm/map/api/tiles/mobile/{z}/{x}/{y}.png'],
@@ -373,6 +392,7 @@ export const OVERLAYS = [
   },
   {
     id: 'trails-hiking',
+    group: 'Routes',
     name: 'Hiking routes',
     description: 'Waymarked hiking and long-distance routes.',
     tiles: ['https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png'],
@@ -384,6 +404,7 @@ export const OVERLAYS = [
   },
   {
     id: 'trails-cycling',
+    group: 'Routes',
     name: 'Cycling routes',
     description: 'Waymarked cycle route networks.',
     tiles: ['https://tile.waymarkedtrails.org/cycling/{z}/{x}/{y}.png'],
@@ -395,6 +416,7 @@ export const OVERLAYS = [
   },
   {
     id: 'usgs-relief',
+    group: 'Terrain',
     name: 'Shaded relief',
     description: 'USGS terrain relief.',
     tiles: ['https://basemap.nationalmap.gov/arcgis/rest/services/USGSShadedReliefOnly/MapServer/tile/{z}/{y}/{x}'],
@@ -406,6 +428,7 @@ export const OVERLAYS = [
   },
   {
     id: 'hillshade',
+    group: 'Terrain',
     name: 'Hillshade',
     description: 'Esri terrain relief. Reads well under topo.',
     tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}'],
@@ -417,6 +440,7 @@ export const OVERLAYS = [
   },
   {
     id: 'places',
+    group: 'Reference',
     name: 'Labels & boundaries',
     description: 'Place names and boundaries — good over bare imagery.',
     tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'],
@@ -428,6 +452,7 @@ export const OVERLAYS = [
   },
   {
     id: 'usgs-hydro',
+    group: 'Terrain',
     name: 'Hydrography',
     description: 'Streams, rivers and water bodies (NHD).',
     tiles: ['https://basemap.nationalmap.gov/arcgis/rest/services/USGSHydroCached/MapServer/tile/{z}/{y}/{x}'],
@@ -451,13 +476,28 @@ export const OVERLAYS = [
  * endpoints move, and the fix is almost always a new URL here.
  */
 export const LAND_LOOKUPS = [
+  // Tried in order; the first that returns a feature at the point wins.
+  //
+  // These endpoints move between service versions, and when one does, ArcGIS
+  // answers HTTP 200 with {"error":{"message":"Invalid URL"}} rather than a
+  // 404 — which is why a stale path here looks like a broken feature rather
+  // than a bad address. The panel now reports what every candidate said, so a
+  // wrong URL names itself.
+  //
+  // To repair one: open the service root in a browser (drop the /query and the
+  // parameters). A working layer shows its name and field list; a dead one
+  // shows that same "Invalid URL". Then correct the entry below.
+  {
+    name: 'BLM surface management',
+    url: 'https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_LimitedScale/MapServer/0',
+  },
   {
     name: 'PAD-US',
     url: 'https://services.arcgis.com/v01gqwM5QqNysAAi/ArcGIS/rest/services/PADUS4_0Fee/FeatureServer/0',
   },
   {
-    name: 'BLM surface management',
-    url: 'https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_LimitedScale/MapServer/0',
+    name: 'USFS administrative forests',
+    url: 'https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_BasicOwnership_01/MapServer/0',
   },
 ];
 

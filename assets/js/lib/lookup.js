@@ -132,7 +132,44 @@ export async function landManager([lon, lat]) {
     };
   }
 
-  return { ok: false, reason: failures[0] || 'no service answered' };
+  // Every failure, not just the first. These endpoints move without notice and
+  // each one fails differently — "Invalid URL" from ArcGIS means the service
+  // path is wrong, a timeout means it is up but slow, a CORS error means it
+  // cannot be called from a browser at all. Showing one and hiding the rest
+  // turns a fixable configuration problem into "the feature is broken".
+  return { ok: false, reason: failures.join('; ') || 'no service answered' };
+}
+
+/**
+ * Is this agency a public land manager, and which kind?
+ *
+ * The question behind "who manages this" is almost always "can I camp here",
+ * and an agency name alone does not answer it for someone who does not already
+ * know that BOR is federal and SLB usually is not.
+ */
+export function publicLand(agency = '', access = '') {
+  const text = `${agency}`.toLowerCase();
+  const closed = /closed|restricted|no public/i.test(access);
+
+  const FEDERAL = [
+    ['bureau of land management', 'BLM'], ['forest service', 'USFS'],
+    ['national park', 'NPS'], ['fish & wildlife', 'USFWS'], ['fish and wildlife', 'USFWS'],
+    ['reclamation', 'BOR'], ['army corps', 'USACE'], ['tennessee valley', 'TVA'],
+    ['department of defense', 'DOD'],
+  ];
+  for (const [needle, short] of FEDERAL) {
+    if (text.includes(needle)) return { public: !closed, level: 'Federal', short, closed };
+  }
+  if (/\bstate\b|state of |state trust|wildlife management area/.test(text)) {
+    return { public: !closed, level: 'State', short: 'State', closed };
+  }
+  if (/county|municipal|city of|regional park/.test(text)) {
+    return { public: !closed, level: 'Local', short: 'Local', closed };
+  }
+  if (/private|inholding|corporation|timber|llc|\binc\b/.test(text)) {
+    return { public: false, level: 'Private', short: 'Private', closed: true };
+  }
+  return { public: false, level: '', short: '', closed: false };
 }
 
 /* ------------------------------------------------------------------ weather */
@@ -202,4 +239,33 @@ export function weatherClass(short = '') {
   if (/partly|mostly sunny|few clouds/.test(text)) return 'partly';
   if (/sun|clear|fair/.test(text)) return 'clear';
   return 'cloud';
+}
+
+/* ------------------------------------------------------------------ elevation */
+
+/**
+ * Ground elevation at a point, from the USGS Elevation Point Query Service.
+ *
+ * A dropped pin has no elevation of its own — an imported GPX waypoint carries
+ * one, a place you tapped on the map does not — and "how high is this saddle"
+ * is most of why you tapped it. US coverage only, like the weather.
+ *
+ * @returns {Promise<{ok: true, metres: number}|{ok: false, reason: string}>}
+ */
+export async function elevation([lon, lat]) {
+  const url = 'https://epqs.nationalmap.gov/v1/json'
+    + `?x=${lon.toFixed(6)}&y=${lat.toFixed(6)}&units=Meters&wkid=4326&includeDate=false`;
+
+  const result = await fetchJSON(url);
+  if (!result.ok) return { ok: false, reason: result.reason };
+
+  const raw = result.data?.value ?? result.data?.location?.z;
+  const metres = typeof raw === 'string' ? Number(raw) : raw;
+
+  // The service answers -1000000 for points it has no data for rather than
+  // failing, which would otherwise render as a plausible-looking depth.
+  if (!Number.isFinite(metres) || metres <= -999999) {
+    return { ok: false, reason: 'no elevation data covers this point' };
+  }
+  return { ok: true, metres };
 }

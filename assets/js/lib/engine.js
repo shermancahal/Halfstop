@@ -51,6 +51,9 @@ function loadScript(src) {
   });
 }
 
+/** Overlays are raster layers named `overlay-<id>`; this is their draw order anchor. */
+export const OVERLAY_LAYER_PREFIX = 'overlay-';
+
 export function resolveEngineName() {
   if (MAP_ENGINE === 'mapbox') return 'mapbox';
   if (MAP_ENGINE === 'maplibre') return 'maplibre';
@@ -91,6 +94,37 @@ export async function loadEngine() {
  * a source swap, not a full setStyle, so loaded tracks never have to be torn
  * down and re-added.
  */
+/**
+ * An overlay's raster sources, as a list.
+ *
+ * Most overlays are one tile service, but some answer a single question that no
+ * one agency covers — "where can I camp" spans BLM and the Forest Service — and
+ * splitting those into separate switches makes the user do the agency's
+ * paperwork. Such an overlay declares `sources: [...]`, and each entry becomes
+ * its own raster layer under one toggle, so one service failing does not blank
+ * the other.
+ *
+ * Layer ids are `overlay-<id>` for the first part and `overlay-<id>--<n>` after
+ * it, so everything keyed on the overlay id still finds its layers by prefix.
+ */
+export function overlayParts(overlay) {
+  const base = { tileSize: overlay.tileSize, maxzoom: overlay.maxzoom, attribution: overlay.attribution };
+  const parts = Array.isArray(overlay.sources) && overlay.sources.length
+    ? overlay.sources.map((source) => ({ ...base, ...source }))
+    : [{ ...base, tiles: overlay.tiles }];
+
+  return parts.map((part, index) => ({
+    ...part,
+    layerId: index === 0 ? `${OVERLAY_LAYER_PREFIX}${overlay.id}` : `${OVERLAY_LAYER_PREFIX}${overlay.id}--${index}`,
+  }));
+}
+
+/** The overlay id a layer or source id belongs to, or '' if it is not one. */
+export function overlayIdFromLayer(layerId = '') {
+  if (!layerId.startsWith(OVERLAY_LAYER_PREFIX)) return '';
+  return layerId.slice(OVERLAY_LAYER_PREFIX.length).split('--')[0];
+}
+
 export function buildRasterStyle(basemap, overlays = []) {
   const sources = {};
   const layers = [];
@@ -107,20 +141,21 @@ export function buildRasterStyle(basemap, overlays = []) {
   }
 
   for (const overlay of overlays) {
-    const sourceId = `overlay-${overlay.id}`;
-    sources[sourceId] = {
-      type: 'raster',
-      tiles: overlay.tiles,
-      tileSize: overlay.tileSize || 256,
-      maxzoom: overlay.maxzoom || 19,
-      attribution: overlay.attribution || '',
-    };
-    layers.push({
-      id: sourceId,
-      type: 'raster',
-      source: sourceId,
-      paint: { 'raster-opacity': overlay.opacity ?? 1, 'raster-fade-duration': 180 },
-    });
+    for (const part of overlayParts(overlay)) {
+      sources[part.layerId] = {
+        type: 'raster',
+        tiles: part.tiles,
+        tileSize: part.tileSize || 256,
+        maxzoom: part.maxzoom || 19,
+        attribution: part.attribution || '',
+      };
+      layers.push({
+        id: part.layerId,
+        type: 'raster',
+        source: part.layerId,
+        paint: { 'raster-opacity': overlay.opacity ?? 1, 'raster-fade-duration': 180 },
+      });
+    }
   }
 
   // Note: no `glyphs` key. Mapbox GL validates the style against the style spec
@@ -131,5 +166,3 @@ export function buildRasterStyle(basemap, overlays = []) {
   return { version: 8, sources, layers };
 }
 
-/** Overlays are raster layers named `overlay-<id>`; this is their draw order anchor. */
-export const OVERLAY_LAYER_PREFIX = 'overlay-';

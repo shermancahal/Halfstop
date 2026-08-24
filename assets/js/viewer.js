@@ -13,7 +13,9 @@ import {
   SITE, BASEMAPS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN, OVERLAYS,
   DEFAULT_VIEW, DEFAULT_UNITS, TRACK_COLORS,
 } from './config.js';
-import { loadEngine, buildRasterStyle, hasMapboxToken } from './lib/engine.js';
+import {
+  loadEngine, buildRasterStyle, hasMapboxToken, overlayParts, overlayIdFromLayer,
+} from './lib/engine.js';
 import { loadCatalog, findMap } from './lib/catalog.js';
 import { parseMapFile, linePositions } from './lib/parse.js';
 import {
@@ -31,7 +33,7 @@ import { Account, isConfigured as accountsAvailable } from './lib/account.js';
 import {
   formatDD, formatDMS, formatDDM, toUTM, distanceBearing, compassPoint, sunTimes, reverseGeocode,
 } from './lib/place.js';
-import { landManager, forecast, weatherClass } from './lib/lookup.js';
+import { landManager, forecast, weatherClass, publicLand, elevation } from './lib/lookup.js';
 import { describeSync } from './lib/sync.js';
 import {
   OfflineStore, MAX_ZOOM as OFFLINE_MAX_ZOOM, TILE_BUDGET,
@@ -75,6 +77,14 @@ const state = {
   offline: null,
   /** Region id whose outline is emphasised on the map, or ''. */
   highlightRegion: '',
+  /** Overlay category headings the user has opened, so re-renders keep them. */
+  openLayerGroups: new Set(),
+  /** Layer ids that answer clicks, so a map click can tell "empty" from "a pin". */
+  interactiveLayers: new Set(),
+  /** The dropped-pin popup, so a second click replaces it rather than stacking. */
+  dropPopup: null,
+  /** [lon, lat] of a place being described that is not a saved pin. */
+  scratchPoint: null,
 };
 
 const dom = {};
@@ -249,6 +259,7 @@ async function main() {
   addFolderLayers();
   refreshFolderData();
   refreshRegionData();
+  wireMapClicks();
   // A Mapbox vector style starts without our overlays; the raster path bakes
   // them into the initial style, so this only has work to do in the former case.
   if (basemap.style && hasMapboxToken()) {
@@ -468,9 +479,8 @@ function setStatus(busy, text = 'Loading…') {
  * staring at an empty map wondering what they broke.
  */
 function noteLayerHealth(sourceId, ok) {
-  const layerId = sourceId === 'basemap' ? state.basemapId
-    : sourceId.startsWith('overlay-') ? sourceId.slice('overlay-'.length)
-      : null;
+  // A combined overlay reports health per source; both map back to one overlay.
+  const layerId = sourceId === 'basemap' ? state.basemapId : overlayIdFromLayer(sourceId);
   if (!layerId) return;
 
   const health = state.layerHealth.get(layerId) || { ok: 0, failed: 0 };
@@ -523,7 +533,41 @@ function renderLayersTab() {
   if (counter) counter.textContent = activeCount ? `${activeCount} on` : '';
 
   dom.overlayList.replaceChildren();
+
+  // Grouped and collapsed. Fourteen overlays in one flat list is a wall you
+  // scroll past rather than read; five named categories is a thing you can
+  // scan. A group opens automatically when something inside it is switched on,
+  // so an active layer is never hidden behind a closed heading.
+  const overlayGroups = new Map();
   for (const overlay of OVERLAYS) {
+    const name = overlay.group || 'Other';
+    if (!overlayGroups.has(name)) overlayGroups.set(name, []);
+    overlayGroups.get(name).push(overlay);
+  }
+
+  for (const [groupName, entries] of overlayGroups) {
+    const activeInGroup = entries.filter((o) => state.overlays.get(o.id)?.visible).length;
+    const group = el('details', {
+      class: 'layer-group',
+      open: activeInGroup > 0 || state.openLayerGroups.has(groupName),
+      ontoggle: (event) => {
+        if (event.target.open) state.openLayerGroups.add(groupName);
+        else state.openLayerGroups.delete(groupName);
+      },
+    }, [
+      el('summary', { class: 'layer-group-summary' }, [
+        el('span', { text: groupName }),
+        el('span', { class: 'count', text: activeInGroup ? `${activeInGroup} on` : '' }),
+      ]),
+    ]);
+    dom.overlayList.append(group);
+    renderOverlayRows(group, entries);
+  }
+}
+
+/** The switch, opacity slider and colour key for each overlay in one group. */
+function renderOverlayRows(container, entries) {
+  for (const overlay of entries) {
     const entry = state.overlays.get(overlay.id);
     const opacityRow = el('div', { class: 'opacity-row', hidden: !entry.visible }, [
       el('input', {
@@ -533,15 +577,15 @@ function renderLayersTab() {
           const value = Number(event.target.value) / 100;
           entry.opacity = value;
           event.target.nextElementSibling.value = `${Math.round(value * 100)}%`;
-          if (state.map.getLayer(`overlay-${overlay.id}`)) {
-            state.map.setPaintProperty(`overlay-${overlay.id}`, 'raster-opacity', value);
+          for (const layerId of overlayLayerIds(overlay)) {
+            if (state.map.getLayer(layerId)) state.map.setPaintProperty(layerId, 'raster-opacity', value);
           }
         },
       }),
       el('output', { text: `${Math.round(entry.opacity * 100)}%` }),
     ]);
 
-    dom.overlayList.append(
+    container.append(
       layerRow({
         entry: overlay,
         selected: entry.visible,
@@ -559,6 +603,14 @@ function renderLayersTab() {
       opacityRow,
     );
   }
+}
+
+/** A colour key for a raster overlay whose colours mean something. */
+function legendList(entries) {
+  return el('ul', { class: 'legend' }, entries.map((item) => el('li', { class: 'legend-item' }, [
+    el('span', { class: 'legend-swatch', style: `background:${item.color}` }),
+    el('span', { text: item.label }),
+  ])));
 }
 
 /* ---------------- offline regions ---------------- */
@@ -751,8 +803,13 @@ function regionRow(region, kind) {
  */
 function layerRow({ entry, selected, control }) {
   const description = entry.description || '';
-  const descriptionNode = description
-    ? el('p', { class: 'layer-desc', hidden: true, text: description })
+  const key = Array.isArray(entry.legend) && entry.legend.length ? entry.legend : null;
+
+  const descriptionNode = description || key
+    ? el('div', { class: 'layer-desc', hidden: true }, [
+      description ? el('p', { class: 'layer-desc-text', text: description }) : null,
+      key ? legendList(key) : null,
+    ])
     : null;
 
   // Hover reveals on a mouse; tap pins it open on touch, where hover does not
@@ -767,7 +824,7 @@ function layerRow({ entry, selected, control }) {
   const info = descriptionNode
     ? el('button', {
       class: 'layer-info', type: 'button',
-      'aria-expanded': 'false', 'aria-label': `About ${entry.name}`,
+      'aria-expanded': 'false', 'aria-label': key ? `About ${entry.name}, with colour key` : `About ${entry.name}`,
       html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 16.5v-5"/><path d="M12 8h.01"/></svg>',
       onpointerenter: (event) => { if (event.pointerType === 'mouse' && !pinned) setOpen(true); },
       onpointerleave: (event) => { if (event.pointerType === 'mouse' && !pinned) setOpen(false); },
@@ -850,28 +907,38 @@ function firstDataLayerId() {
 
 function addOverlayLayer(overlay) {
   if (!styleReady()) { whenStyleReady(() => addOverlayLayer(overlay)); return; }
-  const id = `overlay-${overlay.id}`;
-  if (state.map.getLayer(id)) return;
   const entry = state.overlays.get(overlay.id);
-  if (!state.map.getSource(id)) {
-    state.map.addSource(id, {
-      type: 'raster',
-      tiles: overlay.tiles,
-      tileSize: overlay.tileSize || 256,
-      maxzoom: overlay.maxzoom || 19,
-      attribution: overlay.attribution || '',
-    });
+  const opacity = entry?.opacity ?? overlay.opacity ?? 1;
+
+  for (const part of overlayParts(overlay)) {
+    if (state.map.getLayer(part.layerId)) continue;
+    if (!state.map.getSource(part.layerId)) {
+      state.map.addSource(part.layerId, {
+        type: 'raster',
+        tiles: part.tiles,
+        tileSize: part.tileSize || 256,
+        maxzoom: part.maxzoom || 19,
+        attribution: part.attribution || '',
+      });
+    }
+    state.map.addLayer({
+      id: part.layerId, type: 'raster', source: part.layerId,
+      paint: { 'raster-opacity': opacity, 'raster-fade-duration': 180 },
+    }, firstDataLayerId());
   }
-  state.map.addLayer({
-    id, type: 'raster', source: id,
-    paint: { 'raster-opacity': entry?.opacity ?? overlay.opacity ?? 1, 'raster-fade-duration': 180 },
-  }, firstDataLayerId());
+}
+
+/** Every map layer one overlay owns — one for most, several for a combined one. */
+function overlayLayerIds(overlay) {
+  return overlayParts(overlay).map((part) => part.layerId);
 }
 
 function removeOverlayLayer(id) {
-  const layerId = `overlay-${id}`;
-  if (state.map.getLayer(layerId)) state.map.removeLayer(layerId);
-  if (state.map.getSource(layerId)) state.map.removeSource(layerId);
+  const overlay = OVERLAYS.find((o) => o.id === id);
+  for (const layerId of (overlay ? overlayLayerIds(overlay) : [`overlay-${id}`])) {
+    if (state.map.getLayer(layerId)) state.map.removeLayer(layerId);
+    if (state.map.getSource(layerId)) state.map.removeSource(layerId);
+  }
 }
 
 /* ------------------------------------------------------------------ data layers */
@@ -1019,6 +1086,7 @@ function applyVisibility() {
 /* ------------------------------------------------------------------ interactions */
 
 function bindFeatureInteractions(layerId) {
+  state.interactiveLayers.add(layerId);
   state.map.on('mouseenter', layerId, () => { state.map.getCanvas().style.cursor = 'pointer'; });
   state.map.on('mouseleave', layerId, () => { state.map.getCanvas().style.cursor = ''; });
   state.map.on('click', layerId, (event) => {
@@ -1027,9 +1095,109 @@ function bindFeatureInteractions(layerId) {
   });
 }
 
+/**
+ * Clicking bare map drops a pin there.
+ *
+ * The gap this fills: everything the app knew about a place, it knew because
+ * that place was already a waypoint in a file you imported. But most of the
+ * time you are looking at a spot on the map — a pullout, a bend in a creek, a
+ * gap in the trees — and want to know where it is and keep it. This makes any
+ * point on the map answerable and savable without importing anything.
+ *
+ * Bound to the map rather than to a layer, so it fires anywhere; a click that
+ * landed on an existing feature is left to that feature's own handler.
+ */
+function wireMapClicks() {
+  state.map.on('click', (event) => {
+    const live = [...state.interactiveLayers].filter((id) => state.map.getLayer(id));
+    const hits = live.length ? state.map.queryRenderedFeatures(event.point, { layers: live }) : [];
+    if (hits.length) return;   // a saved pin or track owns this click
+    showDropPin([event.lngLat.lng, event.lngLat.lat]);
+  });
+}
+
+/** The dropped-pin popup: where this is, how high, what the sky is doing. */
+function showDropPin(position) {
+  state.dropPopup?.remove();
+
+  const content = el('div', { class: 'drop-pin' });
+  const feature = {
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: position },
+    properties: { kind: 'waypoint', name: 'Dropped pin', description: '' },
+  };
+
+  const popup = new state.gl.Popup({ closeButton: true, maxWidth: '320px', offset: 12 })
+    .setLngLat(position);
+  state.dropPopup = popup;
+
+  const nameInput = el('input', {
+    class: 'drop-pin-name', value: 'Dropped pin', 'aria-label': 'Name for this pin',
+    oninput: (event) => { feature.properties.name = event.target.value.trim() || 'Dropped pin'; },
+  });
+
+  const coords = formatDD(position);
+  const elevationLine = el('dd', { text: '…' });
+  const weatherLine = el('dd', { text: '…' });
+
+  content.append(
+    nameInput,
+    el('dl', { class: 'popup-stats' }, [
+      el('dt', { text: 'Coordinates' }),
+      el('dd', {}, [
+        el('span', { class: 'drop-pin-coords', text: coords }),
+        el('button', {
+          class: 'icon-button detail-copy', type: 'button', title: 'Copy coordinates',
+          html: icons.copy,
+          onclick: async (event) => {
+            const button = event.currentTarget;
+            const ok = await copyText(coords);
+            button.classList.toggle('is-done', ok);
+            if (ok) setTimeout(() => button.classList.remove('is-done'), 1400);
+          },
+        }),
+      ]),
+      el('dt', { text: 'Elevation' }), elevationLine,
+      el('dt', { text: 'Weather' }), weatherLine,
+    ]),
+    saveToFolderActions(feature, popup),
+    el('button', {
+      class: 'button button-ghost button-small drop-pin-more', type: 'button',
+      text: 'Full details for this point',
+      onclick: () => { popup.remove(); showPointDetails(position); },
+    }),
+  );
+
+  // Both lookups need the network and neither blocks the popup: the
+  // coordinates are the part you need standing at a trailhead with one bar,
+  // and they are already on screen.
+  elevation(position).then((result) => {
+    elevationLine.textContent = result.ok
+      ? formatElevation(result.metres, state.units)
+      : result.reason;
+  }).catch(() => { elevationLine.textContent = 'unavailable'; });
+
+  forecast(position).then((result) => {
+    if (!result.ok) { weatherLine.textContent = result.reason; return; }
+    const now = result.periods[0];
+    weatherLine.textContent = `${now.temperature}°${now.unit} · ${now.short}`;
+  }).catch(() => { weatherLine.textContent = 'unavailable'; });
+
+  popup.setDOMContent(content).addTo(state.map);
+}
+
+/** Show the Details tab for a place that is not a saved pin. */
+function showPointDetails(position) {
+  state.selectedPin = null;
+  state.scratchPoint = position;
+  renderDetailsTab();
+  openTab('details');
+}
+
 /** Remember which saved pin the Details tab should describe, and show it. */
 function selectPin(folderId, itemId, { open = true } = {}) {
   state.selectedPin = folderId && itemId ? { folderId, itemId } : null;
+  if (state.selectedPin) state.scratchPoint = null;
   renderDetailsTab();
   if (open) openTab('details');
 }
@@ -1457,7 +1625,11 @@ function renderDetailsTab() {
   dom.details.replaceChildren();
 
   const pin = selectedPinRecord();
-  if (pin) { renderPinDetails(pin.folder, pin.item); return; }
+  if (pin) { state.scratchPoint = null; renderPinDetails(pin.folder, pin.item); return; }
+
+  // A dropped pin gets the same treatment as a saved one, minus the parts that
+  // only a saved waypoint has: no notes to keep, no folder to sit in.
+  if (state.scratchPoint) { renderPointDetails(state.scratchPoint); return; }
 
   const entry = state.documents.get(state.activeKey);
   if (!entry) {
@@ -1519,6 +1691,93 @@ async function copyText(text) {
  * The geocoded place name is the only part that needs the network, and it is
  * appended when it arrives rather than blocking the rest.
  */
+/**
+ * Details for a place you tapped rather than saved.
+ *
+ * The same coordinates, daylight, land manager and weather a saved waypoint
+ * gets — the point of the panel is the place, not the bookkeeping — minus
+ * notes and photos, which need somewhere to be kept. The save button turns it
+ * into a real waypoint and hands off to the full view.
+ */
+function renderPointDetails(position) {
+  const [lon, lat] = position;
+  const utm = toUTM(position);
+
+  dom.details.append(el('div', { class: 'panel-section' }, [
+    el('h2', { class: 'panel-title', style: 'margin:0', text: 'Dropped pin' }),
+    el('p', { class: 'hint', style: 'margin:6px 0 11px', text: 'Not saved yet — this is wherever you last clicked the map.' }),
+    el('div', { class: 'picker-row' }, [
+      el('button', {
+        class: 'button button-secondary button-small', type: 'button', text: 'Save as waypoint',
+        onclick: () => {
+          const folders = state.folders.list();
+          const target = folders.length ? folders[folders.length - 1] : state.folders.create('Saved places');
+          const feature = {
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: position },
+            properties: { kind: 'waypoint', name: 'Dropped pin', description: '' },
+          };
+          saveFeatureToFolder(feature, target.id, null);
+          state.scratchPoint = null;
+          toast(`Saved to “${target.name}”.`);
+          openTab('folders');
+        },
+      }),
+      el('button', {
+        class: 'button button-ghost button-small', type: 'button', text: 'Clear',
+        onclick: () => { state.scratchPoint = null; state.dropPopup?.remove(); renderDetailsTab(); },
+      }),
+    ]),
+  ]));
+
+  const everything = [
+    `${formatDD(position)}`,
+    `${formatDMS(position)}`,
+    utm ? utm.toString() : '',
+    `https://www.google.com/maps?q=${lat},${lon}`,
+  ].filter(Boolean).join('\n');
+
+  dom.details.append(el('div', { class: 'panel-section' }, [
+    el('h2', { class: 'panel-title' }, [
+      el('span', { text: 'Coordinates' }),
+      el('button', {
+        class: 'button button-ghost button-small', type: 'button', text: 'Copy all',
+        onclick: async (event) => {
+          const ok = await copyText(everything);
+          event.currentTarget.textContent = ok ? 'Copied' : 'Copy failed';
+          setTimeout(() => { event.currentTarget.textContent = 'Copy all'; }, 1400);
+        },
+      }),
+    ]),
+    detailRow('Decimal', formatDD(position), { copy: formatDD(position) }),
+    detailRow('DMS', formatDMS(position), { copy: formatDMS(position) }),
+    detailRow('Deg / min', formatDDM(position), { copy: formatDDM(position) }),
+    utm ? detailRow('UTM', utm.toString(), { copy: utm.toString() }) : null,
+  ]));
+
+  // Elevation is a lookup here rather than a field: a dropped pin has no
+  // recorded height, only a position.
+  dom.details.append(pendingSection('Elevation', async (body, section) => {
+    const result = await elevation(position);
+    body.replaceChildren(result.ok
+      ? detailRow('Ground', formatElevation(result.metres, state.units))
+      : el('p', { class: 'hint', style: 'margin:0', text: `Not available — ${result.reason}.` }));
+    if (!result.ok && /no elevation data/.test(result.reason)) section.classList.add('is-quiet');
+  }));
+
+  const sun = sunTimes(position);
+  const clock = (date) => date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  dom.details.append(el('div', { class: 'panel-section' }, [
+    el('h2', { class: 'panel-title', text: 'Daylight today' }),
+    sun.sunrise
+      ? el('div', {}, [detailRow('Sunrise', clock(sun.sunrise)), detailRow('Sunset', clock(sun.sunset))])
+      : el('p', { class: 'hint', style: 'margin:0', text: sun.note }),
+  ]));
+
+  dom.details.append(landSection(position));
+  dom.details.append(weatherSection(position));
+}
+
 function renderPinDetails(folder, item) {
   const props = item.feature.properties;
   const position = item.feature.geometry?.coordinates || [];
@@ -1700,6 +1959,26 @@ function landSection(position) {
     }
 
     const rows = [];
+
+    // The banner first, because "can I camp here" is the question underneath
+    // "who manages this", and an agency name alone does not answer it for
+    // anyone who does not already know which acronyms are federal.
+    const status = publicLand(result.agency, result.access);
+    if (status.level) {
+      rows.push(el('div', {
+        class: `land-badge ${status.public ? 'is-public' : 'is-private'}`,
+      }, [
+        el('span', { class: 'land-badge-mark', html: status.public ? icons.eye : icons.info }),
+        el('span', {
+          text: status.public
+            ? `Public land · ${status.level}${status.short && status.short !== status.level ? ` (${status.short})` : ''}`
+            : status.closed
+              ? `${status.level} land, access restricted`
+              : `${status.level} land — not open by default`,
+        }),
+      ]));
+    }
+
     if (result.agency) rows.push(detailRow('Agency', result.agency, { copy: result.agency }));
     if (result.unit) rows.push(detailRow('Unit', result.unit, { copy: result.unit }));
     if (result.access) rows.push(detailRow('Access', result.access));

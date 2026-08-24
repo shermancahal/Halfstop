@@ -705,3 +705,69 @@ html, body { height: 100%; overflow: hidden; }
   font-size: .76rem; line-height: 1.45;
   color: var(--clay-2); background: var(--clay-soft);
 }
+
+/* ==========================================================================
+   Layer groups and colour keys
+   ========================================================================== */
+
+.layer-group { border-bottom: 1px solid var(--line); }
+.layer-group:last-of-type { border-bottom: 0; }
+
+.layer-group-summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 9px 4px; cursor: pointer; list-style: none;
+  font-size: .82rem; font-weight: 600; letter-spacing: .02em; color: var(--ink-2);
+}
+.layer-group-summary::-webkit-details-marker { display: none; }
+
+/* A caret that turns, so open and closed are legible without reading. */
+.layer-group-summary::before {
+  content: ''; flex: none; width: 0; height: 0;
+  border-left: 4px solid currentColor;
+  border-top: 3.5px solid transparent; border-bottom: 3.5px solid transparent;
+  transition: transform .15s ease; transform-origin: 25% 50%;
+}
+.layer-group[open] > .layer-group-summary::before { transform: rotate(90deg); }
+.layer-group-summary:hover { color: var(--ink); }
+
+.layer-desc-text { margin: 0; }
+
+/* Colour key. Third-party raster tiles carry no attribute data, so the only
+   way to say what a colour means is to write it down. */
+.legend { list-style: none; margin: 7px 0 0; padding: 0; display: grid; gap: 4px; }
+.legend-item { display: flex; align-items: center; gap: 7px; font-size: .75rem; color: var(--ink-2); }
+.legend-swatch {
+  flex: none; width: 13px; height: 13px; border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, .18);
+}
+
+/* Public / private land banner in the details panel */
+.land-badge {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; margin-bottom: 8px; border-radius: var(--radius-sm);
+  font-size: .82rem; font-weight: 550;
+}
+.land-badge-mark { display: flex; flex: none; }
+.land-badge-mark svg { width: 15px; height: 15px; }
+.land-badge.is-public { color: #1b5e20; background: #e6f2e6; }
+.land-badge.is-private { color: var(--clay-2); background: var(--clay-soft); }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .land-badge.is-public { color: #a5d6a7; background: rgba(46, 125, 50, .18); }
+}
+:root[data-theme="dark"] .land-badge.is-public { color: #a5d6a7; background: rgba(46, 125, 50, .18); }
+
+/* Dropped-pin popup */
+.drop-pin { min-width: 220px; }
+.drop-pin-name {
+  width: 100%; padding: 4px 6px; margin-bottom: 8px;
+  font: inherit; font-size: .92rem; font-weight: 600; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 4px;
+}
+.drop-pin-name:focus { border-color: var(--line-strong); outline: none; }
+.drop-pin-coords { font-variant-numeric: tabular-nums; }
+.drop-pin .popup-stats dd { display: flex; align-items: center; gap: 4px; }
+.drop-pin-more { width: 100%; margin-top: 6px; }
+
+/* A section that came back empty for a reason worth stating quietly */
+.panel-section.is-quiet { opacity: .72; }

@@ -16,7 +16,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildRasterStyle } from '../assets/js/lib/engine.js';
+import { buildRasterStyle, overlayParts, overlayIdFromLayer } from '../assets/js/lib/engine.js';
 import { BASEMAPS, OVERLAYS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN } from '../assets/js/config.js';
 
 const rasterBasemaps = BASEMAPS.filter((b) => b.tiles);
@@ -125,7 +125,37 @@ test('style: layer ids are unique', () => {
 test('style: overlays are drawn above the basemap, in configuration order', () => {
   const style = buildRasterStyle(rasterBasemaps[0], overlays());
   assert.equal(style.layers[0].id, 'basemap');
-  assert.deepEqual(style.layers.slice(1).map((l) => l.id), OVERLAYS.map((o) => `overlay-${o.id}`));
+  assert.deepEqual(
+    style.layers.slice(1).map((l) => l.id),
+    OVERLAYS.flatMap((o) => overlayParts(o).map((part) => part.layerId)),
+  );
+});
+
+test('style: a combined overlay contributes one layer per source', () => {
+  // "Recreation sites" spans BLM and USGS. Both draw under one toggle, so one
+  // agency's service being down leaves the other's sites on the map rather
+  // than blanking the layer.
+  const combined = OVERLAYS.find((o) => Array.isArray(o.sources) && o.sources.length > 1);
+  assert.ok(combined, 'expected at least one multi-source overlay');
+
+  const parts = overlayParts(combined);
+  assert.equal(parts.length, combined.sources.length);
+  assert.equal(parts[0].layerId, `overlay-${combined.id}`, 'the first part keeps the plain id');
+  assert.ok(parts.every((part) => Array.isArray(part.tiles) && part.tiles.length), 'every part needs tiles');
+
+  // Everything keyed on the overlay id must still find all of its layers.
+  assert.ok(parts.every((part) => overlayIdFromLayer(part.layerId) === combined.id));
+
+  const style = buildRasterStyle(rasterBasemaps[0], [combined]);
+  assert.deepEqual(style.layers.slice(1).map((l) => l.id), parts.map((p) => p.layerId));
+});
+
+test('style: a single-source overlay is unchanged by the parts machinery', () => {
+  const plain = OVERLAYS.find((o) => !o.sources);
+  const parts = overlayParts(plain);
+  assert.equal(parts.length, 1);
+  assert.equal(parts[0].layerId, `overlay-${plain.id}`);
+  assert.deepEqual(parts[0].tiles, plain.tiles);
 });
 
 test('style: opacity is carried through to raster paint', () => {
