@@ -1,7 +1,13 @@
 name: Deploy to web host (FTP)
 
-# Publishes the built site to shared hosting on every push to the working
-# branch, so the browser is the only place you need to look after a change.
+# Publishes the built site to shared hosting. Kept for a future real domain;
+# the live site is on GitHub Pages (see deploy-pages.yml).
+#
+# The lesson this workflow taught, worth keeping: an FTP deploy can succeed
+# completely and still change nothing anyone can see, because it writes to the
+# directory you name and has no way to know whether the web server reads that
+# directory. Before trusting a green run here, fetch deployed.txt from the site
+# and check the commit it names.
 #
 # Required repository secrets (Settings -> Secrets and variables -> Actions):
 #   FTP_SERVER    e.g. ftp.shermanc8.sg-host.com
@@ -15,11 +21,10 @@ name: Deploy to web host (FTP)
 #
 # Nothing runs if the secrets are absent, so forks and clones stay inert.
 
+# Manual only. GitHub Pages is the live host; this stays here for the day a
+# real domain is pointed at shared hosting, and running it on every push to a
+# host that is not serving anything just paints the branch red.
 on:
-  push:
-    branches:
-      - main
-      - 'claude/**'
   workflow_dispatch:
     inputs:
       clean_slate:

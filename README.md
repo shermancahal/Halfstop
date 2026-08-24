@@ -224,6 +224,10 @@ has moved, the fix is a URL edit in `config.js`.
 
 ## Deploying by FTP
 
+Optional, and not how the live site is published — see GitHub Pages below.
+`.github/workflows/deploy-ftp.yml` is manual-run only, kept for the day a real
+domain points at shared hosting.
+
 `npm run dist` rebuilds the catalogue, then stages everything the live site
 needs — and nothing else — into `dist/`, along with:
 
@@ -247,16 +251,28 @@ Two things that catch people out:
 - **HTTPS is not optional.** The geolocate button silently fails on plain
   `http://`; browsers only expose the Geolocation API on secure origins.
 - **Restrict your Mapbox token to the deployed domain** if you have added one.
+- **Confirm the document root before trusting a deploy.** An FTP upload writes
+  where you tell it to and cannot know whether the web server reads that
+  directory; when the two disagree, every run succeeds and the site never
+  changes. Fetch `deployed.txt` from the site and check the commit it names.
 
 ---
 
 ## Deploying with GitHub Pages
 
-`.github/workflows/pages.yml` runs the test suite, verifies `data/catalog.json`
-matches `data/maps/`, and deploys to GitHub Pages on every push to `main`.
+This is the live host: <https://shermancahal.github.io/Map/>
 
-To enable it: **Settings → Pages → Build and deployment → Source: GitHub
-Actions.**
+`.github/workflows/deploy-pages.yml` runs the test suite, verifies
+`data/catalog.json` matches `data/maps/`, builds `dist/`, and publishes it on
+every push to `main` or a `claude/**` branch.
+
+To enable it on a fresh clone: **Settings → Pages → Build and deployment →
+Source: GitHub Actions.**
+
+Every deploy writes `deployed.txt` alongside the site, carrying the commit,
+branch, run number, build time and host. Fetch it before concluding anything
+about which version is live — the site shows its version nowhere else, and a
+deploy that quietly changed nothing looks exactly like one that worked.
 
 For a custom subdomain such as `maps.americanbyways.com`, add a `CNAME` file at
 the repository root containing the hostname, and point a DNS CNAME record at
@@ -264,6 +280,8 @@ the repository root containing the hostname, and point a DNS CNAME record at
 
 Nothing about the site is Pages-specific — it is a directory of static files and
 will deploy to Netlify, Cloudflare Pages, S3 or any web server just as happily.
+Pages is chosen here because it serves the artifact the workflow uploads or
+fails loudly, with no document root to misconfigure.
 
 ---
 
