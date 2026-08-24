@@ -771,3 +771,5 @@ html, body { height: 100%; overflow: hidden; }
 
 /* A section that came back empty for a reason worth stating quietly */
 .panel-section.is-quiet { opacity: .72; }
+
+.legend-note { margin: 6px 0 0; font-size: .71rem; line-height: 1.45; color: var(--ink-3); }

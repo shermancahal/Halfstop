@@ -9,14 +9,14 @@
  *
  * The palette leans on the two traditions worth stealing from:
  *
- * - National Geographic for the ground — warm cream land, muted sage forest,
- *   restrained water. A topo you can read a route across is one where the base
- *   recedes and the lines you care about come forward. Saturated greens fight
- *   the tracks drawn on top of them.
- * - Rand McNally for the roads — the hierarchy that makes a road atlas
- *   scannable at arm's length. Interstates blue, US routes red, state routes
- *   amber, everything else neutral, each with a casing so it holds up over
- *   imagery and shading.
+ * - Rand McNally for contrast and hierarchy. An atlas is read in a moving
+ *   vehicle in bad light, so nothing in it is subtle: parchment land, gold and
+ *   red roads, one deep brown for every structural line. The first version of
+ *   this style used pastels and washed out completely — pale ground, pale
+ *   contours, pale roads, nothing for the eye to catch.
+ * - National Geographic for the terrain — tan and brown ground with muted
+ *   green woodland, rather than the grey-and-white of a street map. It is the
+ *   colouring that makes relief legible without shouting.
  *
  * Unpaved roads and tracks are deliberately louder than either tradition would
  * have them, because this is a map for finding the road that is not paved.
@@ -25,39 +25,52 @@
  * Without one the app falls back to a raster topo — see config.js.
  */
 
+import { shieldImageExpression, SHIELD_TEXT_COLOUR } from './route-shields.js';
+
 /* ------------------------------------------------------------------ palette */
 
 export const PALETTE = {
-  land: '#f4efe4',
-  landAlt: '#efe8d9',        // bare ground, sand
-  forest: '#dfe6d3',
-  forestDeep: '#d2dcc4',
-  park: '#e2ead6',
-  wetland: '#dde6dc',
-  snow: '#f4f6f8',
-  water: '#a8c8dd',
-  waterDeep: '#93b9d2',
-  waterLine: '#8fb4cd',
+  // Anchored on the Rand McNally atlas values, which are considerably more
+  // saturated than the pastels this started with. The first version washed out:
+  // pale land, pale contours, pale roads, nothing to fix your eye on. Contrast
+  // is the whole point of an atlas — you read it in a moving vehicle in bad
+  // light — so the ground is a real parchment tan, not cream, and the contours
+  // and boundaries are the deep brown that keeps them legible over it.
+  land: '#D1BE9D',           // base landmass — warm parchment
+  landPale: '#DCCDB2',       // open ground, one step lighter for figure/ground
+  landAlt: '#E0D3B8',        // sand, bare rock
+  urban: '#B9A37E',          // built-up areas — the darker wicker tone
+  forest: '#82A775',         // parks, national forest, protected land
+  forestDeep: '#6E9463',     // dense woodland
+  park: '#93B487',
+  snow: '#EFF3F5',
 
-  contour: '#c2ab8b',
-  contourIndex: '#a98f6b',
-  hillshade: '#8a7a5f',
+  water: '#3B727C',          // oceans, large lakes
+  waterDeep: '#2F5F68',
+  waterLine: '#3B727C',
 
-  interstate: '#3d6ea8',
-  usRoute: '#b3402f',
-  stateRoute: '#c98a2b',
-  major: '#ffffff',
-  minor: '#ffffff',
-  unpaved: '#b98a52',
-  track: '#a8702f',
-  path: '#8a6b46',
-  casing: '#cdbfa5',
-  casingDark: '#a9977a',
+  // #64513B does triple duty in the reference palette: contours, state lines
+  // and map grids. Using one dark brown for all the structural linework is
+  // what makes the atlas read as one drawing rather than three overlays.
+  contour: '#8A7355',
+  contourIndex: '#64513B',
+  hillshade: '#5A4834',
+  boundary: '#64513B',
 
-  ink: '#2f2a22',
-  inkSoft: '#5d5443',
-  halo: '#f7f3e9',
-  boundary: '#a596a0',
+  interstate: '#B05F66',     // primary arteries — the muted high-visibility red
+  usRoute: '#C97B3F',        // US routes, one step warmer
+  stateRoute: '#E0A94F',     // state routes — atlas gold
+  major: '#FFFFFF',
+  minor: '#FFFFFF',
+  unpaved: '#8C5A28',
+  track: '#8C5A28',
+  path: '#6B5335',
+  casing: '#8A7355',
+  casingDark: '#64513B',
+
+  ink: '#2A2118',
+  inkSoft: '#4A3D2E',
+  halo: '#F2E9D6',
 };
 
 /** Ordered so the smallest roads are drawn first and the biggest end up on top. */
@@ -196,9 +209,9 @@ function reliefLayers() {
         // keep here, since heavy shading buries the contours drawn over it.
         'fill-opacity': [
           'match', ['get', 'class'],
-          'shadow', 0.09,
-          'medium_shadow', 0.06,
-          'faint_shadow', 0.03,
+          'shadow', 0.16,
+          'medium_shadow', 0.11,
+          'faint_shadow', 0.055,
           0,
         ],
         'fill-antialias': false,
@@ -210,11 +223,11 @@ function reliefLayers() {
       source: 'terrain',
       'source-layer': 'contour',
       filter: ['!=', ['get', 'index'], 5],
-      minzoom: 11,
+      minzoom: 10,
       paint: {
         'line-color': PALETTE.contour,
-        'line-width': ['interpolate', ['linear'], ['zoom'], 11, 0.4, 16, 0.8],
-        'line-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0.35, 13, 0.6],
+        'line-width': ['interpolate', ['linear'], ['zoom'], 10, 0.5, 16, 1],
+        'line-opacity': ['interpolate', ['linear'], ['zoom'], 10, 0.45, 13, 0.75],
       },
     },
     {
@@ -223,11 +236,11 @@ function reliefLayers() {
       source: 'terrain',
       'source-layer': 'contour',
       filter: ['==', ['get', 'index'], 5],
-      minzoom: 10,
+      minzoom: 9,
       paint: {
         'line-color': PALETTE.contourIndex,
-        'line-width': ['interpolate', ['linear'], ['zoom'], 10, 0.6, 16, 1.4],
-        'line-opacity': 0.75,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 9, 0.7, 16, 1.7],
+        'line-opacity': 0.9,
       },
     },
     {
@@ -517,29 +530,29 @@ function shieldLayers() {
         ['has', 'ref'],
         ['match', ['get', 'class'], ['motorway', 'trunk', 'primary', 'secondary'], true, false],
       ],
-      minzoom: 7,
+      minzoom: 6,
       layout: {
         'symbol-placement': 'line',
-        'symbol-spacing': 250,
-        'icon-image': [
-          'coalesce',
-          ['image', ['concat', ['get', 'shield'], '-', ['to-string', ['get', 'reflen']]]],
-          ['image', ['concat', 'default-', ['to-string', ['get', 'reflen']]]],
-        ],
-        'icon-size': 0.9,
+        'symbol-spacing': ['interpolate', ['linear'], ['zoom'], 6, 180, 12, 260],
+        // Images we generate and register ourselves — see lib/route-shields.js
+        // for why this does not go through the Mapbox sprite.
+        'icon-image': shieldImageExpression(),
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 6, 0.85, 12, 1.05],
+        'icon-rotation-alignment': 'viewport',
         'text-field': ['get', 'ref'],
         'text-font': FONT_BOLD,
-        'text-size': 9,
-        'symbol-avoid-edges': true,
+        'text-size': ['interpolate', ['linear'], ['zoom'], 6, 9, 12, 11],
+        'text-rotation-alignment': 'viewport',
+        'text-anchor': 'center',
+        // The shield is the point; let it push other labels aside rather than
+        // being the thing that gets dropped when the map is busy.
         'icon-allow-overlap': false,
-        'text-allow-overlap': false,
+        'icon-ignore-placement': false,
+        'text-allow-overlap': true,
+        'text-ignore-placement': true,
+        'text-optional': false,
       },
-      paint: {
-        'text-color': ['match', ['get', 'shield'],
-          'us-interstate', '#ffffff',
-          PALETTE.ink,
-        ],
-      },
+      paint: { 'text-color': SHIELD_TEXT_COLOUR },
     },
   ];
 }

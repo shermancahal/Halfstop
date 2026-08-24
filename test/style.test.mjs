@@ -19,6 +19,10 @@ import assert from 'node:assert/strict';
 import { buildRasterStyle, overlayParts, overlayIdFromLayer, styleFor } from '../assets/js/lib/engine.js';
 import { BASEMAPS, OVERLAYS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN } from '../assets/js/config.js';
 import { bywaysStyle, PALETTE } from '../assets/js/lib/byways-style.js';
+import {
+  shieldDesign, shieldImageId, shieldImageIds, shieldImageExpression,
+  rasterizeShield, SHIELD_DESIGNS, SHIELD_TEXT_COLOUR,
+} from '../assets/js/lib/route-shields.js';
 
 const rasterBasemaps = BASEMAPS.filter((b) => b.tiles);
 const overlays = () => OVERLAYS.map((o) => ({ ...o }));
@@ -133,22 +137,47 @@ test('style: overlays are drawn above the basemap, in configuration order', () =
 });
 
 test('style: a combined overlay contributes one layer per source', () => {
-  // "Recreation sites" spans BLM and USGS. Both draw under one toggle, so one
-  // agency's service being down leaves the other's sites on the map rather
-  // than blanking the layer.
-  const combined = OVERLAYS.find((o) => Array.isArray(o.sources) && o.sources.length > 1);
-  assert.ok(combined, 'expected at least one multi-source overlay');
+  // Tested against a constructed overlay rather than whichever config entry
+  // happens to use several sources today — the machinery is what has to keep
+  // working, and config churns. (The recreation overlay used two until the
+  // second endpoint turned out to draw fire stations.)
+  const combined = {
+    id: 'test-combined',
+    name: 'Combined',
+    tileSize: 256,
+    maxzoom: 14,
+    opacity: 0.8,
+    attribution: 'test',
+    sources: [
+      { name: 'A', tiles: ['https://example.org/a/{z}/{x}/{y}.png'] },
+      { name: 'B', tiles: ['https://example.org/b/{z}/{x}/{y}.png'] },
+    ],
+  };
 
   const parts = overlayParts(combined);
-  assert.equal(parts.length, combined.sources.length);
-  assert.equal(parts[0].layerId, `overlay-${combined.id}`, 'the first part keeps the plain id');
-  assert.ok(parts.every((part) => Array.isArray(part.tiles) && part.tiles.length), 'every part needs tiles');
+  assert.equal(parts.length, 2);
+  assert.equal(parts[0].layerId, 'overlay-test-combined', 'the first part keeps the plain id');
+  assert.notEqual(parts[1].layerId, parts[0].layerId, 'later parts need distinct ids');
+
+  // Per-source settings inherit from the overlay unless the source overrides.
+  assert.equal(parts[1].tileSize, 256);
+  assert.deepEqual(parts[1].tiles, combined.sources[1].tiles);
 
   // Everything keyed on the overlay id must still find all of its layers.
   assert.ok(parts.every((part) => overlayIdFromLayer(part.layerId) === combined.id));
 
   const style = buildRasterStyle(rasterBasemaps[0], [combined]);
   assert.deepEqual(style.layers.slice(1).map((l) => l.id), parts.map((p) => p.layerId));
+  assert.ok(style.layers.slice(1).every((l) => l.paint['raster-opacity'] === 0.8), 'one opacity for all parts');
+});
+
+test('style: any configured multi-source overlay is well formed', () => {
+  for (const overlay of OVERLAYS.filter((o) => Array.isArray(o.sources))) {
+    assert.ok(overlay.sources.length >= 1, `${overlay.id} declares an empty sources array`);
+    for (const part of overlayParts(overlay)) {
+      assert.ok(Array.isArray(part.tiles) && part.tiles.length, `${overlay.id}: a source has no tiles`);
+    }
+  }
 });
 
 test('style: a single-source overlay is unchanged by the parts machinery', () => {
@@ -337,4 +366,71 @@ test('byways: contours are present, with index lines heavier than the rest', () 
   assert.equal(plain.source, 'terrain');
   assert.deepEqual(index.filter, ['==', ['get', 'index'], 5], 'index lines are every fifth');
   assert.ok(index.minzoom < plain.minzoom, 'index lines should appear first when zooming in');
+});
+
+/* ---- route shields ---- */
+
+test('shields: Mapbox shield values collapse onto four designs', () => {
+  // Mapbox ships a long tail of variants. A variant drawn as its parent design
+  // is far better than a variant drawn as nothing, which is what the first
+  // version did when it asked the sprite for a name the sprite did not have.
+  assert.equal(shieldDesign('us-interstate'), 'interstate');
+  assert.equal(shieldDesign('us-interstate-duplex'), 'interstate');
+  assert.equal(shieldDesign('us-highway'), 'us');
+  assert.equal(shieldDesign('us-highway-business'), 'us');
+  assert.equal(shieldDesign('us-state'), 'state');
+  assert.equal(shieldDesign('something-unheard-of'), 'default');
+  assert.equal(shieldDesign(''), 'default');
+  assert.equal(shieldDesign(undefined), 'default');
+});
+
+test('shields: image ids clamp to the widths actually generated', () => {
+  // A seven-character reference must land on the widest image rather than on
+  // `abmap-shield-us-7`, which nothing would have registered.
+  const ids = new Set(shieldImageIds());
+  for (const length of [0, 1, 2, 3, 4, 5, 9, 40]) {
+    assert.ok(ids.has(shieldImageId('us', length)), `length ${length} produced an unregistered id`);
+  }
+  assert.equal(shieldImageId('us', 1), shieldImageId('us', 2), 'below the minimum clamps up');
+  assert.equal(shieldImageId('us', 9), shieldImageId('us', 4), 'above the maximum clamps down');
+});
+
+test('shields: every design and width has an id, and they are unique', () => {
+  const ids = shieldImageIds();
+  assert.equal(ids.length, SHIELD_DESIGNS.length * 3, 'four designs at three widths');
+  assert.equal(new Set(ids).size, ids.length);
+  assert.ok(ids.every((id) => id.startsWith('abmap-shield-')));
+});
+
+test('shields: the style names only images this module registers', () => {
+  // The failure being guarded against: a style referring to an image nobody
+  // registered draws nothing and reports nothing.
+  const registered = new Set(shieldImageIds());
+  const expression = shieldImageExpression();
+  assert.equal(expression[0], 'concat');
+  assert.equal(expression[1], 'abmap-shield-');
+
+  // Pull the literal design names out of the match expression and confirm every
+  // design/width combination it can produce was generated.
+  const match = expression[2];
+  assert.equal(match[0], 'match');
+  const designs = match.slice(3).filter((item) => typeof item === 'string');
+  for (const design of designs) {
+    for (const length of [2, 3, 4]) {
+      assert.ok(registered.has(`abmap-shield-${design}-${length}`), `unregistered: ${design}-${length}`);
+    }
+  }
+});
+
+test('shields: interstate numbers are white, everything else dark', () => {
+  const colour = SHIELD_TEXT_COLOUR;
+  assert.equal(colour[0], 'match');
+  assert.equal(colour[colour.length - 1], '#1c1c1c', 'the fallback should be dark on light');
+  assert.ok(JSON.stringify(colour).includes('#ffffff'), 'interstates are white on blue');
+});
+
+test('shields: rasterizing is skipped rather than thrown without a canvas', () => {
+  // These tests run in Node. The module must degrade rather than explode, so
+  // that importing it anywhere is safe.
+  assert.equal(rasterizeShield('interstate', 2), null);
 });

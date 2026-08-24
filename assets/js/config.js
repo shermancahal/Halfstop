@@ -241,12 +241,11 @@ export const OVERLAYS = [
   {
     id: 'recreation',
     legend: [
-      { color: '#1B5E20', label: 'BLM site' },
-      { color: '#4E342E', label: 'USGS / Forest Service site' },
+      { color: '#1B5E20', label: 'BLM recreation site' },
     ],
     group: 'Land & access',
     name: 'Recreation sites',
-    description: 'Campgrounds, trailheads and facilities on federal land.',
+    description: 'Campgrounds, trailheads and facilities on BLM land.',
     // Two agencies, one switch. Nobody planning a trip thinks "I want the BLM
     // campgrounds but not the Forest Service ones" — they want somewhere to
     // sleep. Each source is drawn as its own raster layer so they stack, and
@@ -257,20 +256,18 @@ export const OVERLAYS = [
         tiles: ['https://gis.blm.gov/arcgis/rest/services/recreation/BLM_Natl_Recreation_Site_Points/MapServer/export'
           + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'],
       },
-      {
-        name: 'USGS / USFS',
-        tiles: ['https://carto.nationalmap.gov/arcgis/rest/services/structures/MapServer/export'
-          + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true'
-          + '&layers=show:16,17,18&f=image'],
-      },
+      // A second source belongs here — this is meant to span agencies — but the
+      // USGS structures layer that was here drew fire and police stations,
+      // because the sub-layer indices were guessed rather than checked. A wrong
+      // endpoint that draws the wrong thing convincingly is worse than none, so
+      // it is out until the right one is confirmed against the live service.
     ],
     tileSize: 256,
     maxzoom: 16,
     opacity: 0.95,
     enabled: false,
     unverified: true,
-    attribution: 'Recreation sites © <a href="https://navigator.blm.gov/">BLM</a>, '
-      + '<a href="https://www.usgs.gov/programs/national-geospatial-program/national-map">USGS</a>',
+    attribution: 'Recreation sites © <a href="https://navigator.blm.gov/">BLM</a>',
   },
   {
     id: 'public-lands',
@@ -344,17 +341,30 @@ export const OVERLAYS = [
   },
   {
     id: 'usfs-mvum',
+    // The MVUM's own categories. It is a legal document, not a trail map: the
+    // distinction between "all vehicles" and "highway-legal only" is what makes
+    // a road passable in a licensed truck but closed to a UTV.
     legend: [
       { color: '#2E7D32', label: 'Open to all vehicles' },
-      { color: '#F9A825', label: 'Seasonal — check dates' },
-      { color: '#C62828', label: 'Highway-legal vehicles only' },
+      { color: '#1565C0', label: 'Highway-legal vehicles only' },
+      { color: '#F9A825', label: 'Open seasonally — check the dates' },
+      { color: '#8E24AA', label: 'Width-restricted (50\" or less)' },
+      { color: '#C62828', label: 'Closed to motor vehicles' },
     ],
+    legendNote: 'Colours follow the Forest Service MVUM key. The MVUM is the legal '
+      + 'authority for what is open — always check the current year\'s map before relying on it.',
     group: 'Land & access',
     name: 'Forest roads (MVUM)',
     description: 'Which Forest Service roads are legally open, and to what.',
+    // Every tile here is a render request the Forest Service answers on demand
+    // rather than a cached image, so the cost is per-tile and the wait is real.
+    // Two things help: 512px tiles, which cover the same screen in a quarter of
+    // the requests, and a minzoom, since a national view of forest roads is
+    // both illegible and the most expensive thing you can ask this service for.
     tiles: ['https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_01/MapServer/export'
-      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'],
-    tileSize: 256,
+      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=512,512&format=png32&transparent=true&f=image'],
+    tileSize: 512,
+    minzoom: 10,
     maxzoom: 16,
     opacity: 0.9,
     enabled: false,

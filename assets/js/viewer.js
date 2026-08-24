@@ -29,6 +29,7 @@ import {
   PIN_ICONS, DEFAULT_PIN_ICON, pinIconGroups, pinIconSVG, pinImageId, registerPinImages,
 } from './lib/pin-icons.js';
 import { toGPX } from './lib/gpx-write.js';
+import { registerShieldImages } from './lib/route-shields.js';
 import { Account, isConfigured as accountsAvailable } from './lib/account.js';
 import {
   formatDD, formatDMS, formatDDM, toUTM, distanceBearing, compassPoint, sunTimes, reverseGeocode,
@@ -607,11 +608,16 @@ function renderOverlayRows(container, entries) {
 }
 
 /** A colour key for a raster overlay whose colours mean something. */
-function legendList(entries) {
-  return el('ul', { class: 'legend' }, entries.map((item) => el('li', { class: 'legend-item' }, [
+function legendList(entries, note = '') {
+  const list = el('ul', { class: 'legend' }, entries.map((item) => el('li', { class: 'legend-item' }, [
     el('span', { class: 'legend-swatch', style: `background:${item.color}` }),
     el('span', { text: item.label }),
   ])));
+  if (!note) return list;
+
+  const wrap = document.createDocumentFragment();
+  wrap.append(list, el('p', { class: 'legend-note', text: note }));
+  return wrap;
 }
 
 /* ---------------- offline regions ---------------- */
@@ -809,7 +815,7 @@ function layerRow({ entry, selected, control }) {
   const descriptionNode = description || key
     ? el('div', { class: 'layer-desc', hidden: true }, [
       description ? el('p', { class: 'layer-desc-text', text: description }) : null,
-      key ? legendList(key) : null,
+      key ? legendList(key, entry.legendNote || '') : null,
     ])
     : null;
 
@@ -951,6 +957,10 @@ function removeOverlayLayer(id) {
  */
 function addAppLayers() {
   if (!styleReady()) { whenStyleReady(addAppLayers); return; }
+  // Route shields are images the style refers to by name. A style swap discards
+  // every registered image, and a layer naming an image that is not there draws
+  // nothing and says nothing — so re-register on every style load.
+  registerShieldImages(state.map);
   const empty = { type: 'geojson', data: { type: 'FeatureCollection', features: [] } };
   if (!state.map.getSource('scratch-highlight')) state.map.addSource('scratch-highlight', empty);
   if (!state.map.getSource('scratch-cursor')) state.map.addSource('scratch-cursor', empty);
