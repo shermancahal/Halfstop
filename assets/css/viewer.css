@@ -1600,6 +1600,13 @@ html, body { height: 100%; overflow: hidden; }
 .scrub-label { font-size: .72rem; font-weight: 600; color: var(--ink-2); }
 .scrub-time { font-size: .72rem; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .scrub-range { width: 100%; margin: 0; accent-color: #7b4fa8; }
+/* Small, because it is a way back rather than the main control. */
+.scrub-now {
+  font: inherit; font-size: .66rem; padding: 1px 7px; cursor: pointer;
+  color: var(--ink-2); background: transparent;
+  border: 1px solid var(--line); border-radius: 999px;
+}
+.scrub-now:hover { border-color: #7b4fa8; color: var(--ink-1); }
 .scrub-ends {
   display: flex; justify-content: space-between;
   font-size: .66rem; color: var(--ink-3); font-variant-numeric: tabular-nums;

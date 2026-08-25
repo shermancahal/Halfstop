@@ -31,7 +31,7 @@ import {
 } from './lib/pin-icons.js';
 import { toGPX } from './lib/gpx-write.js';
 import {
-  registerShieldImages, shieldRegistrationReport, stateDesign, rasterizeShieldById,
+  registerShieldImages, shieldRegistrationReport, shieldImageIds, stateDesign, rasterizeShieldById,
   shieldImageIdFor, loadShieldBlank, shieldImageId, hasShieldBlank,
 } from './lib/route-shields.js';
 import { shieldLayerUpdates, PALETTE } from './lib/byways-style.js';
@@ -961,8 +961,19 @@ async function fillArcGISLegend(host, { url, layer } = {}) {
     const response = await fetch(url);
     if (!response.ok) return;
     const body = await response.json();
-    const found = (body.layers || []).find((entry) => entry.layerId === layer);
-    const classes = (found?.legend || []).filter((item) => item.imageData);
+    /*
+     * One sublayer, or all of them.
+     *
+     * A service that draws several sublayers at once has no single key — the
+     * MVUM export renders roads and trails together — and naming one of them
+     * would explain a fraction of what is on screen. With no `layer` the
+     * classes are taken from every sublayer, in the order the service lists
+     * them, which is the order it drew them in.
+     */
+    const wanted = typeof layer === 'number'
+      ? (body.layers || []).filter((entry) => entry.layerId === layer)
+      : (body.layers || []);
+    const classes = wanted.flatMap((entry) => entry.legend || []).filter((item) => item.imageData);
     if (!classes.length) return;
 
     host.replaceChildren(el('ul', { class: 'legend' }, classes.map((item) => el('li', { class: 'legend-item' }, [
@@ -1301,9 +1312,44 @@ function trackShieldState() {
    */
   state.map.on('idle', () => {
     if (state.shieldsDrawnFor !== state.shieldState) applyShieldState();
+    healShieldImages();
   });
 
   refreshShieldState();
+}
+
+/**
+ * Put back any shield image that is missing, whatever took it.
+ *
+ * A shield whose image is absent does not vanish — GL drops the icon and keeps
+ * the number, so the road ends up labelled with a bare "70" floating on it.
+ * That has now been reported three times, and each round chased a different
+ * cause: registration running before the style was up, a style swap discarding
+ * every registered image, a blank that failed to load. All three are real and
+ * all three are fixed, and the symptom came back anyway.
+ *
+ * So this stops asking why. Every settled frame, compare the images the current
+ * state could ask for against the ones the map has, and re-register if any are
+ * gone. It is a set difference over about fifteen strings — cheap enough to run
+ * on every idle, and it converges no matter which of the causes is responsible
+ * or whether it is one nobody has thought of yet.
+ *
+ * The counter is not a retry limit, it is a loop guard: if an image cannot be
+ * created at all, re-registering it every frame forever would be a busy loop
+ * that never fixes anything.
+ */
+let shieldHealAttempts = 0;
+function healShieldImages() {
+  if (!styleReady() || !state.map.getLayer('road-shield')) return;
+  if (shieldHealAttempts > 12) return;
+
+  const wanted = shieldImageIds({ state: state.shieldState });
+  const missing = wanted.filter((id) => !state.map.hasImage?.(id));
+  if (!missing.length) { shieldHealAttempts = 0; return; }
+
+  shieldHealAttempts += 1;
+  console.warn(`[shields] ${missing.length} image(s) missing (${missing.slice(0, 3).join(', ')}) — re-registering.`);
+  registerShieldImages(state.map, { state: state.shieldState, base: assetBase() });
 }
 
 /**
@@ -2415,6 +2461,21 @@ function nightScrubber(position, date) {
     readout.textContent = `${clockTime(when)} · core ${Math.round(core.altitude)}° at ${Math.round(core.azimuth)}°`;
   };
 
+  const now = Date.now();
+  const nowButton = el('button', {
+    class: 'scrub-now', type: 'button',
+    text: 'Now',
+    title: now < from || now > to
+      ? 'Now is outside tonight\u2019s dark window — jumps to the nearest end'
+      : 'Back to the present',
+    onclick: () => {
+      const at = Math.min(Math.max(Date.now(), from), to);
+      slider.value = String(at);
+      show(at);
+      setSkyTime(new Date(at));
+    },
+  });
+
   const slider = el('input', {
     type: 'range', class: 'scrub-range',
     min: String(from), max: String(to), value: String(Math.min(Math.max(peak, from), to)),
@@ -2434,6 +2495,7 @@ function nightScrubber(position, date) {
     el('div', { class: 'scrub-head' }, [
       el('span', { class: 'scrub-label', text: 'Tonight' }),
       readout,
+      nowButton,
     ]),
     slider,
     el('div', { class: 'scrub-ends' }, [
@@ -2541,7 +2603,19 @@ function setSkyTime(when) {
   if (!state.lightLines) return;
   const [lon, lat] = state.lightLines.position;
   state.lightLines.date = when;
-  state.lightLines.directions = lightDirections(when, lat, lon);
+  /*
+   * Both halves, which is the point.
+   *
+   * `lightDirections` is where things rise and set — fixed for the night — and
+   * `currentDirections` is where they are at this instant, including the
+   * bearing to the galactic core. Recomputing only the first left the "Milky
+   * Way now" spoke frozen at the moment the lines were switched on while the
+   * band above it moved, which is worse than not drawing it.
+   */
+  state.lightLines.directions = [
+    ...lightDirections(when, lat, lon),
+    ...currentDirections(when, lat, lon),
+  ];
   refreshLightLines();
 }
 
@@ -2561,7 +2635,22 @@ function refreshLightLines() {
   // and short enough not to sweep across the whole map at trip-planning zooms.
   const REACH = 40;
 
-  const features = lines.directions.map((direction) => ({
+  const sky = milkyWayGround(lines.position, lines.date || new Date(), { maxKm: REACH });
+
+  /*
+   * The core's own spoke replaces the generic "Milky Way now" bearing.
+   *
+   * Both are a line from where you are standing towards the core, so drawing
+   * both puts two collinear lines on top of each other. This one ends on the
+   * band rather than at a fixed 40km, so the spoke and the arc meet — which is
+   * what makes the picture readable as "stand here, face this way, the band is
+   * there" rather than as two unrelated marks.
+   */
+  const drawn = sky.core
+    ? lines.directions.filter((direction) => direction.id !== 'core-now')
+    : lines.directions;
+
+  const features = drawn.map((direction) => ({
     type: 'Feature',
     properties: {
       body: direction.body,
@@ -2582,7 +2671,18 @@ function refreshLightLines() {
    * out of it. That is the question the whole Photography panel is for, and it
    * is the one thing a table of numbers cannot answer.
    */
-  const sky = milkyWayGround(lines.position, lines.date || new Date(), { maxKm: REACH });
+  if (sky.core) {
+    features.push({
+      type: 'Feature',
+      properties: {
+        body: 'core',
+        now: true,
+        label: `Milky Way ${Math.round(sky.core.azimuth)}° · ${Math.round(sky.core.altitude)}° up`,
+      },
+      geometry: { type: 'LineString', coordinates: [lines.position, sky.core.position] },
+    });
+  }
+
   if (sky.line.length > 1) {
     features.push({
       type: 'Feature',

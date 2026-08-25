@@ -1,41 +1,40 @@
 [
   {
-    "id": "land:blm-sma-sublayers",
-    "note": "Public lands is a cached raster with the six agency colours baked into the PNG, so it cannot be hatched. Stripes need polygons. This asks the surface-management service which sublayers it has and whether any of them will answer a query.",
+    "id": "lp:lorenz-tiles-2022",
+    "note": "Bortle-scale brightness, which is what a photographer actually reads. The viewer names tiles2016 through tiles2025; 2024 at z7 was a 404, so this walks back a year and down two zooms - a small atlas may simply not publish the deeper levels.",
+    "at": [-86.013, 39.654, 5],
+    "url": "https://djlorenz.github.io/astronomy/image_tiles/tiles2022/tile_{z}_{x}_{y}.png"
+  },
+  {
+    "id": "lp:lorenz-tiles-2022-low",
+    "note": "The same year at z3, to find where the atlas stops rather than concluding it is missing.",
+    "at": [-86.013, 39.654, 3],
+    "url": "https://djlorenz.github.io/astronomy/image_tiles/tiles2022/tile_{z}_{x}_{y}.png"
+  },
+  {
+    "id": "lp:lorenz-trend",
+    "note": "The trend overlay from the same viewer, on a different path - worth knowing whether the whole image_tiles tree is reachable or only parts.",
+    "at": [-86.013, 39.654, 5],
+    "url": "https://djlorenz.github.io/astronomy/lp/overlay/trend/tile_{z}_{x}_{y}.png"
+  },
+  {
+    "id": "road:mvum-legend",
+    "note": "The MVUM key, as the service describes it. The panel used to list five colours the service does not draw - it renders in black - so this is what replaces them. Checking the shape before trusting it.",
     "expect": "data",
-    "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_Cached_without_PriUnk/MapServer/layers?f=pjson"
+    "find": "\"label\":\\s*\"[^\"]{0,40}\"",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_01/MapServer/legend?f=pjson"
+  },
+  {
+    "id": "road:mvum-02-cached",
+    "note": "Forest roads take about thirty seconds to finish drawing because every tile is a render request answered on demand. EDW_MVUM_02 is the newer service; if it has a cached tile endpoint that is the whole fix.",
+    "expect": "data",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_02/MapServer?f=pjson"
   },
   {
     "id": "land:padus-agency-query",
-    "note": "The other way to the same polygons. PAD-US already backs the land-manager lookup in the details panel, so if it will answer a bbox query with Mang_Name the app can draw BLM itself - and the pattern becomes a styling decision rather than a data problem.",
+    "note": "Still open: hatching BLM land needs polygons, and public lands is a cached raster with the colours baked in. PAD-US already backs the land-manager lookup, so if it answers a bbox query with Mang_Name the pattern becomes a styling decision.",
     "expect": "data",
     "find": "\"(?:Mang_Name|Mang_Type|Own_Name)\":\\s*\"[^\"]{0,24}\"",
     "url": "https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services/PADUS4_0Fee/FeatureServer/0/query?where=Mang_Name%3D%27BLM%27&outFields=Mang_Name%2CMang_Type%2CUnit_Nm&geometry=-112.0%2C38.0%2C-111.0%2C39.0&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&returnGeometry=false&resultRecordCount=3&f=geojson"
-  },
-  {
-    "id": "rec:blm-recs-pts-fields",
-    "note": "The replacement for the 404ing BLM recreation service. If its fields name a site type it can join the USGS points under the same icons.",
-    "expect": "data",
-    "url": "https://gis.blm.gov/arcgis/rest/services/recreation/BLM_Natl_Recs_pts/MapServer/0?f=pjson"
-  },
-  {
-    "id": "lp:lorenz-tile-2024",
-    "note": "The atlas viewer names its own tiles: image_tiles/tiles2024/tile_{z}_{x}_{y}.png. This is the calibrated sky-brightness overlay rather than a photograph of streetlights, so it is the better of the two if it draws.",
-    "at": [
-      -86.013,
-      39.654,
-      7
-    ],
-    "url": "https://djlorenz.github.io/astronomy/image_tiles/tiles2024/tile_{z}_{x}_{y}.png"
-  },
-  {
-    "id": "img:ky-aerial-6in",
-    "note": "The statewide six-inch mosaic. Answers, but draws nothing over Hardyville where the three-inch does - so it needs a different sublayer or renderer before it is worth offering.",
-    "at": [
-      -85.73,
-      37.29,
-      12
-    ],
-    "url": "https://kyraster.ky.gov/arcgis/rest/services/ImageServices/Ky_KYAPED_Imagery_WGS84WM/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
   }
 ]

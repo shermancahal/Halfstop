@@ -118,6 +118,7 @@ addControl(){return this}getCanvas(){return{style:{}}}getContainer(){return docu
 // any time cannot catch a registrar called too early — which is exactly how a
 // whole state's markers went missing with an empty catch block over the top.
 addImage(i,d){if(!this._ready)throw new Error('Style is not done loading');this._img.set(i,d)}
+removeImage(i){this._img.delete(i)}
 hasImage(i){return this._img.has(i)}imageIds(){return [...this._img.keys()]}
 addSource(i,c){this._s.set(i,new Src(c.data))}getSource(i){return this._s.get(i)}removeSource(i){this._s.delete(i)}
 addLayer(l,b){if(b&&!this._l.has(b))throw new Error('before missing '+b);this._l.set(l.id,l)}
@@ -511,6 +512,30 @@ check('the layer comes back generic, as the style document builds it',
 check('and a settled frame points it at the state anyway',
   /st-TN/.test(late.afterIdle), true);
 
+/*
+ * And a shield image that goes missing comes back.
+ *
+ * This is the symptom, reported three times: a road labelled with a bare "70"
+ * and no marker under it, because GL drops an icon whose image is absent and
+ * keeps the text. Three different causes have been found and fixed for it and
+ * it returned anyway, so the map now checks its own images every settled frame
+ * rather than trusting that registration went well.
+ *
+ * Taking an image away and firing idle is that, without needing to reproduce
+ * whichever cause it was.
+ */
+const healed = await page.evaluate(async () => {
+  const map = window.__map;
+  const victim = map.imageIds().find((id) => id.startsWith('abmap-shield-'));
+  map.removeImage(victim);
+  const gone = !map.hasImage(victim);
+  map.fire('idle');
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  return { victim, gone, back: map.hasImage(victim) };
+});
+check('an image really was removed', healed.gone, true);
+check('and a settled frame puts it back', healed.back, true);
+
 console.log('\nA state layer is offered only inside its state');
 const scoped = await page.evaluate(async () => {
   const config = await import('./assets/js/config.js');
@@ -771,7 +796,7 @@ console.log('\nA queried overlay loads features for the view');
 await page.click('.panel-tab[data-tab="layers"]');
 await page.waitForTimeout(300);
 await openGroup(/Conditions/);
-await page.locator('.layer-row', { hasText: /Wildfire perimeters/ }).locator('input[type=checkbox]').check();
+await page.locator('.layer-row', { hasText: /^Wildfire/ }).locator('input[type=checkbox]').check();
 await page.waitForTimeout(900);
 
 const fire = await page.evaluate(() => {
@@ -790,7 +815,7 @@ check('and the perimeters reach the source', fire.features, 1);
 // The slider is one control over two kinds of layer now. `raster-opacity` on a
 // fill layer is not a dimmer, it is a spec error, so what it sets has to follow
 // the layer type.
-const slider = page.locator('.layer-row', { hasText: /Wildfire perimeters/ })
+const slider = page.locator('.layer-row', { hasText: /^Wildfire/ })
   .locator('xpath=following-sibling::*[1]').locator('input[type=range]');
 await slider.fill('30').catch(() => {});
 await page.waitForTimeout(300);
@@ -821,7 +846,7 @@ check('with its features', fireOnRaster.features, 1);
 await page.locator('.layer-row', { hasText: /^Byways Topo/ }).locator('input[type=radio]').check();
 await page.waitForTimeout(1100);
 
-await page.locator('.layer-row', { hasText: /Wildfire perimeters/ }).locator('input[type=checkbox]').uncheck();
+await page.locator('.layer-row', { hasText: /^Wildfire/ }).locator('input[type=checkbox]').uncheck();
 await page.waitForTimeout(500);
 const afterOff = await page.evaluate(() => window.__map.layerIds().filter((id) => id.startsWith('overlay-wildfire')));
 check('switching it off takes both layers with it', afterOff, []);
@@ -972,6 +997,28 @@ const scrubbed = await (async () => {
   return arcOf();
 })();
 check('and moving it moves the band', scrubbed.first !== band.first, true);
+check('the Now button is there to get back', await page.locator('.scrub-now').count(), 1);
+
+/*
+ * The spoke from the pin to the band, which is the "where do I stand and which
+ * way do I face" half. Without it the arc is a shape floating near the pin
+ * rather than something anchored to where the reader is.
+ */
+const spoke = await page.evaluate(() => {
+  const features = window.__map.getSource('light-directions')?._d?.features || [];
+  const core = features.find((feature) => feature.properties.body === 'core'
+    && feature.properties.kind !== 'arc');
+  return {
+    present: !!core,
+    label: core?.properties.label || '',
+    startsAtPin: core ? JSON.stringify(core.geometry.coordinates[0]) : '',
+    cores: features.filter((feature) => feature.properties.body === 'core').length,
+  };
+});
+if (spoke.present) {
+  check('the core spoke carries its bearing in degrees', /\d+°/.test(spoke.label), true);
+  check('and there is one core line, not two collinear ones', spoke.cores, 2);
+}
 
 console.log('\nCollapsed Details sections survive a reload');
 // Back onto a pin: the step above reloaded, so the panel is on its first tab.

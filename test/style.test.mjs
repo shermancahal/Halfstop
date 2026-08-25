@@ -397,14 +397,22 @@ test('config: the weather group is a group, and every layer in it is a forecast 
   }
 });
 
-test('config: a JSON legend names the sublayer it is the key for', () => {
-  // The whole point of the JSON form is that a service with several sublayers
-  // will describe all of their keys at once, and only one of them is this
-  // layer's. Without the id it would draw the boundary's key over a depth map.
+test('config: a JSON legend is a legend request, and names a sublayer or none', () => {
+  /*
+   * `layer` picks one sublayer's key out of a service that describes all of
+   * them — without it, a depth map would be captioned with a boundary's key.
+   *
+   * It is optional rather than required, though, and that is not a loosening:
+   * a service whose export renders several sublayers at once has no single
+   * key, and naming one of them would describe a fraction of what is drawn.
+   * Omitting it means "all of them", which is the honest answer there.
+   */
   for (const entry of [...BASEMAPS, ...OVERLAYS]) {
     if (!entry.legendJSON) continue;
     assert.match(entry.legendJSON.url, /^https:\/\/.*legend/, `${entry.id} legend is not a legend request`);
-    assert.equal(typeof entry.legendJSON.layer, 'number', `${entry.id} legend names no sublayer`);
+    if ('layer' in entry.legendJSON) {
+      assert.equal(typeof entry.legendJSON.layer, 'number', `${entry.id} names a sublayer that is not a number`);
+    }
   }
 });
 

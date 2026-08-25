@@ -436,7 +436,7 @@ export const OVERLAYS = [
       { color: '#8D6E63', label: 'Recently burned' },
     ],
     group: 'Conditions',
-    name: 'Wildfire perimeters',
+    name: 'Wildfire',
     description: 'Current large-fire perimeters from NIFC. Zoom in to a region to load them.',
     legendNote: 'The mapped edge of a fire as last flown or walked, which can be hours old '
       + 'and is never a closure map. Check the responsible agency before travelling.',
@@ -465,18 +465,23 @@ export const OVERLAYS = [
   },
   {
     id: 'usfs-mvum',
-    // The MVUM's own categories. It is a legal document, not a trail map: the
-    // distinction between "all vehicles" and "highway-legal only" is what makes
-    // a road passable in a licensed truck but closed to a UTV.
-    legend: [
-      { color: '#2E7D32', label: 'Open to all vehicles' },
-      { color: '#1565C0', label: 'Highway-legal vehicles only' },
-      { color: '#F9A825', label: 'Open seasonally — check the dates' },
-      { color: '#8E24AA', label: 'Width-restricted (50\" or less)' },
-      { color: '#C62828', label: 'Closed to motor vehicles' },
-    ],
-    legendNote: 'Colors follow the Forest Service MVUM key. The MVUM is the legal '
-      + 'authority for what is open — always check the current year\'s map before relying on it.',
+    /*
+     * The service's own key, not a written-out one.
+     *
+     * This used to list five colours — green for open to all vehicles, blue for
+     * highway-legal only, and so on — described as "the Forest Service MVUM
+     * key". The service draws the roads in black. So the panel was explaining a
+     * map that does not exist, which is worse than explaining nothing: a reader
+     * looking for the green roads concludes the layer is broken.
+     *
+     * No sublayer named, because the export renders roads and trails together
+     * and naming one would describe half of what is drawn.
+     */
+    legendJSON: {
+      url: 'https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_01/MapServer/legend?f=pjson',
+    },
+    legendNote: 'The MVUM is the legal authority for what is open — always check '
+      + 'the current year\'s map before relying on it.',
     group: 'Land & access',
     name: 'Forest roads (MVUM)',
     description: 'Which Forest Service roads are legally open, and to what.',
