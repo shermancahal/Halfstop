@@ -20,7 +20,11 @@ import { buildRasterStyle, overlayParts, overlayIdFromLayer, styleFor } from '..
 import { BASEMAPS, OVERLAYS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN } from '../assets/js/config.js';
 import { bywaysStyle, PALETTE, shieldLayerUpdates } from '../assets/js/lib/byways-style.js';
 import { previewFor, tileFor, tileURL, swatchSVG } from '../assets/js/lib/preview.js';
-import { shieldTextOffset, shieldTextSize } from '../assets/js/lib/route-shields.js';
+import {
+  shieldTextOffset, shieldTextSize, shieldDisplayWidth, shieldBlankFor,
+  SHIELD_SCALE, BLANK_PIXEL_RATIO, MIN_TEXT,
+} from '../assets/js/lib/route-shields.js';
+import { SHIELD_BOXES } from '../assets/js/lib/shield-boxes.js';
 import { formatTemperature, convertTemperature } from '../assets/js/lib/geo.js';
 import {
   shieldDesign,
@@ -1002,4 +1006,53 @@ test('byways: a zoom expression is never nested where GL will reject it', () => 
     }
   }
   assert.deepEqual(offenders, []);
+});
+
+test('a drawn shield and a real blank land at the same size on screen', () => {
+  /*
+   * The invariant that makes SHIELD_SCALE a single knob rather than three.
+   *
+   * A marker's size is set two different ways depending on where it comes
+   * from. A drawn one is canvassed at a CSS size, so it grows when that size
+   * grows. A blank is a PNG of fixed pixel dimensions, so it grows only when
+   * the ratio it is registered at falls. Change one and not the other and half
+   * the country's markers are a different size from the other half — which
+   * reads as a rendering bug rather than a constant somebody edited.
+   *
+   * Narrow blanks are 44x40 device pixels; the length-2 drawn shield is the
+   * one they have to match.
+   */
+  const near = (a, b) => Math.abs(a - b) < 1e-9;
+  assert.ok(
+    near(44 / BLANK_PIXEL_RATIO, shieldDisplayWidth(2)),
+    `a narrow blank draws ${44 / BLANK_PIXEL_RATIO}px wide, a drawn shield ${shieldDisplayWidth(2)}px`,
+  );
+  assert.ok(near(40 / BLANK_PIXEL_RATIO, 20 * SHIELD_SCALE), 'the heights have to agree too');
+});
+
+test('the number still fits its clear space at whatever scale', () => {
+  /*
+   * Growing the marker is only half of growing the marker: the number is sized
+   * from a rectangle measured in the blank's own pixels, and if that
+   * measurement stops being converted by the ratio the blank is registered at,
+   * the text grows at a different rate from the shield behind it and runs off
+   * the edge. Nothing about that is visible in a unit test of either one alone.
+   */
+  for (const design of ['us', 'interstate', ...statesWithShields().map((code) => `st-${code}`)]) {
+    for (const length of [2, 3, 4]) {
+      const blank = shieldBlankFor(design, length);
+      if (!blank) continue;
+      const box = SHIELD_BOXES[blank.key];
+      if (!box) continue;
+
+      const size = shieldTextSize(design, length);
+      const room = box.h / BLANK_PIXEL_RATIO;
+      // Or it is at the readability floor, which a handful of markers with very
+      // little clear space sit at deliberately — see MIN_TEXT.
+      assert.ok(
+        size <= room || size === MIN_TEXT,
+        `${design}/${length}: ${size}px of type in ${room}px of space, and not at the floor`,
+      );
+    }
+  }
 });

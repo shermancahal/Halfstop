@@ -242,10 +242,31 @@ const COLOURS = {
   default: { fill: '#fbf7ee', stroke: '#64513b', text: '#3a3026' },
 };
 
-const HEIGHT = 20;
+/**
+ * How much bigger than the drawn baseline every marker sits on screen.
+ *
+ * One constant, because the marker's size is not one number: the drawn shields
+ * are canvassed at a CSS size, the blanks are PNGs of a fixed pixel size scaled
+ * by the ratio they are registered at, and the number on top is sized and
+ * offset from measurements taken in the blank's own pixels. Growing any one of
+ * those alone moves the number off the shield.
+ */
+export const SHIELD_SCALE = 1.2;
+
+/**
+ * The ratio the blanks are registered at.
+ *
+ * They are 44x40 device pixels, so at 2 they land 22x20 CSS pixels — the drawn
+ * shields' baseline size. Dividing by the scale is what makes the same PNG draw
+ * bigger, and it is also the number that converts a SHIELD_BOXES measurement
+ * into CSS pixels, which is why both come from here rather than from a literal.
+ */
+export const BLANK_PIXEL_RATIO = 2 / SHIELD_SCALE;
+
+const HEIGHT = 20 * SHIELD_SCALE;
 
 function shieldWidth(length) {
-  return { 2: 22, 3: 27, 4: 33 }[length] || 22;
+  return ({ 2: 22, 3: 27, 4: 33 }[length] || 22) * SHIELD_SCALE;
 }
 
 /**
@@ -643,7 +664,17 @@ export function rasterizeShield(design, length, { pixelRatio = 2 } = {}) {
  * the box is measured in device pixels of a 40px-tall icon, so a pixel is half
  * a CSS pixel and an em is NOMINAL_TEXT of them.
  */
-const NOMINAL_TEXT = 11;
+const NOMINAL_TEXT = 11 * SHIELD_SCALE;
+
+/**
+ * The smallest the number is allowed to get, whatever the shield.
+ *
+ * A few markers have less clear space than this needs — Alaska's Big Dipper
+ * leaves a 12-pixel band — and there the number is allowed to overrun its
+ * rectangle slightly. That is the right way round: a number half a pixel over
+ * its box is still read at a glance, and one shrunk to fit is not read at all.
+ */
+export const MIN_TEXT = 6.5 * SHIELD_SCALE;
 
 function boxFor(design, length) {
   const blank = shieldBlankFor(design, length);
@@ -661,10 +692,13 @@ export function shieldTextSize(design, length) {
   // A drawn marker with the state's name on it has less room than one without,
   // and the same amount whatever the number is.
   if (!box) return drawnState(design)?.name ? NOMINAL_TEXT * 0.82 : NOMINAL_TEXT;
-  // Two digits across the box width, and most of its height.
-  const byHeight = (box.h / 2) * 0.82;
-  const byWidth = (box.w / 2) / Math.max(2, length) * 1.55;
-  return Math.max(6.5, Math.min(NOMINAL_TEXT, byHeight, byWidth));
+  // Two digits across the box width, and most of its height. The box is
+  // measured in the blank's own pixels, so it converts by the ratio the blank
+  // is registered at — not by a literal 2, which is what it was when that
+  // ratio could not change.
+  const byHeight = (box.h / BLANK_PIXEL_RATIO) * 0.82;
+  const byWidth = (box.w / BLANK_PIXEL_RATIO) / Math.max(2, length) * 1.55;
+  return Math.max(MIN_TEXT, Math.min(NOMINAL_TEXT, byHeight, byWidth));
 }
 
 /** Offset from the icon's centre to the middle of the clear space, in ems. */
@@ -679,7 +713,7 @@ export function shieldTextOffset(design, length) {
   }
   const size = shieldTextSize(design, length);
   const round = (value) => Math.round(value * 100) / 100;
-  return [round((box.dx / 2) / size), round((box.dy / 2) / size)];
+  return [round((box.dx / BLANK_PIXEL_RATIO) / size), round((box.dy / BLANK_PIXEL_RATIO) / size)];
 }
 
 /**
@@ -738,7 +772,7 @@ export function shieldTextOffsetExpression(state = '', length = 2, shiftPx = 0) 
  *        subpath resolves it the same way it resolves the rest of its assets.
  * @returns {Promise<boolean>} whether an image was added.
  */
-export async function loadShieldBlank(map, id, { base = '', pixelRatio = 2 } = {}) {
+export async function loadShieldBlank(map, id, { base = '', pixelRatio = BLANK_PIXEL_RATIO } = {}) {
   const parsed = parseShieldId(id);
   if (!parsed) return false;
 
@@ -804,6 +838,10 @@ export function rasterizeShieldById(id, options = {}) {
  * Idempotent, and safe to call after each style load — a style swap discards
  * registered images, so this has to run again on the other side of one.
  */
+/**
+ * @param pixelRatio the resolution to *draw* at. It does not change how big a
+ *        shield is — that is SHIELD_SCALE — only how sharp a drawn one looks.
+ */
 export function registerShieldImages(map, { pixelRatio = 2, state = '', base = '' } = {}) {
   let added = 0;
   const trouble = [];
@@ -822,7 +860,16 @@ export function registerShieldImages(map, { pixelRatio = 2, state = '', base = '
        * arrives.
        */
       if (shieldBlankFor(design, length)) {
-        loadShieldBlank(map, id, { base, pixelRatio }).then((loaded) => {
+        /*
+         * The blank goes in at BLANK_PIXEL_RATIO, not at `pixelRatio`.
+         *
+         * They are different jobs wearing the same name. For a drawing,
+         * pixelRatio is resolution — the canvas grows with it and the shield
+         * stays the same size, only sharper. For a fixed-size PNG it is the
+         * size itself. Passing the drawing's ratio to the loader is what would
+         * leave the blanks at the old size while everything drawn grew.
+         */
+        loadShieldBlank(map, id, { base, pixelRatio: BLANK_PIXEL_RATIO }).then((loaded) => {
           if (loaded || map.hasImage?.(id)) return;
           const drawn = rasterizeShield(design, length, { pixelRatio });
           if (drawn) { try { map.addImage(id, drawn, { pixelRatio }); } catch { /* raced */ } }
