@@ -505,9 +505,15 @@ export const OVERLAYS = [
     name: 'Snow on the ground',
     description: 'Modelled snow depth from the National Snow Analyses.',
     legendNote: 'NOHRSC models this at 1 km from gauges, satellite and radar. Empty in summer.',
+    // Sublayer 3 is the depth raster itself; 0 is the group it sits inside,
+    // and 1 and 2 are its boundary and footprint. The legend comes from the
+    // same service's WMS endpoint, which is the only one of the two that can
+    // draw a key.
     tiles: ['https://mapservices.weather.noaa.gov/raster/rest/services/snow/NOHRSC_Snow_Analysis/MapServer/export'
       + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true'
-      + '&layers=show:0&f=image'],
+      + '&layers=show:3&f=image'],
+    legendImage: 'https://mapservices.weather.noaa.gov/raster/services/snow/NOHRSC_Snow_Analysis/MapServer/WMSServer'
+      + '?service=WMS&version=1.3.0&request=GetLegendGraphic&layer=3&format=image/png',
     tileSize: 256,
     maxzoom: 12,
     opacity: 0.65,
