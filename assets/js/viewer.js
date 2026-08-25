@@ -52,6 +52,7 @@ import {
 } from './lib/runtime-layers.js';
 import {
   landManager, forecast, weatherClass, publicLand, elevation, skyCover,
+  parseWMSLegend,
 } from './lib/lookup.js';
 import { describeSync } from './lib/sync.js';
 import {
@@ -889,10 +890,20 @@ function renderOverlayRows(container, entries) {
 
 /** A colour key for a raster overlay whose colours mean something. */
 function legendList(entries, note = '') {
-  const list = el('ul', { class: 'legend' }, entries.map((item) => el('li', { class: 'legend-item' }, [
-    el('span', { class: 'legend-swatch', style: `background:${item.color}` }),
-    el('span', { text: item.label }),
-  ])));
+  /*
+   * Two columns once the list is long enough to be a column of its own.
+   *
+   * A temperature ramp is twenty-odd steps. In a 320px panel that is a stripe
+   * of text taller than the panel, which pushes every layer below it out of
+   * reach — so past the threshold it reads down one column and up the next.
+   * Under it, one column: two columns of three looks like a mistake.
+   */
+  const split = entries.length >= SPLIT_LEGEND_AT;
+  const list = el('ul', { class: split ? 'legend is-split' : 'legend' },
+    entries.map((item) => el('li', { class: 'legend-item' }, [
+      el('span', { class: 'legend-swatch', style: `background:${item.color}` }),
+      el('span', { text: item.label }),
+    ])));
   if (!note) return list;
 
   const wrap = document.createDocumentFragment();
@@ -912,6 +923,30 @@ function legendList(entries, note = '') {
  * Failure is silent on purpose. A missing key is a layer with no key, not an
  * error worth putting in front of somebody who just opened a description.
  */
+const SPLIT_LEGEND_AT = 9;
+
+/**
+ * Fetch a GeoServer colormap and draw it as the same swatch list radar uses.
+ *
+ * Replaces a fetched PNG of the key. The picture was legible only after being
+ * asked for at three times the size and allowed to scroll sideways, and it
+ * still did not match the layer sitting above it in the same group. This is the
+ * service's own colours and its own labels, drawn in the panel's own type.
+ */
+async function fillWMSLegend(host, url) {
+  if (!host || !url) return;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return;
+    const entries = parseWMSLegend(await response.json());
+    if (!entries.length) return;
+    host.replaceChildren(legendList(entries));
+  } catch {
+    // A key that will not load leaves the layer's name and nothing else, which
+    // is better than a broken image where the explanation should be.
+  }
+}
+
 async function fillArcGISLegend(host, { url, layer } = {}) {
   if (!host || !url) return;
   try {
@@ -2556,10 +2591,24 @@ function layerRow({ entry, selected, control, preview = false }) {
   // instead. Drawn on white because every one of them is black text on
   // transparent, which disappears against a dark panel.
   const note = entry.legendNote || '';
-  const descriptionNode = description || key || note || entry.legendImage
+
+  /*
+   * A layer with a scale explains itself with the scale.
+   *
+   * The prose above it was written when the alternative was an unlabelled
+   * ramp, and now restates what the swatches already say — "forecast air
+   * temperature" over a column reading -40 to 110. So a layer carrying a
+   * fetched scale shows the scale alone, and the descriptions that say
+   * something the colours cannot are kept in the catalogue rather than here.
+   */
+  const scaleHost = entry.legendScale ? el('div', { class: 'legend-slot' }) : null;
+  if (scaleHost) fillWMSLegend(scaleHost, entry.legendScale);
+
+  const descriptionNode = description || key || note || scaleHost || entry.legendImage
     ? el('div', { class: 'layer-desc', hidden: true }, [
-      description ? el('p', { class: 'layer-desc-text', text: description }) : null,
+      description && !scaleHost ? el('p', { class: 'layer-desc-text', text: description }) : null,
       key ? legendList(key, note) : (note ? el('p', { class: 'legend-note', text: note }) : null),
+      scaleHost,
       entry.legendImage
         ? el('div', { class: 'legend-image-wrap' }, [
           el('img', {

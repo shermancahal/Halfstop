@@ -1,59 +1,45 @@
 [
   {
-    "id": "legend:ndfd-sky-json",
-    "note": "GeoServer answered 200 with JSON but the find pattern matched nothing, so the key names are not colour/quantity/label. Reading the body this time instead of pattern-matching a guess at it.",
-    "expect": "data",
-    "url": "https://mapservices.weather.noaa.gov/geoserver/ndfd/wms?service=WMS&version=1.3.0&request=GetLegendGraphic&layer=ndfd:sky&format=application/json"
+    "id": "lp:gibs-black-marble-png",
+    "note": "The capabilities named the format: image/png, not jpg. That single letter is the whole of the 400 both earlier guesses returned. Level8 means the layer stops at z8, which suits a thing that is regional by nature.",
+    "at": [
+      -86.013,
+      39.654,
+      7
+    ],
+    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png"
   },
   {
-    "id": "legend:ndfd-temp-json",
-    "note": "Temperature is the long ramp - the one that decides whether the swatch list needs two columns.",
+    "id": "lp:lorenz-real-page",
+    "note": "Both earlier URLs were deprecation stubs redirecting to /astronomy/lp/. This is where they point. Looking for the tile pattern its viewer builds.",
     "expect": "data",
-    "url": "https://mapservices.weather.noaa.gov/geoserver/ndfd/wms?service=WMS&version=1.3.0&request=GetLegendGraphic&layer=ndfd:temp&format=application/json"
+    "find": "[\\w./]*tile[\\w./{}$+_-]*\\.(?:png|jpg)",
+    "url": "https://djlorenz.github.io/astronomy/lp/overlay/dark.html"
   },
   {
-    "id": "lp:gibs-black-marble-caps",
-    "note": "VIIRS_Black_Marble is a real GIBS identifier - it is in the capabilities - so the 400 is the time or the tile matrix set, not the layer. This lifts that layer's own block out of the document: its Format, its TileMatrixSetLink and whether it has a time dimension at all.",
+    "id": "rec:blm-rec-query-fields",
+    "note": "Recreation sites is a raster today, which is why the map fills with server-drawn names and nothing is clickable. Icons and a popup need it queried as GeoJSON instead - so this asks which field carries the site type.",
     "expect": "data",
-    "find": "<ows:Identifier>VIIRS_Black_Marble</ows:Identifier>[\\s\\S]{0,700}",
-    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/1.0.0/WMTSCapabilities.xml"
+    "url": "https://gis.blm.gov/arcgis/rest/services/recreation/BLM_Natl_Recreation_Site_Points/MapServer/0?f=pjson"
   },
   {
-    "id": "lp:gibs-night-lights-caps",
-    "note": "VIIRS_Night_Lights, the other candidate from the same list, in case Black Marble turns out to be awkward.",
+    "id": "rec:usgs-campgrounds-fields",
+    "note": "USGS structures sublayer 25, Campgrounds. Eleven sublayers are drawn together today; whether they can be queried as one request decides how heavy the icon version is.",
     "expect": "data",
-    "find": "<ows:Identifier>VIIRS_Night_Lights</ows:Identifier>[\\s\\S]{0,700}",
-    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/1.0.0/WMTSCapabilities.xml"
+    "url": "https://carto.nationalmap.gov/arcgis/rest/services/structures/MapServer/25?f=pjson"
   },
   {
-    "id": "lp:lorenz-root",
-    "note": "The atlas page came back 334 bytes, which is not a viewer - probably a redirect stub. Reading what it actually says, and trying the directory above it.",
+    "id": "rec:usgs-structures-query",
+    "note": "A real query over one small extent, to see what comes back and how big it is. If a bbox of a county returns thousands of points the icons need a zoom floor.",
     "expect": "data",
-    "url": "https://djlorenz.github.io/astronomy/lp2022/"
+    "find": "\"(?:NAME|FCODE|FTYPE|GNIS_NAME|LOADDATE)\":\\s*\"?[^,\"]{0,30}\"?",
+    "url": "https://carto.nationalmap.gov/arcgis/rest/services/structures/MapServer/25/query?where=1%3D1&outFields=*&geometry=-86.3%2C39.5%2C-85.7%2C39.9&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&resultRecordCount=3&f=geojson"
   },
   {
-    "id": "lp:lorenz-page",
-    "note": "The 334-byte answer itself, printed rather than pattern-matched.",
+    "id": "road:blm-transportation",
+    "note": "BLM publishes a `transportation` folder - the catalogue root listed it. GTLF, with the OHV designation on every route, should be in there.",
     "expect": "data",
-    "url": "https://djlorenz.github.io/astronomy/lp2022/overlay/dark.html"
-  },
-  {
-    "id": "road:blm-services",
-    "note": "248 bytes with no folder or service names extracted. Printing the body to see what shape BLM's catalogue root actually is.",
-    "expect": "data",
-    "url": "https://gis.blm.gov/arcgis/rest/services?f=pjson"
-  },
-  {
-    "id": "road:usfs-mvum-layers",
-    "note": "EDW_MVUM_02 is the current Motor Vehicle Use Map service. Its layer list and fields are what carry the vehicle class and seasonal restriction the off-road work needs.",
-    "expect": "data",
-    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_02/MapServer?f=pjson"
-  },
-  {
-    "id": "road:usfs-roadbasic-fields",
-    "note": "Road maintenance level - the class that says whether a road wants a truck or a Jeep - lives in EDW_RoadBasic_01.",
-    "expect": "data",
-    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RoadBasic_01/MapServer/0?f=pjson"
+    "url": "https://gis.blm.gov/arcgis/rest/services/transportation?f=pjson"
   },
   {
     "id": "img:ky-aerial-6in",

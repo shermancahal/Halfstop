@@ -20,6 +20,7 @@ import {
   weatherClass,
   expandAgency,
   parseISODuration,
+  parseWMSLegend,
 } from '../assets/js/lib/lookup.js';
 
 /** Replace global fetch for one test, restoring it afterwards. */
@@ -258,4 +259,107 @@ test('an ISO 8601 duration becomes whole hours', () => {
   // Anything unparseable is one hour, never zero — zero would drop the reading.
   assert.equal(parseISODuration(''), 1);
   assert.equal(parseISODuration('nonsense'), 1);
+});
+
+/*
+ * The GeoServer colour scales.
+ *
+ * Shape captured from the live NDFD service in CI, not written from the
+ * documentation — the first attempt at reading it guessed the key names and
+ * matched nothing, which is the whole argument for probing before building.
+ */
+const skyLegend = {
+  Legend: [{
+    layerName: 'sky',
+    rules: [{
+      symbolizers: [{
+        Raster: {
+          colormap: {
+            entries: [
+              { label: '0', quantity: '0', color: '#FFFFFF' },
+              { label: '25', quantity: '25', color: '#D0D8E0' },
+              { label: '50', quantity: '50', color: '#A0B0C0' },
+              { label: '100', quantity: '100', color: '#607080' },
+            ],
+          },
+        },
+      }],
+    }],
+  }],
+};
+
+test('legend: a colormap becomes swatches with the service own colours', () => {
+  assert.deepEqual(parseWMSLegend(skyLegend), [
+    { color: '#FFFFFF', label: '0' },
+    { color: '#D0D8E0', label: '25' },
+    { color: '#A0B0C0', label: '50' },
+    { color: '#607080', label: '100' },
+  ]);
+});
+
+test('legend: the nodata sentinel and transparent steps are not in the key', () => {
+  /*
+   * Temperature opens its colormap with {"label":"","quantity":"-500"}, which
+   * is nodata rather than a temperature anyone will stand in, and coverage gaps
+   * come through fully transparent. Both would draw as a row with no text
+   * beside a swatch of nothing.
+   */
+  const withSentinels = {
+    Legend: [{
+      rules: [{
+        symbolizers: [{
+          Raster: {
+            colormap: {
+              entries: [
+                { label: '', quantity: '-500', color: '#000000' },
+                { label: '  ', quantity: '-499', color: '#000000' },
+                { label: '-40', quantity: '-40', color: '#2B2BFF' },
+                { label: 'gap', quantity: '0', color: '#000000', opacity: '0' },
+                { label: '110', quantity: '110', color: '#FF2B2B' },
+              ],
+            },
+          },
+        }],
+      }],
+    }],
+  };
+  assert.deepEqual(parseWMSLegend(withSentinels), [
+    { color: '#2B2BFF', label: '-40' },
+    { color: '#FF2B2B', label: '110' },
+  ]);
+});
+
+test('legend: a step repeated in the ramp appears once in the key', () => {
+  // A ramp often holds one colour across neighbouring quantities. The same
+  // swatch and the same text twice in a column reads as a rendering fault.
+  const repeated = {
+    Legend: [{
+      rules: [{
+        symbolizers: [{
+          Raster: {
+            colormap: {
+              entries: [
+                { label: '10', quantity: '10', color: '#123456' },
+                { label: '10', quantity: '11', color: '#123456' },
+                { label: '20', quantity: '20', color: '#123456' },
+              ],
+            },
+          },
+        }],
+      }],
+    }],
+  };
+  assert.deepEqual(parseWMSLegend(repeated), [
+    { color: '#123456', label: '10' },
+    { color: '#123456', label: '20' },
+  ]);
+});
+
+test('legend: nothing usable is an empty list, never a throw', () => {
+  // The panel treats an empty key as "no key" and shows the layer name alone.
+  // Anything thrown here would take the whole layer row with it.
+  for (const body of [null, undefined, {}, { Legend: [] }, { Legend: [{}] },
+    { Legend: [{ rules: [{ symbolizers: [{}] }] }] }]) {
+    assert.deepEqual(parseWMSLegend(body), []);
+  }
 });

@@ -378,9 +378,9 @@ test('config: the weather group is a group, and every layer in it is a forecast 
   }
 
   // A continuous ramp with no key is decoration. Every layer here carries
-  // either a hand-written key or the service's own legend graphic.
+  // either a hand-written key or one fetched from the service that draws it.
   for (const entry of weather) {
-    const explained = entry.legendImage || entry.legendJSON
+    const explained = entry.legendScale || entry.legendImage || entry.legendJSON
       || (Array.isArray(entry.legend) && entry.legend.length);
     assert.ok(explained, `${entry.id} has no colour key`);
   }
@@ -394,6 +394,21 @@ test('config: a JSON legend names the sublayer it is the key for', () => {
     if (!entry.legendJSON) continue;
     assert.match(entry.legendJSON.url, /^https:\/\/.*legend/, `${entry.id} legend is not a legend request`);
     assert.equal(typeof entry.legendJSON.layer, 'number', `${entry.id} legend names no sublayer`);
+  }
+});
+
+test('config: a fetched colour scale asks GeoServer for JSON, not a picture', () => {
+  /*
+   * The point of the JSON form is that the swatch list is drawn in the panel's
+   * own type from the service's own colours. Asking for `format=image/png` here
+   * would still return a legend and still render — as a picture of somebody
+   * else's typography, which is what this replaced.
+   */
+  for (const entry of [...BASEMAPS, ...OVERLAYS]) {
+    if (!entry.legendScale) continue;
+    assert.match(entry.legendScale, /^https:\/\//, `${entry.id} scale is not https`);
+    assert.match(entry.legendScale, /GetLegendGraphic/, `${entry.id} scale is not a legend request`);
+    assert.match(entry.legendScale, /format=application\/json/, `${entry.id} scale asks for a picture`);
   }
 });
 

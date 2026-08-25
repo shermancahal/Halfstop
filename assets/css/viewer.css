@@ -974,6 +974,12 @@ html, body { height: 100%; overflow: hidden; }
 /* Colour key. Third-party raster tiles carry no attribute data, so the only
    way to say what a colour means is to write it down. */
 .legend { list-style: none; margin: 7px 0 0; padding: 0; display: grid; gap: 4px; }
+/* A long ramp reads down one column and up the next rather than becoming a
+   stripe taller than the panel, which pushes every layer under it out of
+   reach. Short keys stay in one column: two columns of three reads as a
+   mistake. */
+.legend.is-split { grid-template-columns: 1fr 1fr; column-gap: 12px; }
+@media (max-width: 380px) { .legend.is-split { grid-template-columns: 1fr; } }
 .legend-item { display: flex; align-items: center; gap: 7px; font-size: .75rem; color: var(--ink-2); }
 .legend-swatch {
   flex: none; width: 13px; height: 13px; border-radius: 3px;

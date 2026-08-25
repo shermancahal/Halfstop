@@ -362,3 +362,59 @@ export async function elevation([lon, lat]) {
   }
   return { ok: true, metres };
 }
+
+/**
+ * Turn a GeoServer JSON legend into a list of swatches.
+ *
+ * The weather layers used to carry a picture of their key — a PNG fetched from
+ * GeoServer and scaled into the panel — while the radar layer drew a list of
+ * coloured squares written out in the catalogue. Two layers in the same group
+ * explaining themselves two different ways, and the picture was the harder of
+ * the two to read.
+ *
+ * Asking GeoServer for `format=application/json` returns the same key as data,
+ * so the list can be drawn the way radar's is without NOAA's palette being
+ * copied into this repository — where it would be wrong the first time they
+ * restyle a layer, silently, and stay wrong.
+ *
+ * The shape, from the live service:
+ *
+ *   {"Legend":[{"layerName":"sky","rules":[{"symbolizers":[{"Raster":
+ *     {"colormap":{"entries":[{"label":"0","quantity":"0","color":"#000000"}]}}
+ *   }]}]}]}
+ *
+ * @returns {{color: string, label: string}[]}
+ */
+export function parseWMSLegend(body) {
+  const entries = [];
+  for (const legend of body?.Legend || []) {
+    for (const rule of legend.rules || []) {
+      for (const symbolizer of rule.symbolizers || []) {
+        for (const entry of symbolizer?.Raster?.colormap?.entries || []) {
+          entries.push(entry);
+        }
+      }
+    }
+  }
+
+  const seen = new Set();
+  return entries
+    /*
+     * Two kinds of entry are in the data but not in the key.
+     *
+     * Temperature's colormap opens with `{"label":"","quantity":"-500"}` — a
+     * nodata sentinel, not a temperature anybody will encounter — and
+     * transparent entries mark the gaps in coverage. Both would draw as a row
+     * with an empty label beside a swatch of nothing.
+     */
+    .filter((entry) => String(entry.label ?? '').trim() && Number(entry.opacity ?? 1) > 0)
+    .map((entry) => ({ color: entry.color || 'transparent', label: String(entry.label).trim() }))
+    // A ramp often repeats a colour across neighbouring steps; the same swatch
+    // and the same text twice in a column reads as a rendering fault.
+    .filter((entry) => {
+      const key = `${entry.color}|${entry.label}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}

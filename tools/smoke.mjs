@@ -234,6 +234,28 @@ await page.route('**/*', async (route) => {
   if (route.request().resourceType() === 'image' && !url.startsWith(new URL(URL_UNDER_TEST).origin)) {
     return route.fulfill({ status: 200, contentType: 'image/png', body: PIXEL });
   }
+  /*
+   * The weather colour scales, as GeoServer really answers them.
+   *
+   * Shape captured from the live NDFD service, including the nodata sentinel
+   * it opens with — a fixture that only holds the tidy entries would pass
+   * whether or not the panel filters them out.
+   */
+  if (/GetLegendGraphic.*application\/json/.test(url)) {
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ Legend: [{ layerName: 'temp', rules: [{ symbolizers: [{ Raster: {
+        colormap: { entries: [
+          { label: '', quantity: '-500', color: '#000000' },
+          ...Array.from({ length: 12 }, (unused, step) => ({
+            label: String(-40 + step * 12), quantity: String(-40 + step * 12),
+            color: `#${(0x2b2bff + step * 0x001100).toString(16).slice(-6)}`,
+          })),
+        ] },
+      } }] }] }] }),
+    });
+  }
   if (/WFIGS_Interagency_Perimeters/.test(url)) {
     return route.fulfill({ status: 200, contentType: 'application/geo+json', body: JSON.stringify(PERIMETERS) });
   }
@@ -594,6 +616,44 @@ check('and no label layer without glyphs to draw it with',
  * adds layers and never fills them looks identical, on screen, to a region
  * with no fires in it.
  */
+/*
+ * The weather keys, which used to be a fetched picture of somebody else's
+ * typography and are now the same swatch list the radar layer draws.
+ */
+console.log('\nA weather layer draws the service colour scale as swatches');
+await page.click('.panel-tab[data-tab="layers"]');
+await page.waitForTimeout(300);
+// The group is a <details>, and a row inside a closed one is not clickable.
+await page.locator('summary', { hasText: /Weather/ }).first().click();
+await page.waitForTimeout(200);
+const scale = await (async () => {
+  const row = page.locator('.layer-row', { hasText: /^Temperature/ }).first();
+  await row.locator('.layer-info, [aria-expanded]').first().click();
+  await page.waitForTimeout(400);
+  return row.evaluate((node) => {
+    // The description is the row's next sibling rather than a child of it —
+    // scoping this to the row itself finds nothing and reads as "the scale
+    // never rendered", which is a different bug entirely.
+    const desc = node.nextElementSibling;
+    const list = desc?.querySelector('.legend');
+    return {
+      swatches: desc?.querySelectorAll('.legend-swatch').length ?? 0,
+      split: !!list?.classList.contains('is-split'),
+      labels: [...(desc?.querySelectorAll('.legend-item') || [])].slice(0, 3)
+        .map((item) => item.textContent.trim()),
+      // The prose above it restated what the swatches say, so a layer with a
+      // scale shows the scale alone.
+      prose: desc?.querySelectorAll('.layer-desc-text').length ?? 0,
+      picture: desc?.querySelectorAll('.legend-image').length ?? 0,
+    };
+  });
+})();
+check('the scale is drawn as swatches, not fetched as a picture', scale.picture, 0);
+check('every step in the colormap has a swatch', scale.swatches, 12);
+check('the nodata sentinel is not one of them', scale.labels.includes(''), false);
+check('a long ramp splits into two columns', scale.split, true);
+check('and the prose that restated it is gone', scale.prose, 0);
+
 console.log('\nA queried overlay loads features for the view');
 await page.click('.panel-tab[data-tab="layers"]');
 await page.waitForTimeout(300);

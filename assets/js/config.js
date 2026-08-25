@@ -140,9 +140,24 @@ const wmsLegend = (endpoint, layer, options = LEGEND_OPTIONS) => `${endpoint}?se
   // form that was measured working rather than a re-encoded cousin of it.
   + `&legend_options=${options}`;
 
+/*
+ * The same key as data rather than as a picture.
+ *
+ * GeoServer will describe a raster's colormap as JSON, which lets the panel
+ * draw the swatch list the radar layer already draws instead of scaling a PNG
+ * of somebody else's typography into a 320px column. Same source of truth, so
+ * a restyle at NOAA still reaches the panel; it just arrives as colours and
+ * labels rather than as pixels.
+ */
+const wmsLegendScale = (endpoint, layer) => `${endpoint}?service=WMS&version=1.3.0`
+  + `&request=GetLegendGraphic&layer=${layer}&format=application/json`;
+
 const ndfdLayer = (layer) => ({
   tiles: [wmsTile(`${NWS_GEOSERVER}/ndfd/wms`, `ndfd:${layer}`)],
-  legendImage: wmsLegend(`${NWS_GEOSERVER}/ndfd/wms`, `ndfd:${layer}`),
+  // `legendScale`, not `legendJSON`: that name is already the ArcGIS form,
+  // which is an object naming a sublayer. Two different services, two
+  // different shapes, and one name over both is how the wrong key gets drawn.
+  legendScale: wmsLegendScale(`${NWS_GEOSERVER}/ndfd/wms`, `ndfd:${layer}`),
 });
 const ESRI_ATTRIBUTION = 'Imagery © <a href="https://www.esri.com/">Esri</a>, Maxar, Earthstar Geographics';
 
