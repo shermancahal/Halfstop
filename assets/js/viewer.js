@@ -164,6 +164,7 @@ const state = {
   // somebody else's idea of a pair.
   temperature: readSetting('temp', 'F'),
   scaleControl: null,
+  shieldStateName: '',
   activeKey: null,
   colorCursor: 0,
   profile: null,
@@ -685,10 +686,47 @@ function layerIsBroken(id) {
   return Boolean(health && health.ok === 0 && health.failed >= 4);
 }
 
+/**
+ * The overlays that apply where the map is looking.
+ *
+ * Most apply everywhere. A few are one state's own data — Kentucky publishes
+ * aerial imagery of a quality no national service comes near, and it stops at
+ * the state line. Fifty states' worth of those in one flat list would be
+ * unusable, so an overlay can name the states it covers and the panel only
+ * offers it inside them.
+ *
+ * Before the map has been placed, state layers are held back rather than shown
+ * everywhere: a layer that draws nothing is worse than one that is not there.
+ */
+function inScopeOverlays() {
+  return OVERLAYS.filter((overlay) => !overlay.states
+    || (state.shieldState && overlay.states.includes(state.shieldState)));
+}
+
 function activeOverlays() {
-  return OVERLAYS
+  return inScopeOverlays()
     .filter((o) => state.overlays.get(o.id)?.visible)
     .map((o) => ({ ...o, opacity: state.overlays.get(o.id).opacity }));
+}
+
+/**
+ * Add or drop the state layers as the map crosses a line.
+ *
+ * A switched-on layer keeps its setting while you are outside the state it
+ * covers, so coming back turns it on again rather than making you find it
+ * twice — but it comes off the map, because it has nothing to draw there.
+ */
+function syncStateOverlays() {
+  if (!state.map || !styleReady()) return;
+
+  for (const overlay of OVERLAYS) {
+    if (!overlay.states) continue;
+    const wanted = state.overlays.get(overlay.id)?.visible
+      && state.shieldState && overlay.states.includes(state.shieldState);
+    const present = Boolean(state.map.getLayer(overlayLayerIds(overlay)[0]));
+    if (wanted && !present) addOverlayLayer(overlay);
+    else if (!wanted && present) removeOverlayLayer(overlay.id);
+  }
 }
 
 function renderLayersTab() {
@@ -751,8 +789,11 @@ function renderLayersTab() {
   // scan. A group opens automatically when something inside it is switched on,
   // so an active layer is never hidden behind a closed heading.
   const overlayGroups = new Map();
-  for (const overlay of OVERLAYS) {
-    const name = overlay.group || 'Other';
+  for (const overlay of inScopeOverlays()) {
+    // A state's own layers are grouped under the state's name rather than the
+    // subject heading they would otherwise share, because "Kentucky" is the
+    // fact that makes them worth reading.
+    const name = overlay.states ? (state.shieldStateName || 'This state') : (overlay.group || 'Other');
     if (!overlayGroups.has(name)) overlayGroups.set(name, []);
     overlayGroups.get(name).push(overlay);
   }
@@ -1051,7 +1092,14 @@ function trackShieldState() {
     if (!code || code === state.shieldState) return;
 
     state.shieldState = code;
+    state.shieldStateName = place?.regionName || '';
     registerShieldImages(state.map, { state: code, base: assetBase() });
+
+    // The layer list carries a group for whichever state the map is over, so it
+    // has to be redrawn when that changes. Also takes the state's own layers
+    // off the map on the way out, and puts them back on the way in.
+    syncStateOverlays();
+    renderLayersTab();
 
     if (!styleReady() || !state.map.getLayer('road-shield')) return;
     try {

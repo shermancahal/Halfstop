@@ -1,25 +1,26 @@
 [
   {
-    "id": "cap:ky-map-services",
-    "note": "Kentucky's public map services. Web Mercator by policy, which is what a web map needs.",
-    "url": "https://kygisserver.ky.gov/arcgis/rest/services?f=pjson"
+    "id": "cap:ky-wgs84",
+    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services?f=pjson"
   },
   {
-    "id": "cap:ky-raster-services",
-    "note": "Kentucky's public image services: KyFromAbove aerial and lidar elevation.",
-    "url": "https://kyraster.ky.gov/arcgis/rest/services?f=pjson"
+    "id": "cap:ky-images",
+    "url": "https://kyraster.ky.gov/arcgis/rest/services/ImageServices?f=pjson"
   },
   {
-    "id": "cap:tn-services",
-    "note": "Tennessee's equivalent.",
-    "url": "https://tnmap.tn.gov/arcgis/rest/services?f=pjson"
+    "id": "cap:ky-elevation",
+    "url": "https://kyraster.ky.gov/arcgis/rest/services/ElevationServices?f=pjson"
   },
   {
-    "id": "cap:wv-services",
-    "url": "https://services.wvgis.wvu.edu/arcgis/rest/services?f=pjson"
+    "id": "cap:ky-thematic",
+    "url": "https://kyraster.ky.gov/arcgis/rest/services/ThematicServices?f=pjson"
   },
   {
-    "id": "cap:va-services",
-    "url": "https://gismaps.vdot.virginia.gov/arcgis/rest/services?f=pjson"
+    "id": "cap:tn-basemaps",
+    "url": "https://tnmap.tn.gov/arcgis/rest/services/BASEMAPS?f=pjson"
+  },
+  {
+    "id": "cap:tn-elevation",
+    "url": "https://tnmap.tn.gov/arcgis/rest/services/ELEVATION?f=pjson"
   }
 ]
