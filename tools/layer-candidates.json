@@ -1,17 +1,25 @@
 [
   {
-    "id": "cap:fcc-mobile-tiles",
-    "note": "Cell coverage. 403 to anything that is not the FCC's own page, and no CORS header. Kept so the weekly run notices if that ever changes.",
-    "url": "https://broadbandmap.fcc.gov/nbm/map/api/tiles/mobile/{z}/{x}/{y}.png"
+    "id": "cap:ky-map-services",
+    "note": "Kentucky's public map services. Web Mercator by policy, which is what a web map needs.",
+    "url": "https://kygisserver.ky.gov/arcgis/rest/services?f=pjson"
   },
   {
-    "id": "cap:fcc-mobile-fields",
-    "note": "The readable FCC layer, which has no provider field. Per-carrier coverage becomes possible the day one appears here.",
-    "url": "https://services6.arcgis.com/clPWQMwZfdWn4MQZ/arcgis/rest/services/FCC_Mobile_Broadband/FeatureServer/195/query?where=1%3D1&outFields=*&resultRecordCount=1&returnGeometry=false&f=pjson"
+    "id": "cap:ky-raster-services",
+    "note": "Kentucky's public image services: KyFromAbove aerial and lidar elevation.",
+    "url": "https://kyraster.ky.gov/arcgis/rest/services?f=pjson"
   },
   {
-    "id": "cap:nifc-server",
-    "note": "An ArcGIS Server would let the fire perimeters be tiles again rather than a per-view query. Has not answered from CI so far.",
-    "url": "https://gis.nifc.gov/arcgis/rest/services?f=pjson"
+    "id": "cap:tn-services",
+    "note": "Tennessee's equivalent.",
+    "url": "https://tnmap.tn.gov/arcgis/rest/services?f=pjson"
+  },
+  {
+    "id": "cap:wv-services",
+    "url": "https://services.wvgis.wvu.edu/arcgis/rest/services?f=pjson"
+  },
+  {
+    "id": "cap:va-services",
+    "url": "https://gismaps.vdot.virginia.gov/arcgis/rest/services?f=pjson"
   }
 ]
