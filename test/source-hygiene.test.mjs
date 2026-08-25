@@ -132,3 +132,39 @@ test('single-valued colour properties carry exactly one value', async () => {
 
   assert.deepEqual(bad, [], `\n${bad.join('\n')}\n`);
 });
+
+/*
+ * Exactly one workflow may publish the site.
+ *
+ * There were two. Both ran on every push, both went green, and the second
+ * finished about thirteen seconds after the first — so it overwrote every good
+ * deploy with a build of the repository root: no token.js (gitignored, so never
+ * in the repo), no build stamp, no cache-busted filenames. The site worked well
+ * enough to hide it, and the only visible symptom was a 404 on two files.
+ *
+ * Nothing about that was detectable from inside the app, and both workflows
+ * reported success, so the check has to live here.
+ */
+test('only one workflow deploys to Pages', async () => {
+  const dir = '.github/workflows';
+  const publishers = [];
+
+  for (const name of await readdir(dir)) {
+    if (!/\.ya?ml$/.test(name)) continue;
+    const text = await readFile(path.join(dir, name), 'utf8');
+    if (/actions\/deploy-pages@/.test(text)) publishers.push(name);
+  }
+
+  assert.deepEqual(publishers, ['deploy-pages.yml'],
+    `these all publish to Pages and will race each other: ${publishers.join(', ')}`);
+});
+
+test('the published artifact is the built site, not the repository', async () => {
+  // `path: .` uploads the working tree — which looks almost right, and is
+  // missing every generated file.
+  const text = await readFile('.github/workflows/deploy-pages.yml', 'utf8');
+  const uploads = [...text.matchAll(/upload-pages-artifact@v\d[\s\S]{0,120}?path:\s*(\S+)/g)]
+    .map((match) => match[1]);
+
+  assert.deepEqual(uploads, ['./dist'], 'Pages must publish ./dist');
+});

@@ -1,25 +1,25 @@
 name: Publish to GitHub Pages
 
-# A second, independent home for the built site, at
-# https://shermancahal.github.io/Map/
+# The one thing that publishes https://shermancahal.github.io/Map/
 #
-# This exists because the FTP deploy depends on the host's document root being
-# what you think it is, and when it is not, the failure is invisible: the upload
-# succeeds, the log is green, and the site does not change. Pages has no
-# equivalent failure mode — GitHub serves exactly the artifact this workflow
-# builds, or the run fails and says so.
+# "The one thing" is load-bearing. There used to be a second workflow that also
+# deployed to Pages, uploading the repository root instead of ./dist. Both ran
+# on every push, both went green, and the second finished about thirteen
+# seconds after the first — so it silently overwrote every good deploy with a
+# build that had no token.js (gitignored, so never in the repo), no
+# deployed.txt, and no cache-busted filenames. The symptom was a 404 on two
+# files nobody could explain, on a site that otherwise worked.
 #
-# It publishes ./dist, the same package the FTP deploy sends, so the two hosts
-# never drift. Nothing outside dist/ is published: no README, no tests, no
-# tooling.
-#
-# One-time setup: Settings -> Pages -> Source -> "GitHub Actions".
+# The `confirm` job at the bottom exists so that cannot happen again quietly:
+# it reads the live site after publishing and fails if what is served is not
+# what this run built.
 
 on:
   push:
     branches:
       - main
       - 'claude/**'
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -34,28 +34,57 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
-    name: Build the site
+  verify:
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Run tests
+      - name: Unit tests
         run: npm test
 
       - name: Verify data/catalog.json matches data/maps/
         run: npm run check
 
+      - name: Validate the map style
+        # Mapbox GL aborts style loading on any spec error and renders nothing,
+        # having already reported success — a blank map with a clean console is
+        # what one bad property looks like. Worth the install.
+        run: |
+          npm install --no-save @mapbox/mapbox-gl-style-spec
+          npm run validate:style
+
+      - name: Smoke test
+        # Drives the real app against a stubbed map engine. This is the only
+        # check that sees the class of bug the unit tests structurally cannot:
+        # the app talking to a map over time — basemap switches dropping saved
+        # pins, layers rejected at addLayer, state that does not survive a
+        # reload.
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+          npm run smoke
+
+  build:
+    name: Build
+    needs: verify
+    runs-on: ubuntu-latest
+    outputs:
+      commit: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Write the client config
-        # Unlike the FTP deploy, this cannot blank a token already on a server:
-        # Pages replaces the whole site each time, so there is nothing to
-        # preserve. The file is always written, even when empty, so the script
-        # tag that loads it does not 404 — the app runs without a token, on
-        # MapLibre and the raster basemaps.
+        # Pages replaces the whole site each time, so there is nothing on the
+        # far end to preserve and the file is always written — even empty, so
+        # the script tag that loads it does not 404. The app runs without a
+        # token, on MapLibre and the raster basemaps.
         env:
           MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -66,7 +95,17 @@ jobs:
             printf "window.ABMAP_SUPABASE_URL = '%s';\n" "$SUPABASE_URL"
             printf "window.ABMAP_SUPABASE_KEY = '%s';\n" "$SUPABASE_KEY"
           } > assets/js/token.js
-          echo "Client config written: mapbox=${#MAPBOX_TOKEN} chars, supabase=${#SUPABASE_URL} chars"
+
+          echo "mapbox=${#MAPBOX_TOKEN} chars, supabase=${#SUPABASE_URL} chars"
+          {
+            echo "### Client config"
+            if [ -n "$MAPBOX_TOKEN" ]; then
+              echo "- Mapbox token present (${#MAPBOX_TOKEN} chars) — vector basemaps and route shields will render."
+            else
+              echo "- **No MAPBOX_TOKEN secret.** Byways Topo cannot render and falls back to CyclOSM raster:"
+              echo "  different colours, no route shields. Set it under Settings → Secrets and variables → Actions."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Stage the upload package
         run: npm run build && node tools/build-dist.mjs
@@ -87,6 +126,7 @@ jobs:
         # drops files and directories whose names begin with an underscore.
         run: touch dist/.nojekyll
 
+      - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist
@@ -94,10 +134,75 @@ jobs:
   deploy:
     name: Publish
     needs: build
+    # A pull request gets the tests and the build, not the site.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  confirm:
+    name: Confirm what is live
+    needs: deploy
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read the live site back
+        env:
+          PAGE_URL: ${{ needs.deploy.outputs.url }}
+          HAS_TOKEN: ${{ secrets.MAPBOX_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          echo "Checking $PAGE_URL"
+
+          # Pages can take a few seconds to serve a new deployment.
+          stamp=""
+          for attempt in 1 2 3 4 5 6; do
+            if stamp=$(curl -fsS --max-time 20 "${PAGE_URL}deployed.txt" 2>/dev/null); then break; fi
+            echo "  deployed.txt not there yet (attempt $attempt); waiting"
+            sleep 10
+            stamp=""
+          done
+
+          if [ -z "$stamp" ]; then
+            echo "::error::deployed.txt is not being served. Something other than this workflow is publishing to Pages."
+            exit 1
+          fi
+
+          echo "$stamp"
+          if ! grep -q "$GITHUB_SHA" <<<"$stamp"; then
+            echo "::error::The live build stamp is not this commit. Another workflow is deploying over this one."
+            grep '^commit:' <<<"$stamp"
+            echo "expected: $GITHUB_SHA"
+            exit 1
+          fi
+
+          # token.js must exist. Whether it has a token in it depends on the
+          # secret, and the two failures are different: a 404 means the wrong
+          # thing was published, an empty value means the secret is unset.
+          config=$(curl -fsS --max-time 20 "${PAGE_URL}assets/js/token.js") || {
+            echo "::error::assets/js/token.js is not being served — the published artifact is not the built site."
+            exit 1
+          }
+
+          if [ "$HAS_TOKEN" = "true" ] && grep -q "ABMAP_MAPBOX_TOKEN = ''" <<<"$config"; then
+            echo "::error::MAPBOX_TOKEN is set as a secret but did not reach the published site."
+            exit 1
+          fi
+
+          {
+            echo "### Live at $PAGE_URL"
+            echo '```'
+            echo "$stamp"
+            echo '```'
+            if [ "$HAS_TOKEN" = "true" ]; then
+              echo "Mapbox token is being served."
+            else
+              echo "No Mapbox token — running on the open raster basemaps."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
