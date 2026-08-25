@@ -28,7 +28,7 @@
 import { chromium } from 'playwright';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 
@@ -55,6 +55,22 @@ const MIME = {
 async function serveFreshBuild() {
   execFileSync(process.execPath, [path.join(ROOT, 'tools', 'build-dist.mjs')], { stdio: 'ignore' });
   const dist = path.join(ROOT, 'dist');
+
+  /*
+   * A token in the served build, which is not a detail.
+   *
+   * Route shields only exist in the Byways Topo vector style, and that style
+   * only renders with a Mapbox token — so without one the whole feature is
+   * absent from the page rather than broken on it, and every check written
+   * against it passes by finding nothing. Which is exactly what happened: the
+   * shields were reported generic on the live site while the smoke test was
+   * green, because the smoke test was never looking at a map that had them.
+   *
+   * Written into dist rather than into the source tree: dist is disposable and
+   * assets/js/token.js is somebody's real key.
+   */
+  await writeFile(path.join(dist, 'assets', 'js', 'token.js'),
+    "window.ABMAP_MAPBOX_TOKEN = 'pk.smoke.notarealtoken';\n");
 
   const server = createServer(async (request, response) => {
     let name = decodeURIComponent(new URL(request.url, 'http://x').pathname);
@@ -107,7 +123,10 @@ moveLayer(){}
 // layer it is set on is a real bug (raster-opacity on a fill), and a stub that
 // swallows the call cannot catch it.
 setPaintProperty(i,p,v){const l=this._l.get(i);if(l){l.paint=l.paint||{};l.paint[p]=v}}
-setLayoutProperty(){}
+// Recorded for the same reason as paint: which image a shield layer ends up
+// asking for is the whole of whether the route markers are right, and a stub
+// that swallows the call cannot tell.
+setLayoutProperty(i,p,v){const l=this._l.get(i);if(l){l.layout=l.layout||{};l.layout[p]=v}}
 setStyle(s,o){this._ready=false;
   // Model both paths GL takes. With diff:true (the default) it applies the
   // difference and NEVER fires 'style.load' — it just drops the layers that are
@@ -298,6 +317,34 @@ check('document layers present', afterImport.documentLayers > 0, true);
  * on offer here — which is the half of the behaviour that is easy to get wrong
  * and impossible to notice.
  */
+/*
+ * The route markers, end to end.
+ *
+ * Reported twice as "all states are generic". Everything under it was tested —
+ * the expression builders, the blanks, the contrast of every number — and none
+ * of it was looking at a map with shields on it, because they only exist in the
+ * vector style and the vector style needs a token. So this asks the one
+ * question all of that was standing in for: after the map has settled over
+ * Tennessee, which image is the shield layer actually asking for?
+ */
+console.log('\nThe route markers follow the state the map is over');
+await page.waitForTimeout(1500);
+const shields = await page.evaluate(() => {
+  const map = window.__map;
+  const layer = map.getLayer('road-shield');
+  return {
+    exists: Boolean(layer),
+    resolvedState: window.__abmapState || null,
+    iconImage: JSON.stringify(layer?.layout?.['icon-image'] || null),
+    tennesseeImages: map.imageIds().filter((id) => id.includes('st-TN')),
+    anyStateImages: map.imageIds().filter((id) => id.startsWith('abmap-shield-')).length,
+  };
+});
+check('the shield layer is on the map at all', shields.exists, true);
+check('Tennessee images are registered', shields.tennesseeImages.length > 0, true);
+check('and the layer asks for Tennessee, not the generic design',
+  /st-TN/.test(shields.iconImage), true);
+
 console.log('\nA state layer is offered only inside its state');
 const scoped = await page.evaluate(async () => {
   const config = await import('./assets/js/config.js');

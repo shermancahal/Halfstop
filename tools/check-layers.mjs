@@ -148,6 +148,22 @@ function layerNames(body) {
     if (Array.isArray(parsed.fields) && parsed.fields.length) {
       return parsed.fields.map((field) => field.name);
     }
+    /*
+     * A feature collection describes the data itself, which is the only way to
+     * settle what a vector tile actually tags a road with. Guessing at that
+     * vocabulary — rather than reading it — is the most expensive mistake in
+     * this project's history, twice over.
+     */
+    if (Array.isArray(parsed.features) && parsed.features.length) {
+      return parsed.features.slice(0, 24).map((feature) => {
+        const props = feature.properties || {};
+        const keep = ['class', 'type', 'ref', 'shield', 'reflen', 'name', 'surface'];
+        const shown = keep.filter((key) => props[key] !== undefined)
+          .map((key) => `${key}=${props[key]}`).join(' ');
+        return shown || Object.keys(props).slice(0, 8).join(',');
+      });
+    }
+
     const layers = parsed.layers || parsed.services || parsed.folders || [];
     for (const layer of layers) {
       if (typeof layer === 'string') found.push(layer);
