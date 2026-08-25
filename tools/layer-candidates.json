@@ -1,27 +1,7 @@
 [
   {
-    "id": "geo:app-url-as-shipped",
-    "note": "Exactly what the app sends, at the reporter's own view in Texas. Reported 422 in the browser. Four types with limit=5 — v5 allows limit>1 only alongside a single type.",
-    "url": "https://api.mapbox.com/geocoding/v5/mapbox.places/-97.69575518906544,32.29939042130714.json?access_token={token}&types=address,place,locality,region&limit=5"
-  },
-  {
-    "id": "geo:same-without-limit",
-    "note": "The same four types with the limit dropped. If this is a 200 the limit is the whole fault.",
-    "url": "https://api.mapbox.com/geocoding/v5/mapbox.places/-97.69575518906544,32.29939042130714.json?access_token={token}&types=address,place,locality,region"
-  },
-  {
-    "id": "geo:no-types-at-all",
-    "note": "The candidate fix: ask for the hierarchy and read the state out of it, so no combination of types and limit can be illegal.",
-    "url": "https://api.mapbox.com/geocoding/v5/mapbox.places/-97.69575518906544,32.29939042130714.json?access_token={token}"
-  },
-  {
-    "id": "geo:region-only",
-    "note": "One type with limit=1 — the legal shape, and the one the earlier probe used, which is why it passed while the app failed.",
-    "url": "https://api.mapbox.com/geocoding/v5/mapbox.places/-97.69575518906544,32.29939042130714.json?access_token={token}&types=region&limit=1"
-  },
-  {
-    "id": "geo:kentucky-no-types",
-    "note": "The same fix over Kentucky, to be sure the shape is not a Texas accident.",
+    "id": "geo:reverse-as-shipped",
+    "note": "Exactly the URL the app sends, so this fails when the app fails. The version before it asked for four types alongside limit=5 and was answered 422 for months, while a probe of a convenient single-type URL reported the geocoder healthy.",
     "url": "https://api.mapbox.com/geocoding/v5/mapbox.places/-85.730495,37.291094.json?access_token={token}"
   },
   {

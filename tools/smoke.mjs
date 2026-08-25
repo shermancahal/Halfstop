@@ -341,6 +341,29 @@ const shields = await page.evaluate(() => {
   };
 });
 check('the shield layer is on the map at all', shields.exists, true);
+
+/*
+ * Every image the layer can name, present before anything asks for it.
+ *
+ * Reported from the live site as five lines of `Image "abmap-shield-state-2"
+ * could not be loaded`. Those are the *generic* markers — the ones that need no
+ * state and no network — so a map that cannot draw them draws no shields at
+ * all, which is a different and worse failure than drawing the wrong ones.
+ *
+ * `state` and `default` are drawn on a canvas and must be there the moment
+ * registration returns; `us` and `interstate` come from PNG blanks and are
+ * allowed to arrive late, so they are given a moment.
+ */
+const baseImages = await page.evaluate(async () => {
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  const have = new Set(window.__map.imageIds());
+  const want = [];
+  for (const design of ['interstate', 'us', 'state', 'default']) {
+    for (const length of [2, 3, 4]) want.push(`abmap-shield-${design}-${length}`);
+  }
+  return want.filter((id) => !have.has(id));
+});
+check('no generic shield image is missing', baseImages, []);
 check('Tennessee images are registered', shields.tennesseeImages.length > 0, true);
 check('and the layer asks for Tennessee, not the generic design',
   /st-TN/.test(shields.iconImage), true);

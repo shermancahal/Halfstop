@@ -168,3 +168,40 @@ test('the published artifact is the built site, not the repository', async () =>
 
   assert.deepEqual(uploads, ['./dist'], 'Pages must publish ./dist');
 });
+
+test('no reverse-geocode URL combines a limit with several types', async () => {
+  /*
+   * Mapbox answers that combination with a 422 and this message:
+   *
+   *   limit must be combined with a single type parameter when reverse geocoding
+   *
+   * The app shipped exactly that for months. Nothing caught it because a failed
+   * lookup is indistinguishable from one that has not answered yet — the place
+   * name is simply absent — and because the probe written to check the geocoder
+   * used a single type, a legal URL the app never sends.
+   *
+   * A source-level guard rather than a behavioural one, because the failure is
+   * in the request and no amount of testing the response can see it.
+   */
+  const raw = await readFile(path.join('assets', 'js', 'lib', 'place.js'), 'utf8');
+
+  /*
+   * Join concatenated template literals before matching.
+   *
+   * The first version of this test did not, and passed against the broken URL
+   * it was written to catch — the query string lives in the second half of a
+   * `` `...` + `...` `` pair, so a pattern anchored on the hostname only ever
+   * saw the half with no parameters in it. A guard that cannot fail is worse
+   * than none: it reads as coverage.
+   */
+  const source = raw.replace(/`\s*\+\s*`/g, '');
+
+  for (const [url] of source.matchAll(/`https:\/\/api\.mapbox\.com\/geocoding[^`]*`/g)) {
+    const types = /[?&]types=([^&`$]*)/.exec(url)?.[1] || '';
+    const hasLimit = /[?&]limit=/.test(url);
+    assert.ok(
+      !(hasLimit && types.includes(',')),
+      `this URL asks for several types alongside a limit, which Mapbox rejects: ${url}`,
+    );
+  }
+});

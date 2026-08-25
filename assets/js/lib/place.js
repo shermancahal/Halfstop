@@ -199,36 +199,98 @@ export async function reverseGeocode([lon, lat]) {
   const key = `${lat.toFixed(4)},${lon.toFixed(4)}`;
   if (geocodeCache.has(key)) return geocodeCache.get(key);
 
+  /*
+   * No `types`, and no `limit`.
+   *
+   * This used to ask for `types=address,place,locality,region&limit=5`, and
+   * every one of those requests came back 422. The v5 API allows a `limit`
+   * above 1 only alongside a *single* `types` value — four types and a limit of
+   * five is not a narrower query, it is an invalid one.
+   *
+   * It failed silently for as long as it existed. `reverseGeocode` returns null
+   * on a bad response and every caller treats null as "no answer yet", so the
+   * place name was simply absent and the route markers quietly fell back to the
+   * generic design. What made it survive review is that the probe written to
+   * check the geocoder used a single type — a legal URL that the app never
+   * sends. Probing a convenient URL instead of the shipped one proves the
+   * service is up and nothing about whether the app can talk to it.
+   *
+   * Asking for the whole hierarchy needs neither parameter, so there is no
+   * combination left to get wrong.
+   */
   const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lon},${lat}.json`
-    + `?access_token=${encodeURIComponent(MAPBOX_TOKEN)}&types=address,place,locality,region&limit=5`;
+    + `?access_token=${encodeURIComponent(MAPBOX_TOKEN)}`;
 
   try {
     const response = await fetch(url);
-    if (!response.ok) return null;
-    const data = await response.json();
-    const features = data.features || [];
-
-    const byType = (type) => features.find((feature) => (feature.place_type || []).includes(type));
-    const address = byType('address');
-    const place = byType('place') || byType('locality');
-    const region = byType('region');
-
-    const result = {
-      address: address?.place_name?.split(',')[0] || '',
-      place: place?.text || '',
-      context: [place?.text, region?.text].filter(Boolean).join(', '),
-      // Two-letter state code, from Mapbox's ISO 3166-2 short code ("US-KY").
-      // Route shields are per-state, and the road data does not reliably say
-      // which state a road is in — where you are looking does.
-      regionCode: (region?.properties?.short_code || '').replace(/^US-/i, '').toUpperCase(),
-      // The state's own name, so a panel that groups something by state can
-      // write "Kentucky" without carrying a table of fifty codes to do it.
-      regionName: region?.text || '',
-    };
+    if (!response.ok) {
+      warnOnce(`[place] the geocoder refused the request: ${response.status} ${response.statusText}. `
+        + 'Place names and state route markers will be unavailable.');
+      return null;
+    }
+    const result = parsePlace(await response.json());
     geocodeCache.set(key, result);
     return result;
   } catch {
     // Offline, or the request was blocked. The panel simply omits the section.
     return null;
   }
+}
+
+/** Said once rather than on every pan, which would be a wall of identical lines. */
+const warned = new Set();
+function warnOnce(message) {
+  if (warned.has(message)) return;
+  warned.add(message);
+  console.warn(message);
+}
+
+/**
+ * Pull a place, an address and a state out of a v5 reverse-geocode answer.
+ *
+ * Separate from the request because the two fail in different ways and only one
+ * of them can be tested without a network: this is the half that decides which
+ * state route marker the whole map draws, from a response shape that varies
+ * with what actually exists at the point.
+ *
+ * The variation is the reason for `pick`. Mapbox returns the hierarchy two
+ * ways — as sibling features in `features`, and as a `context` array hanging
+ * off the most specific one — and which you get depends on the location. Out in
+ * open country there may be no address feature at all and the state is only
+ * ever in `context`. Reading just one of the two works everywhere the developer
+ * happened to test and nowhere else.
+ */
+export function parsePlace(data) {
+  const features = data?.features || [];
+
+  const byType = (type) => features.find((feature) => (feature.place_type || []).includes(type));
+  const inContext = (type) => {
+    for (const feature of features) {
+      const hit = (feature.context || []).find((entry) => String(entry.id || '').startsWith(`${type}.`));
+      if (hit) return hit;
+    }
+    return null;
+  };
+  const pick = (type) => byType(type) || inContext(type);
+
+  // A sibling feature carries its short code under `properties`; a context
+  // entry carries it at the top level. Same field, two places.
+  const shortCode = (entry) => entry?.properties?.short_code || entry?.short_code || '';
+
+  const address = byType('address');
+  const place = pick('place') || pick('locality');
+  const region = pick('region');
+
+  return {
+    address: address?.place_name?.split(',')[0] || '',
+    place: place?.text || '',
+    context: [place?.text, region?.text].filter(Boolean).join(', '),
+    // Two-letter state code, from Mapbox's ISO 3166-2 short code ("US-KY").
+    // Route shields are per-state, and the road data does not reliably say
+    // which state a road is in — where you are looking does.
+    regionCode: shortCode(region).replace(/^US-/i, '').toUpperCase(),
+    // The state's own name, so a panel that groups something by state can
+    // write "Kentucky" without carrying a table of fifty codes to do it.
+    regionName: region?.text || '',
+  };
 }
