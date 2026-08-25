@@ -175,8 +175,12 @@ async function probe(entry) {
       ms: Date.now() - started,
       verdict: !response.ok ? 'failed'
         : !isImage ? 'not an image'
-          : bytes < EMPTY_BYTES ? (entry.seasonal ? 'empty (seasonal)' : 'blank')
-            : 'ok',
+          // A tile a browser is not allowed to read is a tile that does not
+          // draw, however well it downloads from a script. Worth failing on:
+          // it is invisible from every other angle.
+          : !response.headers.get('access-control-allow-origin') ? 'no CORS'
+            : bytes < EMPTY_BYTES ? (entry.seasonal ? 'empty (seasonal)' : 'blank')
+              : 'ok',
       text,
       cors: response.headers.get('access-control-allow-origin') || '',
       names: isImage ? [] : layerNames(decoded),
@@ -198,6 +202,7 @@ if (asJSON) {
 } else {
   const mark = {
     ok: 'ok  ', blank: 'BLANK', failed: 'FAIL', 'not an image': 'FAIL', unreachable: 'DOWN',
+    'no CORS': 'CORS',
     // Snow depth in August is empty because there is no snow, not because the
     // service is wrong. Marked in the catalogue rather than guessed at here.
     'empty (seasonal)': 'ok  ',
