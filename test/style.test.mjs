@@ -383,6 +383,31 @@ test('byways: a concurrency gets two shields, not one hyphenated one', () => {
   assert.notEqual(textX(first), JSON.stringify(plain.layout['text-offset']));
 });
 
+test('byways: unpaved roads are marked, and say so in their label', () => {
+  // Mapbox Streets carries surface as paved/unpaved and nothing finer, so this
+  // is the whole of what the tiles know about what a road is made of. It is
+  // still the difference between a drive and a decision.
+  const layers = bywaysStyle('pk.test').layers;
+  const unpaved = layers.find((layer) => layer.id === 'road-unpaved');
+  assert.ok(unpaved, 'no unpaved layer');
+  assert.ok(JSON.stringify(unpaved.filter).includes('surface'), 'it should key on the surface field');
+  assert.ok(unpaved.paint['line-dasharray'], 'and be dashed, or it is just another road');
+
+  // Drawn over the fills rather than under them: a dash beneath the road it
+  // describes is invisible.
+  const at = (id) => layers.findIndex((layer) => layer.id === id);
+  assert.ok(at('road-unpaved') > at('road-primary'), 'the dashes go on top of the road');
+  assert.ok(at('road-unpaved') < at('label-road'), 'but under the labels');
+
+  const label = layers.find((layer) => layer.id === 'label-road');
+  assert.ok(JSON.stringify(label.layout['text-field']).includes('unpaved'),
+    'the road label should carry the surface');
+
+  const trail = layers.find((layer) => layer.id === 'label-trail');
+  assert.ok(trail, 'no trail label layer');
+  assert.ok(trail.minzoom > label.minzoom, 'trail names come in later than road names');
+});
+
 test('byways: the road hierarchy is coloured by class, not uniformly', () => {
   const style = bywaysStyle('pk.test');
   const colourOf = (id) => style.layers.find((l) => l.id === id).paint['line-color'];

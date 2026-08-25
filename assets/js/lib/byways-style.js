@@ -116,6 +116,21 @@ const ROAD_CLASSES = {
  */
 const LABEL_NAME = ['coalesce', ['get', 'name_en'], ['get', 'name']];
 
+/*
+ * Whether the road is unsealed.
+ *
+ * `surface` is the only surface detail in Mapbox Streets — paved or unpaved,
+ * and only where OpenStreetMap has it — so gravel, dirt and sand all arrive
+ * here as the same word. That is worth saying plainly rather than implying a
+ * precision the tiles do not carry: this map can tell you a road is not sealed,
+ * not what it is made of. Severity is not in there at all; the Forest Service
+ * MVUM overlay is where the legal and practical status of a forest road lives.
+ */
+const UNPAVED = ['==', ['get', 'surface'], 'unpaved'];
+
+/** Roads that are drawn solid, and so have something for a dash to sit on. */
+const SEALED_CLASSES = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'street', 'street_limited'];
+
 const FONT = ['DIN Pro Regular', 'Arial Unicode MS Regular'];
 const FONT_BOLD = ['DIN Pro Bold', 'Arial Unicode MS Bold'];
 
@@ -485,6 +500,30 @@ function roadLayers() {
     },
   });
 
+  /*
+   * Unpaved roads, marked on top of whatever they are.
+   *
+   * A gravel county road is drawn the same as a sealed one by class alone, and
+   * on this map that is the difference between a drive and a decision. Tracks
+   * and paths are left out: they are already dashed, and a second dash over the
+   * first reads as neither.
+   */
+  layers.push({
+    id: 'road-unpaved',
+    type: 'line',
+    source: 'composite',
+    'source-layer': 'road',
+    filter: ['all', UNPAVED, ['match', ['get', 'class'], SEALED_CLASSES, true, false]],
+    minzoom: 9,
+    layout: { 'line-cap': 'butt', 'line-join': 'round' },
+    paint: {
+      'line-color': PALETTE.track,
+      'line-width': ['interpolate', ['linear'], ['zoom'], 9, 0.7, 14, 1.5, 18, 2.6],
+      'line-dasharray': [1, 2.4],
+      'line-opacity': 0.9,
+    },
+  });
+
   return layers;
 }
 
@@ -571,12 +610,43 @@ function labelLayers() {
       minzoom: 13,
       layout: {
         'symbol-placement': 'line',
-        'text-field': LABEL_NAME,
+        // The surface rides along with the name. A forest road's number tells
+        // you nothing about whether you want to be on it; "unpaved" does.
+        'text-field': ['case',
+          ['all', UNPAVED, ['has', 'name']], ['concat', LABEL_NAME, ' \u00b7 unpaved'],
+          LABEL_NAME],
         'text-font': FONT,
         'text-size': ['interpolate', ['linear'], ['zoom'], 13, 9, 18, 12],
       },
       paint: {
         'text-color': PALETTE.inkSoft,
+        'text-halo-color': PALETTE.halo,
+        'text-halo-width': 1.4,
+      },
+    },
+    {
+      // Trails carry names worth reading — and they are the routes this map is
+      // for. They come in later than roads because a trail name at z13 is
+      // clutter over a county.
+      id: 'label-trail',
+      type: 'symbol',
+      source: 'composite',
+      'source-layer': 'road',
+      filter: ['all',
+        ['match', ['get', 'class'], ['path', 'service'], true, false],
+        ['has', 'name'],
+      ],
+      minzoom: 14,
+      layout: {
+        'symbol-placement': 'line',
+        'text-field': ['case',
+          UNPAVED, ['concat', LABEL_NAME, ' \u00b7 unpaved'],
+          LABEL_NAME],
+        'text-font': FONT,
+        'text-size': ['interpolate', ['linear'], ['zoom'], 14, 8.5, 18, 11],
+      },
+      paint: {
+        'text-color': PALETTE.path,
         'text-halo-color': PALETTE.halo,
         'text-halo-width': 1.4,
       },
