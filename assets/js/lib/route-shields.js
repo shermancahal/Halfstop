@@ -233,6 +233,17 @@ function shieldWidth(length) {
   return { 2: 22, 3: 27, 4: 33 }[length] || 22;
 }
 
+/**
+ * How wide a shield sits on screen, in CSS pixels.
+ *
+ * The drawn shields are canvassed at this width and the blanks are added at
+ * pixelRatio 2 from a 44px image, so both land at the same size. Callers need
+ * it to place two shields side by side without them touching.
+ */
+export function shieldDisplayWidth(length) {
+  return shieldWidth(Math.max(MIN_LEN, Math.min(MAX_LEN, Math.round(length) || MIN_LEN)));
+}
+
 function roundedRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -638,17 +649,27 @@ export function shieldTextSizeExpression(state = '', length = 2) {
   ];
 }
 
-export function shieldTextOffsetExpression(state = '', length = 2) {
+/**
+ * @param shiftPx how far sideways to move the number, in CSS pixels. Text
+ *        offsets are in ems, and the em is a different size on every design,
+ *        so the conversion has to happen per arm rather than once.
+ */
+export function shieldTextOffsetExpression(state = '', length = 2, shiftPx = 0) {
   const local = shieldTextOffset(stateDesign(state), length);
   // The interstate number clears its crown; the US shield's sits centre.
   const national = (design) => (design === 'interstate' ? [0, 0.18] : [0, 0.06]);
+  const shift = (base, design) => {
+    if (!shiftPx) return base;
+    const size = design === LOCAL ? shieldTextSize(stateDesign(state), length) : NOMINAL_TEXT;
+    return [Math.round((base[0] + shiftPx / size) * 100) / 100, base[1]];
+  };
   return [
     'match', ['get', 'shield'],
     ...SHIELD_MATCH.flatMap((arm) => [
       arm.values,
-      ['literal', arm.design === LOCAL ? local : national(arm.design)],
+      ['literal', shift(arm.design === LOCAL ? local : national(arm.design), arm.design)],
     ]),
-    ['literal', local],
+    ['literal', shift(local, LOCAL)],
   ];
 }
 
@@ -816,7 +837,7 @@ export function shieldImageIdFor(shield, reflen, state = '') {
   return shieldImageId(designForShield(shield, state), reflen);
 }
 
-export function shieldImageExpression(state = '') {
+export function shieldImageExpression(state = '', { length = null } = {}) {
   // Interstates and US routes look the same in every state, so only the state
   // branch varies. Which state that is comes from where the map is looking
   // rather than from the road's own tags — the road data does not reliably
@@ -833,7 +854,10 @@ export function shieldImageExpression(state = '') {
       local,
     ],
     '-',
-    ['to-string', ['max', MIN_LEN, ['min', MAX_LEN, ['coalesce', ['get', 'reflen'], MIN_LEN]]]],
+    // `length` lets a caller size the image from something other than the
+    // road's own `reflen` — a shield carrying half of a concurrency is as wide
+    // as its own half, not as the pair.
+    ['to-string', ['max', MIN_LEN, ['min', MAX_LEN, length || ['coalesce', ['get', 'reflen'], MIN_LEN]]]],
   ];
 }
 

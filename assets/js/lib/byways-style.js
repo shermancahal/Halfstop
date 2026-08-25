@@ -27,7 +27,7 @@
 
 import {
   shieldImageExpression, SHIELD_TEXT_COLOUR,
-  shieldTextSizeExpression, shieldTextOffsetExpression,
+  shieldTextSizeExpression, shieldTextOffsetExpression, shieldDisplayWidth,
 } from './route-shields.js';
 
 /* ------------------------------------------------------------------ palette */
@@ -622,6 +622,69 @@ function labelLayers() {
  * rather than vanishing.
  */
 function shieldLayers(state = '') {
+  /*
+   * Concurrencies — one road carrying two route numbers — reach us as a single
+   * feature with `ref` of "23-60" and a `shield` of `us-highway-duplex`. Drawn
+   * as one shield that is a marker reading 23-60, which is not a sign that
+   * exists anywhere. Two markers is what the road actually has on it.
+   *
+   * Both halves have to be present to split: a `-duplex` shield is the tag that
+   * says the hyphen is a separator rather than part of a number.
+   */
+  const ref = ['coalesce', ['get', 'ref'], ''];
+  const cut = ['index-of', '-', ref];
+  const isDuplex = ['all',
+    ['>', cut, 0],
+    ['in', 'duplex', ['coalesce', ['get', 'shield'], '']],
+  ];
+  const firstRef = ['slice', ref, 0, cut];
+  // A three-way concurrency would leave "60-119" behind the first hyphen, so
+  // the second shield stops at the next one.
+  const secondRef = ['let', 'rest', ['slice', ref, ['+', cut, 1]],
+    ['case',
+      ['>', ['index-of', '-', ['var', 'rest']], 0],
+      ['slice', ['var', 'rest'], 0, ['index-of', '-', ['var', 'rest']]],
+      ['var', 'rest']],
+  ];
+
+  const onARoad = ['match', ['get', 'class'], ['motorway', 'trunk', 'primary', 'secondary'], true, false];
+
+  /** Half a concurrency: its own number, its own image, shifted off centre. */
+  const half = (id, text, shiftPx) => ({
+    id,
+    type: 'symbol',
+    source: 'composite',
+    'source-layer': 'road',
+    filter: ['all', ['has', 'ref'], onARoad, isDuplex],
+    minzoom: 6,
+    layout: {
+      'symbol-placement': 'line',
+      'symbol-spacing': ['interpolate', ['linear'], ['zoom'], 6, 180, 12, 260],
+      'icon-image': shieldImageExpression(state, { length: ['length', text] }),
+      'icon-size': 1,
+      'icon-offset': [shiftPx, 0],
+      'icon-rotation-alignment': 'viewport',
+      'text-field': text,
+      'text-font': FONT_BOLD,
+      'text-size': shieldTextSizeExpression(state),
+      'text-offset': shieldTextOffsetExpression(state, 2, shiftPx),
+      'text-rotation-alignment': 'viewport',
+      'text-anchor': 'center',
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': false,
+      'text-allow-overlap': true,
+      'text-ignore-placement': false,
+      'text-optional': false,
+      'icon-optional': false,
+      'symbol-sort-key': ['match', ['get', 'class'],
+        'motorway', 1, 'trunk', 2, 'primary', 3, 4],
+    },
+    paint: { 'text-color': SHIELD_TEXT_COLOUR },
+  });
+
+  // Half a shield's width each way, plus a pixel so the two do not touch.
+  const apart = shieldDisplayWidth(2) / 2 + 1;
+
   return [
     {
       id: 'road-shield',
@@ -630,7 +693,8 @@ function shieldLayers(state = '') {
       'source-layer': 'road',
       filter: ['all',
         ['has', 'ref'],
-        ['match', ['get', 'class'], ['motorway', 'trunk', 'primary', 'secondary'], true, false],
+        onARoad,
+        ['!', isDuplex],
       ],
       minzoom: 6,
       layout: {
@@ -673,5 +737,7 @@ function shieldLayers(state = '') {
       },
       paint: { 'text-color': SHIELD_TEXT_COLOUR },
     },
+    half('road-shield-first', firstRef, -apart),
+    half('road-shield-second', secondRef, apart),
   ];
 }

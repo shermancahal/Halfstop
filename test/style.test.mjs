@@ -350,6 +350,39 @@ test('byways: route shields build their image name from the feature', () => {
   assert.ok(shield.filter.flat(3).includes('ref'), 'only roads with a number get a shield');
 });
 
+test('byways: a concurrency gets two shields, not one hyphenated one', () => {
+  // US 23 and US 60 running together arrive as one feature with ref "23-60".
+  // Drawn as a single marker that reads 23-60 — a sign that exists nowhere —
+  // so the pair is split across two layers and the combined one stands down.
+  // What the split actually evaluates to is checked in tools/validate-style.mjs,
+  // which has the real expression evaluator; this is the structure it needs.
+  const layers = bywaysStyle('pk.test').layers;
+  const ids = layers.map((layer) => layer.id);
+  for (const id of ['road-shield', 'road-shield-first', 'road-shield-second']) {
+    assert.ok(ids.includes(id), `${id} is missing`);
+  }
+
+  const plain = layers.find((layer) => layer.id === 'road-shield');
+  const first = layers.find((layer) => layer.id === 'road-shield-first');
+  const second = layers.find((layer) => layer.id === 'road-shield-second');
+
+  assert.ok(JSON.stringify(plain.filter).includes('"!"'), 'the combined shield should exclude concurrencies');
+  assert.ok(JSON.stringify(first.filter).includes('duplex'), 'a half shield is only for a concurrency');
+
+  // Opposite ways, or the two markers sit on top of each other.
+  const [firstX] = first.layout['icon-offset'];
+  const [secondX] = second.layout['icon-offset'];
+  assert.ok(firstX < 0 && secondX > 0, 'the halves should sit either side of the line');
+  assert.equal(firstX, -secondX, 'and the same distance from it');
+
+  // The number moves with its shield. Text offsets are in ems and icon offsets
+  // in pixels, so these are different numbers for the same shift — the failure
+  // this guards is one of them being left at zero.
+  const textX = (layer) => JSON.stringify(layer.layout['text-offset']);
+  assert.notEqual(textX(first), textX(second), 'each half puts its number over its own shield');
+  assert.notEqual(textX(first), JSON.stringify(plain.layout['text-offset']));
+});
+
 test('byways: the road hierarchy is coloured by class, not uniformly', () => {
   const style = bywaysStyle('pk.test');
   const colourOf = (id) => style.layers.find((l) => l.id === id).paint['line-color'];
