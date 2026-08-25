@@ -643,6 +643,14 @@ html, body { height: 100%; overflow: hidden; }
 
 .source-note { margin: 9px 0 0; font-size: .72rem; color: var(--ink-3); }
 
+/* A service's own legend graphic. Always black on transparent, so it needs a
+   white bed of its own to stay readable in the dark theme. */
+.legend-image {
+  display: block; max-width: 100%; margin: 9px 0 0;
+  background: #fff; border-radius: 6px; padding: 5px 6px;
+  border: 1px solid var(--line);
+}
+
 /* Headline card: condition sets the wash behind it, so a glance reads the
    weather before any of the text does. */
 .weather-now {

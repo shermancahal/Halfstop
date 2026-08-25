@@ -2158,10 +2158,24 @@ function layerRow({ entry, selected, control }) {
   const description = entry.description || '';
   const key = Array.isArray(entry.legend) && entry.legend.length ? entry.legend : null;
 
-  const descriptionNode = description || key
+  // A continuous ramp — temperature, wind speed, cloud cover — has no list of
+  // colours to write out, so those layers carry the service's own legend image
+  // instead. Drawn on white because every one of them is black text on
+  // transparent, which disappears against a dark panel.
+  const note = entry.legendNote || '';
+  const descriptionNode = description || key || note || entry.legendImage
     ? el('div', { class: 'layer-desc', hidden: true }, [
       description ? el('p', { class: 'layer-desc-text', text: description }) : null,
-      key ? legendList(key, entry.legendNote || '') : null,
+      key ? legendList(key, note) : (note ? el('p', { class: 'legend-note', text: note }) : null),
+      entry.legendImage
+        ? el('img', {
+          class: 'legend-image', src: entry.legendImage, loading: 'lazy',
+          alt: `Color key for ${entry.name}`,
+          // A key that cannot be fetched leaves a broken-image box where an
+          // explanation should be, which is worse than no key at all.
+          onerror: (event) => event.currentTarget.remove(),
+        })
+        : null,
     ])
     : null;
 

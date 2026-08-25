@@ -235,6 +235,34 @@ test('config: every basemap is either raster tiles or a token-gated style', () =
   }
 });
 
+test('config: the weather group is a group, and every layer in it is a forecast source', () => {
+  const weather = OVERLAYS.filter((entry) => entry.group === 'Weather');
+  assert.ok(weather.length >= 5, 'the weather group should be more than the radar');
+  assert.ok(weather.some((entry) => entry.id === 'radar'), 'radar belongs with the weather');
+
+  for (const entry of weather) {
+    assert.ok(entry.tiles?.length, `${entry.id} has no tiles`);
+    assert.match(entry.tiles[0], /^https:\/\/[^/]*noaa\.gov\//, `${entry.id} should come from NOAA`);
+    assert.ok(entry.attribution, `${entry.id} has no attribution`);
+  }
+
+  // A continuous ramp with no key is decoration. Every layer here carries
+  // either a hand-written key or the service's own legend graphic.
+  for (const entry of weather) {
+    const explained = entry.legendImage || (Array.isArray(entry.legend) && entry.legend.length);
+    assert.ok(explained, `${entry.id} has no colour key`);
+  }
+});
+
+test('config: a legend image is a real https URL asking for an image', () => {
+  for (const entry of [...BASEMAPS, ...OVERLAYS]) {
+    if (!entry.legendImage) continue;
+    assert.match(entry.legendImage, /^https:\/\//, `${entry.id} legend is not https`);
+    assert.match(entry.legendImage, /GetLegendGraphic/, `${entry.id} legend is not a legend request`);
+    assert.match(entry.legendImage, /format=image\//, `${entry.id} legend does not ask for an image`);
+  }
+});
+
 test('config: basemaps and overlays have unique ids and attribution', () => {
   const ids = [...BASEMAPS, ...OVERLAYS].map((entry) => entry.id);
   assert.equal(new Set(ids).size, ids.length, 'duplicate basemap/overlay id');

@@ -107,6 +107,11 @@ function layerNames(body) {
   // ArcGIS: {"layers":[{"id":3,"name":"Snow Depth"}]}
   try {
     const parsed = JSON.parse(body);
+    // A query answer describes its own columns, which is how you find the one
+    // that names a carrier without downloading the whole layer.
+    if (Array.isArray(parsed.fields) && parsed.fields.length) {
+      return parsed.fields.map((field) => `${field.name} (${field.type || '?'}) ${field.alias || ''}`.trim()).slice(0, 60);
+    }
     const layers = parsed.layers || parsed.services || parsed.folders || [];
     for (const layer of layers) {
       if (typeof layer === 'string') found.push(layer);

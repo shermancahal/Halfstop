@@ -78,6 +78,44 @@ export const DEFAULT_UNITS = 'imperial';
 
 const OSM_ATTRIBUTION = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 const USGS_ATTRIBUTION = 'Map data © <a href="https://www.usgs.gov/">USGS</a> — The National Map';
+const NOAA_ATTRIBUTION = 'Forecast data © <a href="https://www.weather.gov/">NOAA / National Weather Service</a>';
+
+/**
+ * A NOAA GeoServer layer, as a tile template and as its own colour key.
+ *
+ * Two hosts, one shape. nowCOAST carries the temperature and precipitation
+ * forecasts; the National Weather Service's own GeoServer carries cloud cover,
+ * wind and snow. Both are OGC WMS, both answer in web mercator, and both allow
+ * a browser to read the answer — which is not a given, and is checked by
+ * tools/check-layers.mjs rather than assumed.
+ *
+ * The layer names here are the services' own, read out of their GetCapabilities
+ * rather than guessed: `ndfd:sky`, `ndfd_temperature:air_temperature`. Guessing
+ * at a service's vocabulary is what left the cell coverage layer drawing
+ * nothing for weeks.
+ */
+const NOWCOAST = 'https://nowcoast.noaa.gov/geoserver';
+const NWS_GEOSERVER = 'https://mapservices.weather.noaa.gov/geoserver';
+
+const wmsTile = (endpoint, layer) => `${endpoint}?service=WMS&version=1.3.0&request=GetMap`
+  + `&layers=${layer}&styles=&crs=EPSG:3857&bbox={bbox-epsg-3857}`
+  + '&width=256&height=256&format=image/png&transparent=true';
+
+// The service draws its own key. A continuous ramp has no list of colours to
+// write out by hand, and a hand-written approximation of one is worse than
+// none: it would be wrong the first time NOAA restyled a layer.
+const wmsLegend = (endpoint, layer) => `${endpoint}?service=WMS&version=1.3.0`
+  + `&request=GetLegendGraphic&layer=${layer}&format=image/png`;
+
+const nowcoastLayer = (workspace, layer) => ({
+  tiles: [wmsTile(`${NOWCOAST}/${workspace}/wms`, `${workspace}:${layer}`)],
+  legendImage: wmsLegend(`${NOWCOAST}/${workspace}/wms`, `${workspace}:${layer}`),
+});
+
+const ndfdLayer = (layer) => ({
+  tiles: [wmsTile(`${NWS_GEOSERVER}/ndfd/wms`, `ndfd:${layer}`)],
+  legendImage: wmsLegend(`${NWS_GEOSERVER}/ndfd/wms`, `ndfd:${layer}`),
+});
 const ESRI_ATTRIBUTION = 'Imagery © <a href="https://www.esri.com/">Esri</a>, Maxar, Earthstar Geographics';
 
 /**
@@ -362,6 +400,19 @@ export const OVERLAYS = [
     enabled: false,
     attribution: 'Motor Vehicle Use Maps © <a href="https://www.fs.usda.gov/">USDA Forest Service</a>',
   },
+  /*
+   * Weather, as a group rather than a single radar switch.
+   *
+   * The forecast layers are here for two different readers. One is planning a
+   * drive and wants to know whether the pass will be snowed in; the other is
+   * planning a photograph, and for them cloud cover is the whole question — a
+   * clear night is the difference between the Milky Way and a grey frame. Both
+   * are answered by the same NDFD grids the Photography panel already reads
+   * numbers from, drawn instead of tabulated.
+   *
+   * All of them are forecasts, not observations: a temperature layer shows what
+   * the National Weather Service expects, not what a thermometer says.
+   */
   {
     id: 'radar',
     legend: [
@@ -371,8 +422,8 @@ export const OVERLAYS = [
       { color: '#F2C744', label: 'Very heavy' },
       { color: '#D9534F', label: 'Intense / hail' },
     ],
-    group: 'Conditions',
-    name: 'Weather radar',
+    group: 'Weather',
+    name: 'Radar',
     description: 'Current precipitation from NOAA. Click a point for storm tracks.',
     tiles: ['https://nowcoast.noaa.gov/geoserver/weather_radar/wms'
       + '?service=WMS&version=1.3.0&request=GetMap&layers=base_reflectivity_mosaic'
@@ -382,6 +433,86 @@ export const OVERLAYS = [
     opacity: 0.6,
     enabled: false,
     attribution: 'Radar © <a href="https://www.noaa.gov/">NOAA</a>',
+  },
+  {
+    id: 'weather-sky',
+    group: 'Weather',
+    name: 'Cloud cover',
+    description: 'Forecast sky cover — the layer that decides whether a night shoot is worth driving to.',
+    legendNote: 'Percentage of the sky the National Weather Service expects to be covered. '
+      + 'Under about 20% is a clear night.',
+    ...ndfdLayer('sky'),
+    tileSize: 256,
+    maxzoom: 12,
+    opacity: 0.5,
+    enabled: false,
+    attribution: NOAA_ATTRIBUTION,
+  },
+  {
+    id: 'weather-temp',
+    group: 'Weather',
+    name: 'Temperature',
+    description: 'Forecast air temperature, 2 m above the ground.',
+    ...nowcoastLayer('ndfd_temperature', 'air_temperature'),
+    tileSize: 256,
+    maxzoom: 12,
+    opacity: 0.5,
+    enabled: false,
+    attribution: NOAA_ATTRIBUTION,
+  },
+  {
+    id: 'weather-wind',
+    group: 'Weather',
+    name: 'Wind speed',
+    description: 'Forecast sustained wind at 10 m. Gusts run higher.',
+    legendNote: 'Knots. A tripod starts arguing at about 15, and a high-sided vehicle at about 30.',
+    ...ndfdLayer('wspd'),
+    tileSize: 256,
+    maxzoom: 12,
+    opacity: 0.5,
+    enabled: false,
+    attribution: NOAA_ATTRIBUTION,
+  },
+  {
+    id: 'weather-rain-chance',
+    group: 'Weather',
+    name: 'Chance of rain',
+    description: 'Probability of precipitation over the next 12 hours.',
+    ...nowcoastLayer('ndfd_precipitation', '12hr_precipitation_probability'),
+    tileSize: 256,
+    maxzoom: 12,
+    opacity: 0.5,
+    enabled: false,
+    attribution: NOAA_ATTRIBUTION,
+  },
+  {
+    id: 'weather-snowfall',
+    group: 'Weather',
+    name: 'Forecast snowfall',
+    description: 'Snow accumulation the National Weather Service expects.',
+    legendNote: 'The next forecast period rather than a running total. Empty in summer, '
+      + 'which is the layer working rather than failing.',
+    ...ndfdLayer('snow'),
+    tileSize: 256,
+    maxzoom: 12,
+    opacity: 0.6,
+    enabled: false,
+    attribution: NOAA_ATTRIBUTION,
+  },
+  {
+    id: 'snow-depth',
+    group: 'Weather',
+    name: 'Snow on the ground',
+    description: 'Modelled snow depth from the National Snow Analyses.',
+    legendNote: 'NOHRSC models this at 1 km from gauges, satellite and radar. Empty in summer.',
+    tiles: ['https://mapservices.weather.noaa.gov/raster/rest/services/snow/NOHRSC_Snow_Analysis/MapServer/export'
+      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true'
+      + '&layers=show:0&f=image'],
+    tileSize: 256,
+    maxzoom: 12,
+    opacity: 0.65,
+    enabled: false,
+    attribution: 'Snow analysis © <a href="https://www.nohrsc.noaa.gov/">NOAA NOHRSC</a>',
   },
   {
     id: 'cell-coverage',
