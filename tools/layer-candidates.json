@@ -5,7 +5,15 @@
   },
   {
     "id": "cap:nohrsc-legend-json",
-    "note": "ArcGIS draws its own key as base64 swatches. If this answers, snow depth can carry a real scale.",
     "url": "https://mapservices.weather.noaa.gov/raster/rest/services/snow/NOHRSC_Snow_Analysis/MapServer/legend?f=pjson"
+  },
+  {
+    "id": "cap:nifc-server",
+    "note": "An ArcGIS Server can draw an image; the hosted FeatureServer the catalogue points at cannot.",
+    "url": "https://gis.nifc.gov/arcgis/rest/services?f=pjson"
+  },
+  {
+    "id": "cap:usfs-services",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services?f=pjson"
   }
 ]
