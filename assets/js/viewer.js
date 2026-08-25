@@ -69,6 +69,7 @@ import {
 // remembered sections silently came back empty on every load.
 const DETAIL_SECTIONS_KEY = 'ab-maps-details-closed-v1';
 const SKY_PANEL_KEY = 'ab-maps-sky-panel-v1';
+const COORD_FORMATS_KEY = 'ab-maps-coord-formats-v1';
 
 /**
  * The directory the page's own assets are served from.
@@ -95,6 +96,28 @@ function readSkyPanel() {
 function rememberSkyPanel() {
   try {
     globalThis.localStorage?.setItem(SKY_PANEL_KEY, state.skyPanel || '');
+  } catch {
+    // Storage refused; the preference lasts for this session only.
+  }
+}
+
+/**
+ * Whether the extra coordinate formats were left showing.
+ *
+ * Anyone who needs UTM or degrees-and-minutes needs them on every pin, not
+ * once — so the disclosure is a preference, not a per-pin state.
+ */
+function readCoordFormats() {
+  try {
+    return globalThis.localStorage?.getItem(COORD_FORMATS_KEY) === 'open';
+  } catch {
+    return false;
+  }
+}
+
+function rememberCoordFormats(open) {
+  try {
+    globalThis.localStorage?.setItem(COORD_FORMATS_KEY, open ? 'open' : '');
   } catch {
     // Storage refused; the preference lasts for this session only.
   }
@@ -1366,7 +1389,7 @@ function skySection(position) {
   const phases = lightPhases(date, lat, lon);
 
   let section = null;
-  const outer = collapsibleSection('sky', 'For photographers', (body) => { section = body; }, {
+  const outer = collapsibleSection('sky', 'Photography', (body) => { section = body; }, {
     count: date.toLocaleDateString([], { month: 'short', day: 'numeric' }),
   });
 
@@ -3094,13 +3117,78 @@ async function copyText(text) {
 }
 
 /**
- * Everything known about one saved pin.
+ * Where the point is: coordinates and height together.
  *
- * Deliberately arithmetic-first: coordinates, elevation, UTM, sun times and
- * bearing all work with no signal, which is exactly when this panel matters.
- * The geocoded place name is the only part that needs the network, and it is
- * appended when it arrives rather than blocking the rest.
+ * Decimal degrees is what almost everyone pastes into something else, so it is
+ * the only format on screen by default and it carries its own copy button. The
+ * rest — DMS, degrees-and-minutes, UTM — sit behind a disclosure that remembers
+ * whether it was left open, so the people who work in UTM see it every time
+ * without it crowding the panel for everyone else.
+ *
+ * Elevation belongs here rather than in a section of its own: it is the third
+ * number of a position, and on a dropped pin it is a lookup rather than a
+ * recorded field, which is why the row can arrive late.
  */
+function locationSection(position, { recorded = null, name = '' } = {}) {
+  const [lon, lat] = position;
+  const dd = formatDD(position);
+  const dms = formatDMS(position);
+  const ddm = formatDDM(position);
+  const utm = toUTM(position);
+  const link = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
+
+  const heightRow = el('div', {});
+  if (Number.isFinite(recorded)) {
+    heightRow.append(detailRow('Elevation', formatElevation(recorded, state.units)));
+  } else {
+    heightRow.append(detailRow('Elevation', 'Looking up…'));
+    elevation(position).then((result) => {
+      heightRow.replaceChildren(result.ok
+        ? detailRow('Elevation', formatElevation(result.metres, state.units))
+        : detailRow('Elevation', 'Not available'));
+    });
+  }
+
+  const everything = () => [
+    name,
+    `Decimal:   ${dd}`,
+    `DMS:       ${dms}`,
+    `Deg / min: ${ddm}`,
+    utm ? `UTM:       ${utm.toString()}` : null,
+    link,
+  ].filter(Boolean).join('\n');
+
+  const more = el('details', {
+    class: 'coord-more',
+    open: readCoordFormats(),
+    ontoggle: (event) => rememberCoordFormats(event.target.open),
+  }, [
+    el('summary', { class: 'coord-more-summary', text: 'Other formats' }),
+    el('div', { class: 'coord-more-body' }, [
+      detailRow('DMS', dms, { copy: dms }),
+      detailRow('Deg / min', ddm, { copy: ddm }),
+      utm ? detailRow('UTM', utm.toString(), { copy: utm.toString() }) : null,
+      el('button', {
+        class: 'button button-ghost button-small', type: 'button', text: 'Copy every format',
+        title: 'Copy all coordinate formats and a map link at once',
+        onclick: async (event) => {
+          const button = event.currentTarget;
+          const ok = await copyText(everything());
+          button.textContent = ok ? 'Copied' : 'Copy failed';
+          setTimeout(() => { button.textContent = 'Copy every format'; }, 1400);
+        },
+      }),
+    ]),
+  ]);
+
+  return el('div', { class: 'panel-section' }, [
+    el('h2', { class: 'panel-title' }, [el('span', { text: 'Location' })]),
+    detailRow('Decimal', dd, { copy: dd }),
+    heightRow,
+    more,
+  ]);
+}
+
 /**
  * Details for a place you tapped rather than saved.
  *
@@ -3110,9 +3198,6 @@ async function copyText(text) {
  * into a real waypoint and hands off to the full view.
  */
 function renderPointDetails(position) {
-  const [lon, lat] = position;
-  const utm = toUTM(position);
-
   dom.details.append(el('div', { class: 'panel-section' }, [
     el('h2', { class: 'panel-title', style: 'margin:0', text: 'Dropped pin' }),
     el('p', { class: 'hint', style: 'margin:6px 0 11px', text: 'Not saved yet — this is wherever you last clicked the map.' }),
@@ -3140,52 +3225,33 @@ function renderPointDetails(position) {
     ]),
   ]));
 
-  const everything = [
-    `${formatDD(position)}`,
-    `${formatDMS(position)}`,
-    utm ? utm.toString() : '',
-    `https://www.google.com/maps?q=${lat},${lon}`,
-  ].filter(Boolean).join('\n');
-
-  dom.details.append(el('div', { class: 'panel-section' }, [
-    el('h2', { class: 'panel-title' }, [
-      el('span', { text: 'Coordinates' }),
-      el('button', {
-        class: 'button button-ghost button-small', type: 'button', text: 'Copy all',
-        onclick: async (event) => {
-          const ok = await copyText(everything);
-          event.currentTarget.textContent = ok ? 'Copied' : 'Copy failed';
-          setTimeout(() => { event.currentTarget.textContent = 'Copy all'; }, 1400);
-        },
-      }),
-    ]),
-    detailRow('Decimal', formatDD(position), { copy: formatDD(position) }),
-    detailRow('DMS', formatDMS(position), { copy: formatDMS(position) }),
-    detailRow('Deg / min', formatDDM(position), { copy: formatDDM(position) }),
-    utm ? detailRow('UTM', utm.toString(), { copy: utm.toString() }) : null,
-  ]));
-
-  // Elevation is a lookup here rather than a field: a dropped pin has no
-  // recorded height, only a position.
-  dom.details.append(pendingSection('Elevation', async (body, section) => {
-    const result = await elevation(position);
-    body.replaceChildren(result.ok
-      ? detailRow('Ground', formatElevation(result.metres, state.units))
-      : el('p', { class: 'hint', style: 'margin:0', text: `Not available — ${result.reason}.` }));
-    if (!result.ok && /no elevation data/.test(result.reason)) section.classList.add('is-quiet');
-  }));
+  // A dropped pin has no recorded height, so `locationSection` looks the ground
+  // up rather than reading a field.
+  dom.details.append(locationSection(position));
 
   dom.details.append(skySection(position));
 
-  dom.details.append(landSection(position));
   dom.details.append(weatherSection(position));
   dom.details.append(stormSection(position));
+
+  // Land manager last: it is the slowest lookup and the least often read.
+  dom.details.append(landSection(position));
 }
 
+/**
+ * Everything known about one saved pin.
+ *
+ * Deliberately arithmetic-first: coordinates, elevation, UTM, sun times and
+ * bearing all work with no signal, which is exactly when this panel matters.
+ * The geocoded place name is the only part that needs the network, and it is
+ * appended when it arrives rather than blocking the rest.
+ */
 function renderPinDetails(folder, item) {
   const props = item.feature.properties;
   const position = item.feature.geometry?.coordinates || [];
-  const [lon, lat, elevation] = position;
+  // Named `recordedHeight` rather than `elevation` so it does not shadow the
+  // elevation lookup that `locationSection` calls.
+  const [lon, lat, recordedHeight] = position;
 
   /* header */
   dom.details.append(el('div', { class: 'panel-section' }, [
@@ -3239,32 +3305,8 @@ function renderPinDetails(folder, item) {
 
   if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
 
-  /* position */
-  const utm = toUTM([lon, lat]);
-  const position_section = el('div', { class: 'panel-section' }, [
-    el('h2', { class: 'panel-title' }, [
-      el('span', { text: 'Position' }),
-      el('button', {
-        class: 'button button-ghost button-small', type: 'button', text: 'Copy all',
-        title: 'Copy every coordinate format at once',
-        onclick: () => copyText([
-          props.name,
-          `Decimal:  ${formatDD([lon, lat])}`,
-          `DMS:      ${formatDMS([lon, lat])}`,
-          `DDM:      ${formatDDM([lon, lat])}`,
-          utm ? `UTM:      ${utm.toString()}` : null,
-          Number.isFinite(elevation) ? `Elevation: ${formatElevation(elevation, state.units)}` : null,
-          `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`,
-        ].filter(Boolean).join('\n')),
-      }),
-    ]),
-    detailRow('Decimal', formatDD([lon, lat]), { copy: formatDD([lon, lat]) }),
-    detailRow('DMS', formatDMS([lon, lat]), { copy: formatDMS([lon, lat]) }),
-    detailRow('Deg / min', formatDDM([lon, lat]), { copy: formatDDM([lon, lat]) }),
-    utm ? detailRow('UTM', utm.toString(), { copy: utm.toString() }) : null,
-    Number.isFinite(elevation) ? detailRow('Elevation', formatElevation(elevation, state.units)) : null,
-  ]);
-  dom.details.append(position_section);
+  /* where it is */
+  dom.details.append(locationSection([lon, lat], { recorded: recordedHeight, name: props.name }));
 
   /* where you are relative to it */
   const relative = el('div', { class: 'panel-section' }, [
@@ -3301,7 +3343,6 @@ function renderPinDetails(folder, item) {
   /* daylight */
   dom.details.append(skySection([lon, lat]));
 
-  dom.details.append(landSection([lon, lat]));
   dom.details.append(weatherSection([lon, lat]));
   dom.details.append(stormSection([lon, lat]));
   dom.details.append(notesSection(folder, item));
@@ -3325,6 +3366,9 @@ function renderPinDetails(folder, item) {
     if (!rows.length) { placeSection.remove(); return; }
     placeBody.replaceWith(el('div', {}, rows));
   });
+
+  // Land manager last: it is the slowest lookup and the least often read.
+  dom.details.append(landSection([lon, lat]));
 }
 
 /* ---------------- details: land, weather, notes ---------------- */

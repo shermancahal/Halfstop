@@ -354,13 +354,34 @@ for (const id of ['storm-area', 'storm-outline', 'storm-motion', 'storm-head']) 
 check('and no label layer without glyphs to draw it with',
   stormLayers.includes('storm-motion-label'), false);
 
-console.log('\nCollapsed Details sections survive a reload');
+console.log('\nThe Location section leads with decimal and hides the rest');
 await page.click('.panel-tab[data-tab="waypoints"]');
 await page.waitForTimeout(300);
 await page.locator('.waypoint-card').first().click();
 await page.waitForTimeout(900);
-const sunMoon = () => page.locator('.detail-block').filter({ hasText: 'For photographers' }).first();
-await page.locator('.detail-block-summary', { hasText: /For photographers/i }).click();
+
+const locationSection = () => page.locator('.panel-section').filter({ hasText: 'Location' }).first();
+check('decimal degrees are on screen without opening anything',
+  await locationSection().locator('.detail-line-label', { hasText: /^Decimal$/ }).count(), 1);
+check('the other formats start hidden',
+  await page.locator('.coord-more').first().evaluate((node) => node.open), false);
+await page.locator('.coord-more-summary').first().click();
+await page.waitForTimeout(200);
+check('opening it reveals UTM',
+  await page.locator('.coord-more[open] .detail-line-label', { hasText: /^UTM$/ }).count(), 1);
+
+// Land manager is the slowest lookup and the least often read, so it sits
+// below everything that answers faster.
+const sectionOrder = await page.evaluate(() => [...document.querySelectorAll('#details-body h2.panel-title, #details-body .detail-block-summary')]
+  .map((node) => node.textContent.trim()));
+check('land manager comes last',
+  sectionOrder.filter((title) => /Land manager/.test(title)).length
+    && sectionOrder.findIndex((title) => /Land manager/.test(title)) === sectionOrder.length - 1,
+  true);
+
+console.log('\nCollapsed Details sections survive a reload');
+const sunMoon = () => page.locator('.detail-block').filter({ hasText: 'Photography' }).first();
+await page.locator('.detail-block-summary', { hasText: /Photography/i }).click();
 await page.waitForTimeout(300);
 check('collapsing closes the section', await sunMoon().evaluate((node) => node.open), false);
 

@@ -612,6 +612,26 @@ html, body { height: 100%; overflow: hidden; }
 .detail-copy svg { width: 13px; height: 13px; }
 .detail-copy.is-done { color: var(--pine); background: var(--pine-soft); }
 
+/* The extra coordinate formats. Closed by default so the panel opens on the
+   one number nearly everyone wants, and kept flush with the rows above it so
+   opening it reads as the same list continuing. */
+.coord-more { margin-top: 2px; }
+.coord-more-summary {
+  list-style: none; cursor: pointer; padding: 7px 0;
+  font-size: .74rem; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--ink-3); display: flex; align-items: center; gap: 6px;
+}
+.coord-more-summary::-webkit-details-marker { display: none; }
+.coord-more-summary::after {
+  content: ''; width: 5px; height: 5px; margin-top: -2px;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg); transition: transform .12s ease;
+}
+.coord-more[open] > .coord-more-summary::after { transform: rotate(-135deg); margin-top: 2px; }
+.coord-more-summary:hover { color: var(--ink-1); }
+.coord-more-body { border-top: 1px solid var(--line); }
+.coord-more-body .button { margin-top: 9px; }
+
 @media (max-width: 820px) {
   .detail-line { grid-template-columns: 72px 1fr auto; }
   .waypoint-card { padding: 12px 9px; }
