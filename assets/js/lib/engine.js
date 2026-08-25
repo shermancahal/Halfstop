@@ -110,6 +110,17 @@ export async function loadEngine() {
  */
 export function overlayParts(overlay) {
   const base = { tileSize: overlay.tileSize, maxzoom: overlay.maxzoom, attribution: overlay.attribution };
+
+  // A queried overlay is two layers over one source: a fill and the outline
+  // that makes a pale fill findable. Both are listed here so that everything
+  // which tears an overlay down by its parts still finds all of it.
+  if (overlay.query) {
+    return [
+      { ...base, query: overlay.query, role: 'fill', layerId: `${OVERLAY_LAYER_PREFIX}${overlay.id}` },
+      { ...base, query: overlay.query, role: 'line', layerId: `${OVERLAY_LAYER_PREFIX}${overlay.id}--1` },
+    ];
+  }
+
   const parts = Array.isArray(overlay.sources) && overlay.sources.length
     ? overlay.sources.map((source) => ({ ...base, ...source }))
     : [{ ...base, tiles: overlay.tiles }];
@@ -178,6 +189,10 @@ export function buildRasterStyle(basemap, overlays = []) {
   }
 
   for (const overlay of overlays) {
+    // A queried overlay has no tiles to bake in — its data depends on where the
+    // map is looking, so it is added at runtime on both engines rather than
+    // written into the style document here.
+    if (overlay.query) continue;
     for (const part of overlayParts(overlay)) {
       sources[part.layerId] = {
         type: 'raster',

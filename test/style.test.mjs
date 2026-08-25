@@ -144,8 +144,48 @@ test('style: overlays are drawn above the basemap, in configuration order', () =
   assert.equal(style.layers[0].id, 'basemap');
   assert.deepEqual(
     style.layers.slice(1).map((l) => l.id),
-    OVERLAYS.flatMap((o) => overlayParts(o).map((part) => part.layerId)),
+    // A queried overlay is deliberately not here: its data depends on where the
+    // map is looking, so it cannot be baked into a style document and is added
+    // at runtime on both engines instead.
+    OVERLAYS.filter((o) => !o.query).flatMap((o) => overlayParts(o).map((part) => part.layerId)),
   );
+});
+
+test('style: a queried overlay is two layers over one source, and no tiles', () => {
+  const queried = {
+    id: 'test-queried',
+    name: 'Queried',
+    opacity: 0.6,
+    attribution: 'test',
+    query: { url: 'https://example.org/query?geometry={bbox}&f=geojson', minzoom: 6 },
+  };
+
+  const parts = overlayParts(queried);
+  assert.equal(parts.length, 2, 'a fill and the outline that makes it findable');
+  assert.equal(parts[0].layerId, 'overlay-test-queried');
+  assert.equal(parts[1].layerId, 'overlay-test-queried--1');
+  assert.ok(parts.every((part) => !part.tiles), 'there are no tiles to fetch');
+
+  // Tearing the overlay down by its id has to find both halves, or the outline
+  // is left behind on the map with nothing under it.
+  assert.ok(parts.every((part) => overlayIdFromLayer(part.layerId) === queried.id));
+
+  // And it must not reach the style document, where a source with no tiles
+  // would be a spec violation and Mapbox GL would abort the whole style.
+  const style = buildRasterStyle(rasterBasemaps[0], [queried]);
+  assert.equal(style.layers.length, 1, 'only the basemap');
+  assert.deepEqual(Object.keys(style.sources), ['basemap']);
+});
+
+test('config: a queried overlay carries a bbox placeholder and a floor', () => {
+  for (const overlay of OVERLAYS.filter((o) => o.query)) {
+    assert.ok(overlay.query.url.includes('{bbox}'),
+      `${overlay.id} has nowhere to put the view`);
+    assert.match(overlay.query.url, /f=geojson/, `${overlay.id} does not ask for GeoJSON`);
+    assert.ok(overlay.query.minzoom >= 1,
+      `${overlay.id} would query the whole country at once`);
+    assert.ok(!overlay.tiles, `${overlay.id} cannot be both queried and tiled`);
+  }
 });
 
 test('style: a combined overlay contributes one layer per source', () => {
@@ -249,8 +289,20 @@ test('config: the weather group is a group, and every layer in it is a forecast 
   // A continuous ramp with no key is decoration. Every layer here carries
   // either a hand-written key or the service's own legend graphic.
   for (const entry of weather) {
-    const explained = entry.legendImage || (Array.isArray(entry.legend) && entry.legend.length);
+    const explained = entry.legendImage || entry.legendJSON
+      || (Array.isArray(entry.legend) && entry.legend.length);
     assert.ok(explained, `${entry.id} has no colour key`);
+  }
+});
+
+test('config: a JSON legend names the sublayer it is the key for', () => {
+  // The whole point of the JSON form is that a service with several sublayers
+  // will describe all of their keys at once, and only one of them is this
+  // layer's. Without the id it would draw the boundary's key over a depth map.
+  for (const entry of [...BASEMAPS, ...OVERLAYS]) {
+    if (!entry.legendJSON) continue;
+    assert.match(entry.legendJSON.url, /^https:\/\/.*legend/, `${entry.id} legend is not a legend request`);
+    assert.equal(typeof entry.legendJSON.layer, 'number', `${entry.id} legend names no sublayer`);
   }
 });
 

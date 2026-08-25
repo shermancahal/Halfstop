@@ -359,12 +359,28 @@ export const OVERLAYS = [
     ],
     group: 'Conditions',
     name: 'Wildfire perimeters',
-    description: 'Current large-fire perimeters from NIFC.',
-    tiles: ['https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query'
-      + '?where=1%3D1&geometry={bbox-epsg-3857}&geometryType=esriGeometryEnvelope&inSR=3857&outSR=3857'
-      + '&f=image&size=256,256&transparent=true'],
-    tileSize: 256,
-    maxzoom: 14,
+    description: 'Current large-fire perimeters from NIFC. Zoom in to a region to load them.',
+    legendNote: 'The mapped edge of a fire as last flown or walked, which can be hours old '
+      + 'and is never a closure map. Check the responsible agency before travelling.',
+    /*
+     * Queried rather than tiled, because NIFC publishes this as a feature
+     * service and nothing else. The previous URL asked that service for
+     * `f=image`, which a feature service cannot produce: it answered 400 to
+     * every tile, so this layer drew nothing from the day it was added and
+     * nothing said so. tools/check-layers.mjs is what finally caught it.
+     */
+    query: {
+      url: 'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/'
+        + 'WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query'
+        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
+        + '&spatialRel=esriSpatialRelIntersects&outFields=attr_IncidentName,attr_GACC'
+        + '&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005'
+        + '&resultRecordCount=400&f=geojson',
+      // Below this, "every fire in the country" is both unreadable and an
+      // unkind thing to ask of the service.
+      minzoom: 6,
+      color: '#D84315',
+    },
     opacity: 0.6,
     enabled: false,
     attribution: 'Fire perimeters © <a href="https://www.nifc.gov/">NIFC</a>',
@@ -490,8 +506,8 @@ export const OVERLAYS = [
     group: 'Weather',
     name: 'Forecast snowfall',
     description: 'Snow accumulation the National Weather Service expects.',
-    legendNote: 'The next forecast period rather than a running total. Empty in summer, '
-      + 'which is the layer working rather than failing.',
+    legendNote: 'The next forecast period rather than a running total.',
+    seasonal: true,
     ...ndfdLayer('snow'),
     tileSize: 256,
     maxzoom: 12,
@@ -504,7 +520,11 @@ export const OVERLAYS = [
     group: 'Weather',
     name: 'Snow on the ground',
     description: 'Modelled snow depth from the National Snow Analyses.',
-    legendNote: 'NOHRSC models this at 1 km from gauges, satellite and radar. Empty in summer.',
+    legendNote: 'NOHRSC models this at 1 km from gauges, satellite and radar.',
+    // Empty out of season, which is the layer working rather than failing.
+    // tools/check-layers.mjs reads this so a summer run does not report a
+    // snow map with no snow on it as a broken layer.
+    seasonal: true,
     // Sublayer 3 is the depth raster itself; 0 is the group it sits inside,
     // and 1 and 2 are its boundary and footprint. The legend comes from the
     // same service's WMS endpoint, which is the only one of the two that can
@@ -512,26 +532,39 @@ export const OVERLAYS = [
     tiles: ['https://mapservices.weather.noaa.gov/raster/rest/services/snow/NOHRSC_Snow_Analysis/MapServer/export'
       + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true'
       + '&layers=show:3&f=image'],
-    legendImage: 'https://mapservices.weather.noaa.gov/raster/services/snow/NOHRSC_Snow_Analysis/MapServer/WMSServer'
-      + '?service=WMS&version=1.3.0&request=GetLegendGraphic&layer=3&format=image/png',
+    // This service publishes no legend graphic — asking for one returns an
+    // empty image — but it will describe its key as JSON, which is better
+    // anyway: the depths come with it.
+    legendJSON: {
+      url: 'https://mapservices.weather.noaa.gov/raster/rest/services/snow/NOHRSC_Snow_Analysis/MapServer/legend?f=pjson',
+      layer: 3,
+    },
     tileSize: 256,
     maxzoom: 12,
     opacity: 0.65,
     enabled: false,
     attribution: 'Snow analysis © <a href="https://www.nohrsc.noaa.gov/">NOAA NOHRSC</a>',
   },
-  {
-    id: 'cell-coverage',
-    group: 'Conditions',
-    name: 'Cell coverage',
-    description: 'Reported mobile broadband coverage (FCC).',
-    tiles: ['https://broadbandmap.fcc.gov/nbm/map/api/tiles/mobile/{z}/{x}/{y}.png'],
-    tileSize: 256,
-    maxzoom: 14,
-    opacity: 0.5,
-    enabled: false,
-    attribution: 'Coverage data © <a href="https://broadbandmap.fcc.gov/">FCC</a>',
-  },
+  /*
+   * Cell coverage was here, and drew nothing from the day it was added.
+   *
+   * broadbandmap.fcc.gov answers 403 to anything that is not its own page —
+   * from a script, from a CI runner, and from this site — and sends no CORS
+   * header even then, so a browser could not read the tile if it arrived. That
+   * is not a URL that needs correcting; it is a service that is not open.
+   *
+   * Per carrier is a further step again. The FCC's public mobile coverage
+   * layers do exist on ArcGIS Online, and they are readable — but their columns
+   * are `technology, mindown, minup, environmnt, h3_res9_id` and nothing else.
+   * There is no provider field: what is published is coverage by technology,
+   * with the carrier behind it stripped. Per-carrier maps live in the
+   * downloadable Broadband Data Collection files, which are gigabytes of
+   * hexagons and not something a static site can serve.
+   *
+   * So there is no layer here rather than a switch that does nothing. A dead
+   * switch is worse than an absent one: it costs somebody the time it takes to
+   * work out that the map is not broken.
+   */
   {
     id: 'trails-hiking',
     group: 'Routes',

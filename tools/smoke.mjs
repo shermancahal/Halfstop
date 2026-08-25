@@ -174,8 +174,29 @@ const SKY_COVER = (() => {
   }));
 })();
 
+/*
+ * Fire perimeters, as the feature service returns them. The layer this stands
+ * in for used to ask a feature service for an image — which it cannot make —
+ * so it answered 400 to every tile and drew nothing, for months, without
+ * anything in the app saying so.
+ */
+const PERIMETERS = {
+  type: 'FeatureCollection',
+  features: [{
+    type: 'Feature',
+    properties: { attr_IncidentName: 'Smoke Ridge', attr_GACC: 'SACC' },
+    geometry: {
+      type: 'Polygon',
+      coordinates: [[[-84.4, 35.8], [-84.1, 35.8], [-84.1, 36.0], [-84.4, 36.0], [-84.4, 35.8]]],
+    },
+  }],
+};
+
 await page.route('**/*', async (route) => {
   const url = route.request().url();
+  if (/WFIGS_Interagency_Perimeters/.test(url)) {
+    return route.fulfill({ status: 200, contentType: 'application/geo+json', body: JSON.stringify(PERIMETERS) });
+  }
   if (/\/points\//.test(url)) {
     return route.fulfill({
       status: 200,
@@ -353,6 +374,52 @@ for (const id of ['storm-area', 'storm-outline', 'storm-motion', 'storm-head']) 
 }
 check('and no label layer without glyphs to draw it with',
   stormLayers.includes('storm-motion-label'), false);
+
+/*
+ * A layer whose data is fetched for the view rather than served as tiles. The
+ * check that matters is that features actually reach a source: a switch that
+ * adds layers and never fills them looks identical, on screen, to a region
+ * with no fires in it.
+ */
+console.log('\nA queried overlay loads features for the view');
+await page.click('.panel-tab[data-tab="layers"]');
+await page.waitForTimeout(300);
+await page.locator('summary', { hasText: /Conditions/ }).first().click();
+await page.waitForTimeout(200);
+await page.locator('.layer-row', { hasText: /Wildfire perimeters/ }).locator('input[type=checkbox]').check();
+await page.waitForTimeout(900);
+
+const fire = await page.evaluate(() => {
+  const map = window.__map;
+  const ids = map.layerIds();
+  return {
+    fill: ids.includes('overlay-wildfire'),
+    line: ids.includes('overlay-wildfire--1'),
+    features: map.getSource('overlay-wildfire')?._d?.features?.length ?? null,
+  };
+});
+check('the fill layer is added', fire.fill, true);
+check('and the outline with it', fire.line, true);
+check('and the perimeters reach the source', fire.features, 1);
+
+// A raster basemap bakes its overlays into the style document, and a queried
+// overlay cannot be baked into anything. It has to be added on that path too,
+// or switching to USGS Topo quietly drops it.
+await page.locator('.layer-row', { hasText: /^USGS Topo$/ }).locator('input[type=radio]').check();
+await page.waitForTimeout(1100);
+const fireOnRaster = await page.evaluate(() => ({
+  fill: window.__map.layerIds().includes('overlay-wildfire'),
+  features: window.__map.getSource('overlay-wildfire')?._d?.features?.length ?? null,
+}));
+check('it survives a switch to a raster basemap', fireOnRaster.fill, true);
+check('with its features', fireOnRaster.features, 1);
+await page.locator('.layer-row', { hasText: /^Byways Topo/ }).locator('input[type=radio]').check();
+await page.waitForTimeout(1100);
+
+await page.locator('.layer-row', { hasText: /Wildfire perimeters/ }).locator('input[type=checkbox]').uncheck();
+await page.waitForTimeout(500);
+const afterOff = await page.evaluate(() => window.__map.layerIds().filter((id) => id.startsWith('overlay-wildfire')));
+check('switching it off takes both layers with it', afterOff, []);
 
 console.log('\nThe Location section leads with decimal and hides the rest');
 await page.click('.panel-tab[data-tab="waypoints"]');

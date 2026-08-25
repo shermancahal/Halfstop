@@ -409,10 +409,13 @@ async function main() {
   healMissingImages();
   keepAppLayersAlive();
   trackShieldState();
+  trackQueryOverlays();
   // A Mapbox vector style starts without our overlays; the raster path bakes
-  // them into the initial style, so this only has work to do in the former case.
-  if (initialStyle.vector) {
-    for (const overlay of activeOverlays()) addOverlayLayer(overlay);
+  // them into the initial style. The exception is a queried overlay, which
+  // cannot be baked into either — it has no tiles, only an answer that depends
+  // on the view — so it is added here on both paths.
+  for (const overlay of activeOverlays()) {
+    if (initialStyle.vector || overlay.query) addOverlayLayer(overlay);
   }
   renderBuildStamp();
   renderLayersTab();
@@ -802,6 +805,41 @@ function legendList(entries, note = '') {
 }
 
 /**
+ * The colour key an ArcGIS service draws for itself.
+ *
+ * Some services publish no legend graphic to fetch — the NOHRSC snow analysis
+ * is one — but every ArcGIS map service will describe its key as JSON, each
+ * class carrying its own swatch as base64. That is the real scale rather than
+ * an approximation of it, which matters for a depth map: a shade of blue with
+ * no number beside it says nothing at all.
+ *
+ * Failure is silent on purpose. A missing key is a layer with no key, not an
+ * error worth putting in front of somebody who just opened a description.
+ */
+async function fillArcGISLegend(host, { url, layer } = {}) {
+  if (!host || !url) return;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return;
+    const body = await response.json();
+    const found = (body.layers || []).find((entry) => entry.layerId === layer);
+    const classes = (found?.legend || []).filter((item) => item.imageData);
+    if (!classes.length) return;
+
+    host.replaceChildren(el('ul', { class: 'legend' }, classes.map((item) => el('li', { class: 'legend-item' }, [
+      el('img', {
+        class: 'legend-swatch is-image',
+        src: `data:${item.contentType || 'image/png'};base64,${item.imageData}`,
+        alt: '',
+      }),
+      el('span', { text: item.label || '' }),
+    ]))));
+  } catch {
+    // No key. The description above it still says what the layer is.
+  }
+}
+
+/**
  * Show which build is running, at the foot of the panel.
  *
  * "The changes did not appear" has been the single most expensive question in
@@ -990,6 +1028,21 @@ function trackShieldState() {
     timer = setTimeout(update, 600);
   });
   update();
+}
+
+/**
+ * Re-ask the queried overlays once the map has settled.
+ *
+ * Debounced rather than per-frame: these are bounding-box queries against
+ * somebody else's server, and a pan across three states should be one request
+ * at the end of it rather than forty on the way.
+ */
+function trackQueryOverlays() {
+  let timer = null;
+  state.map.on('moveend', () => {
+    clearTimeout(timer);
+    timer = setTimeout(refreshQueryOverlays, 700);
+  });
 }
 
 /**
@@ -2255,7 +2308,11 @@ function setBasemap(id) {
   // raster to vector does not.
   state.map.setStyle(next.style, { diff: false });
   state.map.once('style.load', () => {
-    if (next.vector) for (const overlay of activeOverlays()) addOverlayLayer(overlay);
+    for (const overlay of activeOverlays()) {
+      // Same rule as at startup: baked in for raster, added here otherwise,
+      // and a queried overlay is never baked in.
+      if (next.vector || overlay.query) addOverlayLayer(overlay);
+    }
     addAppLayers();
     for (const entry of state.documents.values()) addDocumentLayers(entry);
     applyVisibility();
@@ -2283,10 +2340,98 @@ function firstDataLayerId() {
   return found?.id;
 }
 
+/**
+ * An overlay whose data is fetched for the view rather than served as tiles.
+ *
+ * Some of the most useful data is published as an ArcGIS feature service and
+ * nothing else — fire perimeters are the case that forced this. A feature
+ * service will not draw an image at any price; asking one for `f=image`, which
+ * is what this layer used to do, returns "Bad Request" and therefore a switch
+ * that does nothing. It will hand over GeoJSON for a bounding box, which is a
+ * better answer anyway: the shapes come with their names attached.
+ *
+ * Two consequences follow and both are handled here. The data depends on where
+ * the map is looking, so it is re-fetched when the map stops moving; and a
+ * national view of every fire in the country is both illegible and an unkind
+ * thing to ask of somebody's server, so it has a minimum zoom.
+ */
+function queryURL(template, map) {
+  const bounds = map.getBounds();
+  const box = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()]
+    .map((value) => value.toFixed(4)).join(',');
+  return template.replace('{bbox}', encodeURIComponent(box));
+}
+
+async function refreshQueryOverlay(overlay) {
+  const [fill] = overlayLayerIds(overlay);
+  const source = state.map?.getSource?.(fill);
+  if (!source) return;
+
+  const { minzoom = 0, url } = overlay.query;
+  const empty = { type: 'FeatureCollection', features: [] };
+  if ((state.map.getZoom?.() ?? 0) < minzoom) { source.setData(empty); return; }
+
+  try {
+    const response = await fetch(queryURL(url, state.map));
+    if (!response.ok) throw new Error(String(response.status));
+    const data = await response.json();
+    // An ArcGIS error is a 200 with an `error` object in it, which parses
+    // cleanly and has no features — worth telling apart from an empty view.
+    if (data.error) throw new Error(data.error.message || 'service error');
+    source.setData(data.type === 'FeatureCollection' ? data : empty);
+    // The same health counter the tile layers feed, so a queried layer that
+    // stops answering gets the same "not responding" badge rather than
+    // silently showing an empty map.
+    noteLayerHealth(overlayLayerIds(overlay)[0], true);
+  } catch {
+    noteLayerHealth(overlayLayerIds(overlay)[0], false);
+  }
+}
+
+function addQueryOverlay(overlay, opacity) {
+  const [fill, line] = overlayLayerIds(overlay);
+  const colour = overlay.query.color || '#D84315';
+
+  if (!state.map.getSource(fill)) {
+    state.map.addSource(fill, {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+      attribution: overlay.attribution || '',
+    });
+  }
+  if (!state.map.getLayer(fill)) {
+    state.map.addLayer({
+      id: fill,
+      type: 'fill',
+      source: fill,
+      paint: { 'fill-color': colour, 'fill-opacity': opacity * 0.45 },
+    }, firstDataLayerId());
+  }
+  if (!state.map.getLayer(line)) {
+    state.map.addLayer({
+      id: line,
+      type: 'line',
+      source: fill,
+      paint: { 'line-color': colour, 'line-width': 1.4, 'line-opacity': Math.min(1, opacity + 0.25) },
+    }, firstDataLayerId());
+  }
+
+  refreshQueryOverlay(overlay);
+}
+
+/** Re-ask every queried overlay that is switched on, once the map settles. */
+function refreshQueryOverlays() {
+  for (const overlay of activeOverlays()) {
+    if (overlay.query) refreshQueryOverlay(overlay);
+  }
+}
+
 function addOverlayLayer(overlay) {
   if (!styleReady()) { whenStyleReady(() => addOverlayLayer(overlay)); return; }
   const entry = state.overlays.get(overlay.id);
   const opacity = entry?.opacity ?? overlay.opacity ?? 1;
+
+  if (overlay.query) { addQueryOverlay(overlay, opacity); return; }
 
   for (const part of overlayParts(overlay)) {
     if (state.map.getLayer(part.layerId)) continue;

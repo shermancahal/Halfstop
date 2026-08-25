@@ -199,7 +199,12 @@ const results = [];
 for (const entry of await candidates()) {
   // Serially, deliberately. These are other people's services and a burst of
   // thirty requests from a CI runner is not a good way to ask.
-  results.push(await probe(entry));
+  let result = await probe(entry);
+  // One retry, and only for a service that did not answer at all. Two of these
+  // timed out in one run and were fine in the next; a weekly report that cries
+  // wolf gets ignored, which defeats the point of having one.
+  if (result.verdict === 'unreachable') result = await probe(entry);
+  results.push(result);
 }
 
 if (asJSON) {

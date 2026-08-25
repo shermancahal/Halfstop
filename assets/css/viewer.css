@@ -906,6 +906,12 @@ html, body { height: 100%; overflow: hidden; }
   flex: none; width: 13px; height: 13px; border-radius: 3px;
   border: 1px solid rgba(0, 0, 0, .18);
 }
+/* A swatch the service drew rather than one we wrote down: its own size, and
+   no rounded corners, because some of them are lines rather than blocks. */
+.legend-swatch.is-image {
+  width: auto; height: 15px; border-radius: 2px; background: #fff;
+  border-color: rgba(0, 0, 0, .1);
+}
 
 /* Public / private land banner in the details panel */
 .land-badge {
