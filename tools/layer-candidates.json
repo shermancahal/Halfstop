@@ -1,18 +1,91 @@
 [
   {
-    "id": "geo:reverse-as-shipped",
-    "note": "Exactly the URL the app sends, so this fails when the app fails. The version before it asked for four types alongside limit=5 and was answered 422 for months, while a probe of a convenient single-type URL reported the geocoder healthy.",
-    "url": "https://api.mapbox.com/geocoding/v5/mapbox.places/-85.730495,37.291094.json?access_token={token}"
+    "id": "legend:ndfd-temp-json",
+    "note": "GeoServer can hand back a legend as JSON instead of a picture: rules with colour, quantity and label. That is the radar-style swatch list the panel wants, sourced from the service rather than typed in here - so it cannot go stale the first time NOAA restyles a layer.",
+    "expect": "data",
+    "find": "\"(?:color|quantity|label)\":\"[^\"]{0,24}\"",
+    "url": "https://mapservices.weather.noaa.gov/geoserver/ndfd/wms?service=WMS&version=1.3.0&request=GetLegendGraphic&layer=ndfd:temp&format=application/json"
+  },
+  {
+    "id": "legend:ndfd-sky-json",
+    "note": "Cloud cover, to confirm the JSON legend is not a one-layer accident and to see how many classes a ramp comes back with - which decides whether the list needs two columns.",
+    "expect": "data",
+    "find": "\"(?:color|quantity|label)\":\"[^\"]{0,24}\"",
+    "url": "https://mapservices.weather.noaa.gov/geoserver/ndfd/wms?service=WMS&version=1.3.0&request=GetLegendGraphic&layer=ndfd:sky&format=application/json"
+  },
+  {
+    "id": "lp:gibs-black-marble",
+    "note": "Light pollution, first choice. NASA GIBS serves the VIIRS Black Marble night lights composite as plain XYZ tiles, no key. Note the path is z/y/x, not z/x/y.",
+    "at": [
+      -86.013,
+      39.654,
+      7
+    ],
+    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg"
+  },
+  {
+    "id": "lp:gibs-black-marble-notime",
+    "note": "The same layer with `default` for the time dimension, in case the dated path is wrong.",
+    "at": [
+      -86.013,
+      39.654,
+      7
+    ],
+    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg"
+  },
+  {
+    "id": "lp:gibs-identifiers",
+    "note": "What GIBS actually calls its night-lights layers, read from its own capabilities rather than guessed. Only the ones with a plausible name are printed.",
+    "expect": "data",
+    "find": "<ows:Identifier>([^<]*(?:Black_Marble|DayNightBand|Nighttime|Lights)[^<]*)</ows:Identifier>",
+    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/1.0.0/WMTSCapabilities.xml"
+  },
+  {
+    "id": "lp:lorenz-atlas-page",
+    "note": "The Lorenz light pollution atlas is the calibrated sky-brightness overlay photographers use, rather than a photograph of streetlights. Its viewer page builds the tile URLs in JavaScript, so this reads the pattern out instead of guessing at it.",
+    "expect": "data",
+    "find": "[\\w./]*tile[\\w./{}$+_-]*\\.png",
+    "url": "https://djlorenz.github.io/astronomy/lp2022/overlay/dark.html"
+  },
+  {
+    "id": "aurora:ovation",
+    "note": "NOAA SWPC OVATION 30-minute aurora forecast: a global probability grid. Same shape as the wildfire overlay - no tiles, fetch and render. Watch the byte count; this decides whether it can be fetched on a phone.",
+    "expect": "data",
+    "find": "\"(Observation Time|Forecast Time)\"",
+    "url": "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"
+  },
+  {
+    "id": "aurora:kp-index",
+    "note": "Planetary K index, for the Photography panel readout. At Indiana's latitude this is the useful half of aurora forecasting.",
+    "expect": "data",
+    "url": "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
+  },
+  {
+    "id": "road:blm-services",
+    "note": "Ask BLM what it publishes. GTLF - Ground Transportation Linear Features - carries the OHV designation on every BLM route, and is the biggest single off-road gap in the catalogue.",
+    "expect": "data",
+    "url": "https://gis.blm.gov/arcgis/rest/services?f=pjson"
+  },
+  {
+    "id": "road:usfs-edw",
+    "note": "The USFS Enterprise Data Warehouse folder. Road maintenance level and trail motorized designation live here - the classes and restrictions MVUM alone does not carry.",
+    "expect": "data",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW?f=pjson"
   },
   {
     "id": "cap:tn-services",
     "note": "Tennessee is the next state worth adding. BASEMAPS holds imagery and a topo.",
+    "expect": "data",
     "url": "https://tnmap.tn.gov/arcgis/rest/services/BASEMAPS?f=pjson"
   },
   {
     "id": "img:ky-aerial-6in",
-    "note": "The statewide six-inch mosaic. Answers, but draws nothing over Hardyville where the three-inch does — so it needs a different sublayer or renderer before it is worth offering.",
-    "at": [-85.73, 37.29, 12],
+    "note": "The statewide six-inch mosaic. Answers, but draws nothing over Hardyville where the three-inch does - so it needs a different sublayer or renderer before it is worth offering.",
+    "at": [
+      -85.73,
+      37.29,
+      12
+    ],
     "url": "https://kyraster.ky.gov/arcgis/rest/services/ImageServices/Ky_KYAPED_Imagery_WGS84WM/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
   }
 ]

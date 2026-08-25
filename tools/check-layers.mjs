@@ -133,6 +133,27 @@ function pngSize(bytes) {
  * and a GetCapabilities or an ArcGIS `f=pjson` is the service telling you its
  * own. Printing what it says beats another round of plausible URLs.
  */
+/**
+ * Pull whatever a candidate says it is looking for out of the body.
+ *
+ * For the cases the generic extractors cannot reach: a WMTS capabilities
+ * document names its layers in `ows:Identifier` rather than `Name`, and a
+ * light-pollution atlas keeps its tile URL pattern inside the JavaScript of its
+ * own viewer page. Both are one regex away from being readable, and both are
+ * otherwise a round trip of guessing at URLs.
+ *
+ * Deduped and capped, because an unfiltered capabilities document is several
+ * hundred lines of log nobody reads.
+ */
+function findIn(body, pattern) {
+  try {
+    const matches = String(body).matchAll(new RegExp(pattern, 'g'));
+    return [...new Set([...matches].map((match) => (match[1] ?? match[0]).trim()))].slice(0, 40);
+  } catch (error) {
+    return [`bad find pattern: ${error.message}`];
+  }
+}
+
 function layerNames(body) {
   const found = [];
   // WMS: <Layer><Name>workspace:layer</Name>. The service's own name is in
@@ -261,7 +282,21 @@ async function probe(entry) {
       bytes,
       ms: Date.now() - started,
       verdict: !response.ok ? 'failed'
-        : !isImage ? 'not an image'
+        /*
+         * A candidate can declare that it is data rather than a tile.
+         *
+         * Several of the things worth checking are not images at all — an
+         * aurora forecast grid, a service's own list of what it publishes, a
+         * geocode. Reporting those as failures because they are not PNGs makes
+         * the summary line cry wolf, and a report people skim is a report that
+         * stops catching the layer that really did break.
+         *
+         * CORS still matters exactly as much: a JSON body a browser is not
+         * allowed to read is as useless as a tile it cannot draw.
+         */
+        : entry.expect === 'data'
+          ? (!response.headers.get('access-control-allow-origin') ? 'no CORS' : 'ok')
+          : !isImage ? 'not an image'
           // A tile a browser is not allowed to read is a tile that does not
           // draw, however well it downloads from a script. Worth failing on:
           // it is invisible from every other angle.
@@ -271,7 +306,7 @@ async function probe(entry) {
       text,
       size,
       cors: response.headers.get('access-control-allow-origin') || '',
-      names: isImage ? [] : layerNames(decoded),
+      names: isImage ? [] : (entry.find ? findIn(decoded, entry.find) : layerNames(decoded)),
     };
   } catch (error) {
     return { ...entry, url, verdict: 'unreachable', text: String(error.message || error) };
@@ -323,7 +358,7 @@ if (asJSON) {
 
   const checked = results.filter((result) => !result.skipped);
   const bad = checked.filter((result) => result.verdict !== 'ok' && result.verdict !== 'empty (seasonal)');
-  console.log(`\n${checked.length - bad.length} of ${checked.length} layers returned an image with something on it.`);
+  console.log(`\n${checked.length - bad.length} of ${checked.length} answered the way they were expected to.`);
   if (bad.length) {
     console.log(`Needs attention: ${bad.map((result) => `${result.id} (${result.verdict})`).join(', ')}`);
   }
