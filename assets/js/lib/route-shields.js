@@ -156,7 +156,20 @@ export const STATE_SHIELDS = {
   OH: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
   RI: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
   TN: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
-  TX: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
+  /*
+   * Texas is the one drawn design that carries lettering.
+   *
+   * Its marker is a white square inside a heavy black border with TEXAS across
+   * the foot, and without the word it is indistinguishable from the dozen other
+   * plain white squares. The lettering also moves the number: it sits in the
+   * upper two thirds rather than in the middle, the same way it does on the
+   * blanks whose states put their name across the top.
+   *
+   * Texas also signs Farm to Market, Loop and Spur routes with markers of their
+   * own, and those cannot be drawn from this data: Mapbox tags all of them
+   * `us-state`, with the number and nothing to say which family it belongs to.
+   */
+  TX: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c', name: 'TEXAS', heavy: true },
   WV: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
   WI: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
   WA: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
@@ -164,7 +177,9 @@ export const STATE_SHIELDS = {
   /* Circles */
   DE: { shape: 'circle', bg: '#ffffff', fg: '#1c1c1c' },
   IA: { shape: 'circle', bg: '#ffffff', fg: '#1c1c1c' },
-  KY: { shape: 'circle', bg: '#1c1c1c', fg: '#ffffff' },
+  // White with black numerals, like the other five circle states. It was drawn
+  // the other way round — black disc, white numerals — which is not the sign.
+  KY: { shape: 'circle', bg: '#ffffff', fg: '#1c1c1c' },
   MS: { shape: 'circle', bg: '#ffffff', fg: '#1c1c1c' },
   NJ: { shape: 'circle', bg: '#ffffff', fg: '#1c1c1c' },
   VA: { shape: 'circle', bg: '#ffffff', fg: '#1c1c1c' },
@@ -502,6 +517,29 @@ const SHAPE_PATHS = {
 /** The shapes the renderer can draw, so the table cannot name one it cannot. */
 export const SHAPE_NAMES = Object.keys(SHAPE_PATHS);
 
+/**
+ * A state's name across the foot of its marker.
+ *
+ * Small, because it is small on the sign: the word identifies the marker and
+ * the number is what anyone actually reads. `NAME_BAND` is how much of the
+ * height it claims, and `shieldTextOffset` lifts the number by the same amount
+ * so the two never overlap.
+ */
+const NAME_BAND = 0.3;
+
+function nameDecoration(ctx, w, h, entry) {
+  ctx.save();
+  ctx.fillStyle = entry.fg;
+  ctx.font = `600 ${(h * 0.185).toFixed(2)}px system-ui, "Helvetica Neue", Arial, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  // Inside the field rather than on the border it sits above: the square is
+  // drawn to h - 1.5 with a heavy stroke straddling that edge, so a baseline
+  // any lower puts the lettering into the frame.
+  ctx.fillText(entry.name, w / 2, h - h * 0.175, w - 7);
+  ctx.restore();
+}
+
 const SHAPE_DECORATIONS = {
   beehive: (ctx, w, h, entry) => beehiveDecoration(ctx, w, h, entry.fg),
   sunflower: (ctx, w, h, entry) => sunflowerDecoration(ctx, w, h, entry.fg),
@@ -545,10 +583,11 @@ export function rasterizeShield(design, length, { pixelRatio = 2 } = {}) {
     ctx.fillStyle = entry.bg;
     ctx.fill();
     ctx.strokeStyle = entry.bg === '#ffffff' ? '#2b2b2b' : 'rgba(255,255,255,0.85)';
-    ctx.lineWidth = 1.3;
+    ctx.lineWidth = entry.heavy ? 2.4 : 1.3;
     ctx.stroke();
 
     SHAPE_DECORATIONS[entry.shape]?.(ctx, width, HEIGHT, entry);
+    if (entry.name) nameDecoration(ctx, width, HEIGHT, entry);
     return ctx.getImageData(0, 0, canvas.width, canvas.height);
   }
 
@@ -612,9 +651,16 @@ function boxFor(design, length) {
 }
 
 /** Text size that fits the clear space, in CSS pixels. */
+/** The drawn design behind `st-XX`, or null for the two national shields. */
+function drawnState(design) {
+  return design.startsWith('st-') ? STATE_SHIELDS[design.slice(3)] || null : null;
+}
+
 export function shieldTextSize(design, length) {
   const box = boxFor(design, length);
-  if (!box) return NOMINAL_TEXT;
+  // A drawn marker with the state's name on it has less room than one without,
+  // and the same amount whatever the number is.
+  if (!box) return drawnState(design)?.name ? NOMINAL_TEXT * 0.82 : NOMINAL_TEXT;
   // Two digits across the box width, and most of its height.
   const byHeight = (box.h / 2) * 0.82;
   const byWidth = (box.w / 2) / Math.max(2, length) * 1.55;
@@ -624,7 +670,13 @@ export function shieldTextSize(design, length) {
 /** Offset from the icon's centre to the middle of the clear space, in ems. */
 export function shieldTextOffset(design, length) {
   const box = boxFor(design, length);
-  if (!box) return [0, 0];
+  if (!box) {
+    const drawn = drawnState(design);
+    if (!drawn?.name) return [0, 0];
+    // Up by half the band, in ems of the size chosen just above.
+    const size = shieldTextSize(design, length);
+    return [0, Math.round((-(HEIGHT * NAME_BAND) / 2 / size) * 100) / 100];
+  }
   const size = shieldTextSize(design, length);
   const round = (value) => Math.round(value * 100) / 100;
   return [round((box.dx / 2) / size), round((box.dy / 2) / size)];

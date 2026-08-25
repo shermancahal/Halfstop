@@ -20,6 +20,7 @@ import { buildRasterStyle, overlayParts, overlayIdFromLayer, styleFor } from '..
 import { BASEMAPS, OVERLAYS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN } from '../assets/js/config.js';
 import { bywaysStyle, PALETTE, shieldLayerUpdates } from '../assets/js/lib/byways-style.js';
 import { previewFor, tileFor, tileURL, swatchSVG } from '../assets/js/lib/preview.js';
+import { shieldTextOffset, shieldTextSize } from '../assets/js/lib/route-shields.js';
 import { formatTemperature, convertTemperature } from '../assets/js/lib/geo.js';
 import {
   shieldDesign,
@@ -726,6 +727,20 @@ test('shields: an unlisted state produces the same expression as no state at all
   );
 });
 
+test('shields: a drawn marker with lettering moves its number off the lettering', () => {
+  // Texas is the one drawn design that carries a word. Without accounting for
+  // it the number lands on TEXAS, which is what happens on the blanks whose
+  // states put their name across the top — solved there by measuring the clear
+  // space, and there is no image to measure here.
+  const [, lifted] = shieldTextOffset('st-TX', 2);
+  assert.ok(lifted < 0, 'the number should sit above the lettering');
+  assert.ok(shieldTextSize('st-TX', 2) < shieldTextSize('st-NY', 2),
+    'and be smaller, because it has less room');
+
+  // A plain marker is unaffected.
+  assert.deepEqual(shieldTextOffset('st-NY', 2), [0, 0]);
+});
+
 test('shields: every number is readable on the marker it sits on', () => {
   /*
    * Asserted by contrast rather than by a list of states.
@@ -765,12 +780,26 @@ test('shields: every number is readable on the marker it sits on', () => {
     assert.equal(expression[expression.length - 1], entry.fg, `${code} number colour`);
   }
 
-  // The interstate arm is always white regardless of the state, so a check that
-  // merely looked for white somewhere in the expression would always pass.
-  const light = shieldTextColour('NY');
-  assert.equal(light[light.length - 1], '#1c1c1c', 'a white marker takes a dark number');
-  const dark = shieldTextColour('KY');
-  assert.equal(dark[dark.length - 1], '#ffffff', "Kentucky's black disc takes a white number");
+  /*
+   * The interstate arm is always white regardless of the state, so a check that
+   * merely looked for white somewhere in the expression would always pass. Both
+   * examples are found in the table rather than named: this test used to name
+   * Kentucky as the dark one, and when Kentucky turned out to be a white disc
+   * like the other five circle states, the test failed for having memorised the
+   * bug — two lines under a comment about exactly that.
+   */
+  const codes = Object.keys(STATE_SHIELDS);
+  const lightMarker = codes.find((code) => STATE_SHIELDS[code].fg === '#1c1c1c');
+  const darkMarker = codes.find((code) => STATE_SHIELDS[code].fg === '#ffffff');
+
+  assert.ok(lightMarker, 'no light marker in the table at all');
+  const light = shieldTextColour(lightMarker);
+  assert.equal(light[light.length - 1], '#1c1c1c', `${lightMarker} takes a dark number`);
+
+  if (darkMarker) {
+    const dark = shieldTextColour(darkMarker);
+    assert.equal(dark[dark.length - 1], '#ffffff', `${darkMarker} takes a white number`);
+  }
 });
 
 test('shields: every state and DC has a marker, listed in a stable order', () => {

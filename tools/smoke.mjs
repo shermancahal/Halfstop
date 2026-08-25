@@ -756,6 +756,35 @@ for (const [name, shape] of Object.entries(profiles)) {
  * drawn ones. The whole feature is silent when it fails: a shield that never
  * arrives is a road with no marker on it.
  */
+/*
+ * Texas is the one drawn marker that carries a word, and a word is the kind of
+ * thing that renders as nothing without anybody noticing — the canvas does not
+ * throw for a font it cannot find, it just draws no ink.
+ */
+console.log('\nThe Texas marker carries its own name');
+const lettering = await page.evaluate(async () => {
+  const shields = await import('./assets/js/lib/route-shields.js');
+  const ink = (code) => {
+    const data = shields.rasterizeShield(`st-${code}`, 2, { pixelRatio: 4 });
+    if (!data) return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = data.width;
+    canvas.height = data.height;
+    const ctx = canvas.getContext('2d');
+    ctx.putImageData(data, 0, 0);
+    // The foot of the marker, inside its frame.
+    const band = ctx.getImageData(6, Math.round(data.height * 0.72), data.width - 12, Math.round(data.height * 0.16));
+    let dark = 0;
+    for (let i = 0; i < band.data.length; i += 4) {
+      if (band.data[i + 3] > 100 && band.data[i] < 120) dark += 1;
+    }
+    return dark;
+  };
+  return { texas: ink('TX'), plain: ink('NY') };
+});
+check('there is ink where the name goes', lettering.texas > 60, true);
+check('and a plain square has none there', lettering.plain < lettering.texas / 3, true);
+
 console.log('\nA state shield loads from its blank');
 const blank = await page.evaluate(async () => {
   const shields = await import('./assets/js/lib/route-shields.js');
