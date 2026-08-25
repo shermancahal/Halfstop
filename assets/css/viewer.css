@@ -978,6 +978,8 @@ html, body { height: 100%; overflow: hidden; }
    stripe taller than the panel, which pushes every layer under it out of
    reach. Short keys stay in one column: two columns of three reads as a
    mistake. */
+.legend.is-symbols { grid-template-columns: repeat(2, 1fr); column-gap: 12px; gap: 6px 12px; }
+.legend-symbol { flex: none; display: inline-flex; line-height: 0; }
 .legend.is-split { grid-template-columns: repeat(2, 1fr); column-gap: 12px; }
 .legend.is-wide { grid-template-columns: repeat(3, 1fr); column-gap: 8px; }
 /* Numbered ramps only: at three across, the cell is about four characters, so

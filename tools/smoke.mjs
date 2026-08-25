@@ -761,7 +761,7 @@ console.log('\nRecreation sites draw as icons, one per kind of place');
 await page.click('.panel-tab[data-tab="layers"]');
 await page.waitForTimeout(300);
 await openGroup(/Land & access/);
-await page.locator('.layer-row', { hasText: /Recreation sites/ }).locator('input[type=checkbox]').check();
+await page.locator('.layer-row', { hasText: /^Recreation/ }).locator('input[type=checkbox]').check();
 await page.waitForTimeout(900);
 const rec = await page.evaluate(() => {
   const map = window.__map;
@@ -779,7 +779,26 @@ const rec = await page.evaluate(() => {
 check('it is a symbol layer, not a fill', rec.type, 'symbol');
 check('every sublayer contributed a site', rec.count, 8);
 check('and each carries the icon of its own kind',
-  rec.icons, ['cabin', 'historic', 'picnic', 'ranger', 'tent', 'trailhead']);
+  rec.icons, ['cabin', 'campground', 'historic', 'information', 'picnic', 'ranger', 'trailhead']);
+check('the symbols are registered as NPS images, not the pin glyphs',
+  await page.evaluate(() => window.__map.imageIds().filter((id) => id.startsWith('nps-')).length > 0), true);
+
+/*
+ * The key shows the symbols themselves. A list of coloured squares cannot
+ * answer "which of these is the tent", which is what got reported.
+ */
+const symbolKey = await page.evaluate(() => {
+  const row = [...document.querySelectorAll('.layer-row')]
+    .find((node) => /^Recreation/.test(node.textContent.trim()));
+  const desc = row?.nextElementSibling;
+  return {
+    rows: desc?.querySelectorAll('.legend.is-symbols .legend-item').length ?? 0,
+    drawn: desc?.querySelectorAll('.legend-symbol svg').length ?? 0,
+  };
+});
+// Seven sublayers, six symbols: cabins and shelters share one.
+check('the key lists one row per symbol', symbolKey.rows, 7);
+check('and each row draws the symbol rather than a colour', symbolKey.drawn, 7);
 check('with a kind to show in the popup', rec.labelled, true);
 check('and a name', rec.named, true);
 check('the pin images the icons name are registered', rec.iconImages > 0, true);

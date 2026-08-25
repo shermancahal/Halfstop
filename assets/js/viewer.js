@@ -54,6 +54,7 @@ import {
   landManager, forecast, weatherClass, publicLand, elevation, skyCover,
   parseWMSLegend,
 } from './lib/lookup.js';
+import { registerNPSImages, npsIconSVG } from './lib/nps-icons.js';
 import { describeSync } from './lib/sync.js';
 import {
   OfflineStore, MAX_ZOOM as OFFLINE_MAX_ZOOM, TILE_BUDGET,
@@ -890,6 +891,22 @@ function renderOverlayRows(container, entries) {
   }
 }
 
+/**
+ * One row per symbol, not one per sublayer.
+ *
+ * Cabins and shelters are different USGS sublayers drawn with the same glyph,
+ * so listing every entry would put the same picture in the key twice under two
+ * names — which reads as a rendering fault rather than as a shared symbol.
+ */
+function dedupeByIcon(points) {
+  const seen = new Map();
+  for (const kind of points) {
+    if (seen.has(kind.icon)) continue;
+    seen.set(kind.icon, kind);
+  }
+  return [...seen.values()];
+}
+
 /** A colour key for a raster overlay whose colours mean something. */
 function legendList(entries, note = '') {
   /*
@@ -973,7 +990,10 @@ async function fillArcGISLegend(host, { url, layer } = {}) {
     const wanted = typeof layer === 'number'
       ? (body.layers || []).filter((entry) => entry.layerId === layer)
       : (body.layers || []);
-    const classes = wanted.flatMap((entry) => entry.legend || []).filter((item) => item.imageData);
+    // An unlabelled class is a swatch with nothing beside it, which reads as a
+    // rendering fault. The MVUM key has one.
+    const classes = wanted.flatMap((entry) => entry.legend || [])
+      .filter((item) => item.imageData && String(item.label ?? '').trim());
     if (!classes.length) return;
 
     host.replaceChildren(el('ul', { class: 'legend' }, classes.map((item) => el('li', { class: 'legend-item' }, [
@@ -2904,10 +2924,32 @@ function layerRow({ entry, selected, control, preview = false }) {
   const scaleHost = entry.legendScale ? el('div', { class: 'legend-slot' }) : null;
   if (scaleHost) fillWMSLegend(scaleHost, entry.legendScale);
 
-  const descriptionNode = description || key || note || scaleHost || entry.legendImage
+  /*
+   * A key made of the symbols themselves.
+   *
+   * For a layer drawn as icons, a list of coloured squares explains nothing —
+   * the reader has to hold a colour in their head and go hunting. Showing the
+   * glyph at the size it appears on the map is the whole answer to "I am not
+   * sure what some of these are".
+   *
+   * Built from the same `points` list the layer draws from, so the key cannot
+   * describe a symbol the map does not use.
+   */
+  const symbolKey = entry.query?.points
+    ? el('ul', { class: 'legend is-symbols' }, dedupeByIcon(entry.query.points).map((kind) => el('li', {
+      class: 'legend-item',
+    }, [
+      el('span', { class: 'legend-symbol', html: npsIconSVG(kind.icon) }),
+      el('span', { text: kind.label }),
+    ])))
+    : null;
+
+  const descriptionNode = description || key || note || scaleHost || symbolKey || entry.legendImage
     ? el('div', { class: 'layer-desc', hidden: true }, [
       description && !scaleHost ? el('p', { class: 'layer-desc-text', text: description }) : null,
-      key ? legendList(key, note) : (note ? el('p', { class: 'legend-note', text: note }) : null),
+      key ? legendList(key, note) : null,
+      symbolKey,
+      !key && note ? el('p', { class: 'legend-note', text: note }) : null,
       scaleHost,
       entry.legendImage
         ? el('div', { class: 'legend-image-wrap' }, [
@@ -3234,14 +3276,15 @@ function addPointOverlay(overlay, layerId) {
     // The images the icon expression names have to exist before it is asked
     // for them; registering is idempotent, so doing it here costs nothing and
     // removes the ordering question entirely.
-    registerPinImages(state.map);
+    //
+    registerNPSImages(state.map);
 
     state.map.addLayer({
       id: layerId,
       type: 'symbol',
       source: layerId,
       layout: {
-        'icon-image': ['concat', 'pin-', ['coalesce', ['get', 'icon'], 'pin']],
+        'icon-image': ['concat', 'nps-', ['coalesce', ['get', 'icon'], 'information']],
         'icon-size': ['interpolate', ['linear'], ['zoom'], 9, 0.7, 14, 1],
         'icon-allow-overlap': false,
         // The name only once there is room for it. At the zoom this layer

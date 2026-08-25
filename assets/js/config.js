@@ -321,8 +321,11 @@ export const OVERLAYS = [
      */
     id: 'recreation',
     group: 'Land & access',
-    name: 'Recreation sites',
+    // "Recreation sites" was wrong: a trailhead is not a site, and neither is a
+    // boat launch. It is recreation.
+    name: 'Recreation',
     description: 'Campgrounds, trailheads, cabins and picnic areas. Tap one for details.',
+    legendNote: 'Symbols are the National Park Service map set — the ones on the signs.',
     query: {
       // `{layer}` is filled per sublayer, `{bbox}` per view. GeoJSON output
       // lower-cases field names, so the popup reads `name`, not `NAME`.
@@ -330,13 +333,15 @@ export const OVERLAYS = [
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
         + '&spatialRel=esriSpatialRelIntersects&outFields=NAME'
         + '&returnGeometry=true&outSR=4326&resultRecordCount=200&f=geojson',
+      // The icon ids are the National Park Service symbol set, not this app's
+      // pin glyphs. See assets/js/lib/nps-icons.js for why.
       points: [
-        { layer: 25, icon: 'tent', label: 'Campground' },
+        { layer: 25, icon: 'campground', label: 'Campground' },
         { layer: 26, icon: 'trailhead', label: 'Trailhead' },
         { layer: 27, icon: 'cabin', label: 'Cabin' },
         { layer: 28, icon: 'cabin', label: 'Shelter' },
         { layer: 29, icon: 'picnic', label: 'Picnic area' },
-        { layer: 31, icon: 'ranger', label: 'Visitor center' },
+        { layer: 31, icon: 'information', label: 'Visitor center' },
         { layer: 32, icon: 'ranger', label: 'Ranger station' },
         { layer: 46, icon: 'historic', label: 'Historic site' },
       ],
@@ -349,7 +354,8 @@ export const OVERLAYS = [
     },
     opacity: 1,
     enabled: false,
-    attribution: 'Recreation sites © <a href="https://www.usgs.gov/programs/national-geospatial-program/national-map">USGS</a>',
+    attribution: 'Recreation © <a href="https://www.usgs.gov/programs/national-geospatial-program/national-map">USGS</a>'
+      + ' · symbols © <a href="https://github.com/nationalparkservice/symbol-library">NPS</a>',
   },
   {
     /*
@@ -380,6 +386,46 @@ export const OVERLAYS = [
     opacity: 0.65,
     enabled: false,
     attribution: 'Night lights © <a href="https://earthdata.nasa.gov/gibs">NASA GIBS</a>, VIIRS',
+  },
+  {
+    /*
+     * The same question as the layer above, answered the way a photographer
+     * asks it.
+     *
+     * Black Marble is a photograph of streetlights — radiance as the satellite
+     * sees it looking down. What you actually want to know is how dark the sky
+     * will be looking *up*, which is a different quantity: it folds in how that
+     * light scatters through the atmosphere above you, so a town twenty miles
+     * away matters and one behind a ridge matters less.
+     *
+     * David Lorenz's atlas models that, and colours it on the scale amateur
+     * astronomers already use. Both layers are here because they answer
+     * different questions and disagreeing with each other is informative.
+     *
+     * The tiles are 1024px covering the ordinary XYZ extent, so `tileSize` is
+     * 256 — that is the size the tile is *drawn* at, not the size of the image,
+     * and getting it wrong would spread each tile over sixteen others' ground.
+     */
+    id: 'sky-brightness',
+    group: 'Conditions',
+    name: 'Sky brightness (Bortle)',
+    description: 'Modelled night-sky brightness, on the Bortle scale.',
+    legend: [
+      { color: '#000000', label: 'Bortle 1–2 · truly dark' },
+      { color: '#303e8c', label: 'Bortle 3 · rural' },
+      { color: '#2e7d5b', label: 'Bortle 4 · rural/suburban' },
+      { color: '#c8b93b', label: 'Bortle 5 · suburban' },
+      { color: '#c8752e', label: 'Bortle 6–7 · bright suburban' },
+      { color: '#c03a2b', label: 'Bortle 8–9 · city' },
+    ],
+    legendNote: 'Colours follow the atlas own scale. Modelled sky brightness, '
+      + 'not a measurement — a ridge between you and a town is not in it.',
+    tiles: ['https://djlorenz.github.io/astronomy/image_tiles/tiles2022/tile_{z}_{x}_{y}.png'],
+    tileSize: 256,
+    maxzoom: 8,
+    opacity: 0.55,
+    enabled: false,
+    attribution: 'Sky brightness © <a href="https://djlorenz.github.io/astronomy/lp/">David J. Lorenz</a>, from VIIRS',
   },
   {
     id: 'public-lands',
