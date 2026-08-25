@@ -891,15 +891,20 @@ function renderOverlayRows(container, entries) {
 /** A colour key for a raster overlay whose colours mean something. */
 function legendList(entries, note = '') {
   /*
-   * Two columns once the list is long enough to be a column of its own.
+   * One column, two, or three, by how many steps there are.
    *
    * A temperature ramp is twenty-odd steps. In a 320px panel that is a stripe
    * of text taller than the panel, which pushes every layer below it out of
-   * reach — so past the threshold it reads down one column and up the next.
-   * Under it, one column: two columns of three looks like a mistake.
+   * reach. Two columns fixes the merely-long ones; the longest still want
+   * three, and their labels are short enough to take it — a colour ramp is
+   * numbered, so the widest cell is about four characters.
+   *
+   * Under the first threshold it stays in one column: two columns of three
+   * reads as a mistake rather than as a layout.
    */
-  const split = entries.length >= SPLIT_LEGEND_AT;
-  const list = el('ul', { class: split ? 'legend is-split' : 'legend' },
+  const columns = entries.length >= WIDE_LEGEND_AT ? ' is-wide'
+    : entries.length >= SPLIT_LEGEND_AT ? ' is-split' : '';
+  const list = el('ul', { class: `legend${columns}` },
     entries.map((item) => el('li', { class: 'legend-item' }, [
       el('span', { class: 'legend-swatch', style: `background:${item.color}` }),
       el('span', { text: item.label }),
@@ -924,6 +929,7 @@ function legendList(entries, note = '') {
  * error worth putting in front of somebody who just opened a description.
  */
 const SPLIT_LEGEND_AT = 9;
+const WIDE_LEGEND_AT = 16;
 
 /**
  * Fetch a GeoServer colormap and draw it as the same swatch list radar uses.

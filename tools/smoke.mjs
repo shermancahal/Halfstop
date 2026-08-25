@@ -638,7 +638,8 @@ const scale = await (async () => {
     const list = desc?.querySelector('.legend');
     return {
       swatches: desc?.querySelectorAll('.legend-swatch').length ?? 0,
-      split: !!list?.classList.contains('is-split'),
+      split: !!(list?.classList.contains('is-split') || list?.classList.contains('is-wide')),
+      wide: !!list?.classList.contains('is-wide'),
       labels: [...(desc?.querySelectorAll('.legend-item') || [])].slice(0, 3)
         .map((item) => item.textContent.trim()),
       // The prose above it restated what the swatches say, so a layer with a
@@ -651,7 +652,7 @@ const scale = await (async () => {
 check('the scale is drawn as swatches, not fetched as a picture', scale.picture, 0);
 check('every step in the colormap has a swatch', scale.swatches, 12);
 check('the nodata sentinel is not one of them', scale.labels.includes(''), false);
-check('a long ramp splits into two columns', scale.split, true);
+check('a long ramp splits into more than one column', scale.split, true);
 check('and the prose that restated it is gone', scale.prose, 0);
 
 console.log('\nA queried overlay loads features for the view');

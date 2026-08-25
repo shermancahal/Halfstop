@@ -1,54 +1,47 @@
 [
   {
-    "id": "lp:gibs-black-marble-png",
-    "note": "The capabilities named the format: image/png, not jpg. That single letter is the whole of the 400 both earlier guesses returned. Level8 means the layer stops at z8, which suits a thing that is regional by nature.",
-    "at": [
-      -86.013,
-      39.654,
-      7
-    ],
-    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png"
+    "id": "rec:usgs-query-smokies",
+    "note": "The last query returned zero features over suburban Indianapolis, which says nothing - there are no federal campgrounds there. Asking over the Smokies, where there certainly are, so an empty answer means the query is wrong rather than the place being empty.",
+    "expect": "data",
+    "find": "\"(?:NAME|FCODE|FTYPE|ADMINTYPE)\":\\s*\"?[^,\"]{0,32}\"?",
+    "url": "https://carto.nationalmap.gov/arcgis/rest/services/structures/MapServer/25/query?where=1%3D1&outFields=NAME%2CFCODE%2CFTYPE%2CADMINTYPE&geometry=-84.0%2C35.4%2C-83.0%2C36.0&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&resultRecordCount=5&f=geojson"
   },
   {
-    "id": "lp:lorenz-real-page",
-    "note": "Both earlier URLs were deprecation stubs redirecting to /astronomy/lp/. This is where they point. Looking for the tile pattern its viewer builds.",
+    "id": "rec:usgs-fcode-domain",
+    "note": "FCODE is a numeric code, not a word. Its coded-value domain is what maps a point to a tent, a caravan or a picnic table - without it the icons would be a guess at what each number means.",
     "expect": "data",
-    "find": "[\\w./]*tile[\\w./{}$+_-]*\\.(?:png|jpg)",
-    "url": "https://djlorenz.github.io/astronomy/lp/overlay/dark.html"
-  },
-  {
-    "id": "rec:blm-rec-query-fields",
-    "note": "Recreation sites is a raster today, which is why the map fills with server-drawn names and nothing is clickable. Icons and a popup need it queried as GeoJSON instead - so this asks which field carries the site type.",
-    "expect": "data",
-    "url": "https://gis.blm.gov/arcgis/rest/services/recreation/BLM_Natl_Recreation_Site_Points/MapServer/0?f=pjson"
-  },
-  {
-    "id": "rec:usgs-campgrounds-fields",
-    "note": "USGS structures sublayer 25, Campgrounds. Eleven sublayers are drawn together today; whether they can be queried as one request decides how heavy the icon version is.",
-    "expect": "data",
+    "find": "\\{\"name\":\"[^\"]{0,40}\",\"code\":[0-9]+\\}",
     "url": "https://carto.nationalmap.gov/arcgis/rest/services/structures/MapServer/25?f=pjson"
   },
   {
-    "id": "rec:usgs-structures-query",
-    "note": "A real query over one small extent, to see what comes back and how big it is. If a bbox of a county returns thousands of points the icons need a zoom floor.",
+    "id": "rec:blm-recreation-folder",
+    "note": "BLM_Natl_Recreation_Site_Points answered 404 Service not found, so the name in the catalogue has moved. Asking the folder what it holds now - the raster half of this layer may have been dead for a while.",
     "expect": "data",
-    "find": "\"(?:NAME|FCODE|FTYPE|GNIS_NAME|LOADDATE)\":\\s*\"?[^,\"]{0,30}\"?",
-    "url": "https://carto.nationalmap.gov/arcgis/rest/services/structures/MapServer/25/query?where=1%3D1&outFields=*&geometry=-86.3%2C39.5%2C-85.7%2C39.9&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&resultRecordCount=3&f=geojson"
+    "url": "https://gis.blm.gov/arcgis/rest/services/recreation?f=pjson"
   },
   {
-    "id": "road:blm-transportation",
-    "note": "BLM publishes a `transportation` folder - the catalogue root listed it. GTLF, with the OHV designation on every route, should be in there.",
+    "id": "land:blm-sma-vectors",
+    "note": "Public lands is a cached raster - the six colours are baked into the PNG, so a pattern cannot be applied to it. Hatching BLM specifically needs the polygons as vectors. This asks whether the surface-management layer will answer a query at all, and what names the agency field uses.",
     "expect": "data",
-    "url": "https://gis.blm.gov/arcgis/rest/services/transportation?f=pjson"
+    "find": "\"(?:ADMIN_UNIT_NAME|ADMIN_AGENCY_CODE|ADMIN_DEPT_CODE|name)\":\\s*\"[^\"]{0,32}\"",
+    "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_Cached_without_PriUnk/MapServer/0?f=pjson"
+  },
+  {
+    "id": "lp:lorenz-tile-2024",
+    "note": "The atlas viewer names its own tiles: image_tiles/tiles2024/tile_{z}_{x}_{y}.png. This is the calibrated sky-brightness overlay rather than a photograph of streetlights, so it is the better of the two if it draws.",
+    "at": [-86.013, 39.654, 7],
+    "url": "https://djlorenz.github.io/astronomy/image_tiles/tiles2024/tile_{z}_{x}_{y}.png"
+  },
+  {
+    "id": "road:blm-gtlf-layers",
+    "note": "GTLF exists after all - the transportation folder lists BLM_Natl_GTLF_Public_Display. Its layers and fields carry the OHV designation per route.",
+    "expect": "data",
+    "url": "https://gis.blm.gov/arcgis/rest/services/transportation/BLM_Natl_GTLF_Public_Display/MapServer?f=pjson"
   },
   {
     "id": "img:ky-aerial-6in",
     "note": "The statewide six-inch mosaic. Answers, but draws nothing over Hardyville where the three-inch does - so it needs a different sublayer or renderer before it is worth offering.",
-    "at": [
-      -85.73,
-      37.29,
-      12
-    ],
+    "at": [-85.73, 37.29, 12],
     "url": "https://kyraster.ky.gov/arcgis/rest/services/ImageServices/Ky_KYAPED_Imagery_WGS84WM/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
   }
 ]
