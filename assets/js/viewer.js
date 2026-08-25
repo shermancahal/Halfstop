@@ -15,6 +15,7 @@ import {
 } from './config.js';
 import {
   loadEngine, buildRasterStyle, hasMapboxToken, overlayParts, overlayIdFromLayer, styleFor,
+  styleHasGlyphs,
 } from './lib/engine.js';
 import { loadCatalog, findMap } from './lib/catalog.js';
 import { parseMapFile, linePositions } from './lib/parse.js';
@@ -31,7 +32,7 @@ import {
 import { toGPX } from './lib/gpx-write.js';
 import {
   registerShieldImages, shieldImageExpression, shieldTextColour, stateDesign, rasterizeShieldById,
-  shieldImageIdFor,
+  shieldImageIdFor, loadShieldBlank, shieldTextSizeExpression, shieldTextOffsetExpression,
 } from './lib/route-shields.js';
 import { Account, isConfigured as accountsAvailable } from './lib/account.js';
 import {
@@ -68,6 +69,19 @@ import {
 // remembered sections silently came back empty on every load.
 const DETAIL_SECTIONS_KEY = 'ab-maps-details-closed-v1';
 const SKY_PANEL_KEY = 'ab-maps-sky-panel-v1';
+
+/**
+ * The directory the page's own assets are served from.
+ *
+ * The site runs at the origin root locally and under /Map/ on GitHub Pages, and
+ * a shield fetched from an absolute /assets path works in the first case and
+ * 404s in the second. Derived from the document rather than configured, so it
+ * cannot disagree with where the page actually is.
+ */
+function assetBase() {
+  const path = globalThis.location?.pathname || '/';
+  return path.endsWith('/') ? path : `${path.slice(0, path.lastIndexOf('/') + 1)}`;
+}
 
 /** Which sky panel was last left open. '' means none. */
 function readSkyPanel() {
@@ -938,6 +952,10 @@ function trackShieldState() {
     if (!styleReady() || !state.map.getLayer('road-shield')) return;
     try {
       state.map.setLayoutProperty('road-shield', 'icon-image', shieldImageExpression(code));
+      // The number's size and position belong to the marker it sits on, so
+      // they move with the state as much as the picture does.
+      state.map.setLayoutProperty('road-shield', 'text-size', shieldTextSizeExpression(code));
+      state.map.setLayoutProperty('road-shield', 'text-offset', shieldTextOffsetExpression(code));
       state.map.setPaintProperty('road-shield', 'text-color', shieldTextColour(code));
     } catch (error) {
       console.warn('[shields] could not update:', error.message);
@@ -1030,10 +1048,22 @@ function healMissingImages() {
     if (!id || state.map.hasImage?.(id)) return;
 
     try {
-      let data = null;
+      // A state with a real sign blank is a PNG rather than a drawing, and
+      // arrives asynchronously. GL re-renders when an image is added, so
+      // answering late is fine.
       if (id.startsWith('abmap-shield-')) {
-        data = rasterizeShieldById(id, { pixelRatio: 2 });
-      } else if (id.startsWith('pin-')) {
+        loadShieldBlank(state.map, id, { base: assetBase() })
+          .then((loaded) => {
+            if (loaded || state.map.hasImage?.(id)) return;
+            const drawn = rasterizeShieldById(id, { pixelRatio: 2 });
+            if (drawn) state.map.addImage(id, drawn, { pixelRatio: 2 });
+          })
+          .catch(() => {});
+        return;
+      }
+
+      let data = null;
+      if (id.startsWith('pin-')) {
         data = rasterizePinIcon(id.slice('pin-'.length), { pixelRatio: 2 });
       } else if (id === STORM_ARROW_IMAGE) {
         data = rasterizeStormArrow({ pixelRatio: 2 });
@@ -2273,8 +2303,10 @@ function addAppLayers() {
   }
 
   // The definitions live in lib/runtime-layers.js so the validator can read
-  // them. Adding them is all that is left here.
-  for (const layer of runtimeLayers()) {
+  // them. Adding them is all that is left here — except for whether the style
+  // can carry text at all, which decides if the label layers come with them.
+  const labels = styleHasGlyphs(state.map.getStyle());
+  for (const layer of runtimeLayers({ labels })) {
     if (!state.map.getLayer(layer.id)) state.map.addLayer(layer);
   }
 }

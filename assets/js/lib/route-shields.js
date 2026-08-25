@@ -19,10 +19,38 @@
  */
 
 /** Widths are indexed by how many characters the route number has. */
+import { SHIELD_BOXES, SHIELD_IMAGES } from './shield-boxes.js';
+
 const MIN_LEN = 2;
 const MAX_LEN = 4;
 
 export const SHIELD_DESIGNS = ['interstate', 'us', 'state', 'default'];
+
+/**
+ * Where the real shield blanks live, and how a design maps onto one.
+ *
+ * Forty-five states are drawn from the actual sign blanks rather than
+ * approximated on a canvas — Alaska's Big Dipper, Kansas's sunflower,
+ * Nebraska's wagon, the Zia on New Mexico. Nothing hand-drawn at twenty pixels
+ * was ever going to be those, and the drawn versions stay only as the fallback
+ * for the states with no blank and for the two national shields, which are not
+ * in the set.
+ */
+const SHIELD_IMAGE_ROOT = 'assets/shields';
+
+/** `st-TN` at three characters wants the wide blank, if that state has one. */
+export function shieldBlankFor(design, length) {
+  if (!design.startsWith('st-')) return null;
+  const code = design.slice(3);
+  const available = SHIELD_IMAGES[code];
+  if (!available) return null;
+
+  const variant = length >= 3 && available.includes('wide') ? 'wide' : 'narrow';
+  return { code, variant, url: `${SHIELD_IMAGE_ROOT}/${code}-${variant}.png`, key: `${code}-${variant}` };
+}
+
+/** Whether this design is drawn from a blank rather than on a canvas. */
+export const hasShieldBlank = (design, length) => !!shieldBlankFor(design, length);
 
 /**
  * Map Mapbox's `shield` field onto one of our four designs.
@@ -484,7 +512,14 @@ export function rasterizeShield(design, length, { pixelRatio = 2 } = {}) {
 
   ctx.lineJoin = 'round';
 
-  // A per-state design: `st-CA` and the like.
+  /*
+   * A state with a real blank is not drawn here at all — the image is loaded
+   * and registered instead, which the caller does because it needs the network
+   * and this function is synchronous. Returning null says "not mine".
+   */
+  if (shieldBlankFor(design, length)) return null;
+
+  // A per-state design with no blank: approximate it.
   if (design.startsWith('st-')) {
     const entry = STATE_SHIELDS[design.slice(3)];
     if (!entry) return null;
@@ -538,6 +573,127 @@ export function rasterizeShield(design, length, { pixelRatio = 2 } = {}) {
   }
 
   return ctx.getImageData(0, 0, canvas.width, canvas.height);
+}
+
+/**
+ * Where the route number sits on a shield, in ems, and how big it can be.
+ *
+ * Both are per-shield rather than global because the blanks are not
+ * interchangeable: a third of them carry the state's name across the top, so a
+ * number centred in the image lands on the lettering. The measurements come
+ * from tools/build-shields.mjs, which finds the largest clear rectangle in each
+ * blank's own field colour.
+ *
+ * Offsets are in ems of the text size, which is how `text-offset` is specified;
+ * the box is measured in device pixels of a 40px-tall icon, so a pixel is half
+ * a CSS pixel and an em is NOMINAL_TEXT of them.
+ */
+const NOMINAL_TEXT = 11;
+
+function boxFor(design, length) {
+  const blank = shieldBlankFor(design, length);
+  return blank ? SHIELD_BOXES[blank.key] : null;
+}
+
+/** Text size that fits the clear space, in CSS pixels. */
+export function shieldTextSize(design, length) {
+  const box = boxFor(design, length);
+  if (!box) return NOMINAL_TEXT;
+  // Two digits across the box width, and most of its height.
+  const byHeight = (box.h / 2) * 0.82;
+  const byWidth = (box.w / 2) / Math.max(2, length) * 1.55;
+  return Math.max(6.5, Math.min(NOMINAL_TEXT, byHeight, byWidth));
+}
+
+/** Offset from the icon's centre to the middle of the clear space, in ems. */
+export function shieldTextOffset(design, length) {
+  const box = boxFor(design, length);
+  if (!box) return [0, 0];
+  const size = shieldTextSize(design, length);
+  const round = (value) => Math.round(value * 100) / 100;
+  return [round((box.dx / 2) / size), round((box.dy / 2) / size)];
+}
+
+/**
+ * The per-shield text size and offset as style expressions.
+ *
+ * Same shape as `shieldImageExpression`: three arms keyed on the road's own
+ * `shield` field, with the state arm resolved for wherever the map is looking.
+ * The nationals are drawn rather than loaded from a blank, so their numbers sit
+ * where those drawings put them — the interstate's below its red crown.
+ */
+export function shieldTextSizeExpression(state = '', length = 2) {
+  return [
+    'match', ['get', 'shield'],
+    ...SHIELD_MATCH.flatMap((arm) => [
+      arm.values,
+      arm.design === LOCAL ? shieldTextSize(stateDesign(state), length) : NOMINAL_TEXT,
+    ]),
+    shieldTextSize(stateDesign(state), length),
+  ];
+}
+
+export function shieldTextOffsetExpression(state = '', length = 2) {
+  const local = shieldTextOffset(stateDesign(state), length);
+  // The interstate number clears its crown; the US shield's sits centre.
+  const national = (design) => (design === 'interstate' ? [0, 0.18] : [0, 0.06]);
+  return [
+    'match', ['get', 'shield'],
+    ...SHIELD_MATCH.flatMap((arm) => [
+      arm.values,
+      ['literal', arm.design === LOCAL ? local : national(arm.design)],
+    ]),
+    ['literal', local],
+  ];
+}
+
+/**
+ * Load a shield blank and hand it to the map.
+ *
+ * Asynchronous, which is why it is separate from `rasterizeShield`: that draws
+ * on a canvas and returns immediately, and this has to wait for a PNG. GL asks
+ * for an image it does not have by firing `styleimagemissing` and re-renders
+ * once one is added, so arriving late is fine — a shield appears a frame or two
+ * after the road it belongs to.
+ *
+ * @param base URL prefix for the shield directory, so a page served from a
+ *        subpath resolves it the same way it resolves the rest of its assets.
+ * @returns {Promise<boolean>} whether an image was added.
+ */
+export async function loadShieldBlank(map, id, { base = '', pixelRatio = 2 } = {}) {
+  const parsed = parseShieldId(id);
+  if (!parsed) return false;
+
+  const blank = shieldBlankFor(parsed.design, parsed.length);
+  if (!blank) return false;
+  if (map.hasImage?.(id)) return true;
+
+  try {
+    const response = await fetch(`${base}${blank.url}`);
+    if (!response.ok) return false;
+    const bitmap = await createImageBitmap(await response.blob());
+    // A style swap between the request and its answer would make this an
+    // orphan; GL throws on a duplicate id, so check again on arrival.
+    if (map.hasImage?.(id)) return true;
+    map.addImage(id, bitmap, { pixelRatio });
+    return true;
+  } catch {
+    // The drawn fallback covers this: a missing blank is a plainer shield, not
+    // a missing one.
+    return false;
+  }
+}
+
+/** Split `abmap-shield-st-CA-2` into its design and length. */
+export function parseShieldId(id) {
+  const prefix = 'abmap-shield-';
+  if (!String(id).startsWith(prefix)) return null;
+  const rest = id.slice(prefix.length);
+  const cut = rest.lastIndexOf('-');
+  if (cut < 0) return null;
+  const length = Number(rest.slice(cut + 1));
+  if (!Number.isFinite(length)) return null;
+  return { design: rest.slice(0, cut), length };
 }
 
 /**

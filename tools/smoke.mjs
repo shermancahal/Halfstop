@@ -157,10 +157,22 @@ const ALERTS = {
  * dawn — enough for the Milky Way card to produce a real percentage rather
  * than falling back to its moon-only wording.
  */
-const SKY_COVER = Array.from({ length: 48 }, (unused, index) => ({
-  validTime: `${new Date(Date.UTC(2026, 7, 24, index - 12)).toISOString().replace('.000Z', '+00:00')}/PT1H`,
-  value: index < 18 ? 10 : 85,
-}));
+const SKY_COVER = (() => {
+  /*
+   * Anchored to now, not to a date.
+   *
+   * A fixture pinned to one calendar day passes until the clock rolls past it
+   * and then reports "cloud unknown" — which is the app's freshness guard
+   * doing its job on stale readings, and looks exactly like the feature being
+   * broken. Noon today, forward two days.
+   */
+  const noon = new Date();
+  noon.setHours(12, 0, 0, 0);
+  return Array.from({ length: 48 }, (unused, index) => ({
+    validTime: `${new Date(noon.valueOf() + index * 3600000).toISOString().replace('.000Z', '+00:00')}/PT1H`,
+    value: index < 18 ? 10 : 85,
+  }));
+})();
 
 await page.route('**/*', async (route) => {
   const url = route.request().url();
@@ -333,9 +345,14 @@ const storm = await page.evaluate(() => {
   return (data?.features || []).map((feature) => feature.properties.kind);
 });
 check('the area, the track and its head all reach the map', storm, ['area', 'motion', 'head']);
+// The label layer is only added when the style can carry text; the stub map
+// has no glyphs, so the geometry layers are what must be here.
 const stormLayers = await page.evaluate(() => window.__map.layerIds().filter((id) => id.startsWith('storm')));
-check('every storm feature has a layer that draws it',
-  stormLayers.sort(), ['storm-area', 'storm-head', 'storm-motion', 'storm-motion-label', 'storm-outline']);
+for (const id of ['storm-area', 'storm-outline', 'storm-motion', 'storm-head']) {
+  check(`${id} is drawn`, stormLayers.includes(id), true);
+}
+check('and no label layer without glyphs to draw it with',
+  stormLayers.includes('storm-motion-label'), false);
 
 console.log('\nCollapsed Details sections survive a reload');
 await page.click('.panel-tab[data-tab="waypoints"]');
@@ -506,6 +523,39 @@ check('the interstate top is flat instead',
 for (const [name, shape] of Object.entries(profiles)) {
   check(`the ${name} tapers`, shape.footWidth > 0.15 && shape.footWidth < 0.75, true);
 }
+
+/*
+ * State shields come from the real sign blanks, which are PNGs — so they load
+ * asynchronously, through the same styleimagemissing hook that covers the
+ * drawn ones. The whole feature is silent when it fails: a shield that never
+ * arrives is a road with no marker on it.
+ */
+console.log('\nA state shield loads from its blank');
+const blank = await page.evaluate(async () => {
+  const shields = await import('./assets/js/lib/route-shields.js');
+  const added = [];
+  const fake = { hasImage: () => false, addImage: (id) => added.push(id) };
+
+  const ok = await shields.loadShieldBlank(fake, 'abmap-shield-st-TN-2', { base: './' });
+  const missing = await shields.loadShieldBlank(fake, 'abmap-shield-st-KY-2', { base: './' });
+  const national = await shields.loadShieldBlank(fake, 'abmap-shield-interstate-2', { base: './' });
+
+  return {
+    ok, missing, national, added,
+    // Tennessee's name runs along the bottom of its marker, so its number sits
+    // high; Illinois's runs along the top, so its number sits low. If both come
+    // back zero the measurement step did not happen.
+    tennessee: shields.shieldTextOffset('st-TN', 2),
+    illinois: shields.shieldTextOffset('st-IL', 2),
+  };
+});
+
+check('a state with a blank loads it', blank.ok, true);
+check('and registers it under the id the style asked for', blank.added, ['abmap-shield-st-TN-2']);
+check('a state without one falls through to the drawing', blank.missing, false);
+check('and so do the national shields', blank.national, false);
+check('a name along the top pushes the number down', blank.illinois[1] > 0.1, true);
+check('and one along the bottom pushes it up', blank.tennessee[1] < -0.1, true);
 
 console.log('\nThe build stamp is readable');
 const stamp = (await page.locator('#build-stamp').innerText().catch(() => '')).trim();

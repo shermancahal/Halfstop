@@ -195,11 +195,31 @@ export function buildRasterStyle(basemap, overlays = []) {
     }
   }
 
-  // Note: no `glyphs` key. Mapbox GL validates the style against the style spec
-  // and aborts loading on any error — and `glyphs: undefined` is an error there
-  // ("string expected, undefined found"), even though MapLibre tolerates it.
-  // A style with no symbol layers does not need glyphs at all, so omit the key
-  // entirely rather than setting it to undefined.
-  return { version: 8, sources, layers };
+  /*
+   * Glyphs, when we have a token to fetch them with.
+   *
+   * The note that used to sit here said a style with no symbol layers does not
+   * need glyphs, which was true when it was written and stopped being true the
+   * day the viewer started adding its own label layers to whatever style is
+   * loaded. Mapbox GL rejects a symbol layer with a text-field against a style
+   * with no glyphs URL — at addLayer time, so the layer never arrives — and
+   * that showed up in the console as
+   *   layers.light-label.layout.text-field: use of "text-field" requires a
+   *   style "glyphs" property
+   * with the sun and moon bearings drawing unlabelled.
+   *
+   * `glyphs: undefined` is itself a spec violation, so the key is set or
+   * absent, never present-and-empty. Without a token there is no free font
+   * endpoint here worth depending on, so the caller is told there are no
+   * glyphs and leaves its label layers out rather than watching them fail.
+   */
+  const style = { version: 8, sources, layers };
+  if (MAPBOX_TOKEN) {
+    style.glyphs = `https://api.mapbox.com/fonts/v1/mapbox/{fontstack}/{range}.pbf?access_token=${MAPBOX_TOKEN}`;
+  }
+  return style;
 }
+
+/** Whether a style can carry text at all — i.e. whether it declares glyphs. */
+export const styleHasGlyphs = (style) => typeof style?.glyphs === 'string' && style.glyphs.length > 0;
 

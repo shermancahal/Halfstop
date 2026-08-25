@@ -25,7 +25,10 @@
  * Without one the app falls back to a raster topo — see config.js.
  */
 
-import { shieldImageExpression, SHIELD_TEXT_COLOUR } from './route-shields.js';
+import {
+  shieldImageExpression, SHIELD_TEXT_COLOUR,
+  shieldTextSizeExpression, shieldTextOffsetExpression,
+} from './route-shields.js';
 
 /* ------------------------------------------------------------------ palette */
 
@@ -578,7 +581,7 @@ function labelLayers() {
  * recognised shield design, so an unusual state route still gets a marker
  * rather than vanishing.
  */
-function shieldLayers() {
+function shieldLayers(state = '') {
   return [
     {
       id: 'road-shield',
@@ -596,11 +599,16 @@ function shieldLayers() {
         // Images we generate and register ourselves — see lib/route-shields.js
         // for why this does not go through the Mapbox sprite.
         'icon-image': shieldImageExpression(),
-        'icon-size': ['interpolate', ['linear'], ['zoom'], 6, 0.85, 12, 1.05],
+        // Constant, so the number's size and offset — which are fixed per
+        // shield — cannot drift out of register with the marker they sit on.
+        'icon-size': 1,
         'icon-rotation-alignment': 'viewport',
         'text-field': ['get', 'ref'],
         'text-font': FONT_BOLD,
-        'text-size': ['interpolate', ['linear'], ['zoom'], 6, 9, 12, 11],
+        // Sized and placed per shield: a third of the blanks carry the state's
+        // name across the top, and a number centred in the image lands on it.
+        'text-size': shieldTextSizeExpression(state),
+        'text-offset': shieldTextOffsetExpression(state),
         'text-rotation-alignment': 'viewport',
         'text-anchor': 'center',
         /*

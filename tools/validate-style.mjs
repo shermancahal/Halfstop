@@ -14,7 +14,8 @@
 
 import { createRequire } from 'node:module';
 import { bywaysStyle } from '../assets/js/lib/byways-style.js';
-import { runtimeLayers } from '../assets/js/lib/runtime-layers.js';
+import { runtimeLayers, runtimeSources } from '../assets/js/lib/runtime-layers.js';
+import { buildRasterStyle, styleHasGlyphs } from '../assets/js/lib/engine.js';
 
 const require = createRequire(import.meta.url);
 
@@ -34,39 +35,44 @@ console.log(`Byways Topo — ${style.layers.length} layers, ${Object.keys(style.
 
 /*
  * The layers the viewer adds at runtime — pins, tracks, region outlines, light
- * bearings, storm tracks — never went through here, and that gap cost a
- * feature.
+ * bearings, storm tracks — validated against the styles they are actually
+ * added to.
  *
- * `line-dasharray` is not a data-driven property. Giving it a `case` on a
- * feature flag is invalid, and GL's response is to reject the layer at
- * addLayer time. The light-direction lines therefore drew their white casing
- * and nothing else, which reads as "the lines are not coloured" rather than as
- * an error, because there is no error — just a layer that never arrived.
- *
- * These are validated inside a minimal host style so the spec has sources to
- * resolve against.
+ * The first version of this check built a synthetic host style and, when the
+ * symbol layers failed for want of a glyphs URL, added one to the host so they
+ * would pass. That is backwards: the raster basemap style has no glyphs, the
+ * real failure was exactly there, and bolting the missing property onto the
+ * harness is how a validator ends up certifying the bug it exists to catch.
+ * The host styles here are the real ones, unmodified.
  */
-const runtime = runtimeLayers();
-const host = {
-  version: 8,
-  // The real style carries these; the host needs them so symbol layers with a
-  // text-field validate against something rather than failing on the harness.
-  glyphs: 'https://example.com/fonts/{fontstack}/{range}.pbf',
-  sprite: 'https://example.com/sprite',
-  sources: Object.fromEntries(
-    [...new Set(runtime.map((layer) => layer.source).filter(Boolean))]
-      .map((name) => [name, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } }]),
-  ),
-  layers: runtime,
+const withRuntime = (base, labels) => ({
+  ...base,
+  sources: {
+    ...base.sources,
+    ...Object.fromEntries(runtimeSources().map((name) => [
+      name, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+    ])),
+  },
+  layers: [...base.layers, ...runtimeLayers({ labels })],
+});
+
+const rasterBasemap = {
+  tiles: ['https://example.com/{z}/{x}/{y}.png'],
+  tileSize: 256,
+  attribution: 'test',
 };
-const runtimeErrors = validate(host);
 
-console.log(`Runtime layers — ${runtime.length} added by the viewer`);
-
-const all = [
-  ...errors.map((error) => ['Byways Topo', error]),
-  ...runtimeErrors.map((error) => ['runtime', error]),
+const hosts = [
+  ['Byways Topo + runtime', withRuntime(style, true)],
+  ['raster basemap + runtime', withRuntime(buildRasterStyle(rasterBasemap), styleHasGlyphs(buildRasterStyle(rasterBasemap)))],
 ];
+
+console.log(`Runtime layers — ${runtimeLayers().length} added by the viewer`);
+
+const all = errors.map((error) => ['Byways Topo', error]);
+for (const [name, host] of hosts) {
+  for (const error of validate(host)) all.push([name, error]);
+}
 
 if (all.length) {
   console.error(`\n${all.length} validation error(s):`);

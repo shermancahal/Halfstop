@@ -41,8 +41,8 @@ export function runtimeSources() {
  * geometry sits above the basemap, and the sky bearings go over everything
  * because the whole point is to read them against the terrain.
  */
-export function runtimeLayers() {
-  return [
+export function runtimeLayers({ labels = true } = {}) {
+  const layers = [
   {
     id: 'storm-area', type: 'fill', source: STORM_SOURCE,
     filter: ['==', ['get', 'kind'], 'area'],
@@ -186,4 +186,12 @@ export function runtimeLayers() {
     },
       },
   ];
+
+  /*
+   * Text needs glyphs, and a style with no glyphs URL rejects the layer rather
+   * than dropping the label — so on a basemap that cannot carry text these are
+   * left out instead of failing. The lines and tracks still draw; only their
+   * labels are missing, and the panel lists the same bearings in words.
+   */
+  return labels ? layers : layers.filter((layer) => !layer.layout?.['text-field']);
 }
