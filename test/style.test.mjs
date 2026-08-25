@@ -180,6 +180,31 @@ test('style: a queried overlay is two layers over one source, and no tiles', () 
   assert.deepEqual(Object.keys(style.sources), ['basemap']);
 });
 
+test('config: a state-scoped overlay names real states', () => {
+  /*
+   * Some of the best data is one state's own and stops at its line — Kentucky
+   * publishes five-foot lidar hillshade for the whole commonwealth, which no
+   * national service comes near. Fifty states of those in one flat list would
+   * be unusable, so an overlay names the states it covers and the panel only
+   * offers it inside them.
+   *
+   * Vacuous until the first one lands, and that is the point: it is the guard
+   * that catches a lowercase code or a full state name the day one is written.
+   */
+  for (const overlay of OVERLAYS.filter((entry) => entry.states)) {
+    assert.ok(Array.isArray(overlay.states) && overlay.states.length,
+      `${overlay.id} declares an empty states list`);
+    for (const code of overlay.states) {
+      assert.match(code, /^[A-Z]{2}$/,
+        `${overlay.id}: "${code}" is not a two-letter state code`);
+    }
+    // The panel groups these under the state's name rather than the subject
+    // heading, so a group of their own would never be shown.
+    assert.ok(!overlay.group || overlay.states,
+      `${overlay.id} cannot be both state-scoped and in a subject group`);
+  }
+});
+
 test('config: a queried overlay carries a bbox placeholder and a floor', () => {
   for (const overlay of OVERLAYS.filter((o) => o.query)) {
     assert.ok(overlay.query.url.includes('{bbox}'),

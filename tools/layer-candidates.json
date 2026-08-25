@@ -1,26 +1,29 @@
 [
   {
-    "id": "cap:ky-wgs84",
-    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services?f=pjson"
+    "id": "geo:v5",
+    "note": "The geocoder the app uses to learn which state it is over. If this is dead, every route marker is generic and nothing says why.",
+    "url": "https://api.mapbox.com/geocoding/v5/mapbox.places/-84.28,35.96.json?access_token={token}&types=region&limit=1"
+  },
+  {
+    "id": "geo:v6",
+    "note": "Its replacement.",
+    "url": "https://api.mapbox.com/search/geocode/v6/reverse?longitude=-84.28&latitude=35.96&types=region&access_token={token}"
   },
   {
     "id": "cap:ky-images",
     "url": "https://kyraster.ky.gov/arcgis/rest/services/ImageServices?f=pjson"
   },
   {
-    "id": "cap:ky-elevation",
-    "url": "https://kyraster.ky.gov/arcgis/rest/services/ElevationServices?f=pjson"
+    "id": "img:ky-hillshade-5ft",
+    "note": "Five-foot lidar hillshade for the whole commonwealth. An ImageServer exports through exportImage, not export.",
+    "url": "https://kyraster.ky.gov/arcgis/rest/services/ElevationServices/Ky_DEM_KYAPED_5FT_Hillshade_WGS84WM/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
   },
   {
-    "id": "cap:ky-thematic",
-    "url": "https://kyraster.ky.gov/arcgis/rest/services/ThematicServices?f=pjson"
+    "id": "img:ky-hillshade-multi",
+    "url": "https://kyraster.ky.gov/arcgis/rest/services/ElevationServices/Ky_DEM_KYAPED_5FT_MultiDirectionalHillshade/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
   },
   {
-    "id": "cap:tn-basemaps",
-    "url": "https://tnmap.tn.gov/arcgis/rest/services/BASEMAPS?f=pjson"
-  },
-  {
-    "id": "cap:tn-elevation",
-    "url": "https://tnmap.tn.gov/arcgis/rest/services/ELEVATION?f=pjson"
+    "id": "img:ky-slope",
+    "url": "https://kyraster.ky.gov/arcgis/rest/services/ElevationServices/Ky_Slope_USGS_10M_Percent_Rise/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
   }
 ]

@@ -32,7 +32,7 @@ import {
 import { toGPX } from './lib/gpx-write.js';
 import {
   registerShieldImages, stateDesign, rasterizeShieldById,
-  shieldImageIdFor, loadShieldBlank,
+  shieldImageIdFor, loadShieldBlank, shieldImageId, hasShieldBlank,
 } from './lib/route-shields.js';
 import { shieldLayerUpdates, PALETTE } from './lib/byways-style.js';
 import { previewFor, swatchSVG } from './lib/preview.js';
@@ -437,6 +437,7 @@ async function main() {
   refreshStormData();
   wireMapClicks();
   exposeRoadInspector();
+  exposeShieldInspector();
   exposeWaypointInspector();
   keepMapSized();
   healMissingImages();
@@ -978,6 +979,40 @@ async function renderBuildStamp() {
  * design from another's — decides how many shield designs are worth drawing,
  * and it is not answerable from the documentation.
  */
+/**
+ * Why the route markers look the way they do.
+ *
+ * `abmapShields()` in the browser console. "The shields are all generic" has
+ * four distinct causes and they are invisible from each other: the state was
+ * never resolved, the images for that state were never registered, the layer is
+ * still asking for the previous state's image, or the design genuinely has no
+ * blank and fell back to the drawing. This says which.
+ */
+function exposeShieldInspector() {
+  globalThis.abmapShields = async () => {
+    const centre = state.map?.getCenter?.();
+    const place = centre ? await reverseGeocode([centre.lng, centre.lat]).catch((error) => ({ error })) : null;
+
+    const design = stateDesign(state.shieldState);
+    const wanted = [2, 3, 4].map((length) => shieldImageId(design, length));
+    const layer = state.map?.getLayer?.('road-shield');
+    const asking = JSON.stringify(layer?.layout?.['icon-image'] || null);
+
+    return {
+      state: state.shieldState || '(never resolved)',
+      geocoder: place?.error ? `failed: ${place.error.message}` : place ? `ok, ${place.regionCode || 'no region'}` : 'no answer',
+      design,
+      hasBlank: hasShieldBlank(design, 2),
+      imagesRegistered: wanted.filter((id) => state.map?.hasImage?.(id)),
+      imagesMissing: wanted.filter((id) => !state.map?.hasImage?.(id)),
+      // The design the layer is currently naming, which is the one thing that
+      // decides what is drawn. If this says `state` while `design` says
+      // `st-KY`, the update never reached the layer.
+      layerAsksFor: asking.length > 240 ? `${asking.slice(0, 240)}…` : asking,
+    };
+  };
+}
+
 function exposeRoadInspector() {
   globalThis.abmapRoadFields = () => {
     if (!styleReady()) return 'The map style is still loading — try again in a moment.';
@@ -1095,30 +1130,45 @@ function trackShieldState() {
     state.shieldStateName = place?.regionName || '';
     registerShieldImages(state.map, { state: code, base: assetBase() });
 
-    // The layer list carries a group for whichever state the map is over, so it
-    // has to be redrawn when that changes. Also takes the state's own layers
-    // off the map on the way out, and puts them back on the way in.
-    syncStateOverlays();
-    renderLayersTab();
-
-    if (!styleReady() || !state.map.getLayer('road-shield')) return;
-    try {
-      // Every shield layer, not just the plain one. The two halves of a
-      // concurrency carry a sideways shift the plain shield does not, so what
-      // to set on each is decided in byways-style.js beside the layers
-      // themselves — updating only 'road-shield' left the halves showing the
-      // previous state's marker after a border crossing.
-      for (const update of shieldLayerUpdates(code)) {
-        if (!state.map.getLayer(update.id)) continue;
-        for (const [property, value] of Object.entries(update.layout)) {
-          state.map.setLayoutProperty(update.id, property, value);
+    /*
+     * The shields first, and everything else after.
+     *
+     * The panel work below used to run before this, which meant anything it
+     * threw took the shields with it — the images would be registered and the
+     * layers would still be asking for the previous state's, so every marker on
+     * the map stayed generic with nothing in the console to say why. The two
+     * have nothing to do with each other and no longer share a failure.
+     */
+    if (styleReady() && state.map.getLayer('road-shield')) {
+      try {
+        // Every shield layer, not just the plain one. The two halves of a
+        // concurrency carry a sideways shift the plain shield does not, so what
+        // to set on each is decided in byways-style.js beside the layers
+        // themselves — updating only 'road-shield' left the halves showing the
+        // previous state's marker after a border crossing.
+        for (const update of shieldLayerUpdates(code)) {
+          if (!state.map.getLayer(update.id)) continue;
+          for (const [property, value] of Object.entries(update.layout)) {
+            state.map.setLayoutProperty(update.id, property, value);
+          }
+          for (const [property, value] of Object.entries(update.paint)) {
+            state.map.setPaintProperty(update.id, property, value);
+          }
         }
-        for (const [property, value] of Object.entries(update.paint)) {
-          state.map.setPaintProperty(update.id, property, value);
-        }
+      } catch (error) {
+        console.warn('[shields] could not update:', error.message);
       }
+    }
+
+    // The layer list carries a group for whichever state the map is over, and
+    // the state's own layers come off the map at the line and back on inside
+    // it. Separately fenced: a panel that will not draw is not a reason for the
+    // markers on the map to be wrong.
+    try {
+      syncStateOverlays();
+      renderLayersTab();
     } catch (error) {
-      console.warn('[shields] could not update:', error.message);
+      console.warn('[layers] could not follow the state:', error.message);
     }
   };
 

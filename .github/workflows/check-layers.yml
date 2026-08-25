@@ -52,3 +52,7 @@ jobs:
         # documentation. Nothing here is shipped until it comes back with an
         # image on it.
         run: node tools/check-layers.mjs --candidates
+        env:
+          # Some candidates are token-gated — the geocoder the shields depend on
+          # for one — and without this they are skipped rather than checked.
+          MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
