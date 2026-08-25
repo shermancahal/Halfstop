@@ -1,30 +1,22 @@
 [
   {
-    "id": "leg:sky-plain",
-    "url": "https://mapservices.weather.noaa.gov/geoserver/ndfd/wms?service=WMS&version=1.3.0&request=GetLegendGraphic&layer=ndfd:sky&format=image/png"
+    "id": "leg:temp-rows1",
+    "url": "https://nowcoast.noaa.gov/geoserver/ndfd_temperature/wms?service=WMS&version=1.3.0&request=GetLegendGraphic&layer=ndfd_temperature:air_temperature&format=image/png&legend_options=layout:horizontal;fontSize:13;fontAntiAliasing:true;dpi:180;forceLabels:on;fontColor:0x2a2a2a;rows:1"
   },
   {
-    "id": "leg:sky-horizontal",
-    "url": "https://mapservices.weather.noaa.gov/geoserver/ndfd/wms?service=WMS&version=1.3.0&request=GetLegendGraphic&layer=ndfd:sky&format=image/png&legend_options=layout:horizontal;fontSize:13;fontAntiAliasing:true;dpi:180;forceLabels:on;fontColor:0x2a2a2a"
+    "id": "leg:temp-rows2",
+    "url": "https://nowcoast.noaa.gov/geoserver/ndfd_temperature/wms?service=WMS&version=1.3.0&request=GetLegendGraphic&layer=ndfd_temperature:air_temperature&format=image/png&legend_options=layout:horizontal;fontSize:13;fontAntiAliasing:true;dpi:180;forceLabels:on;fontColor:0x2a2a2a;rows:2"
   },
   {
-    "id": "leg:wspd-horizontal",
-    "url": "https://mapservices.weather.noaa.gov/geoserver/ndfd/wms?service=WMS&version=1.3.0&request=GetLegendGraphic&layer=ndfd:wspd&format=image/png&legend_options=layout:horizontal;fontSize:13;fontAntiAliasing:true;dpi:180;forceLabels:on;fontColor:0x2a2a2a"
+    "id": "leg:temp-cols8",
+    "url": "https://nowcoast.noaa.gov/geoserver/ndfd_temperature/wms?service=WMS&version=1.3.0&request=GetLegendGraphic&layer=ndfd_temperature:air_temperature&format=image/png&legend_options=layout:horizontal;fontSize:13;fontAntiAliasing:true;dpi:180;forceLabels:on;fontColor:0x2a2a2a;columns:8"
   },
   {
-    "id": "leg:snow-horizontal",
-    "url": "https://mapservices.weather.noaa.gov/geoserver/ndfd/wms?service=WMS&version=1.3.0&request=GetLegendGraphic&layer=ndfd:snow&format=image/png&legend_options=layout:horizontal;fontSize:13;fontAntiAliasing:true;dpi:180;forceLabels:on;fontColor:0x2a2a2a"
+    "id": "leg:pop12-rows1",
+    "url": "https://nowcoast.noaa.gov/geoserver/ndfd_precipitation/wms?service=WMS&version=1.3.0&request=GetLegendGraphic&layer=ndfd_precipitation:12hr_precipitation_probability&format=image/png&legend_options=layout:horizontal;fontSize:13;fontAntiAliasing:true;dpi:180;forceLabels:on;fontColor:0x2a2a2a;rows:1"
   },
   {
-    "id": "leg:temp-plain",
-    "url": "https://nowcoast.noaa.gov/geoserver/ndfd_temperature/wms?service=WMS&version=1.3.0&request=GetLegendGraphic&layer=ndfd_temperature:air_temperature&format=image/png"
-  },
-  {
-    "id": "leg:temp-horizontal",
-    "url": "https://nowcoast.noaa.gov/geoserver/ndfd_temperature/wms?service=WMS&version=1.3.0&request=GetLegendGraphic&layer=ndfd_temperature:air_temperature&format=image/png&legend_options=layout:horizontal;fontSize:13;fontAntiAliasing:true;dpi:180;forceLabels:on;fontColor:0x2a2a2a"
-  },
-  {
-    "id": "leg:pop12-horizontal",
-    "url": "https://nowcoast.noaa.gov/geoserver/ndfd_precipitation/wms?service=WMS&version=1.3.0&request=GetLegendGraphic&layer=ndfd_precipitation:12hr_precipitation_probability&format=image/png&legend_options=layout:horizontal;fontSize:13;fontAntiAliasing:true;dpi:180;forceLabels:on;fontColor:0x2a2a2a"
+    "id": "leg:qpf-rows1",
+    "url": "https://nowcoast.noaa.gov/geoserver/ndfd_precipitation/wms?service=WMS&version=1.3.0&request=GetLegendGraphic&layer=ndfd_precipitation:6hr_precipitation_amount&format=image/png&legend_options=layout:horizontal;fontSize:13;fontAntiAliasing:true;dpi:180;forceLabels:on;fontColor:0x2a2a2a;rows:1"
   }
 ]

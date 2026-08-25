@@ -209,6 +209,29 @@ export function formatElevation(metres, units = 'imperial') {
     : `${Math.round(metres * M_TO_FT).toLocaleString()} ft`;
 }
 
+/**
+ * A temperature in whichever scale the reader asked for.
+ *
+ * The National Weather Service publishes in Fahrenheit for the United States
+ * and says so in every period, so the conversion is from whatever it sent
+ * rather than from an assumption. `unit` is the scale the number arrived in.
+ */
+export function convertTemperature(value, unit = 'F', want = 'F') {
+  if (!Number.isFinite(value)) return null;
+  const from = String(unit).toUpperCase().replace('°', '').trim() || 'F';
+  const to = String(want).toUpperCase().trim();
+  if (from === to) return value;
+  if (to === 'C') return (value - 32) * (5 / 9);
+  return value * (9 / 5) + 32;
+}
+
+/** The same, rounded and with its degree sign, for putting on screen. */
+export function formatTemperature(value, unit = 'F', want = 'F', { withScale = true } = {}) {
+  const converted = convertTemperature(value, unit, want);
+  if (converted === null) return '—';
+  return `${Math.round(converted)}\u00b0${withScale ? String(want).toUpperCase() : ''}`;
+}
+
 export function formatDuration(seconds) {
   if (!Number.isFinite(seconds) || seconds <= 0) return '—';
   const total = Math.round(seconds);

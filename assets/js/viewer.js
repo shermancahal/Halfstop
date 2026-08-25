@@ -21,7 +21,7 @@ import { loadCatalog, findMap } from './lib/catalog.js';
 import { parseMapFile, linePositions } from './lib/parse.js';
 import {
   boundsAreValid, cumulativeDistances, formatDistance, formatDuration, formatElevation,
-  geojsonBounds, mergeBounds, padBounds,
+  formatTemperature, geojsonBounds, mergeBounds, padBounds,
 } from './lib/geo.js';
 import { el, escapeHTML, createToaster, downloadText, initTheme, formatDate } from './lib/ui.js';
 import { icons } from './lib/icons.js';
@@ -86,6 +86,30 @@ function assetBase() {
   return path.endsWith('/') ? path : `${path.slice(0, path.lastIndexOf('/') + 1)}`;
 }
 
+/**
+ * A remembered display preference.
+ *
+ * Units used to live only in the URL, which meant they reset every time you
+ * opened the site fresh and travelled with every link you shared. Both are
+ * wrong in opposite directions: the choice is about the reader, not the view.
+ * So it is stored, and a URL that names one still wins for that visit.
+ */
+function readSetting(key, fallback) {
+  try {
+    return globalThis.localStorage?.getItem(`ab-maps-${key}`) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function rememberSetting(key, value) {
+  try {
+    globalThis.localStorage?.setItem(`ab-maps-${key}`, value);
+  } catch {
+    // Storage refused; the preference lasts for this session only.
+  }
+}
+
 /** Which sky panel was last left open. '' means none. */
 function readSkyPanel() {
   try {
@@ -134,7 +158,12 @@ const state = {
   documents: new Map(),
   basemapId: DEFAULT_BASEMAP,
   overlays: new Map(OVERLAYS.map((o) => [o.id, { visible: !!o.enabled, opacity: o.opacity ?? 1 }])),
-  units: DEFAULT_UNITS,
+  units: readSetting('units', DEFAULT_UNITS),
+  // Kept apart from distance on purpose. Plenty of people want miles and
+  // Celsius, or kilometres and Fahrenheit; one switch for both would be
+  // somebody else's idea of a pair.
+  temperature: readSetting('temp', 'F'),
+  scaleControl: null,
   activeKey: null,
   colorCursor: 0,
   profile: null,
@@ -346,7 +375,8 @@ async function main() {
   });
 
   state.map.addControl(new gl.NavigationControl({ visualizePitch: true }), 'top-right');
-  state.map.addControl(new gl.ScaleControl({ unit: state.units === 'metric' ? 'metric' : 'imperial' }), 'bottom-left');
+  state.scaleControl = new gl.ScaleControl({ unit: state.units === 'metric' ? 'metric' : 'imperial' });
+  state.map.addControl(state.scaleControl, 'bottom-left');
   state.map.addControl(new gl.GeolocateControl({
     positionOptions: { enableHighAccuracy: true },
     trackUserLocation: true,
@@ -506,7 +536,6 @@ function cacheDom() {
   dom.toasts = document.getElementById('toasts');
   dom.status = document.getElementById('map-status');
   dom.statusText = document.getElementById('map-status-text');
-  dom.unitsToggle = document.getElementById('units-toggle');
   dom.folderList = document.getElementById('folder-list');
   dom.folderTotals = document.getElementById('folder-totals');
   dom.newFolder = document.getElementById('new-folder');
@@ -567,13 +596,7 @@ function wirePanel() {
   window.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !dom.panel.hidden && isNarrow()) setPanelOpen(false);
   });
-  dom.unitsToggle?.addEventListener('click', () => {
-    state.units = state.units === 'imperial' ? 'metric' : 'imperial';
-    dom.unitsToggle.textContent = state.units === 'imperial' ? 'mi / ft' : 'km / m';
-    renderMapsTab();
-    renderDetailsTab();
-    writeURL();
-  });
+  wireSettingsMenu();
   dom.quickLayers?.addEventListener('click', () => openTab('layers'));
   dom.quickFolders?.addEventListener('click', () => openTab('folders'));
   dom.waypointSearch?.addEventListener('input', (event) => {
@@ -1294,6 +1317,96 @@ function keepAppLayersAlive() {
 
   state.map.on('styledata', check);
   state.map.on('idle', check);
+}
+
+/**
+ * Units and display, behind one button.
+ *
+ * This was a single mi/ft toggle, which answered the one conversion question
+ * somebody had thought of. Distance and temperature are different questions
+ * with different answers — miles and Celsius is a perfectly ordinary pair — so
+ * they are separate rows, and both are remembered.
+ */
+const SETTINGS = [
+  {
+    key: 'units',
+    label: 'Distance and elevation',
+    options: [
+      { value: 'imperial', label: 'Miles / feet' },
+      { value: 'metric', label: 'Kilometers / meters' },
+    ],
+  },
+  {
+    key: 'temperature',
+    label: 'Temperature',
+    options: [
+      { value: 'F', label: 'Fahrenheit' },
+      { value: 'C', label: 'Celsius' },
+    ],
+  },
+];
+
+function wireSettingsMenu() {
+  const trigger = document.getElementById('settings-trigger');
+  const drop = document.getElementById('settings-panel');
+  const menu = document.getElementById('settings-menu');
+  if (!trigger || !drop) return;
+
+  const setOpen = (open) => {
+    drop.hidden = !open;
+    trigger.setAttribute('aria-expanded', String(open));
+    if (open) paint();
+  };
+
+  const paint = () => {
+    drop.replaceChildren(...SETTINGS.map((setting) => el('div', { class: 'settings-row' }, [
+      el('div', { class: 'settings-label', text: setting.label }),
+      el('div', { class: 'settings-choices' }, setting.options.map((option) => el('button', {
+        class: `settings-choice${state[setting.key] === option.value ? ' is-on' : ''}`,
+        type: 'button', text: option.label,
+        onclick: () => {
+          if (state[setting.key] === option.value) return;
+          state[setting.key] = option.value;
+          rememberSetting(setting.key === 'units' ? 'units' : 'temp', option.value);
+          applyUnits();
+          paint();
+        },
+      }))),
+    ])));
+  };
+
+  trigger.addEventListener('click', (event) => {
+    event.stopPropagation();
+    setOpen(drop.hidden);
+  });
+  document.addEventListener('click', (event) => {
+    if (drop.hidden) return;
+    if (!menu?.contains(event.target)) setOpen(false);
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !drop.hidden) { setOpen(false); trigger.focus(); }
+  });
+  drop.addEventListener('click', (event) => event.stopPropagation());
+}
+
+/** Redraw everything that shows a number with a unit on it. */
+function applyUnits() {
+  // The scale bar is the map's own control and cannot be re-configured in
+  // place, so it is replaced rather than told.
+  if (state.scaleControl && state.map) {
+    try {
+      state.map.removeControl(state.scaleControl);
+      state.scaleControl = new state.gl.ScaleControl({
+        unit: state.units === 'metric' ? 'metric' : 'imperial',
+      });
+      state.map.addControl(state.scaleControl, 'bottom-left');
+    } catch {
+      // A control that will not come off is not worth failing a click over.
+    }
+  }
+  renderMapsTab();
+  renderDetailsTab();
+  writeURL();
 }
 
 /**
@@ -3789,7 +3902,10 @@ function weatherSection(position) {
       el('div', { class: 'weather-glyph', html: weatherGlyph(weatherClass(now.short), { night: !now.isDaytime }) }),
       el('div', { class: 'weather-now-text' }, [
         el('div', { class: 'weather-when', text: now.name }),
-        el('div', { class: 'weather-temp', text: `${now.temperature}°${now.unit}` }),
+        el('div', {
+          class: 'weather-temp',
+          text: formatTemperature(now.temperature, now.unit, state.temperature),
+        }),
         el('div', { class: 'weather-short', text: now.short }),
       ]),
     ]);
@@ -3803,7 +3919,10 @@ function weatherSection(position) {
         class: 'weather-chip-glyph',
         html: weatherGlyph(weatherClass(period.short), { night: !period.isDaytime }),
       }),
-      el('span', { class: 'weather-chip-temp', text: `${period.temperature}°` }),
+      el('span', {
+        class: 'weather-chip-temp',
+        text: formatTemperature(period.temperature, period.unit, state.temperature, { withScale: false }),
+      }),
     ])));
 
     const facts = [];

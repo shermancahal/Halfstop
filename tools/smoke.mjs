@@ -528,8 +528,43 @@ await page.waitForTimeout(500);
 const cardNote = await page.locator('.waypoint-note').first().innerText().catch(() => '');
 check('the newest note is on the waypoint card', /Gate locked at the second/.test(cardNote), true);
 
+/*
+ * Units are a property of the reader, not of the view. They used to live only
+ * in the URL, which meant they reset on every fresh visit and travelled with
+ * every shared link — wrong in both directions.
+ *
+ * Placed after everything that depends on an imported file: this reloads, and
+ * a loaded document lives in memory rather than in storage.
+ */
+console.log('\nUnits are chosen, applied and remembered');
+await page.click('#settings-trigger');
+await page.waitForTimeout(200);
+check('the menu offers both conversions',
+  await page.locator('.settings-choice').count(), 4);
+await page.locator('.settings-choice', { hasText: 'Celsius' }).click();
+await page.waitForTimeout(400);
+check('Celsius sticks in the menu',
+  await page.locator('.settings-choice.is-on', { hasText: 'Celsius' }).count(), 1);
+await page.locator('.settings-choice', { hasText: /Kilometers/ }).click();
+await page.waitForTimeout(400);
+await page.keyboard.press('Escape');
+
+await page.reload({ waitUntil: 'networkidle' });
+await page.waitForTimeout(1200);
+await page.click('#settings-trigger');
+await page.waitForTimeout(300);
+check('and both survive a reload',
+  await page.locator('.settings-choice.is-on', { hasText: /Celsius|Kilometers/ }).count(), 2);
+// Back to what the rest of the run expects.
+await page.locator('.settings-choice', { hasText: 'Fahrenheit' }).click();
+await page.locator('.settings-choice', { hasText: /Miles/ }).click();
+await page.waitForTimeout(300);
+await page.keyboard.press('Escape');
+
 console.log('\nCollapsed Details sections survive a reload');
-// Back onto a pin: the step above left the panel on the waypoint list.
+// Back onto a pin: the step above reloaded, so the panel is on its first tab.
+await page.click('.panel-tab[data-tab="waypoints"]');
+await page.waitForTimeout(400);
 await page.locator('.waypoint-card').first().click();
 await page.waitForTimeout(800);
 const sunMoon = () => page.locator('.detail-block').filter({ hasText: 'Photography' }).first();

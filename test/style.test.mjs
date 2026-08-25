@@ -20,6 +20,7 @@ import { buildRasterStyle, overlayParts, overlayIdFromLayer, styleFor } from '..
 import { BASEMAPS, OVERLAYS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN } from '../assets/js/config.js';
 import { bywaysStyle, PALETTE, shieldLayerUpdates } from '../assets/js/lib/byways-style.js';
 import { previewFor, tileFor, tileURL, swatchSVG } from '../assets/js/lib/preview.js';
+import { formatTemperature, convertTemperature } from '../assets/js/lib/geo.js';
 import {
   shieldDesign,
   shieldImageId,
@@ -274,6 +275,25 @@ test('config: every basemap is either raster tiles or a token-gated style', () =
       assert.ok(Array.isArray(basemap.tiles) && basemap.tiles.length, `"${basemap.id}" has neither tiles nor a style`);
     }
   }
+});
+
+test('units: a temperature converts from whatever scale it arrived in', () => {
+  // The NWS publishes Fahrenheit for the United States and says so in every
+  // period, so the conversion reads that rather than assuming it.
+  assert.equal(formatTemperature(85, 'F', 'C'), '29\u00b0C');
+  assert.equal(formatTemperature(85, 'F', 'F'), '85\u00b0F');
+  assert.equal(formatTemperature(0, 'C', 'F'), '32\u00b0F');
+  assert.equal(formatTemperature(100, 'C', 'C'), '100\u00b0C');
+
+  // Round trips, because an off-by-one on the way back is a real bug that
+  // shows up as a forecast that drifts a degree every time you toggle.
+  for (const value of [-40, 0, 32, 72, 212]) {
+    const there = convertTemperature(value, 'F', 'C');
+    assert.ok(Math.abs(convertTemperature(there, 'C', 'F') - value) < 1e-9);
+  }
+
+  assert.equal(formatTemperature(null, 'F', 'C'), '\u2014');
+  assert.equal(formatTemperature(60, 'F', 'C', { withScale: false }), '16\u00b0');
 });
 
 test('preview: every basemap can show one, and Byways is drawn rather than fetched', () => {

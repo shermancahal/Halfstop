@@ -1477,6 +1477,27 @@ html, body { height: 100%; overflow: hidden; }
 }
 .account-drop[hidden] { display: none; }
 
+/* Units and display. One button, because distance and temperature are two
+   different questions and a single mi/ft toggle only ever answered one. */
+.settings-menu { position: relative; }
+.settings-drop { width: min(268px, calc(100vw - 24px)); padding: 12px 13px; }
+.settings-row + .settings-row { margin-top: 13px; }
+.settings-label {
+  font-size: .7rem; font-weight: 650; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--ink-3); margin-bottom: 6px;
+}
+.settings-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.settings-choice {
+  font: inherit; font-size: .8rem; padding: 7px 6px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--ink-2);
+  min-height: 36px;
+}
+.settings-choice:hover { border-color: var(--line-strong); color: var(--ink); }
+.settings-choice.is-on {
+  border-color: transparent; background: var(--clay-soft); color: var(--clay-2); font-weight: 600;
+}
+
 /* ==========================================================================
    One "Open a file" block, and foldable detail sections
    ========================================================================== */
