@@ -3415,8 +3415,12 @@ function weatherSection(position) {
     }
 
     const [now, ...rest] = result.periods;
-    const card = el('div', { class: `weather-now is-${weatherClass(now.short)}` }, [
-      el('div', { class: 'weather-glyph', html: weatherGlyph(weatherClass(now.short)) }),
+    // `isDaytime` comes straight from the NWS period and has been in the data
+    // all along.
+    const card = el('div', {
+      class: `weather-now is-${weatherClass(now.short)}${now.isDaytime ? '' : ' is-night'}`,
+    }, [
+      el('div', { class: 'weather-glyph', html: weatherGlyph(weatherClass(now.short), { night: !now.isDaytime }) }),
       el('div', { class: 'weather-now-text' }, [
         el('div', { class: 'weather-when', text: now.name }),
         el('div', { class: 'weather-temp', text: `${now.temperature}°${now.unit}` }),
@@ -3425,10 +3429,14 @@ function weatherSection(position) {
     ]);
 
     const strip = el('div', { class: 'weather-strip' }, rest.slice(0, 4).map((period) => el('div', {
-      class: `weather-chip is-${weatherClass(period.short)}`, title: period.detailed,
+      class: `weather-chip is-${weatherClass(period.short)}${period.isDaytime ? '' : ' is-night'}`,
+      title: period.detailed,
     }, [
-      el('span', { class: 'weather-chip-when', text: period.name.replace(/ (Night|Afternoon)$/, ' $1') }),
-      el('span', { class: 'weather-chip-glyph', html: weatherGlyph(weatherClass(period.short)) }),
+      el('span', { class: 'weather-chip-when', text: period.name }),
+      el('span', {
+        class: 'weather-chip-glyph',
+        html: weatherGlyph(weatherClass(period.short), { night: !period.isDaytime }),
+      }),
       el('span', { class: 'weather-chip-temp', text: `${period.temperature}°` }),
     ])));
 
@@ -3446,12 +3454,22 @@ function weatherSection(position) {
 }
 
 /** Weather glyphs, drawn inline so the forecast works with no images to load. */
-function weatherGlyph(kind) {
+function weatherGlyph(kind, { night = false } = {}) {
   const wrap = (paths) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
   const cloud = '<path d="M7 18h10a4 4 0 0 0 .5-8 6 6 0 0 0-11.4 1.6A3.5 3.5 0 0 0 7 18Z"/>';
+  // A crescent, for the periods the NWS marks as night. A sun over the words
+  // "Overnight — Mostly Clear" is the kind of wrong that undermines everything
+  // next to it.
+  const moon = '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"/>';
+  const moonSmall = '<path d="M12.6 8.4A5 5 0 0 1 6.4 2.2a5 5 0 1 0 6.2 6.2Z"/>';
+
   switch (kind) {
-    case 'clear': return wrap('<circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2M12 19.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2.5 12h2M19.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>');
-    case 'partly': return wrap('<circle cx="8.5" cy="8" r="3.2"/><path d="M8.5 2.6v1.6M3.6 8H2M4.8 4.3 3.7 3.2M13.4 8H15"/>' + cloud);
+    case 'clear': return night
+      ? wrap(moon)
+      : wrap('<circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2M12 19.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2.5 12h2M19.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>');
+    case 'partly': return night
+      ? wrap(moonSmall + cloud)
+      : wrap('<circle cx="8.5" cy="8" r="3.2"/><path d="M8.5 2.6v1.6M3.6 8H2M4.8 4.3 3.7 3.2M13.4 8H15"/>' + cloud);
     case 'rain': return wrap(cloud + '<path d="M9 21v-1.5M13 21.5v-2M17 21v-1.5"/>');
     case 'thunder': return wrap(cloud + '<path d="M13 19.5h-2.5l3-4.5H10"/>');
     case 'snow': return wrap(cloud + '<path d="M9 20.5h.01M13 21h.01M17 20.5h.01"/>');
@@ -3971,45 +3989,29 @@ function renderFolder(folder) {
       onkeydown: (event) => { if (event.key === 'Enter') event.target.blur(); },
     }),
     counts.total ? el('span', { class: 'folder-count', text: String(counts.total) }) : null,
-    el('div', { class: 'folder-head-actions' }, [
-      el('button', {
-        class: `icon-button${chosen.length ? ' is-armed' : ''}`, type: 'button',
-        title: chosen.length
-          ? `Style the ${chosen.length} selected pin${chosen.length === 1 ? '' : 's'}`
-          : 'Style every pin in this folder',
-        'aria-label': `Style pins in ${folder.name}`,
-        html: icons.brush,
-        onclick: (event) => openStyleEditor(folder, chosen.length ? chosen : null, event.currentTarget.closest('.folder-head')),
-      }),
-      el('button', {
-        class: 'icon-button', type: 'button', title: 'Zoom to this folder',
-        'aria-label': `Zoom to ${folder.name}`, html: icons.target,
-        onclick: () => {
-          const bounds = geojsonBounds(state.folders.folderGeoJSON(folder.id));
-          if (boundsAreValid(bounds)) fitTo(bounds);
-          else toast('That folder has nothing in it yet.', { tone: 'error' });
-        },
-      }),
-      el('button', {
-        class: 'icon-button', type: 'button', title: 'Export this folder as GPX',
-        'aria-label': `Export ${folder.name} as GPX`, html: icons.download,
-        onclick: () => exportFolder(folder),
-      }),
-      el('button', {
-        class: 'icon-button', type: 'button', title: 'Delete this folder',
-        'aria-label': `Delete ${folder.name}`, html: icons.trash,
-        onclick: () => {
-          const message = counts.total
-            ? `Delete “${folder.name}” and its ${counts.total} item${counts.total === 1 ? '' : 's'}? This cannot be undone.`
-            : `Delete “${folder.name}”?`;
-          if (!window.confirm(message)) return;
-        const tombstone = state.folders.remove(folder.id);
-        // Push the tombstone so other devices learn of the deletion; without it
-        // the folder would simply reappear on the next sync.
-        if (tombstone && state.account?.user) state.account.pushFolder(tombstone);
-        },
-      }),
-    ]),
+    /*
+     * One button, not four.
+     *
+     * This row carried style, zoom, export and delete as sixteen-pixel icons
+     * side by side. On a phone that is four targets inside a thumb's width,
+     * with delete next to export — the actions are now labelled buttons in the
+     * panel this opens, where there is room for words and for spacing between
+     * something reversible and something that is not.
+     */
+    el('button', {
+      class: `folder-menu-button${chosen.length ? ' is-armed' : ''}`,
+      type: 'button',
+      title: chosen.length
+        ? `Actions for the ${chosen.length} selected pin${chosen.length === 1 ? '' : 's'}`
+        : `Actions for ${folder.name}`,
+      'aria-label': `Actions for ${folder.name}`,
+      html: `${icons.brush}<span>Edit</span>`,
+      onclick: (event) => openStyleEditor(
+        folder,
+        chosen.length ? chosen : null,
+        event.currentTarget.closest('.folder-head'),
+      ),
+    }),
   ]);
 
   const body = el('div', { class: 'folder-body' });
@@ -4649,7 +4651,7 @@ function openStyleEditor(folder, itemIds, anchor) {
   editor.append(iconWrap);
   paintIcons();
 
-  editor.append(el('div', { class: 'picker-row' }, [
+  const actions = el('div', { class: 'picker-row' }, [
     el('button', {
       class: 'button button-primary button-small', type: 'button', text: 'Apply',
       onclick: () => {
@@ -4676,7 +4678,48 @@ function openStyleEditor(folder, itemIds, anchor) {
       class: 'button button-ghost button-small', type: 'button', text: 'Cancel',
       onclick: () => { state.openEditor = null; editor.remove(); },
     }),
-  ]));
+  ]);
+  editor.append(actions);
+
+  /*
+   * The folder's own actions, as words.
+   *
+   * Only when the editor is for the whole folder — styling one pin is not the
+   * place to offer to delete the folder it is in. Delete sits apart from the
+   * others and asks first, because it is the one that cannot be undone.
+   */
+  if (itemIds === null) {
+    editor.append(el('div', { class: 'picker-row editor-folder-actions' }, [
+      el('button', {
+        class: 'button button-ghost button-small', type: 'button', text: 'Zoom to',
+        onclick: () => {
+          const bounds = geojsonBounds(state.folders.folderGeoJSON(folder.id));
+          if (boundsAreValid(bounds)) fitTo(bounds);
+          else toast('That folder has nothing in it yet.', { tone: 'error' });
+        },
+      }),
+      el('button', {
+        class: 'button button-ghost button-small', type: 'button', text: 'Export GPX',
+        onclick: () => exportFolder(folder),
+      }),
+      el('button', {
+        class: 'button button-ghost button-small is-danger', type: 'button', text: 'Delete folder',
+        onclick: () => {
+          const total = state.folders.counts(folder).total;
+          const message = total
+            ? `Delete “${folder.name}” and its ${total} item${total === 1 ? '' : 's'}? This cannot be undone.`
+            : `Delete “${folder.name}”?`;
+          if (!window.confirm(message)) return;
+
+          const tombstone = state.folders.remove(folder.id);
+          // Push the tombstone so other devices learn of the deletion; without
+          // it the folder would simply reappear on the next sync.
+          if (tombstone && state.account?.user) state.account.pushFolder(tombstone);
+          state.openEditor = null;
+        },
+      }),
+    ]));
+  }
 
   anchor.after(editor);
   editor.scrollIntoView({ block: 'nearest', behavior: 'smooth' });

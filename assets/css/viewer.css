@@ -211,6 +211,44 @@ html, body { height: 100%; overflow: hidden; }
 
 .folder-actions { display: flex; gap: 7px; margin-bottom: 13px; flex-wrap: wrap; }
 
+/* One labelled button where four sixteen-pixel icons used to sit.
+   Four targets inside a thumb's width, with delete beside export, is not a
+   toolbar anyone should be asked to hit on a phone — the actions moved into
+   the panel it opens, where they can be words. */
+.folder-menu-button {
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  min-height: 34px; padding: 6px 11px; border-radius: var(--radius-sm);
+  border: 1px solid var(--line); background: var(--surface-2);
+  font: inherit; font-size: .76rem; font-weight: 600; color: var(--ink-2);
+  cursor: pointer;
+}
+.folder-menu-button svg { width: 15px; height: 15px; }
+.folder-menu-button:hover { border-color: var(--line-strong); color: var(--ink); }
+.folder-menu-button.is-armed { border-color: var(--clay); color: var(--clay); }
+
+/* The folder's own actions, below Apply and Cancel with a rule between them:
+   one row changes how pins look, the other can remove the folder. */
+.editor-folder-actions {
+  margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--line);
+}
+/* Never wrapped mid-label: "Zoom to" broken across two lines reads as two
+   separate things. */
+.editor-folder-actions .button { min-height: 34px; white-space: nowrap; }
+.button.is-danger { color: var(--rust, #a33); }
+.button.is-danger:hover { border-color: var(--rust, #a33); background: var(--rust-soft, rgba(170, 51, 51, .08)); }
+
+/* Every tap target in the folder tree gets a thumb's worth of height. The
+   per-pin edit and remove icons are the same complaint as the folder toolbar,
+   one level down. */
+@media (max-width: 820px) {
+  .folder-menu-button { min-height: 40px; padding: 8px 13px; }
+  .picker-row .button { min-height: 40px; }
+  .folder-item .icon-button,
+  .waypoint-card .icon-button { min-width: 38px; min-height: 38px; }
+  .editor-folder-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .editor-folder-actions .button:last-child { grid-column: 1 / -1; }
+}
+
 .folder {
   border: 1px solid var(--line); border-radius: var(--radius);
   margin-bottom: 8px; overflow: hidden; background: var(--surface);
@@ -643,6 +681,18 @@ html, body { height: 100%; overflow: hidden; }
 .weather-temp { font-family: var(--font-serif); font-size: 1.7rem; line-height: 1.1; color: var(--ink); }
 .weather-short { font-size: .82rem; color: var(--ink-2); margin-top: 2px; }
 
+/* The headline card at night. The wash is the sky it is describing, so a clear
+   night is a dark one — the daytime blue-and-gold behind the word "Overnight"
+   was reading as a sunny afternoon. */
+.weather-now.is-night.is-clear   { --wash-a: #1b2740; --wash-b: #2c3d5c; --glyph: #dbe4f5; --wash-ink: #eef2fa; }
+.weather-now.is-night.is-partly  { --wash-a: #232f47; --wash-b: #3a4763; --glyph: #cbd6ea; --wash-ink: #eef2fa; }
+.weather-now.is-night.is-cloud   { --wash-a: #2b323c; --wash-b: #3f4854; --glyph: #aab5c2; --wash-ink: #eceff3; }
+.weather-now.is-night.is-rain    { --wash-a: #1f2e3c; --wash-b: #33475a; --glyph: #8fbfe0; --wash-ink: #e9f1f7; }
+.weather-now.is-night.is-thunder { --wash-a: #23283a; --wash-b: #3a4058; --glyph: #f2c744; --wash-ink: #f3f1fa; }
+.weather-now.is-night.is-snow    { --wash-a: #2b3a48; --wash-b: #43566a; --glyph: #cfe4f5; --wash-ink: #f0f6fb; }
+.weather-now.is-night.is-fog     { --wash-a: #2e3336; --wash-b: #454b4f; --glyph: #b3bcc2; --wash-ink: #eef0f1; }
+.weather-now.is-night.is-wind    { --wash-a: #22352f; --wash-b: #374f45; --glyph: #9ccbb9; --wash-ink: #ecf5f1; }
+
 .weather-strip {
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
   margin: 9px 0 11px;
@@ -650,47 +700,70 @@ html, body { height: 100%; overflow: hidden; }
 .weather-chip {
   display: flex; flex-direction: column; align-items: center; gap: 3px;
   padding: 8px 4px; border-radius: var(--radius-sm);
-  background: var(--surface-2); border: 1px solid var(--line);
+  border: 1px solid var(--line);
+  background: linear-gradient(160deg, var(--chip-a, var(--surface-2)), var(--chip-b, var(--surface-2)));
+  color: var(--chip-ink, var(--ink));
 }
 .weather-chip-when {
   font-size: .63rem; text-transform: uppercase; letter-spacing: .04em;
-  color: var(--ink-3); text-align: center; line-height: 1.2;
+  color: inherit; opacity: .75; text-align: center; line-height: 1.2;
 }
-.weather-chip-glyph { width: 20px; height: 20px; color: var(--ink-2); }
+.weather-chip-glyph { width: 20px; height: 20px; color: var(--chip-glyph, currentColor); }
 .weather-chip-glyph svg { width: 100%; height: 100%; }
 .weather-chip-temp { font-size: .88rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 
 /* The chips take the same sky colours as the headline card, at lower strength.
    Four days of weather should be readable as a sequence — brightening, turning
    — without reading a word of it. Full strength on something this small would
-   fight the numbers rather than support them. */
-.weather-chip.is-clear   { background: linear-gradient(160deg, #bfe0f5, #ffeec4); }
-.weather-chip.is-partly  { background: linear-gradient(160deg, #cbe3f4, #f2f5f7); }
-.weather-chip.is-cloud   { background: linear-gradient(160deg, #dbe1e8, #eef1f4); }
-.weather-chip.is-rain    { background: linear-gradient(160deg, #b3c9dc, #dee8f1); }
-.weather-chip.is-thunder { background: linear-gradient(160deg, #9098b4, #c2c8da); }
-.weather-chip.is-snow    { background: linear-gradient(160deg, #e6f0f8, #fdfeff); }
-.weather-chip.is-fog     { background: linear-gradient(160deg, #dfe2e4, #f0f1f2); }
-.weather-chip.is-wind    { background: linear-gradient(160deg, #cbe0d8, #eef4f1); }
+   fight the numbers rather than support them.
 
-.weather-chip.is-clear   .weather-chip-glyph { color: #e09400; }
-.weather-chip.is-partly  .weather-chip-glyph { color: #d99a28; }
-.weather-chip.is-cloud   .weather-chip-glyph { color: #667583; }
-.weather-chip.is-rain    .weather-chip-glyph { color: #2f6f9f; }
-.weather-chip.is-thunder .weather-chip-glyph { color: #b8860b; }
-.weather-chip.is-snow    .weather-chip-glyph { color: #5f8bb0; }
-.weather-chip.is-fog     .weather-chip-glyph { color: #78828a; }
-.weather-chip.is-wind    .weather-chip-glyph { color: #3f7d68; }
+   Set as custom properties rather than as a background shorthand, because the
+   dark theme has to restate them. The first version dimmed the whole chip with
+   `filter: brightness(.66)` instead — and a filter applies to an element's
+   children, so the near-white text was darkened by exactly as much as the pale
+   background behind it. The two met in the middle and the cards went blank. */
+.weather-chip.is-clear   { --chip-a: #bfe0f5; --chip-b: #ffeec4; --chip-glyph: #e09400; --chip-ink: #24405a; }
+.weather-chip.is-partly  { --chip-a: #cbe3f4; --chip-b: #f2f5f7; --chip-glyph: #d99a28; --chip-ink: #2b4155; }
+.weather-chip.is-cloud   { --chip-a: #dbe1e8; --chip-b: #eef1f4; --chip-glyph: #667583; --chip-ink: #2f3944; }
+.weather-chip.is-rain    { --chip-a: #b3c9dc; --chip-b: #dee8f1; --chip-glyph: #2f6f9f; --chip-ink: #1f3446; }
+.weather-chip.is-thunder { --chip-a: #9098b4; --chip-b: #c2c8da; --chip-glyph: #7a5c00; --chip-ink: #23283a; }
+.weather-chip.is-snow    { --chip-a: #e6f0f8; --chip-b: #fdfeff; --chip-glyph: #5f8bb0; --chip-ink: #2a3b4a; }
+.weather-chip.is-fog     { --chip-a: #dfe2e4; --chip-b: #f0f1f2; --chip-glyph: #78828a; --chip-ink: #333b41; }
+.weather-chip.is-wind    { --chip-a: #cbe0d8; --chip-b: #eef4f1; --chip-glyph: #3f7d68; --chip-ink: #23443a; }
 
-.weather-chip.is-thunder .weather-chip-when,
-.weather-chip.is-thunder .weather-chip-temp { color: #23283a; }
+/* Night periods get their own, darker set. A pale daytime sky behind "Tuesday
+   Night" was the other half of why these did not read. */
+.weather-chip.is-night.is-clear   { --chip-a: #1b2740; --chip-b: #2c3d5c; --chip-glyph: #cfd8ec; --chip-ink: #eef2fa; }
+.weather-chip.is-night.is-partly  { --chip-a: #232f47; --chip-b: #3a4763; --chip-glyph: #c3cee4; --chip-ink: #eef2fa; }
+.weather-chip.is-night.is-cloud   { --chip-a: #2b323c; --chip-b: #3f4854; --chip-glyph: #aab5c2; --chip-ink: #eceff3; }
+.weather-chip.is-night.is-rain    { --chip-a: #1f2e3c; --chip-b: #33475a; --chip-glyph: #8fbfe0; --chip-ink: #e9f1f7; }
+.weather-chip.is-night.is-thunder { --chip-a: #23283a; --chip-b: #3a4058; --chip-glyph: #f2c744; --chip-ink: #f3f1fa; }
+.weather-chip.is-night.is-snow    { --chip-a: #2b3a48; --chip-b: #43566a; --chip-glyph: #cfe4f5; --chip-ink: #f0f6fb; }
+.weather-chip.is-night.is-fog     { --chip-a: #2e3336; --chip-b: #454b4f; --chip-glyph: #b3bcc2; --chip-ink: #eef0f1; }
+.weather-chip.is-night.is-wind    { --chip-a: #22352f; --chip-b: #374f45; --chip-glyph: #9ccbb9; --chip-ink: #ecf5f1; }
 
+/* Dark theme restates the DAY colours rather than filtering them. Night chips
+   are excluded: their palette is already dark and correct in both themes, and
+   without the :not() these selectors outrank it on specificity — which put a
+   gold sunrise wash behind the words "Tuesday Night". */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .weather-chip { filter: saturate(.8) brightness(.66); }
-  :root:not([data-theme="light"]) .weather-chip * { color: #efe9de; }
+  :root:not([data-theme="light"]) .weather-chip:not(.is-night).is-clear   { --chip-a: #33506b; --chip-b: #6b5f3d; --chip-ink: #f4efe2; --chip-glyph: #f0b429; }
+  :root:not([data-theme="light"]) .weather-chip:not(.is-night).is-partly  { --chip-a: #3a4d60; --chip-b: #4b5560; --chip-ink: #eef0f3; --chip-glyph: #e6ae4a; }
+  :root:not([data-theme="light"]) .weather-chip:not(.is-night).is-cloud   { --chip-a: #3b434c; --chip-b: #4c545c; --chip-ink: #eceff2; --chip-glyph: #b6c1cc; }
+  :root:not([data-theme="light"]) .weather-chip:not(.is-night).is-rain    { --chip-a: #2f4457; --chip-b: #435a6e; --chip-ink: #eaf2f8; --chip-glyph: #8fc3e8; }
+  :root:not([data-theme="light"]) .weather-chip:not(.is-night).is-thunder { --chip-a: #333a52; --chip-b: #474e69; --chip-ink: #f2f2f8; --chip-glyph: #f2c744; }
+  :root:not([data-theme="light"]) .weather-chip:not(.is-night).is-snow    { --chip-a: #44535f; --chip-b: #5c6c78; --chip-ink: #f2f7fb; --chip-glyph: #cfe4f5; }
+  :root:not([data-theme="light"]) .weather-chip:not(.is-night).is-fog     { --chip-a: #3f4447; --chip-b: #52585c; --chip-ink: #eef0f1; --chip-glyph: #bcc4ca; }
+  :root:not([data-theme="light"]) .weather-chip:not(.is-night).is-wind    { --chip-a: #2f4A40; --chip-b: #40584d; --chip-ink: #edf5f1; --chip-glyph: #9ccbb9; }
 }
-:root[data-theme="dark"] .weather-chip { filter: saturate(.8) brightness(.66); }
-:root[data-theme="dark"] .weather-chip * { color: #efe9de; }
+:root[data-theme="dark"] .weather-chip:not(.is-night).is-clear   { --chip-a: #33506b; --chip-b: #6b5f3d; --chip-ink: #f4efe2; --chip-glyph: #f0b429; }
+:root[data-theme="dark"] .weather-chip:not(.is-night).is-partly  { --chip-a: #3a4d60; --chip-b: #4b5560; --chip-ink: #eef0f3; --chip-glyph: #e6ae4a; }
+:root[data-theme="dark"] .weather-chip:not(.is-night).is-cloud   { --chip-a: #3b434c; --chip-b: #4c545c; --chip-ink: #eceff2; --chip-glyph: #b6c1cc; }
+:root[data-theme="dark"] .weather-chip:not(.is-night).is-rain    { --chip-a: #2f4457; --chip-b: #435a6e; --chip-ink: #eaf2f8; --chip-glyph: #8fc3e8; }
+:root[data-theme="dark"] .weather-chip:not(.is-night).is-thunder { --chip-a: #333a52; --chip-b: #474e69; --chip-ink: #f2f2f8; --chip-glyph: #f2c744; }
+:root[data-theme="dark"] .weather-chip:not(.is-night).is-snow    { --chip-a: #44535f; --chip-b: #5c6c78; --chip-ink: #f2f7fb; --chip-glyph: #cfe4f5; }
+:root[data-theme="dark"] .weather-chip:not(.is-night).is-fog     { --chip-a: #3f4447; --chip-b: #52585c; --chip-ink: #eef0f1; --chip-glyph: #bcc4ca; }
+:root[data-theme="dark"] .weather-chip:not(.is-night).is-wind    { --chip-a: #2f4a40; --chip-b: #40584d; --chip-ink: #edf5f1; --chip-glyph: #9ccbb9; }
 
 /* Field notes */
 .note-list { display: grid; gap: 7px; margin-bottom: 10px; }

@@ -96,7 +96,10 @@ jobs:
             printf "window.ABMAP_SUPABASE_KEY = '%s';\n" "$SUPABASE_KEY"
           } > assets/js/token.js
 
-          echo "mapbox=${#MAPBOX_TOKEN} chars, supabase=${#SUPABASE_URL} chars"
+          # Every value, every time. Reporting the URL's length but not the
+          # key's is how "where is the login button" became unanswerable from
+          # the logs: accounts need both, and only one was ever printed.
+          echo "mapbox=${#MAPBOX_TOKEN} supabase_url=${#SUPABASE_URL} supabase_key=${#SUPABASE_KEY}"
           {
             echo "### Client config"
             if [ -n "$MAPBOX_TOKEN" ]; then
@@ -104,6 +107,12 @@ jobs:
             else
               echo "- **No MAPBOX_TOKEN secret.** Byways Topo cannot render and falls back to CyclOSM raster:"
               echo "  different colours, no route shields. Set it under Settings → Secrets and variables → Actions."
+            fi
+            if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_KEY" ]; then
+              echo "- Supabase configured (url ${#SUPABASE_URL}, key ${#SUPABASE_KEY} chars) — the account menu is shown."
+            else
+              echo "- **Accounts are off**: SUPABASE_URL is ${#SUPABASE_URL} chars and SUPABASE_KEY is ${#SUPABASE_KEY}."
+              echo "  Both are required, and the sign-in control stays hidden until they are set."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
