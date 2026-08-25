@@ -706,12 +706,22 @@ html, body { height: 100%; overflow: hidden; }
 
 .source-note { margin: 9px 0 0; font-size: .72rem; color: var(--ink-3); }
 
-/* A service's own legend graphic. Always black on transparent, so it needs a
-   white bed of its own to stay readable in the dark theme. */
+/*
+ * A service's own legend graphic.
+ *
+ * Always black on transparent, so it needs a white bed of its own to stay
+ * readable in the dark theme. Sized by height rather than width, and allowed to
+ * run off the side: the temperature key comes back 1181 pixels wide, and
+ * squeezing that into a 320px panel would put the type back to six pixels —
+ * which is the problem the horizontal layout was asked for in the first place.
+ * A long ramp is worth a swipe; an illegible one is worth nothing.
+ */
 .legend-image {
-  display: block; max-width: 100%; margin: 9px 0 0;
-  background: #fff; border-radius: 6px; padding: 5px 6px;
-  border: 1px solid var(--line);
+  display: block; height: 40px; width: auto; max-width: none; margin: 0;
+}
+.legend-image-wrap {
+  margin: 9px 0 0; padding: 5px 6px; overflow-x: auto; overscroll-behavior-x: contain;
+  background: #fff; border-radius: 6px; border: 1px solid var(--line);
 }
 
 /* Headline card: condition sets the wash behind it, so a glance reads the

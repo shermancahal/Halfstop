@@ -2369,13 +2369,15 @@ function layerRow({ entry, selected, control, preview = false }) {
       description ? el('p', { class: 'layer-desc-text', text: description }) : null,
       key ? legendList(key, note) : (note ? el('p', { class: 'legend-note', text: note }) : null),
       entry.legendImage
-        ? el('img', {
-          class: 'legend-image', src: entry.legendImage, loading: 'lazy',
-          alt: `Color key for ${entry.name}`,
-          // A key that cannot be fetched leaves a broken-image box where an
-          // explanation should be, which is worse than no key at all.
-          onerror: (event) => event.currentTarget.remove(),
-        })
+        ? el('div', { class: 'legend-image-wrap' }, [
+          el('img', {
+            class: 'legend-image', src: entry.legendImage, loading: 'lazy',
+            alt: `Color key for ${entry.name}`,
+            // A key that cannot be fetched leaves a broken-image box where an
+            // explanation should be, which is worse than no key at all.
+            onerror: (event) => event.currentTarget.closest('.legend-image-wrap')?.remove(),
+          }),
+        ])
         : null,
     ])
     : null;

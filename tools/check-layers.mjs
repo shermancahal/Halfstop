@@ -175,7 +175,11 @@ async function probe(entry) {
         Origin: ORIGIN,
       },
       redirect: 'follow',
-      signal: AbortSignal.timeout(20000),
+      // Thirty seconds, not ten. The USGS contour and transport services take
+      // upwards of twenty to answer a cold tile — slow is what they are, not
+      // broken, and reporting them as down every week teaches people to skim
+      // the report.
+      signal: AbortSignal.timeout(30000),
     });
     const body = await response.arrayBuffer();
     const type = response.headers.get('content-type') || '';
