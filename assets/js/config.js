@@ -94,23 +94,36 @@ const NOAA_ATTRIBUTION = 'Forecast data © <a href="https://www.weather.gov/">NO
  * at a service's vocabulary is what left the cell coverage layer drawing
  * nothing for weeks.
  */
-const NOWCOAST = 'https://nowcoast.noaa.gov/geoserver';
 const NWS_GEOSERVER = 'https://mapservices.weather.noaa.gov/geoserver';
 
 const wmsTile = (endpoint, layer) => `${endpoint}?service=WMS&version=1.3.0&request=GetMap`
   + `&layers=${layer}&styles=&crs=EPSG:3857&bbox={bbox-epsg-3857}`
   + '&width=256&height=256&format=image/png&transparent=true';
 
-// The service draws its own key. A continuous ramp has no list of colours to
-// write out by hand, and a hand-written approximation of one is worse than
-// none: it would be wrong the first time NOAA restyled a layer.
-const wmsLegend = (endpoint, layer) => `${endpoint}?service=WMS&version=1.3.0`
-  + `&request=GetLegendGraphic&layer=${layer}&format=image/png`;
+/*
+ * The service draws its own key.
+ *
+ * A continuous ramp has no list of colours to write out by hand, and a
+ * hand-written approximation of one is worse than none: it would be wrong the
+ * first time NOAA restyled a layer.
+ *
+ * The options are not decoration. A GeoServer legend defaults to a tall thin
+ * column of tiny black type — the sky cover key comes back 38 pixels wide and
+ * 302 tall — which in a 320px panel is a stripe you cannot read. `horizontal`
+ * turns it into a scale that reads left to right like the ramp it describes,
+ * `dpi:180` renders the type at three times the size before it is scaled to
+ * fit, and `rows:1` keeps a long ramp on one line instead of wrapping it into
+ * a block. Every one of these was measured from CI rather than assumed: the
+ * same key goes from 38x302 to 312x56.
+ */
+const LEGEND_OPTIONS = 'layout:horizontal;fontSize:13;fontAntiAliasing:true'
+  + ';dpi:180;forceLabels:on;fontColor:0x2a2a2a';
 
-const nowcoastLayer = (workspace, layer) => ({
-  tiles: [wmsTile(`${NOWCOAST}/${workspace}/wms`, `${workspace}:${layer}`)],
-  legendImage: wmsLegend(`${NOWCOAST}/${workspace}/wms`, `${workspace}:${layer}`),
-});
+const wmsLegend = (endpoint, layer, options = LEGEND_OPTIONS) => `${endpoint}?service=WMS&version=1.3.0`
+  + `&request=GetLegendGraphic&layer=${layer}&format=image/png`
+  // Not encoded: semicolons are legal in a query value, and this is the exact
+  // form that was measured working rather than a re-encoded cousin of it.
+  + `&legend_options=${options}`;
 
 const ndfdLayer = (layer) => ({
   tiles: [wmsTile(`${NWS_GEOSERVER}/ndfd/wms`, `ndfd:${layer}`)],
@@ -469,7 +482,10 @@ export const OVERLAYS = [
     group: 'Weather',
     name: 'Temperature',
     description: 'Forecast air temperature, 2 m above the ground.',
-    ...nowcoastLayer('ndfd_temperature', 'air_temperature'),
+    // The National Weather Service's own GeoServer rather than nowCOAST, which
+    // publishes the same NDFD grid: its legend honours the horizontal layout
+    // and nowCOAST's does not, so this way the whole group's keys match.
+    ...ndfdLayer('temp'),
     tileSize: 256,
     maxzoom: 12,
     opacity: 0.5,
@@ -494,7 +510,7 @@ export const OVERLAYS = [
     group: 'Weather',
     name: 'Chance of rain',
     description: 'Probability of precipitation over the next 12 hours.',
-    ...nowcoastLayer('ndfd_precipitation', '12hr_precipitation_probability'),
+    ...ndfdLayer('pop12'),
     tileSize: 256,
     maxzoom: 12,
     opacity: 0.5,
