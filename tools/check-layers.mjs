@@ -350,7 +350,16 @@ if (asJSON) {
       for (let at = 0; at < result.names.length; at += 8) {
         console.log(`        ${result.names.slice(at, at + 8).join(', ')}`);
       }
-    } else if (result.verdict !== 'ok' && result.text) {
+    } else if (result.text && (result.verdict !== 'ok' || result.expect === 'data')) {
+      /*
+       * A data probe prints its body even when it passed.
+       *
+       * The first run of these produced three green lines that said nothing at
+       * all: the legend JSON, the BLM catalogue and the atlas page all
+       * answered 200 with a `find` that matched nothing, and "ok" with no
+       * output is indistinguishable from "ok, and here is what you asked for".
+       * The whole reason to probe data rather than a tile is to read it.
+       */
       console.log(`        ${result.text.slice(0, 160)}`);
     }
     if (result.verdict !== 'ok') console.log(`        ${result.url}`);
