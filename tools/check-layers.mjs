@@ -91,6 +91,22 @@ function quadkey(z, x, y) {
 }
 
 /**
+ * A PNG's pixel size, read out of its header.
+ *
+ * Eight bytes of signature, then the IHDR chunk: length, type, then width and
+ * height as big-endian 32-bit integers. Worth the twelve lines — "the legend is
+ * horizontal now" and "the legend is a 1x1 pixel" are both things a byte count
+ * cannot tell you.
+ */
+function pngSize(bytes) {
+  const view = new DataView(bytes);
+  if (view.byteLength < 24) return null;
+  if (view.getUint32(0) !== 0x89504e47) return null;
+  if (view.getUint32(12) !== 0x49484452) return null;
+  return { width: view.getUint32(16), height: view.getUint32(20) };
+}
+
+/**
  * The layer names a capabilities document offers.
  *
  * The point of the candidates file is to stop guessing at service vocabulary,
@@ -168,6 +184,7 @@ async function probe(entry) {
     // An error page is the failure that looks most like success: 200, a body,
     // and not one pixel of map in it.
     const isImage = /image\//.test(type);
+    const size = isImage ? pngSize(body) : null;
     const decoded = isImage ? '' : new TextDecoder().decode(body);
     const text = isImage ? '' : decoded.slice(0, 300).replace(/\s+/g, ' ').trim();
 
@@ -187,6 +204,7 @@ async function probe(entry) {
             : bytes < EMPTY_BYTES ? (entry.seasonal ? 'empty (seasonal)' : 'blank')
               : 'ok',
       text,
+      size,
       cors: response.headers.get('access-control-allow-origin') || '',
       names: isImage ? [] : layerNames(decoded),
     };
@@ -224,7 +242,8 @@ if (asJSON) {
     }
     const size = result.bytes === undefined ? '' : `${String(result.bytes).padStart(7)}B`;
     const cors = result.status === undefined ? '' : (result.cors ? `cors:${result.cors}` : 'CORS:none');
-    console.log(`  ${(mark[result.verdict] || '????').padEnd(5)} ${result.id.padEnd(34)} ${String(result.status ?? '').padEnd(4)} ${size}  ${(result.type || '').padEnd(12)} ${cors}`);
+    const px = result.size ? `${result.size.width}x${result.size.height}`.padStart(9) : ''.padStart(9);
+    console.log(`  ${(mark[result.verdict] || '????').padEnd(5)} ${result.id.padEnd(30)} ${String(result.status ?? '').padEnd(4)} ${size} ${px}  ${(result.type || '').padEnd(11)} ${cors}`);
     if (result.names?.length) {
       // Eight to a line. A service with sixty fields is worth reading, and
       // sixty lines of it is not.
