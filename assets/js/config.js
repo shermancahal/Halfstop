@@ -243,7 +243,7 @@ export const OVERLAYS = [
     legend: [
       { color: '#1B5E20', label: 'BLM recreation site' },
       { color: '#4E342E', label: 'USGS: campground, trailhead, cabin or shelter' },
-      { color: '#6D4C41', label: 'USGS: ranger station, visitor centre or headquarters' },
+      { color: '#6D4C41', label: 'USGS: ranger station, visitor center or headquarters' },
       { color: '#8D6E63', label: 'USGS: historic site, monument or point of interest' },
     ],
     legendNote: 'Two services drawn together — BLM recreation sites and the USGS National Map '
@@ -372,7 +372,7 @@ export const OVERLAYS = [
       { color: '#8E24AA', label: 'Width-restricted (50\" or less)' },
       { color: '#C62828', label: 'Closed to motor vehicles' },
     ],
-    legendNote: 'Colours follow the Forest Service MVUM key. The MVUM is the legal '
+    legendNote: 'Colors follow the Forest Service MVUM key. The MVUM is the legal '
       + 'authority for what is open — always check the current year\'s map before relying on it.',
     group: 'Land & access',
     name: 'Forest roads (MVUM)',

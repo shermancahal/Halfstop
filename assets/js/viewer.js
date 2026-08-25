@@ -2154,7 +2154,7 @@ function layerRow({ entry, selected, control }) {
   const info = descriptionNode
     ? el('button', {
       class: 'layer-info', type: 'button',
-      'aria-expanded': 'false', 'aria-label': key ? `About ${entry.name}, with colour key` : `About ${entry.name}`,
+      'aria-expanded': 'false', 'aria-label': key ? `About ${entry.name}, with color key` : `About ${entry.name}`,
       html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 16.5v-5"/><path d="M12 8h.01"/></svg>',
       onpointerenter: (event) => { if (event.pointerType === 'mouse' && !pinned) setOpen(true); },
       onpointerleave: (event) => { if (event.pointerType === 'mouse' && !pinned) setOpen(false); },
@@ -2604,7 +2604,7 @@ function openPopupEditor(host, props, popup) {
     const button = el('button', {
       class: `popup-swatch${value === colour ? ' is-on' : ''}`,
       type: 'button', style: `background:${value}`,
-      'aria-label': `Colour ${value}`,
+      'aria-label': `Color ${value}`,
       onclick: () => {
         colour = value;
         for (const node of swatches.children) node.classList.toggle('is-on', node === button);
@@ -3977,7 +3977,7 @@ function renderFolder(folder) {
     }),
     el('button', {
       class: 'folder-swatch', type: 'button', style: `background:${folder.color}`,
-      title: 'Change colour', 'aria-label': `Change the colour of ${folder.name}`,
+      title: 'Change color', 'aria-label': `Change the color of ${folder.name}`,
       onclick: () => {
         const next = FOLDER_COLORS[(FOLDER_COLORS.indexOf(folder.color) + 1) % FOLDER_COLORS.length];
         state.folders.update(folder.id, { color: next });
@@ -4111,7 +4111,7 @@ function renderFolderItem(folder, item) {
     meta ? el('span', { class: 'folder-item-meta', text: meta }) : null,
     isWaypoint
       ? el('button', {
-        class: 'icon-button', type: 'button', title: 'Edit colour and icon',
+        class: 'icon-button', type: 'button', title: 'Edit color and icon',
         'aria-label': `Edit ${props.name}`, html: icons.brush,
         onclick: (event) => openStyleEditor(folder, [item.id], event.currentTarget.closest('.folder-item')),
       })
@@ -4596,7 +4596,7 @@ function openStyleEditor(folder, itemIds, anchor) {
   if (single) editor.append(photoSection(folder, target));
 
   /* colour */
-  editor.append(el('div', { class: 'style-label', text: 'Colour' }));
+  editor.append(el('div', { class: 'style-label', text: 'Color' }));
   const colorRow = el('div', { class: 'swatch-row' });
   const paintSwatches = () => {
     colorRow.querySelectorAll('.swatch').forEach((node) => {
@@ -4605,15 +4605,15 @@ function openStyleEditor(folder, itemIds, anchor) {
   };
   colorRow.append(el('button', {
     class: 'swatch is-inherit', type: 'button', dataset: { color: '' },
-    title: 'Clear the override and use the folder colour',
-    'aria-label': 'Use the folder colour',
+    title: 'Clear the override and use the folder color',
+    'aria-label': 'Use the folder color',
     style: `--swatch:${folder.color}`,
     onclick: () => { chosenColor = null; colorTouched = true; paintSwatches(); },
   }));
   for (const color of FOLDER_COLORS) {
     colorRow.append(el('button', {
       class: 'swatch', type: 'button', dataset: { color },
-      title: color, 'aria-label': `Colour ${color}`, style: `--swatch:${color}`,
+      title: color, 'aria-label': `Color ${color}`, style: `--swatch:${color}`,
       onclick: () => { chosenColor = color; colorTouched = true; paintSwatches(); },
     }));
   }
@@ -4690,8 +4690,13 @@ function openStyleEditor(folder, itemIds, anchor) {
    */
   if (itemIds === null) {
     editor.append(el('div', { class: 'picker-row editor-folder-actions' }, [
+      // Icon plus label. Three text-only buttons could not fit the panel and
+      // ran off its right edge; a mark each lets the words be short enough to
+      // sit inside it.
       el('button', {
-        class: 'button button-ghost button-small', type: 'button', text: 'Zoom to',
+        class: 'button button-ghost button-small', type: 'button',
+        title: `Zoom the map to ${folder.name}`,
+        html: `${icons.target}<span>Zoom</span>`,
         onclick: () => {
           const bounds = geojsonBounds(state.folders.folderGeoJSON(folder.id));
           if (boundsAreValid(bounds)) fitTo(bounds);
@@ -4699,11 +4704,15 @@ function openStyleEditor(folder, itemIds, anchor) {
         },
       }),
       el('button', {
-        class: 'button button-ghost button-small', type: 'button', text: 'Export GPX',
+        class: 'button button-ghost button-small', type: 'button',
+        title: `Export ${folder.name} as a GPX file`,
+        html: `${icons.download}<span>Export</span>`,
         onclick: () => exportFolder(folder),
       }),
       el('button', {
-        class: 'button button-ghost button-small is-danger', type: 'button', text: 'Delete folder',
+        class: 'button button-ghost button-small is-danger', type: 'button',
+        title: `Delete ${folder.name}`,
+        html: `${icons.trash}<span>Delete</span>`,
         onclick: () => {
           const total = state.folders.counts(folder).total;
           const message = total

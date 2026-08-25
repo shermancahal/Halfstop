@@ -228,12 +228,22 @@ html, body { height: 100%; overflow: hidden; }
 
 /* The folder's own actions, below Apply and Cancel with a rule between them:
    one row changes how pins look, the other can remove the folder. */
+/* Three buttons that fit the panel, whatever it is wide.
+   `1fr` alone is not enough — a grid track's minimum is its content, so
+   nowrapped labels pushed the row past the panel's right edge instead of
+   shrinking. minmax(0, 1fr) lets them give. */
 .editor-folder-actions {
-  margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--line);
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px;
+  margin-top: 11px; padding-top: 11px; border-top: 1px solid var(--line);
 }
-/* Never wrapped mid-label: "Zoom to" broken across two lines reads as two
-   separate things. */
-.editor-folder-actions .button { min-height: 34px; white-space: nowrap; }
+.editor-folder-actions .button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  min-height: 36px; min-width: 0; padding: 6px 8px; white-space: nowrap;
+}
+.editor-folder-actions .button svg { width: 14px; height: 14px; flex: none; }
+.editor-folder-actions .button span {
+  overflow: hidden; text-overflow: ellipsis;
+}
 .button.is-danger { color: var(--rust, #a33); }
 .button.is-danger:hover { border-color: var(--rust, #a33); background: var(--rust-soft, rgba(170, 51, 51, .08)); }
 
@@ -245,8 +255,7 @@ html, body { height: 100%; overflow: hidden; }
   .picker-row .button { min-height: 40px; }
   .folder-item .icon-button,
   .waypoint-card .icon-button { min-width: 38px; min-height: 38px; }
-  .editor-folder-actions { display: grid; grid-template-columns: 1fr 1fr; }
-  .editor-folder-actions .button:last-child { grid-column: 1 / -1; }
+  .editor-folder-actions .button { min-height: 40px; }
 }
 
 .folder {
@@ -311,6 +320,9 @@ html, body { height: 100%; overflow: hidden; }
   background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); padding: 7px 9px;
 }
 .picker-row { display: flex; gap: 7px; }
+/* Apply and Cancel were sitting flush against the icon grid above them, which
+   read as part of it. They are the end of the form, not another row of it. */
+.style-editor .picker-row { margin-top: 13px; }
 .picker-note { font-size: .76rem; color: var(--ink-3); margin: 0 0 9px; }
 
 /* ---------- floating map controls ---------- */
