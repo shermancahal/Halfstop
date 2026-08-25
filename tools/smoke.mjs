@@ -357,8 +357,15 @@ await page.locator('.waypoint-card').first().click();
 await page.waitForTimeout(900);
 check('the open panel survives a reload', await page.locator('.moon-card').count(), 1);
 
+// Severe weather lives inside Weather rather than under a heading of its own:
+// a section that reads "no active warnings" on every pin is one people stop
+// reading, which is a bad property for the part that matters most when it does
+// have something to say.
 console.log('\nA warned storm reports its heading and draws it');
-const stormText = await page.locator('.detail-block').filter({ hasText: 'Storm warnings' }).first().innerText();
+const stormText = await page.locator('.detail-block').filter({ hasText: 'Severe Thunderstorm' }).first().innerText();
+check('the warning sits inside the weather section',
+  /WEATHER/i.test(await page.locator('.detail-block').filter({ hasText: 'Severe Thunderstorm' }).first().innerText()),
+  true);
 check('the warning is named', /Severe Thunderstorm Warning/.test(stormText), true);
 // 245DEG is the direction it is coming FROM. Getting this backwards would send
 // someone straight into the storm, so it is checked in words, not degrees.
@@ -462,16 +469,36 @@ await page.waitForTimeout(200);
 check('opening it reveals UTM',
   await page.locator('.coord-more[open] .detail-line-label', { hasText: /^UTM$/ }).count(), 1);
 
-// Land manager is the slowest lookup and the least often read, so it sits
-// below everything that answers faster.
+// Who manages the land is part of where the place is: it reads inside Location
+// rather than under a heading three sections further down.
 const sectionOrder = await page.evaluate(() => [...document.querySelectorAll('#details-body h2.panel-title, #details-body .detail-block-summary')]
   .map((node) => node.textContent.trim()));
-check('land manager comes last',
-  sectionOrder.filter((title) => /Land manager/.test(title)).length
-    && sectionOrder.findIndex((title) => /Land manager/.test(title)) === sectionOrder.length - 1,
-  true);
+check('there is no land manager section of its own',
+  sectionOrder.some((title) => /Land manager/i.test(title)), false);
+check('and Location is the first section on the panel',
+  /Location/i.test(sectionOrder[sectionOrder.findIndex((t) => /Location/i.test(t))] || ''), true);
+check('every section carries a mark',
+  await page.locator('#details-body .detail-block-summary .detail-block-mark').count() > 0, true);
+
+/*
+ * A field note is the most perishable thing on a pin — "gate locked", "creek
+ * up" — and it was two taps deep. It belongs on the card, trimmed.
+ */
+console.log('\nA field note reaches the cards');
+// Sections start open, so no click first — clicking would close it.
+await page.locator('textarea[aria-label="New field note"]').fill('Gate locked at the second cattle guard, creek was up over the ford');
+await page.locator('button', { hasText: /^Add note$/ }).click();
+await page.waitForTimeout(400);
+
+await page.click('.panel-tab[data-tab="waypoints"]');
+await page.waitForTimeout(500);
+const cardNote = await page.locator('.waypoint-note').first().innerText().catch(() => '');
+check('the newest note is on the waypoint card', /Gate locked at the second/.test(cardNote), true);
 
 console.log('\nCollapsed Details sections survive a reload');
+// Back onto a pin: the step above left the panel on the waypoint list.
+await page.locator('.waypoint-card').first().click();
+await page.waitForTimeout(800);
 const sunMoon = () => page.locator('.detail-block').filter({ hasText: 'Photography' }).first();
 await page.locator('.detail-block-summary', { hasText: /Photography/i }).click();
 await page.waitForTimeout(300);

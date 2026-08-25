@@ -1375,7 +1375,7 @@ function rememberClosedSections() {
  *
  * `id` is what is remembered, so it has to be stable — not the pin's name.
  */
-function collapsibleSection(id, title, buildBody, { count = '' } = {}) {
+function collapsibleSection(id, title, buildBody, { count = '', icon = '' } = {}) {
   const open = !state.closedDetailSections.has(id);
 
   const section = el('details', {
@@ -1395,6 +1395,10 @@ function collapsibleSection(id, title, buildBody, { count = '' } = {}) {
     },
   }, [
     el('summary', { class: 'detail-block-summary' }, [
+      // A panel of eight stacked headings reads as one wall of small capitals.
+      // A mark per section gives the eye somewhere to land, and turns "where is
+      // the weather" into a glance rather than a read.
+      icon ? el('span', { class: 'detail-block-mark', html: icon }) : null,
       el('span', { text: title }),
       count ? el('span', { class: 'count', text: count }) : null,
     ]),
@@ -1468,8 +1472,11 @@ function skySection(position) {
   const phases = lightPhases(date, lat, lon);
 
   let section = null;
+  // No date beside the heading. Everything under it is about tonight, the bar
+  // says so in times, and a date in the header only invited the question of
+  // whether it could be changed — which it cannot.
   const outer = collapsibleSection('sky', 'Photography', (body) => { section = body; }, {
-    count: date.toLocaleDateString([], { month: 'short', day: 'numeric' }),
+    icon: icons.camera,
   });
 
   if (sun.polar) {
@@ -2752,18 +2759,61 @@ function showFeaturePopup(feature, lngLat, { edit = false, identity = null } = {
   if (Number.isFinite(high)) rows.push(['High point', formatElevation(high, state.units)]);
   const duration = number(props.duration_s);
   if (Number.isFinite(duration) && duration > 0) rows.push(['Moving time', formatDuration(duration)]);
-  if (props.symbol) rows.push(['Symbol', props.symbol]);
   if (props.folderName) rows.push(['Folder', props.folderName]);
   else if (props.folder) rows.push(['Folder', props.folder]);
 
   const description = props.description ? String(props.description).slice(0, 1200) : '';
+
+  /*
+   * The pin's own mark, beside its name.
+   *
+   * It used to be a row in the stats reading "Symbol: waterfall" — a word for a
+   * picture the map is already drawing, halfway down the card. Next to the
+   * title it identifies the pin at a glance and takes no line of its own.
+   */
+  const glyph = props.kind === 'waypoint' || props.icon
+    ? el('span', {
+      class: 'popup-mark',
+      style: `background:${props.color || props.folderColor || 'var(--clay)'}`,
+      html: pinIconSVG(props.icon || DEFAULT_PIN_ICON, { size: 15, stroke: 2 }),
+    })
+    : null;
+
   const content = el('div', {});
-  content.innerHTML = `
-    <div class="popup-title">${escapeHTML(props.name || 'Untitled')}</div>
-    <div class="popup-kind">${escapeHTML(props.kind || 'feature')}</div>
-    ${description ? `<p class="popup-desc">${escapeHTML(description)}</p>` : ''}
-    ${rows.length ? `<dl class="popup-stats">${rows.map(([k, v]) => `<dt>${escapeHTML(k)}</dt><dd>${escapeHTML(v)}</dd>`).join('')}</dl>` : ''}
-  `;
+  content.append(el('div', { class: 'popup-head' }, [
+    glyph,
+    el('div', { class: 'popup-head-text' }, [
+      el('div', { class: 'popup-title', text: props.name || 'Untitled' }),
+      el('div', { class: 'popup-kind', text: props.kind || 'feature' }),
+    ]),
+  ]));
+
+  if (description) {
+    content.append(el('p', { class: 'popup-desc', text: description }));
+  }
+
+  // The latest field note, trimmed. A popup is a glance, and "gate locked" is
+  // exactly the kind of thing you want at a glance rather than two taps away.
+  const latest = latestNote(props);
+  if (latest?.text) {
+    const trimmed = String(latest.text).length > NOTE_PREVIEW
+      ? `${String(latest.text).slice(0, NOTE_PREVIEW).trimEnd()}…`
+      : String(latest.text);
+    content.append(el('div', { class: 'popup-note' }, [
+      el('span', { class: 'popup-note-mark', html: icons.note }),
+      el('div', {}, [
+        el('div', { class: 'popup-note-text', text: trimmed }),
+        el('div', { class: 'popup-note-date', text: formatDate(new Date(latest.at)) }),
+      ]),
+    ]));
+  }
+
+  if (rows.length) {
+    content.append(el('dl', { class: 'popup-stats' }, rows.flatMap(([k, v]) => [
+      el('dt', { text: k }),
+      el('dd', { text: v }),
+    ])));
+  }
 
   const popup = new state.gl.Popup({ closeButton: true, maxWidth: '300px', offset: 12 })
     .setLngLat(feature.geometry?.type === 'Point' ? feature.geometry.coordinates : lngLat);
@@ -2902,8 +2952,9 @@ function savedItemActions(props, popup, content) {
     children.push(select);
   }
 
-  children.push(el('button', {
-    type: 'button', text: 'Details',
+  children.push(labelledButton(icons.info, 'Details', {
+    tone: 'ghost',
+    title: 'Everything known about this place',
     onclick: () => { popup.remove(); selectPin(props.folderId, props.itemId); },
   }));
 
@@ -2915,13 +2966,15 @@ function savedItemActions(props, popup, content) {
    * thousand, which is what a GaiaGPS export actually contains. The pin is
    * already on screen and already the thing you are pointing at.
    */
-  children.push(el('button', {
-    type: 'button', text: 'Edit',
+  children.push(labelledButton(icons.pencil, 'Edit', {
+    tone: 'ghost',
+    title: 'Change the name, note, icon or color',
     onclick: () => openPopupEditor(content, props, popup),
   }));
 
-  children.push(el('button', {
-    type: 'button', text: 'Remove',
+  children.push(labelledButton(icons.trash, 'Remove', {
+    tone: 'ghost',
+    title: 'Delete this waypoint',
     onclick: () => {
       state.folders.removeItem(props.folderId, props.itemId);
       popup.remove();
@@ -3271,6 +3324,52 @@ function selectedPinRecord() {
   return { folder, item };
 }
 
+/**
+ * The most recent field note on a pin, whatever shape it arrives in.
+ *
+ * A feature read back off the map is not the object that was put on it: GL
+ * serialises anything that is not a string or a number, so `log` comes back as
+ * JSON text rather than an array. The stored item is the authority where there
+ * is one — this only parses when there is not.
+ */
+function latestNote(props) {
+  const stored = state.folders.get(props.folderId)?.items
+    .find((item) => item.id === props.itemId)?.feature.properties.log;
+
+  let log = stored ?? props.log;
+  if (typeof log === 'string') {
+    try { log = JSON.parse(log); } catch { log = []; }
+  }
+  if (!Array.isArray(log) || !log.length) return null;
+
+  return [...log].sort((a, b) => (b.at || 0) - (a.at || 0))[0];
+}
+
+/**
+ * A button with a mark and a word.
+ *
+ * Three text-only buttons in a row is most of the panel's width, and on a phone
+ * it is more than all of it. A mark each lets the word be short enough to fit,
+ * and gives a target big enough to hit without reading first.
+ */
+function labelledButton(icon, label, { onclick, title = '', tone = 'secondary' } = {}) {
+  return el('button', {
+    class: `button button-${tone} button-small button-with-icon`,
+    type: 'button',
+    title: title || label,
+    html: `${icon}<span>${escapeHTML(label)}</span>`,
+    onclick,
+  });
+}
+
+/** A plain section heading, with the same mark the collapsible ones carry. */
+function sectionTitle(text, icon = '') {
+  return el('h2', { class: 'panel-title' }, [
+    icon ? el('span', { class: 'detail-block-mark', html: icon }) : null,
+    el('span', { text }),
+  ]);
+}
+
 /** One labelled row in the details list, with an optional copy button. */
 function detailRow(label, value, { copy = null } = {}) {
   return el('div', { class: 'detail-line' }, [
@@ -3316,13 +3415,11 @@ async function copyText(text) {
  * number of a position, and on a dropped pin it is a lookup rather than a
  * recorded field, which is why the row can arrive late.
  */
-function locationSection(position, { recorded = null, name = '' } = {}) {
-  const [lon, lat] = position;
+function locationSection(position, { recorded = null } = {}) {
   const dd = formatDD(position);
   const dms = formatDMS(position);
   const ddm = formatDDM(position);
   const utm = toUTM(position);
-  const link = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
 
   const heightRow = el('div', {});
   if (Number.isFinite(recorded)) {
@@ -3336,15 +3433,6 @@ function locationSection(position, { recorded = null, name = '' } = {}) {
     });
   }
 
-  const everything = () => [
-    name,
-    `Decimal:   ${dd}`,
-    `DMS:       ${dms}`,
-    `Deg / min: ${ddm}`,
-    utm ? `UTM:       ${utm.toString()}` : null,
-    link,
-  ].filter(Boolean).join('\n');
-
   const more = el('details', {
     class: 'coord-more',
     open: readCoordFormats(),
@@ -3355,24 +3443,23 @@ function locationSection(position, { recorded = null, name = '' } = {}) {
       detailRow('DMS', dms, { copy: dms }),
       detailRow('Deg / min', ddm, { copy: ddm }),
       utm ? detailRow('UTM', utm.toString(), { copy: utm.toString() }) : null,
-      el('button', {
-        class: 'button button-ghost button-small', type: 'button', text: 'Copy every format',
-        title: 'Copy all coordinate formats and a map link at once',
-        onclick: async (event) => {
-          const button = event.currentTarget;
-          const ok = await copyText(everything());
-          button.textContent = ok ? 'Copied' : 'Copy failed';
-          setTimeout(() => { button.textContent = 'Copy every format'; }, 1400);
-        },
-      }),
     ]),
   ]);
 
+  // Who manages the land is part of where the place is, not a subject of its
+  // own — "public or private" is the second thing anyone asks after "where",
+  // and it was three sections away from the coordinates that answer the first.
+  const manager = el('div', { class: 'land-slot' });
+  landManagerRows(position).then((rows) => {
+    if (rows) manager.replaceChildren(...rows);
+  });
+
   return el('div', { class: 'panel-section' }, [
-    el('h2', { class: 'panel-title' }, [el('span', { text: 'Location' })]),
+    sectionTitle('Location', icons.crosshair),
     detailRow('Decimal', dd, { copy: dd }),
     heightRow,
     more,
+    manager,
   ]);
 }
 
@@ -3419,10 +3506,6 @@ function renderPointDetails(position) {
   dom.details.append(skySection(position));
 
   dom.details.append(weatherSection(position));
-  dom.details.append(stormSection(position));
-
-  // Land manager last: it is the slowest lookup and the least often read.
-  dom.details.append(landSection(position));
 }
 
 /**
@@ -3454,12 +3537,12 @@ function renderPinDetails(folder, item) {
     ]),
     props.description ? el('p', { class: 'pin-description', text: props.description }) : null,
     el('div', { class: 'picker-row', style: 'margin-top:11px' }, [
-      el('button', {
-        class: 'button button-secondary button-small', type: 'button', text: 'Zoom to',
+      labelledButton(icons.target, 'Zoom to', {
+        title: 'Centre the map on this waypoint',
         onclick: () => focusFolderItem(item, folder.id),
       }),
-      el('button', {
-        class: 'button button-secondary button-small', type: 'button', text: 'Edit',
+      labelledButton(icons.pencil, 'Edit', {
+        title: 'Change the name, note, icon or color',
         onclick: () => {
           openTab('folders');
           renderFoldersTab();
@@ -3474,7 +3557,7 @@ function renderPinDetails(folder, item) {
   const photos = props.photos || [];
   if (photos.length) {
     const section = el('div', { class: 'panel-section' }, [
-      el('h2', { class: 'panel-title', text: `Photos (${photos.length})` }),
+      sectionTitle(`Photos (${photos.length})`, icons.image),
     ]);
     const strip = el('div', { class: 'photo-strip' });
     section.append(strip);
@@ -3493,11 +3576,11 @@ function renderPinDetails(folder, item) {
   if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
 
   /* where it is */
-  dom.details.append(locationSection([lon, lat], { recorded: recordedHeight, name: props.name }));
+  dom.details.append(locationSection([lon, lat], { recorded: recordedHeight }));
 
   /* where you are relative to it */
   const relative = el('div', { class: 'panel-section' }, [
-    el('h2', { class: 'panel-title', text: 'From here' }),
+    sectionTitle('From here', icons.compass),
   ]);
   const relativeBody = el('div', {}, [
     el('p', { class: 'hint', style: 'margin:0', text: 'Waiting for your location…' }),
@@ -3531,12 +3614,11 @@ function renderPinDetails(folder, item) {
   dom.details.append(skySection([lon, lat]));
 
   dom.details.append(weatherSection([lon, lat]));
-  dom.details.append(stormSection([lon, lat]));
   dom.details.append(notesSection(folder, item));
 
   /* place — network, so appended when it arrives */
   const placeSection = el('div', { class: 'panel-section' }, [
-    el('h2', { class: 'panel-title', text: 'Nearest place' }),
+    sectionTitle('Nearest place', icons.pin),
   ]);
   const placeBody = el('p', { class: 'hint', style: 'margin:0', text: 'Looking up…' });
   placeSection.append(placeBody);
@@ -3553,78 +3635,80 @@ function renderPinDetails(folder, item) {
     if (!rows.length) { placeSection.remove(); return; }
     placeBody.replaceWith(el('div', {}, rows));
   });
-
-  // Land manager last: it is the slowest lookup and the least often read.
-  dom.details.append(landSection([lon, lat]));
 }
 
 /* ---------------- details: land, weather, notes ---------------- */
 
 /** Small helper for a section that fills in once a network call returns. */
-function pendingSection(title, run, id = '') {
+function pendingSection(title, run, { id = '', icon = '' } = {}) {
   const key = id || `pending:${title}`;
   let body = null;
 
   const section = collapsibleSection(key, title, (target) => {
     body = target;
     body.append(el('p', { class: 'hint', style: 'margin:0', text: 'Looking up…' }));
-  });
+  }, { icon });
 
   run(body, section);
   return section;
 }
 
-/** Who manages the land under the pin. */
-function landSection(position) {
-  return pendingSection('Land manager', async (body, section) => {
-    const result = await landManager(position);
+/**
+ * Who manages the land under the pin, as rows rather than a section.
+ *
+ * This used to be a section of its own, three below the coordinates. It reads
+ * better inside Location: "public or private" is the second thing anyone asks
+ * after "where am I", and the answer is about the place, not a separate
+ * subject. Returns null when there is nothing worth saying, so the caller can
+ * leave the space empty rather than print a heading over an apology.
+ */
+async function landManagerRows(position) {
+  const result = await landManager(position).catch(() => ({ ok: false }));
 
-    if (!result.ok) {
-      // "Nothing here" and "nothing could be asked" mean opposite things: the
-      // first is a working answer about private land, the second a broken
-      // configuration. Only the second is the reader's problem, and even then
-      // the service names belong in a tooltip rather than across the panel.
-      const nothingMapped = result.empty === true;
-      const note = el('p', {
-        class: 'hint', style: 'margin:0',
-        text: nothingMapped
-          ? 'No public land mapped here — most likely private.'
-          : 'Could not check who manages this — the land-ownership services did not answer.',
-      });
-      if (result.unreachable?.length) note.title = `Not answering:\n${result.unreachable.join('\n')}`;
-      body.replaceChildren(note);
-      return;
-    }
+  if (!result.ok) {
+    // "Nothing here" and "nothing could be asked" mean opposite things: the
+    // first is a working answer about private land, the second a broken
+    // configuration. Only the second is the reader's problem, and even then the
+    // service names belong in a tooltip rather than across the panel.
+    if (result.empty !== true && !result.unreachable?.length) return null;
+    const note = el('p', {
+      class: 'hint', style: 'margin:9px 0 0',
+      text: result.empty === true
+        ? 'No public land mapped here — most likely private.'
+        : 'Could not check who manages this — the land-ownership services did not answer.',
+    });
+    if (result.unreachable?.length) note.title = `Not answering:\n${result.unreachable.join('\n')}`;
+    return [note];
+  }
 
-    const rows = [];
+  const rows = [];
 
-    // The banner first, because "can I camp here" is the question underneath
-    // "who manages this", and an agency name alone does not answer it for
-    // anyone who does not already know which acronyms are federal.
-    const status = publicLand(result.agency, result.access);
-    if (status.level) {
-      rows.push(el('div', {
-        class: `land-badge ${status.public ? 'is-public' : 'is-private'}`,
-      }, [
-        el('span', { class: 'land-badge-mark', html: status.public ? icons.eye : icons.info }),
-        el('span', {
-          text: status.public
-            ? `Public land · ${status.level}${status.short && status.short !== status.level ? ` (${status.short})` : ''}`
-            : status.closed
-              ? `${status.level} land, access restricted`
-              : `${status.level} land — not open by default`,
-        }),
-      ]));
-    }
+  // The banner first, because "can I camp here" is the question underneath
+  // "who manages this", and an agency name alone does not answer it for anyone
+  // who does not already know which acronyms are federal.
+  const status = publicLand(result.agency, result.access);
+  if (status.level) {
+    rows.push(el('div', {
+      class: `land-badge ${status.public ? 'is-public' : 'is-private'}`,
+    }, [
+      el('span', { class: 'land-badge-mark', html: status.public ? icons.eye : icons.info }),
+      el('span', {
+        text: status.public
+          ? `Public land · ${status.level}${status.short && status.short !== status.level ? ` (${status.short})` : ''}`
+          : status.closed
+            ? `${status.level} land, access restricted`
+            : `${status.level} land — not open by default`,
+      }),
+    ]));
+  }
 
-    if (result.agency) rows.push(detailRow('Agency', result.agency, { copy: result.agency }));
-    if (result.unit) rows.push(detailRow('Unit', result.unit, { copy: result.unit }));
-    if (result.access) rows.push(detailRow('Access', result.access));
-    if (!rows.length) { section.remove(); return; }
+  if (result.agency) rows.push(detailRow('Agency', result.agency, { copy: result.agency }));
+  if (result.unit) rows.push(detailRow('Unit', result.unit, { copy: result.unit }));
+  if (result.access) rows.push(detailRow('Access', result.access));
+  if (!rows.length) return null;
 
-    rows.push(el('p', { class: 'source-note', text: `Source: ${result.source}` }));
-    body.replaceChildren(...rows);
-  });
+  rows.push(el('p', { class: 'source-note', text: `Source: ${result.source}` }));
+  return rows;
 }
 
 /**
@@ -3637,10 +3721,20 @@ function landSection(position) {
  */
 function weatherSection(position) {
   return pendingSection('Weather', async (body, section) => {
+    // Severe weather is weather. It was a section of its own, which put "no
+    // active warnings" under its own heading on every pin — and a heading that
+    // says nothing every time is one you stop reading, which is a bad property
+    // for the one section that matters when it does have something to say.
+    const storms = el('div', { class: 'storm-slot' });
+    fillStormRows(storms, position);
+
     const result = await forecast(position);
 
     if (!result.ok) {
-      body.replaceChildren(el('p', { class: 'hint', style: 'margin:0', text: `No forecast — ${result.reason}.` }));
+      body.replaceChildren(
+        el('p', { class: 'hint', style: 'margin:0', text: `No forecast — ${result.reason}.` }),
+        storms,
+      );
       return;
     }
 
@@ -3679,8 +3773,9 @@ function weatherSection(position) {
       strip,
       ...facts,
       el('p', { class: 'source-note', text: result.place ? `NWS · ${result.place}` : 'National Weather Service' }),
+      storms,
     );
-  });
+  }, { icon: icons.cloud });
 }
 
 /** Weather glyphs, drawn inline so the forecast works with no images to load. */
@@ -3725,66 +3820,66 @@ function weatherGlyph(kind, { night = false } = {}) {
  * it is the only free source that answers "where will this be in half an hour"
  * without differencing radar frames in a browser.
  *
- * Quiet when nothing is warned, which is almost always. A section that says
- * "no warnings" on every pin trains you to stop reading it.
+ * Filled into the Weather section rather than standing on its own: severe
+ * weather is weather, and a heading that says "no active warnings" on every pin
+ * is one people stop reading — which is a bad property for the one part of the
+ * panel that matters most when it does have something to say.
  */
-function stormSection(position) {
-  return pendingSection('Storm warnings', async (body, section) => {
-    const result = await activeAlerts(position);
+async function fillStormRows(host, position) {
+  const result = await activeAlerts(position);
 
-    if (!result.ok) {
-      body.replaceChildren(el('p', { class: 'hint', style: 'margin:0', text: `Could not check — ${result.reason}.` }));
-      section.classList.add('is-quiet');
-      return;
-    }
+  if (!result.ok) {
+    host.replaceChildren(el('p', { class: 'hint storm-quiet', text: `Warnings could not be checked — ${result.reason}.` }));
+    return;
+  }
 
-    if (!result.alerts.length) {
-      body.replaceChildren(el('p', { class: 'hint', style: 'margin:0', text: 'No active warnings here.' }));
-      section.classList.add('is-quiet');
-      state.storms = null;
-      refreshStormData();
-      return;
-    }
+  if (!result.alerts.length) {
+    // One quiet line rather than nothing, because "no warnings" and "nobody
+    // asked" are different answers and only one of them is reassuring.
+    host.replaceChildren(el('p', { class: 'hint storm-quiet', text: 'No active warnings here.' }));
+    state.storms = null;
+    refreshStormData();
+    return;
+  }
 
-    body.replaceChildren();
-    for (const alert of result.alerts) {
-      const motion = alert.motion ? describeMotion(alert.motion) : '';
-      body.append(el('div', { class: `storm-card is-${alert.severity.toLowerCase()}` }, [
-        el('div', { class: 'storm-event', text: alert.event }),
-        motion
-          ? el('div', { class: 'storm-motion' }, [
-            el('span', { class: 'storm-arrow', html: arrowGlyph(alert.motion.headingDegrees) }),
-            el('span', { text: `Moving ${motion}` }),
-          ])
-          : el('div', { class: 'storm-motion is-quiet', text: 'No storm motion published for this one.' }),
-        el('div', { class: 'storm-area', text: alert.areaDescription }),
-        alert.expires
-          ? el('div', { class: 'storm-expires', text: `Until ${clockTime(new Date(alert.expires))}` })
-          : null,
-      ]));
-    }
+  host.replaceChildren();
+  for (const alert of result.alerts) {
+    const motion = alert.motion ? describeMotion(alert.motion) : '';
+    host.append(el('div', { class: `storm-card is-${alert.severity.toLowerCase()}` }, [
+      el('div', { class: 'storm-event', text: alert.event }),
+      motion
+        ? el('div', { class: 'storm-motion' }, [
+          el('span', { class: 'storm-arrow', html: arrowGlyph(alert.motion.headingDegrees) }),
+          el('span', { text: `Moving ${motion}` }),
+        ])
+        : el('div', { class: 'storm-motion is-quiet', text: 'No storm motion published for this one.' }),
+      el('div', { class: 'storm-area', text: alert.areaDescription }),
+      alert.expires
+        ? el('div', { class: 'storm-expires', text: `Until ${clockTime(new Date(alert.expires))}` })
+        : null,
+    ]));
+  }
 
-    const tracked = result.alerts.filter((alert) => alert.geometry);
-    if (tracked.length) {
-      const showing = state.storms?.key === position.join(',');
-      body.append(el('button', {
-        class: `button ${showing ? 'button-secondary' : 'button-primary'} button-small sky-lines-toggle`,
-        type: 'button',
-        text: showing ? 'Hide the warning areas' : 'Show the warning areas on the map',
-        onclick: () => {
-          state.storms = showing ? null : { key: position.join(','), alerts: tracked };
-          refreshStormData();
-          renderDetailsTab();
-        },
-      }));
-    }
-
-    body.append(el('p', {
-      class: 'source-note',
-      text: 'Storm motion is the National Weather Service\u2019s own vector, from consecutive radar'
-        + ' scans. Only warned storms carry one — ordinary rain on the radar has no published track.',
+  const tracked = result.alerts.filter((alert) => alert.geometry);
+  if (tracked.length) {
+    const showing = state.storms?.key === position.join(',');
+    host.append(el('button', {
+      class: `button ${showing ? 'button-secondary' : 'button-primary'} button-small sky-lines-toggle`,
+      type: 'button',
+      text: showing ? 'Hide the warning areas' : 'Show the warning areas on the map',
+      onclick: () => {
+        state.storms = showing ? null : { key: position.join(','), alerts: tracked };
+        refreshStormData();
+        renderDetailsTab();
+      },
     }));
-  }, 'storms');
+  }
+
+  host.append(el('p', {
+    class: 'source-note',
+    text: 'Storm motion is the National Weather Service\u2019s own vector, from consecutive radar'
+      + ' scans. Only warned storms carry one — ordinary rain on the radar has no published track.',
+  }));
 }
 
 /**
@@ -3842,6 +3937,7 @@ function notesSection(folder, item) {
   const notes = item.feature.properties.log || [];
   let section = null;
   const outer = collapsibleSection('notes', 'Field notes', (body) => { section = body; }, {
+    icon: icons.note,
     count: notes.length ? String(notes.length) : '',
   });
 
@@ -3936,7 +4032,7 @@ function renderDocumentDetails(entry) {
   const profile = buildProfile(doc);
   if (profile) {
     const section = el('div', { class: 'panel-section' }, [
-      el('h2', { class: 'panel-title', text: 'Elevation profile' }),
+      sectionTitle('Elevation profile', icons.mountain),
     ]);
     section.append(renderProfile(profile));
     dom.details.append(section);
@@ -4558,6 +4654,8 @@ function renderWaypointsTab() {
 
 /** How many waypoint cards render at once. */
 const WAYPOINT_PAGE_SIZE = 30;
+/** How much of a field note fits on a card before it stops being a glance. */
+const NOTE_PREVIEW = 200;
 
 /** How many folder rows appear before "show more", and how many each click adds. */
 const FOLDER_REVEAL_STEP = 40;
@@ -4594,6 +4692,10 @@ function waypointCard(folder, item) {
         el('span', { class: 'waypoint-name', text: props.name, title: props.name }),
       ]),
       blurb ? el('p', { class: 'waypoint-blurb', text: blurb }) : null,
+      // The newest field note, trimmed. "Gate locked" is the thing you want off
+      // the card rather than two taps into the panel, and it is what makes the
+      // list worth scanning rather than only worth searching.
+      noteLine(props),
       el('div', { class: 'waypoint-foot' }, [
         el('span', { class: 'waypoint-folder', text: folder.name }),
         props.symbol ? el('span', { class: 'waypoint-symbol', text: props.symbol }) : null,
@@ -4609,6 +4711,20 @@ function waypointCard(folder, item) {
         event.stopPropagation();
         focusFolderItem(item, folder.id, { edit: true });
       },
+    }),
+  ]);
+}
+
+/** The newest field note as one trimmed line, or nothing if there is none. */
+function noteLine(props) {
+  const latest = latestNote(props);
+  if (!latest?.text) return null;
+
+  const text = String(latest.text);
+  return el('p', { class: 'waypoint-note' }, [
+    el('span', { class: 'waypoint-note-mark', html: icons.note }),
+    el('span', {
+      text: text.length > NOTE_PREVIEW ? `${text.slice(0, NOTE_PREVIEW).trimEnd()}…` : text,
     }),
   ]);
 }

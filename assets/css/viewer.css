@@ -39,9 +39,21 @@ html, body { height: 100%; overflow: hidden; }
 .panel-title {
   font-family: var(--font-sans); font-size: .72rem; font-weight: 650;
   letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3);
-  margin: 0 0 11px; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin: 0 0 11px; display: flex; align-items: center; gap: 8px;
 }
+/* The heading's own mark sits against its text; anything else in the row —
+   a count, a button — is pushed to the far end. */
+.panel-title .count,
+.panel-title .button { margin-left: auto; }
 .panel-title .count { font-weight: 500; letter-spacing: 0; text-transform: none; font-size: .76rem; }
+
+/* The section mark. Sized to the cap height of the heading beside it so it
+   reads as part of the word rather than as a button. */
+.detail-block-mark {
+  flex: none; display: inline-flex; width: 15px; height: 15px;
+  color: var(--clay);
+}
+.detail-block-mark svg { width: 100%; height: 100%; }
 
 /* The active map's own name is a title, not a section label — let it read as one. */
 .panel-title.is-name {
@@ -170,14 +182,45 @@ html, body { height: 100%; overflow: hidden; }
   border: 1px solid var(--line); border-radius: var(--radius);
   box-shadow: var(--shadow-lg); padding: 13px 15px; font-family: var(--font-sans); max-width: 290px;
 }
-.maplibregl-popup-close-button, .mapboxgl-popup-close-button { color: var(--ink-3); font-size: 19px; padding: 2px 7px; }
+/* Set in from the corner. At the default position it overlapped the title on
+   any pin whose name filled the line. */
+.maplibregl-popup-close-button, .mapboxgl-popup-close-button {
+  color: var(--ink-3); font-size: 17px; line-height: 1;
+  width: 26px; height: 26px; top: 5px; right: 5px; border-radius: var(--radius-sm);
+}
+.maplibregl-popup-close-button:hover, .mapboxgl-popup-close-button:hover {
+  color: var(--ink); background: var(--surface-2);
+}
 .maplibregl-popup-tip, .mapboxgl-popup-tip { border-top-color: var(--surface) !important; border-bottom-color: var(--surface) !important; }
 .maplibregl-ctrl-attrib, .mapboxgl-ctrl-attrib { background: color-mix(in srgb, var(--surface) 84%, transparent) !important; }
 .maplibregl-ctrl-attrib a, .mapboxgl-ctrl-attrib a { color: var(--ink-2) !important; }
 
-.popup-title { font-family: var(--font-serif); font-size: 1.02rem; font-weight: 600; margin: 0 0 3px; }
-.popup-kind { font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3); margin-bottom: 8px; }
+/* The pin's own mark beside its name, so the card identifies itself the way
+   the map does. The right padding is for the close button, which used to sit
+   on top of the last word of the title. */
+.popup-head { display: flex; align-items: flex-start; gap: 9px; padding-right: 22px; margin-bottom: 8px; }
+.popup-head-text { min-width: 0; }
+.popup-mark {
+  flex: none; width: 26px; height: 26px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; margin-top: 1px;
+}
+.popup-mark svg { width: 15px; height: 15px; }
+.popup-title { font-family: var(--font-serif); font-size: 1.02rem; font-weight: 600; margin: 0 0 2px; line-height: 1.25; }
+.popup-kind { font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3); }
 .popup-desc { font-size: .86rem; color: var(--ink-2); margin: 0 0 9px; max-height: 170px; overflow-y: auto; white-space: pre-line; }
+
+/* The newest field note, trimmed to a glance. */
+.popup-note {
+  display: flex; gap: 7px; align-items: flex-start;
+  margin: 0 0 9px; padding: 8px 9px;
+  background: var(--surface-2); border-radius: var(--radius-sm);
+  border-left: 2px solid var(--clay);
+}
+.popup-note-mark { flex: none; color: var(--ink-3); display: inline-flex; }
+.popup-note-mark svg { width: 13px; height: 13px; }
+.popup-note-text { font-size: .81rem; color: var(--ink-2); line-height: 1.4; }
+.popup-note-date { font-size: .68rem; color: var(--ink-3); margin-top: 3px; }
 .popup-stats { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: .81rem; border-top: 1px solid var(--line); padding-top: 8px; }
 .popup-stats dt { color: var(--ink-3); }
 .popup-stats dd { margin: 0; font-variant-numeric: tabular-nums; }
@@ -236,11 +279,17 @@ html, body { height: 100%; overflow: hidden; }
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px;
   margin-top: 11px; padding-top: 11px; border-top: 1px solid var(--line);
 }
+/* A mark and a word. Used wherever three buttons have to share a row that is
+   narrower than three words — which on a phone is most rows. */
+.button-with-icon,
 .editor-folder-actions .button {
   display: inline-flex; align-items: center; justify-content: center; gap: 5px;
-  min-height: 36px; min-width: 0; padding: 6px 8px; white-space: nowrap;
+  min-width: 0; white-space: nowrap;
 }
+.editor-folder-actions .button { min-height: 36px; padding: 6px 8px; }
+.button-with-icon svg,
 .editor-folder-actions .button svg { width: 14px; height: 14px; flex: none; }
+.button-with-icon span,
 .editor-folder-actions .button span {
   overflow: hidden; text-overflow: ellipsis;
 }
@@ -348,14 +397,17 @@ html, body { height: 100%; overflow: hidden; }
   .map-quick-button { padding: 10px; }
 }
 
-/* Buttons inside popups, e.g. "Save to folder" */
-.popup-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+/* Buttons inside popups, e.g. "Save to folder". A mark plus a short word, so
+   three of them fit one row of a 290px card instead of wrapping onto two. */
+.popup-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 11px; }
 .popup-actions button, .popup-actions select {
-  font: inherit; font-size: .8rem; padding: 5px 10px; cursor: pointer;
+  font: inherit; font-size: .78rem; padding: 5px 9px; cursor: pointer;
   border-radius: var(--radius-sm); border: 1px solid var(--line-strong);
   background: var(--surface); color: var(--ink);
 }
 .popup-actions button:hover { background: var(--paper-2); border-color: var(--ink-3); }
+.popup-actions .button-with-icon { gap: 5px; }
+.popup-actions .button-with-icon svg { width: 13px; height: 13px; }
 
 /* ==========================================================================
    Pin styling — colour and icon, single or bulk
@@ -1172,6 +1224,20 @@ html, body { height: 100%; overflow: hidden; }
   margin: 2px 0 0; font-size: .73rem; line-height: 1.35; color: var(--ink-2);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
+/* The newest field note. Set apart from the description above it — one is what
+   the place is, the other is what it was like last time. */
+.waypoint-note {
+  display: flex; gap: 5px; align-items: flex-start;
+  margin: 5px 0 0; padding-left: 6px;
+  border-left: 2px solid var(--clay);
+  font-size: .72rem; line-height: 1.35; color: var(--ink-2);
+}
+.waypoint-note-mark { flex: none; color: var(--ink-3); display: inline-flex; margin-top: 1px; }
+.waypoint-note-mark svg { width: 11px; height: 11px; }
+.waypoint-note span:last-child {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
 .waypoint-foot {
   display: flex; gap: 8px; margin-top: 3px;
   font-size: .68rem; color: var(--ink-3);
@@ -1421,6 +1487,18 @@ html, body { height: 100%; overflow: hidden; }
 .files-block > summary::before { content: '+ '; color: var(--ink-3); }
 .files-block[open] > summary::before { content: '– '; }
 .files-block[open] > summary { margin-bottom: 11px; }
+
+/*
+ * The Details panel's own gutter.
+ *
+ * The folding sections are appended straight to the panel while the plain ones
+ * are `.panel-section`, which carries its own 16px — so half the panel was
+ * inset and half of it ran into the edge of the glass. The gutter belongs to
+ * the column, not to each section, so it is set once here and the sections
+ * inside it stop setting their own.
+ */
+#details-body { padding: 4px 16px 20px; }
+#details-body .panel-section { padding-left: 0; padding-right: 0; }
 
 /* Each detail section folds, and stays folded — the panel is eight sections
    long now and which of them matter is personal and stable. */
