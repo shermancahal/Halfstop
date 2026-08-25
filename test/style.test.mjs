@@ -19,6 +19,7 @@ import assert from 'node:assert/strict';
 import { buildRasterStyle, overlayParts, overlayIdFromLayer, styleFor } from '../assets/js/lib/engine.js';
 import { BASEMAPS, OVERLAYS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN } from '../assets/js/config.js';
 import { bywaysStyle, PALETTE, shieldLayerUpdates } from '../assets/js/lib/byways-style.js';
+import { previewFor, tileFor, tileURL, swatchSVG } from '../assets/js/lib/preview.js';
 import {
   shieldDesign,
   shieldImageId,
@@ -273,6 +274,46 @@ test('config: every basemap is either raster tiles or a token-gated style', () =
       assert.ok(Array.isArray(basemap.tiles) && basemap.tiles.length, `"${basemap.id}" has neither tiles nor a style`);
     }
   }
+});
+
+test('preview: every basemap can show one, and Byways is drawn rather than fetched', () => {
+  const token = 'pk.test';
+  for (const basemap of BASEMAPS) {
+    const preview = previewFor(basemap, { lon: -84.28, lat: 35.96, zoom: 10, token });
+    assert.ok(preview, `${basemap.id} has no preview`);
+    if (basemap.custom === 'byways') {
+      // Nothing renders this style but the browser it is built in, and its
+      // raster `tiles` are the no-token fallback — a different map entirely, so
+      // previewing with them would advertise the wrong thing.
+      assert.equal(preview.kind, 'swatch', 'byways should be drawn, not fetched');
+      continue;
+    }
+    assert.equal(preview.kind, 'image');
+    assert.match(preview.src, /^https:\/\//, `${basemap.id} preview is not https`);
+    assert.ok(!/\{[a-z-]+\}/.test(preview.src), `${basemap.id} preview left a placeholder in: ${preview.src}`);
+  }
+});
+
+test('preview: the tile is the one under the point asked for', () => {
+  // z10 over the Smokies. Getting y inverted is the classic tile-maths bug and
+  // it fails silently — you get a tile, just of somewhere else.
+  const tile = tileFor(-84.28, 35.96, 10);
+  assert.deepEqual(tile, { x: 272, y: 402, z: 10 });
+
+  // North is the larger latitude and the smaller y.
+  assert.ok(tileFor(-84.28, 40, 10).y < tile.y, 'further north should have a smaller y');
+  assert.ok(tileFor(-80, 35.96, 10).x > tile.x, 'further east should have a larger x');
+
+  const url = tileURL('https://example.org/{z}/{x}/{y}.png', tile);
+  assert.equal(url, 'https://example.org/10/272/402.png');
+});
+
+test('preview: the drawn swatch is one line, so it adds no text to its row', () => {
+  // innerHTML keeps the whitespace between tags as text nodes, which put ten
+  // blank lines ahead of the basemap's name in the row's textContent.
+  const svg = swatchSVG({ paper: '#fff' });
+  assert.ok(!/\n/.test(svg), 'the swatch should be a single line');
+  assert.ok(svg.startsWith('<svg') && svg.endsWith('</svg>'));
 });
 
 test('config: the weather group is a group, and every layer in it is a forecast source', () => {

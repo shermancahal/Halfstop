@@ -197,8 +197,20 @@ const PERIMETERS = {
   }],
 };
 
+// A 1x1 PNG. Anything the page loads as an image gets this rather than the GL
+// stub: a basemap thumbnail that fails to load removes itself, which would make
+// "the previews are missing" and "the previews are switched off" identical from
+// in here.
+const PIXEL = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64',
+);
+
 await page.route('**/*', async (route) => {
   const url = route.request().url();
+  if (route.request().resourceType() === 'image' && !url.startsWith(new URL(URL_UNDER_TEST).origin)) {
+    return route.fulfill({ status: 200, contentType: 'image/png', body: PIXEL });
+  }
   if (/WFIGS_Interagency_Perimeters/.test(url)) {
     return route.fulfill({ status: 200, contentType: 'application/geo+json', body: JSON.stringify(PERIMETERS) });
   }
@@ -270,6 +282,27 @@ const afterImport = await state();
 check('waypoints reached the map', afterImport.folderFeatures, 2);
 check('folder layers present', afterImport.folderLayers, 5);
 check('document layers present', afterImport.documentLayers > 0, true);
+
+/*
+ * Nine basemap names say almost nothing about which one you want. One tile of
+ * each says it immediately — so every basemap has to have a preview, including
+ * the one nothing can render server-side.
+ */
+console.log('\nEvery basemap previews itself');
+await page.click('.panel-tab[data-tab="layers"]');
+await page.waitForTimeout(700);
+const previews = await page.evaluate(() => ({
+  rows: document.querySelectorAll('#basemap-list .layer-row').length,
+  thumbs: document.querySelectorAll('#basemap-list .layer-thumb').length,
+  drawn: document.querySelectorAll('#basemap-list .layer-thumb.is-drawn').length,
+  // The preview follows the map, so the tile it asks for has to be the one
+  // under the current centre rather than a fixed corner of the world.
+  src: document.querySelector('#basemap-list img.layer-thumb')?.getAttribute('src') || '',
+}));
+check('every basemap has one', previews.thumbs, previews.rows);
+check('Byways Topo is drawn rather than fetched', previews.drawn, 1);
+check('and the rest ask for a tile near the middle of the map',
+  /\/12\/1609\/1089|1609.*1089/.test(previews.src), true);
 
 console.log('\nSwitch to a raster basemap and back');
 await page.click('.panel-tab[data-tab="layers"]');

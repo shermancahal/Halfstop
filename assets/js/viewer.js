@@ -14,7 +14,7 @@ import {
   DEFAULT_VIEW, DEFAULT_UNITS, TRACK_COLORS,
 } from './config.js';
 import {
-  loadEngine, buildRasterStyle, hasMapboxToken, overlayParts, overlayIdFromLayer, styleFor,
+  loadEngine, buildRasterStyle, hasMapboxToken, mapboxToken, overlayParts, overlayIdFromLayer, styleFor,
   styleHasGlyphs,
 } from './lib/engine.js';
 import { loadCatalog, findMap } from './lib/catalog.js';
@@ -34,7 +34,8 @@ import {
   registerShieldImages, stateDesign, rasterizeShieldById,
   shieldImageIdFor, loadShieldBlank,
 } from './lib/route-shields.js';
-import { shieldLayerUpdates } from './lib/byways-style.js';
+import { shieldLayerUpdates, PALETTE } from './lib/byways-style.js';
+import { previewFor, swatchSVG } from './lib/preview.js';
 import { Account, isConfigured as accountsAvailable } from './lib/account.js';
 import {
   formatDD, formatDMS, formatDDM, toUTM, distanceBearing, compassPoint, reverseGeocode,
@@ -707,6 +708,7 @@ function renderLayersTab() {
       dom.basemapList.append(layerRow({
         entry: basemap,
         selected,
+        preview: true,
         control: el('input', {
           type: 'radio', name: 'basemap', value: basemap.id, checked: selected,
           onchange: () => setBasemap(basemap.id),
@@ -2240,7 +2242,7 @@ function regionRow(region, kind) {
  * are worth keeping — they are how you tell USGS Topo from Esri Topo — so they
  * fold away behind (i) rather than being deleted.
  */
-function layerRow({ entry, selected, control }) {
+function layerRow({ entry, selected, control, preview = false }) {
   const description = entry.description || '';
   const key = Array.isArray(entry.legend) && entry.legend.length ? entry.legend : null;
 
@@ -2290,6 +2292,7 @@ function layerRow({ entry, selected, control }) {
   const row = el('div', { class: `layer-row${selected ? ' is-selected' : ''}` }, [
     el('label', { class: 'layer-option' }, [
       control,
+      preview ? basemapThumb(entry) : null,
       el('span', { class: 'layer-option-name' }, [
         el('span', { class: 'layer-option-label', text: entry.name }),
         layerBadge(entry),
@@ -2302,6 +2305,45 @@ function layerRow({ entry, selected, control }) {
   const wrap = document.createDocumentFragment();
   wrap.append(row, descriptionNode);
   return wrap;
+}
+
+/**
+ * One tile of a basemap, beside its name.
+ *
+ * Nine names — USGS Topo, USGS Topo (classic), USGS Imagery + Topo, Esri
+ * imagery — say almost nothing about which one you want. One tile says it
+ * immediately, and taken from the current centre it says it about the place you
+ * are actually looking at rather than a fixed corner of Tennessee.
+ */
+function basemapThumb(entry) {
+  const centre = state.map?.getCenter?.();
+  const source = previewFor(entry, {
+    lon: centre?.lng ?? -84.28,
+    lat: centre?.lat ?? 35.96,
+    zoom: state.map?.getZoom?.() ?? 10,
+    token: mapboxToken(),
+  });
+  if (!source) return null;
+
+  if (source.kind === 'swatch') {
+    return el('span', {
+      class: 'layer-thumb is-drawn',
+      html: swatchSVG({
+        paper: PALETTE.land,
+        contour: PALETTE.contourIndex,
+        wood: PALETTE.forest,
+        water: PALETTE.water,
+        road: PALETTE.usRoute,
+      }),
+    });
+  }
+
+  return el('img', {
+    class: 'layer-thumb', src: source.src, alt: '', loading: 'lazy',
+    // A thumbnail that will not load leaves a broken-image box in the middle of
+    // the list. The name below it is the real label; this is a bonus.
+    onerror: (event) => event.currentTarget.remove(),
+  });
 }
 
 /**

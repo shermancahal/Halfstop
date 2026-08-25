@@ -66,6 +66,16 @@ export function hasMapboxToken() {
 }
 
 /**
+ * The token itself, for the few callers that need to build a URL with it.
+ *
+ * Exported from here rather than imported from config all over the app, so
+ * there is one place that knows whether a token exists and what it is.
+ */
+export function mapboxToken() {
+  return hasMapboxToken() ? MAPBOX_TOKEN : '';
+}
+
+/**
  * Load the chosen GL library.
  * @returns {Promise<{gl: object, engine: 'mapbox'|'maplibre'}>}
  */
