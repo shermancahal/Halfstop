@@ -605,6 +605,46 @@ export function milkyWayArc(date, lat, lon, { span = 40, step = 5, minAltitude =
 }
 
 /**
+ * The Milky Way's band, laid on the ground so a map can draw it.
+ *
+ * A map is a plan view and the galaxy is overhead, so something has to give.
+ * The convention every planetarium app uses — and the one a reader already
+ * understands from the sun and moon lines — is to plot each point along its own
+ * bearing, at a distance that shrinks as the point climbs: something on the
+ * horizon lands at the far edge, something overhead lands on top of you.
+ *
+ * That makes the drawn curve mean what it looks like. An arc sweeping wide
+ * across the south is a band lying low along the southern horizon; one pulled
+ * into a tight hook is a band standing up steeply. Both are the shape you would
+ * see if you looked up, and both are wrong if you read the distances as
+ * distances — which is why the line is drawn without a scale on it.
+ *
+ * Sampled every three degrees of galactic longitude across the 180° that
+ * contains the core, which is enough for a smooth curve at any zoom the line is
+ * legible at.
+ *
+ * @returns {{line: number[][], core: object|null, fraction: number}}
+ */
+export function milkyWayGround([lon, lat], date, { maxKm = 40, minAltitude = 0, span = 90, step = 3 } = {}) {
+  const arc = milkyWayArc(date, lat, lon, { span, step, minAltitude });
+
+  const project = (point) => {
+    const height = Math.min(90, Math.max(0, point.altitude));
+    return destinationPoint([lon, lat], point.azimuth, maxKm * (1 - height / 90));
+  };
+
+  const core = galacticCentre(date, lat, lon);
+
+  return {
+    line: arc.points.filter((point) => point.altitude > minAltitude).map(project),
+    core: core.altitude > minAltitude
+      ? { position: project(core), azimuth: core.azimuth, altitude: core.altitude }
+      : null,
+    fraction: arc.fraction,
+  };
+}
+
+/**
  * The highest the core ever gets from a given latitude.
  *
  * Worth stating plainly because it is the first thing that surprises people:

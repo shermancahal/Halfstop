@@ -224,17 +224,25 @@ export function bywaysStyle(token) {
       ...roadLayers(),
       ...boundaryLayers(),
       /*
-       * Shields BEFORE the other labels, and the order is the whole fix.
+       * Shields last, which is both the draw order and the placement order.
        *
-       * GL resolves symbol collisions in layer order: whatever is placed first
-       * keeps its spot and everything after it moves or disappears. With
-       * shields last, every water name, summit, road name and place label got
-       * there first, and on any map with labels on it the shields were the
-       * thing that gave way — which is exactly backwards for a road map, where
-       * the shield is the most useful label on the road.
+       * GL uses layer order for two things at once: symbols in an earlier layer
+       * are placed first and keep their spot, and symbols in a later layer are
+       * painted on top. Those pull in opposite directions here.
+       *
+       * They were first, so that the shields won collisions instead of giving
+       * way to every water name and place label — which was the right fix for
+       * the wrong lever. Winning a collision was never the issue: these layers
+       * set `icon-allow-overlap` and `text-allow-overlap`, so a shield draws
+       * whatever else is already there. What being first cost was the paint
+       * order, and a road name painted across a route marker is exactly what
+       * got reported.
+       *
+       * Last, then: still always drawn, and now over the road's name rather
+       * than under it.
        */
-      ...shieldLayers(),
       ...labelLayers(),
+      ...shieldLayers(),
     ],
     attribution: '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> '
       + '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',

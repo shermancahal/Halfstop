@@ -1589,3 +1589,18 @@ html, body { height: 100%; overflow: hidden; }
   border: 1px solid var(--line); border-radius: var(--radius-sm, 6px);
 }
 .build-newer:hover { border-color: var(--accent, #b4441f); }
+
+/* One night, end to end. The ends are labelled because a slider with no scale
+   on it is a guess, and the whole point is that this range has real edges. */
+.scrubber { margin: 0 0 10px; }
+.scrub-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  margin-bottom: 4px;
+}
+.scrub-label { font-size: .72rem; font-weight: 600; color: var(--ink-2); }
+.scrub-time { font-size: .72rem; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.scrub-range { width: 100%; margin: 0; accent-color: #7b4fa8; }
+.scrub-ends {
+  display: flex; justify-content: space-between;
+  font-size: .66rem; color: var(--ink-3); font-variant-numeric: tabular-nums;
+}

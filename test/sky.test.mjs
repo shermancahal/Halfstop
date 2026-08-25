@@ -29,6 +29,7 @@ import {
   galacticCentre,
   milkyWayArc,
   nightQuality,
+  milkyWayGround,
 } from '../assets/js/lib/sky.js';
 
 /* Places chosen for what they prove, not for sentiment. */
@@ -524,4 +525,76 @@ test('shooting moments name only what tonight actually offers', () => {
     assert.ok(Math.abs(plain[i].when - plain[i - 1].when) >= 15 * 60000,
       `${plain[i].id} duplicates ${plain[i - 1].id}`);
   }
+});
+
+/*
+ * The band laid on the ground.
+ *
+ * A map is a plan view and the galaxy is overhead, so the drawing is a
+ * projection: each point goes along its own bearing, at a distance that shrinks
+ * as it climbs. These fix that convention in place, because it is the thing
+ * that makes the drawn curve mean what it looks like.
+ */
+test('milky way: the arc projects onto the ground around the observer', () => {
+  // A July night over Tennessee, when the core is well up.
+  const when = new Date(Date.UTC(2026, 6, 27, 4, 0, 0));
+  const ground = milkyWayGround([-84.28, 35.96], when, { maxKm: 40 });
+
+  assert.ok(ground.line.length > 10, 'the band should be sampled into a curve');
+  for (const [lon, lat] of ground.line) {
+    assert.ok(Number.isFinite(lon) && Number.isFinite(lat), 'every point is a real coordinate');
+    // 40km is well under a degree of latitude, so nothing may land far away.
+    assert.ok(Math.abs(lat - 35.96) < 0.6, `${lat} is not near the observer`);
+    assert.ok(Math.abs(lon + 84.28) < 0.8, `${lon} is not near the observer`);
+  }
+});
+
+test('milky way: a point overhead lands nearer than one on the horizon', () => {
+  /*
+   * The whole readability of the drawing rests on this. If height did not pull
+   * a point inward, a band standing straight up and a band lying flat would
+   * draw as the same curve — and the picture would be decorative rather than
+   * informative.
+   */
+  const at = [-84.28, 35.96];
+  const when = new Date(Date.UTC(2026, 6, 27, 4, 0, 0));
+  const ground = milkyWayGround(at, when, { maxKm: 40 });
+
+  const distance = ([lon, lat]) => Math.hypot(lon - at[0], lat - at[1]);
+  const arc = milkyWayArc(when, at[1], at[0], { span: 90, step: 3, minAltitude: 0 });
+  const visible = arc.points.filter((point) => point.altitude > 0);
+
+  const highest = visible.reduce((best, point, index) =>
+    (point.altitude > visible[best].altitude ? index : best), 0);
+  const lowest = visible.reduce((worst, point, index) =>
+    (point.altitude < visible[worst].altitude ? index : worst), 0);
+
+  assert.ok(distance(ground.line[highest]) < distance(ground.line[lowest]),
+    'the highest point of the band must plot closer in than the lowest');
+});
+
+test('milky way: the core is reported as absent when it is below the horizon', () => {
+  /*
+   * A December night from Tennessee, at an hour when the core is 80° *under*
+   * the observer — the far side of the planet. Drawing anything then would be a
+   * confident picture of something not in the sky.
+   *
+   * The hour was checked rather than assumed: the first version of this test
+   * used 18:00 UTC on the same date, reasoning that December daytime means no
+   * Milky Way. The core is 24° up at that moment. It is daylight, so you cannot
+   * see it, but "not visible" and "below the horizon" are different facts and
+   * this function only claims the second.
+   */
+  const down = new Date(Date.UTC(2026, 11, 21, 6, 0, 0));
+  const ground = milkyWayGround([-84.28, 35.96], down, { maxKm: 40 });
+  assert.equal(ground.core, null, 'the core should be reported as down');
+
+  /*
+   * Not zero points, though. The band is 180° long, so a sliver of it can be a
+   * couple of degrees above the horizon while the core is 80° below — which is
+   * exactly what happens here, and asserting an empty line would have been
+   * asserting a bug. Two points are what it takes to draw a line, and the
+   * caller requires them.
+   */
+  assert.ok(ground.line.length <= 1, 'not enough of the band is up to draw');
 });

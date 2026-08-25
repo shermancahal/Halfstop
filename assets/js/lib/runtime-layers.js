@@ -112,10 +112,33 @@ export function runtimeLayers({ labels = true } = {}) {
     },
       },
   {
+    /*
+     * The Milky Way's band, which is a curve rather than a bearing.
+     *
+     * Its own layer because it is the one feature here that is not a straight
+     * line from the observer: the dash and the round cap that suit a bearing
+     * make a sampled arc look like a dotted mess, and a heavier stroke reads as
+     * a band rather than as a direction.
+     */
+    id: 'light-arc',
+    type: 'line',
+    source: LIGHT_SOURCE,
+    filter: ['==', ['get', 'kind'], 'arc'],
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': '#7b4fa8',
+      'line-width': ['interpolate', ['linear'], ['zoom'], 8, 3.2, 14, 5.5],
+      'line-opacity': 0.75,
+      'line-blur': 1.2,
+    },
+  },
+  {
     id: 'light-line',
     type: 'line',
     source: LIGHT_SOURCE,
-    filter: ['!', ['get', 'now']],
+    // The arc is drawn by its own layer above; without this it would also be
+    // drawn here as a dashed bearing, doubled and wrong.
+    filter: ['all', ['!', ['get', 'now']], ['!=', ['get', 'kind'], 'arc']],
     layout: { 'line-cap': 'round' },
     paint: {
       'line-color': BODY_COLOUR,
@@ -145,6 +168,9 @@ export function runtimeLayers({ labels = true } = {}) {
   },
   {
     id: 'light-label', type: 'symbol', source: LIGHT_SOURCE,
+    // Bearings are labelled; the arc is not — a label repeated along a sampled
+    // curve is the "dotted mess" this layer split off to avoid.
+    filter: ['!=', ['get', 'kind'], 'arc'],
     layout: {
       'symbol-placement': 'line-center',
       'text-field': ['get', 'label'],

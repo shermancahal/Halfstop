@@ -870,22 +870,36 @@ test('shields: every state and DC has a marker, listed in a stable order', () =>
   assert.equal(STATE_SHIELDS.TX.shape, 'square', 'Texas is a square with lettering, not an outline');
 });
 
-test('route shields are placed before every other label layer', () => {
+test('route shields paint over the road names, and still always draw', () => {
   /*
-   * Not cosmetic ordering — GL resolves symbol collisions in layer order, so
-   * whatever comes first keeps its position and the rest give way. With shields
-   * last they lost to every water name and place label on the map, which on a
-   * road map is exactly the wrong way round.
+   * Two properties that have to hold together, because each alone is a trap.
+   *
+   * Layer order is both paint order and placement order in GL: later paints on
+   * top, earlier wins collisions. This used to put shields first, to stop them
+   * giving way to every water name on the map — the right fix for the wrong
+   * lever, because these layers allow overlap and were never going to give way
+   * on collision. What it cost was the paint order, and a road name drawn
+   * across a route marker is what got reported.
+   *
+   * So shields go last, and the allow-overlap flags are what make that safe.
+   * Assert both: last alone would be a regression the moment somebody
+   * "tidied" those flags away.
    */
   const style = bywaysStyle('pk.test');
   const symbols = style.layers.filter((layer) => layer.type === 'symbol').map((layer) => layer.id);
   const shield = symbols.indexOf('road-shield');
 
   assert.ok(shield >= 0, 'the shield layer exists');
-  const labelsAfter = symbols.slice(shield + 1);
-  assert.ok(labelsAfter.includes('label-place'), 'place labels come after shields');
-  assert.ok(!symbols.slice(0, shield).some((id) => id.startsWith('label-')),
-    `these labels are placed before shields and will win against them: ${symbols.slice(0, shield)}`);
+  assert.ok(symbols.slice(0, shield).includes('label-road'),
+    'road names must be painted before shields, so the shield lands on top');
+  assert.ok(!symbols.slice(shield + 1).some((id) => id.startsWith('label-')),
+    `these labels paint over the shields: ${symbols.slice(shield + 1)}`);
+
+  for (const id of ['road-shield', 'road-shield-first', 'road-shield-second']) {
+    const { layout } = style.layers.find((layer) => layer.id === id);
+    assert.equal(layout['icon-allow-overlap'], true, `${id} would give way on collision`);
+    assert.equal(layout['text-allow-overlap'], true, `${id}'s number would give way on collision`);
+  }
 });
 
 test('a shield and the number on it obey the same collision rules', () => {

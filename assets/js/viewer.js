@@ -42,8 +42,8 @@ import {
 } from './lib/place.js';
 import {
   sunTimes, sunPosition, moonTimes, moonPosition, moonIllumination,
-  lightPhases, lightDirections, currentDirections, destinationPoint,
-  milkyWayNight, bestMilkyWayNights, nightQuality,
+  lightPhases, lightDirections, currentDirections, destinationPoint, milkyWayGround,
+  milkyWayNight, bestMilkyWayNights, nightQuality, galacticCentre,
 } from './lib/sky.js';
 import { activeAlerts, describeMotion, alertsToGeoJSON } from './lib/storms.js';
 import {
@@ -2381,6 +2381,68 @@ function bestNightsList(date, lat, lon, cover) {
   return wrap;
 }
 
+/**
+ * A slider across one night, for watching the band move.
+ *
+ * Deliberately not a clock. A clock is an open-ended control over all of time,
+ * needs a date picker beside it, and answers a question nobody asked; what a
+ * photographer wants is "where will this be at two in the morning", and the
+ * range that matters is a single night. `milkyWayNight` already computes that
+ * window — astronomical dark, end to end — so the control has real ends and a
+ * real default rather than arbitrary ones.
+ *
+ * It starts at the peak, because that is the answer if you only look once.
+ */
+function nightScrubber(position, date) {
+  const [lon, lat] = position;
+  const night = milkyWayNight(date, lat, lon);
+  const span = night?.dark;
+  if (!span) {
+    return el('p', {
+      class: 'hint', style: 'margin:0 0 8px',
+      text: 'No astronomical darkness tonight, so there is no window to scrub through.',
+    });
+  }
+
+  const from = span.from.valueOf();
+  const to = span.to.valueOf();
+  const peak = night.windowPeak?.when?.valueOf() ?? (from + to) / 2;
+
+  const readout = el('span', { class: 'scrub-time' });
+  const show = (at) => {
+    const when = new Date(at);
+    const core = galacticCentre(when, lat, lon);
+    readout.textContent = `${clockTime(when)} · core ${Math.round(core.altitude)}° at ${Math.round(core.azimuth)}°`;
+  };
+
+  const slider = el('input', {
+    type: 'range', class: 'scrub-range',
+    min: String(from), max: String(to), value: String(Math.min(Math.max(peak, from), to)),
+    step: String(5 * 60 * 1000),
+    'aria-label': 'Time tonight',
+    oninput: (event) => {
+      const at = Number(event.target.value);
+      show(at);
+      setSkyTime(new Date(at));
+    },
+  });
+
+  show(Number(slider.value));
+  setSkyTime(new Date(Number(slider.value)));
+
+  return el('div', { class: 'scrubber' }, [
+    el('div', { class: 'scrub-head' }, [
+      el('span', { class: 'scrub-label', text: 'Tonight' }),
+      readout,
+    ]),
+    slider,
+    el('div', { class: 'scrub-ends' }, [
+      el('span', { text: clockTime(span.from) }),
+      el('span', { text: clockTime(span.to) }),
+    ]),
+  ]);
+}
+
 /** Draw bearings on the map: where things rise, set, and are right now. */
 function linesPanel(body, position, date) {
   const [lon, lat] = position;
@@ -2394,11 +2456,20 @@ function linesPanel(body, position, date) {
   }
 
   const active = state.lightLines?.key === position.join(',');
+  if (active) body.append(nightScrubber(position, date));
   body.append(el('button', {
     class: `button ${active ? 'button-secondary' : 'button-primary'} button-small sky-lines-toggle`,
+    // `sky-lines-toggle` is a layout class and the storm panel uses it too, so
+    // it identifies nothing. This does — and a test that clicked the wrong one
+    // of the two reported the whole feature as missing.
+    dataset: { toggle: 'sky-lines' },
     type: 'button',
     text: active ? 'Hide the lines' : 'Draw the lines on the map',
-    onclick: () => toggleLightLines(position, all),
+    // The date matters now: the band is drawn for a moment, and the scrubber
+    // moves that moment. Without it here the stored moment was `undefined`,
+    // which threw inside the handler — where a throw does not reach the
+    // caller, so the button simply did nothing and said nothing.
+    onclick: () => toggleLightLines(position, all, date),
   }));
 
   body.append(el('div', { class: 'core-rows' }, all.map((entry) => el('div', { class: 'core-row' }, [
@@ -2444,7 +2515,7 @@ function skyCell(label, value, note) {
  * the sun sets at 291° is not the same as seeing that 291° runs straight down
  * the valley, or straight into the ridge behind you.
  */
-function toggleLightLines(position, directions) {
+function toggleLightLines(position, directions, date = new Date()) {
   if (state.lightLines?.key === position.join(',')) {
     state.lightLines = null;
     refreshLightLines();
@@ -2452,9 +2523,26 @@ function toggleLightLines(position, directions) {
     return;
   }
 
-  state.lightLines = { key: position.join(','), position, directions };
+  state.lightLines = { key: position.join(','), position, directions, date };
   refreshLightLines();
   renderDetailsTab();
+}
+
+/**
+ * Move the drawn sky to another moment of the same night.
+ *
+ * The scrubber's whole range is one night, which is why it needs no clock: the
+ * core is only worth looking at between astronomical dusk and dawn, and
+ * `milkyWayNight` already computes exactly that window. So the control is
+ * bounded by something the app knows rather than by the calendar, and dragging
+ * it re-asks the same maths for a different instant.
+ */
+function setSkyTime(when) {
+  if (!state.lightLines) return;
+  const [lon, lat] = state.lightLines.position;
+  state.lightLines.date = when;
+  state.lightLines.directions = lightDirections(when, lat, lon);
+  refreshLightLines();
 }
 
 function refreshLightLines() {
@@ -2471,21 +2559,39 @@ function refreshLightLines() {
 
   // 40km is long enough to cross the horizon you can actually see from a ridge
   // and short enough not to sweep across the whole map at trip-planning zooms.
-  source.setData({
-    type: 'FeatureCollection',
-    features: lines.directions.map((direction) => ({
+  const REACH = 40;
+
+  const features = lines.directions.map((direction) => ({
+    type: 'Feature',
+    properties: {
+      body: direction.body,
+      now: !!direction.now,
+      label: `${direction.name} ${Math.round(direction.azimuth)}°`,
+    },
+    geometry: {
+      type: 'LineString',
+      coordinates: [lines.position, destinationPoint(lines.position, direction.azimuth, REACH)],
+    },
+  }));
+
+  /*
+   * The band itself, not just a bearing to its centre.
+   *
+   * A line pointing at the core says where to stand; the arc says what the
+   * frame will contain — whether the band runs along the ridge or straight up
+   * out of it. That is the question the whole Photography panel is for, and it
+   * is the one thing a table of numbers cannot answer.
+   */
+  const sky = milkyWayGround(lines.position, lines.date || new Date(), { maxKm: REACH });
+  if (sky.line.length > 1) {
+    features.push({
       type: 'Feature',
-      properties: {
-        body: direction.body,
-        now: !!direction.now,
-        label: `${direction.name} ${Math.round(direction.azimuth)}°`,
-      },
-      geometry: {
-        type: 'LineString',
-        coordinates: [lines.position, destinationPoint(lines.position, direction.azimuth, 40)],
-      },
-    })),
-  });
+      properties: { body: 'core', kind: 'arc' },
+      geometry: { type: 'LineString', coordinates: sky.line },
+    });
+  }
+
+  source.setData({ type: 'FeatureCollection', features });
 }
 
 /* ---------------- offline regions ---------------- */
@@ -4476,6 +4582,7 @@ async function fillStormRows(host, position) {
     const showing = state.storms?.key === position.join(',');
     host.append(el('button', {
       class: `button ${showing ? 'button-secondary' : 'button-primary'} button-small sky-lines-toggle`,
+      dataset: { toggle: 'storm-areas' },
       type: 'button',
       text: showing ? 'Hide the warning areas' : 'Show the warning areas on the map',
       onclick: () => {

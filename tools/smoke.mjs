@@ -919,6 +919,60 @@ await page.locator('.settings-choice', { hasText: /Miles/ }).click();
 await page.waitForTimeout(300);
 await page.keyboard.press('Escape');
 
+/*
+ * The Milky Way band on the map, and the control that moves it.
+ *
+ * The maths for this has been in sky.js and under test for a while; what was
+ * missing was ever drawing it. So the check is deliberately about the map data
+ * rather than about the numbers: an arc feature with more than two points, and
+ * a scrubber that changes it.
+ */
+console.log('\nThe Milky Way band is drawn, and the night can be scrubbed');
+await page.click('.panel-tab[data-tab="waypoints"]');
+await page.waitForTimeout(400);
+await page.locator('.waypoint-card').first().click();
+await page.waitForTimeout(800);
+// Opened, not toggled: Photography starts open, so clicking its summary here
+// closes it — and every check below then reports the feature as missing rather
+// than the section as shut. The layer groups had the same trap.
+await page.locator('.detail-block').filter({ hasText: 'Photography' }).first()
+  .evaluate((node) => { node.open = true; });
+await page.waitForTimeout(300);
+// The map-drawing controls live behind their own sub-tab inside Photography.
+await page.locator('.sky-tab', { hasText: /On the map/ }).first().click();
+await page.waitForTimeout(300);
+await page.locator('[data-toggle="sky-lines"]').first().click();
+await page.waitForTimeout(500);
+
+const arcOf = () => page.evaluate(() => {
+  const features = window.__map.getSource('light-directions')?._d?.features || [];
+  const arc = features.find((feature) => feature.properties.kind === 'arc');
+  return {
+    present: !!arc,
+    points: arc?.geometry.coordinates.length ?? 0,
+    first: arc?.geometry.coordinates[0]?.map((n) => Number(n.toFixed(4))).join(',') ?? '',
+    bearings: features.filter((feature) => feature.properties.kind !== 'arc').length,
+  };
+});
+
+const band = await arcOf();
+check('the band is drawn as its own arc feature', band.present, true);
+check('sampled into a curve rather than a straight line', band.points > 10, true);
+check('and the rise and set bearings are still there', band.bearings > 0, true);
+
+check('the scrubber spans one night', await page.locator('.scrub-range').count(), 1);
+const scrubbed = await (async () => {
+  const range = page.locator('.scrub-range').first();
+  const { min, max } = await range.evaluate((node) => ({ min: node.min, max: node.max }));
+  await range.evaluate((node, value) => {
+    node.value = value;
+    node.dispatchEvent(new Event('input', { bubbles: true }));
+  }, String(Number(min) + (Number(max) - Number(min)) * 0.15));
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  return arcOf();
+})();
+check('and moving it moves the band', scrubbed.first !== band.first, true);
+
 console.log('\nCollapsed Details sections survive a reload');
 // Back onto a pin: the step above reloaded, so the panel is on its first tab.
 await page.click('.panel-tab[data-tab="waypoints"]');
