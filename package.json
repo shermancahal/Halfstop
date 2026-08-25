@@ -14,7 +14,8 @@
     "dist": "node tools/build-dist.mjs --zip",
     "test": "node --test test/*.test.mjs",
     "validate:style": "node tools/validate-style.mjs",
-    "smoke": "node tools/smoke.mjs"
+    "smoke": "node tools/smoke.mjs",
+    "check:layers": "node tools/check-layers.mjs"
   },
   "license": "UNLICENSED",
   "devDependencies": {

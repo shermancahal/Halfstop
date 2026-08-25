@@ -1,0 +1,54 @@
+name: Check map layers
+
+# Asks every configured layer for one tile and reports what came back.
+#
+# It exists because a third-party layer can fail in a way the app cannot see: a
+# 200 with a transparent image, or an error returned as JSON with an image
+# content type nowhere in sight. Both look exactly like "switched off" from the
+# inside, which is how the cell coverage layer sat broken for weeks.
+#
+# Deliberately separate from the deploy workflow and deliberately not a gate.
+# These are other people's servers; NOAA having an afternoon is not a reason to
+# stop publishing the site. Read the run, fix the URL, push.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly, on Monday morning UTC. Often enough to catch a service that has
+    # moved, rare enough not to be a load on anyone.
+    - cron: '17 8 * * 1'
+  push:
+    paths:
+      - 'assets/js/config.js'
+      - 'tools/check-layers.mjs'
+      - 'tools/layer-candidates.json'
+      - '.github/workflows/check-layers.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-layers-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    name: Probe every layer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: The catalogue
+        run: node tools/check-layers.mjs
+        env:
+          MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
+
+      - name: Candidates not yet in the catalogue
+        # A staging area for services whose URL cannot be confirmed from
+        # documentation. Nothing here is shipped until it comes back with an
+        # image on it.
+        run: node tools/check-layers.mjs --candidates

@@ -1,0 +1,87 @@
+[
+  {
+    "id": "cap:noaa-ndfd-geoserver",
+    "note": "What the NWS GeoServer publishes under its NDFD workspace.",
+    "url": "https://mapservices.weather.noaa.gov/geoserver/ndfd/wms?service=WMS&version=1.3.0&request=GetCapabilities"
+  },
+  {
+    "id": "cap:nowcoast-geoserver",
+    "note": "The host the working radar layer already comes from.",
+    "url": "https://nowcoast.noaa.gov/geoserver/wms?service=WMS&version=1.3.0&request=GetCapabilities"
+  },
+  {
+    "id": "cap:nowcoast-observations",
+    "url": "https://nowcoast.noaa.gov/geoserver/observations/wms?service=WMS&version=1.3.0&request=GetCapabilities"
+  },
+  {
+    "id": "cap:nowcoast-forecasts",
+    "url": "https://nowcoast.noaa.gov/geoserver/forecasts/wms?service=WMS&version=1.3.0&request=GetCapabilities"
+  },
+  {
+    "id": "cap:noaa-raster-services",
+    "note": "The ArcGIS side: which folders and services exist at all.",
+    "url": "https://mapservices.weather.noaa.gov/raster/rest/services?f=pjson"
+  },
+  {
+    "id": "cap:noaa-ndfd-folder",
+    "url": "https://mapservices.weather.noaa.gov/raster/rest/services/NDFD?f=pjson"
+  },
+  {
+    "id": "cap:noaa-snow-layers",
+    "note": "Which numbered layer is snow depth and which is water equivalent.",
+    "url": "https://mapservices.weather.noaa.gov/raster/rest/services/snow/NOHRSC_Snow_Analysis/MapServer/layers?f=pjson&returnDomainNames=true"
+  },
+  {
+    "id": "cap:noaa-temp-layers",
+    "url": "https://mapservices.weather.noaa.gov/raster/rest/services/NDFD/NDFD_temp/MapServer?f=pjson"
+  },
+
+  {
+    "id": "img:snow-depth-default",
+    "note": "NOHRSC snow analysis, whatever it draws by default.",
+    "url": "https://mapservices.weather.noaa.gov/raster/rest/services/snow/NOHRSC_Snow_Analysis/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
+  },
+  {
+    "id": "img:snow-depth-l3",
+    "url": "https://mapservices.weather.noaa.gov/raster/rest/services/snow/NOHRSC_Snow_Analysis/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&layers=show:3&f=image"
+  },
+  {
+    "id": "img:temp-default",
+    "url": "https://mapservices.weather.noaa.gov/raster/rest/services/NDFD/NDFD_temp/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
+  },
+  {
+    "id": "img:temp-l0",
+    "url": "https://mapservices.weather.noaa.gov/raster/rest/services/NDFD/NDFD_temp/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&layers=show:0&f=image"
+  },
+  {
+    "id": "img:wind-arcgis",
+    "url": "https://mapservices.weather.noaa.gov/raster/rest/services/NDFD/NDFD_wind/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
+  },
+  {
+    "id": "img:snowfall-arcgis",
+    "url": "https://mapservices.weather.noaa.gov/raster/rest/services/NDFD/NDFD_snow/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
+  },
+  {
+    "id": "img:sky-arcgis",
+    "note": "Cloud cover, which is the one the photography panel would use.",
+    "url": "https://mapservices.weather.noaa.gov/raster/rest/services/NDFD/NDFD_sky/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
+  },
+  {
+    "id": "img:wind-geoserver",
+    "url": "https://mapservices.weather.noaa.gov/geoserver/ndfd/wind/ows?service=WMS&version=1.3.0&request=GetMap&layers=ndfd:wind&styles=&crs=EPSG:3857&bbox={bbox-epsg-3857}&width=256&height=256&format=image/png&transparent=true"
+  },
+
+  {
+    "id": "cap:fcc-mobile",
+    "note": "Cell coverage. The tile URL in the catalogue answers with nothing, and the FCC does not document this API.",
+    "url": "https://broadbandmap.fcc.gov/nbm/map/api/getMapLayers"
+  },
+  {
+    "id": "img:fcc-mobile-current",
+    "url": "https://broadbandmap.fcc.gov/nbm/map/api/tiles/mobile/{z}/{x}/{y}.png"
+  },
+  {
+    "id": "cap:fcc-published-data",
+    "url": "https://broadbandmap.fcc.gov/api/public/map/downloads/listAvailabilityData"
+  }
+]
