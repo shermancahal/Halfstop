@@ -99,7 +99,7 @@ function layerNames(body) {
   // WMS: <Layer><Name>workspace:layer</Name>. The service's own name is in
   // there too, which is harmless — it is one line among the real ones.
   for (const match of body.matchAll(/<Name>([^<]{1,120})<\/Name>/g)) found.push(match[1]);
-  if (found.length) return [...new Set(found)].slice(0, 60);
+  if (found.length) return [...new Set(found)].slice(0, 400);
 
   // ArcGIS: {"layers":[{"id":3,"name":"Snow Depth"}]}
   try {
@@ -112,7 +112,7 @@ function layerNames(body) {
   } catch {
     // Not JSON either. The first 300 characters are printed instead.
   }
-  return found.slice(0, 60);
+  return found.slice(0, 400);
 }
 
 /**
@@ -165,7 +165,7 @@ async function probe(entry) {
       ms: Date.now() - started,
       verdict: !response.ok ? 'failed'
         : !isImage ? 'not an image'
-          : bytes < EMPTY_BYTES ? 'blank'
+          : bytes < EMPTY_BYTES ? (entry.seasonal ? 'empty (seasonal)' : 'blank')
             : 'ok',
       text,
       names: isImage ? [] : layerNames(decoded),
@@ -185,7 +185,12 @@ for (const entry of await candidates()) {
 if (asJSON) {
   console.log(JSON.stringify(results, null, 2));
 } else {
-  const mark = { ok: 'ok  ', blank: 'BLANK', failed: 'FAIL', 'not an image': 'FAIL', unreachable: 'DOWN' };
+  const mark = {
+    ok: 'ok  ', blank: 'BLANK', failed: 'FAIL', 'not an image': 'FAIL', unreachable: 'DOWN',
+    // Snow depth in August is empty because there is no snow, not because the
+    // service is wrong. Marked in the catalogue rather than guessed at here.
+    'empty (seasonal)': 'ok  ',
+  };
   for (const result of results) {
     if (result.skipped) {
       console.log(`  --    ${result.id.padEnd(22)} skipped (${result.skipped})`);
@@ -202,7 +207,7 @@ if (asJSON) {
   }
 
   const checked = results.filter((result) => !result.skipped);
-  const bad = checked.filter((result) => result.verdict !== 'ok');
+  const bad = checked.filter((result) => result.verdict !== 'ok' && result.verdict !== 'empty (seasonal)');
   console.log(`\n${checked.length - bad.length} of ${checked.length} layers returned an image with something on it.`);
   if (bad.length) {
     console.log(`Needs attention: ${bad.map((result) => `${result.id} (${result.verdict})`).join(', ')}`);
