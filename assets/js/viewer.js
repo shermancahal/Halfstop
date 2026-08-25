@@ -450,6 +450,7 @@ async function main() {
   wireMapClicks();
   exposeRoadInspector();
   exposeShieldInspector();
+  exposeOverlayInspector();
   exposeWaypointInspector();
   keepMapSized();
   healMissingImages();
@@ -1114,6 +1115,53 @@ function exposeShieldInspector() {
       // decides what is drawn. If this says `state` while `design` says
       // `st-KY`, the update never reached the layer.
       layerAsksFor: asking.length > 240 ? `${asking.slice(0, 240)}…` : asking,
+    };
+  };
+}
+
+/**
+ * Why an overlay is not on the screen.
+ *
+ * `abmapOverlays()` in the console. A switched-on overlay drawing nothing has
+ * several causes that are indistinguishable from the outside: the layer was
+ * never added, the source is empty because the view is below the layer's zoom
+ * floor, the service answered with no features because there genuinely are
+ * none there, or the request failed. This says which.
+ */
+function exposeOverlayInspector() {
+  globalThis.abmapOverlays = () => {
+    if (!styleReady()) return 'The map style is still loading — try again in a moment.';
+
+    const zoom = Number((state.map.getZoom?.() ?? 0).toFixed(1));
+    const rows = [];
+
+    for (const overlay of OVERLAYS) {
+      // `visible` is the field the rest of the app keys on; there is no `on`.
+      const entry = state.overlays.get(overlay.id);
+      if (!entry?.visible) continue;
+
+      const ids = overlayLayerIds(overlay);
+      const live = ids.filter((id) => state.map.getLayer(id));
+      const source = state.map.getSource(ids[0]);
+      const kind = overlay.query ? (overlay.query.points ? 'points' : 'shapes') : 'raster';
+
+      rows.push({
+        id: overlay.id,
+        kind,
+        layersOnMap: live.length ? live : 'none — the switch is on but nothing was added',
+        minzoom: overlay.query?.minzoom ?? null,
+        belowZoomFloor: overlay.query?.minzoom ? zoom < overlay.query.minzoom : false,
+        features: source?._data?.features?.length
+          ?? source?._d?.features?.length
+          ?? (kind === 'raster' ? 'n/a — raster' : 'unknown'),
+        lastFetch: lastPointFetch.get(overlay.id) || (kind === 'points' ? 'never ran' : 'n/a'),
+      });
+    }
+
+    return {
+      zoom,
+      basemap: state.basemapId,
+      switchedOn: rows.length ? rows : 'nothing is switched on',
     };
   };
 }
@@ -2911,7 +2959,19 @@ async function refreshPointOverlay(overlay, source, empty) {
   const features = answers.flat();
   source.setData(features.length ? { type: 'FeatureCollection', features } : empty);
   noteLayerHealth(overlayLayerIds(overlay)[0], answers.some((list) => list.length > 0));
+
+  // Kept for abmapOverlays(). "No icons" has three causes that look identical
+  // on screen — below the zoom floor, the service answered with nothing, or
+  // the request failed — and this is what tells them apart.
+  lastPointFetch.set(overlay.id, {
+    zoom: Number((state.map.getZoom?.() ?? 0).toFixed(1)),
+    perLayer: Object.fromEntries(points.map((kind, at) => [kind.label, answers[at].length])),
+    total: features.length,
+  });
 }
+
+/** What the last point query returned, per overlay, for the inspector. */
+const lastPointFetch = new Map();
 
 function addQueryOverlay(overlay, opacity) {
   const [fill, line] = overlayLayerIds(overlay);

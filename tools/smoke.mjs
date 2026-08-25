@@ -338,6 +338,21 @@ await page.route('**/*', async (route) => {
 });
 
 await page.goto(URL_UNDER_TEST, { waitUntil: 'networkidle' });
+
+/*
+ * Open a layer group without toggling it.
+ *
+ * Clicking the summary flips a <details>, so two checks that each "open" the
+ * same group leave it shut for the second one — which fails as "the layer is
+ * not there" rather than as "the group is closed". Setting `open` is
+ * idempotent, which is what a set-up step should be.
+ */
+const openGroup = async (name) => {
+  await page.locator('summary', { hasText: name }).first()
+    .evaluate((node) => { node.parentElement.open = true; });
+  await page.waitForTimeout(200);
+};
+
 await page.waitForTimeout(1200);
 
 const state = () => page.evaluate(() => {
@@ -659,8 +674,7 @@ console.log('\nA weather layer draws the service colour scale as swatches');
 await page.click('.panel-tab[data-tab="layers"]');
 await page.waitForTimeout(300);
 // The group is a <details>, and a row inside a closed one is not clickable.
-await page.locator('summary', { hasText: /Weather/ }).first().click();
-await page.waitForTimeout(200);
+await openGroup(/Weather/);
 const scale = await (async () => {
   const row = page.locator('.layer-row', { hasText: /^Temperature/ }).first();
   await row.locator('.layer-info, [aria-expanded]').first().click();
@@ -695,11 +709,33 @@ check('and the prose that restated it is gone', scale.prose, 0);
  * nothing on them clickable. The check is that a point carries the icon of the
  * sublayer that produced it — that is the whole mechanism.
  */
+/*
+ * The light pollution layer, switched on the way a reader switches it on.
+ * Reported as absent, and "the entry is in the catalogue" is not the same
+ * claim as "the switch puts a layer on the map".
+ */
+console.log('\nLight pollution is offered and adds a layer');
+await page.click('.panel-tab[data-tab="layers"]');
+await page.waitForTimeout(300);
+const lpOffered = await page.evaluate(() => !!document.querySelector('[data-layer="light-pollution"]'));
+check('the layer is in the panel', lpOffered, true);
+await openGroup(/Conditions/);
+await page.locator('.layer-row', { hasText: /Light pollution/ }).locator('input[type=checkbox]').check();
+await page.waitForTimeout(500);
+const lp = await page.evaluate(() => {
+  const map = window.__map;
+  const layer = map.getLayer('overlay-light-pollution');
+  const source = map.getSource('overlay-light-pollution');
+  return { hasLayer: !!layer, type: layer?.type, hasSource: !!source };
+});
+check('switching it on adds a layer', lp.hasLayer, true);
+check('and it is a raster', lp.type, 'raster');
+check('with a source behind it', lp.hasSource, true);
+
 console.log('\nRecreation sites draw as icons, one per kind of place');
 await page.click('.panel-tab[data-tab="layers"]');
 await page.waitForTimeout(300);
-await page.locator('summary', { hasText: /Land & access/ }).first().click();
-await page.waitForTimeout(200);
+await openGroup(/Land & access/);
 await page.locator('.layer-row', { hasText: /Recreation sites/ }).locator('input[type=checkbox]').check();
 await page.waitForTimeout(900);
 const rec = await page.evaluate(() => {
@@ -723,11 +759,18 @@ check('with a kind to show in the popup', rec.labelled, true);
 check('and a name', rec.named, true);
 check('the pin images the icons name are registered', rec.iconImages > 0, true);
 
+// The inspector that answers "the switch is on and I see nothing" without a
+// round trip. It is only useful if it reports the layer it is asked about.
+const report = await page.evaluate(() => window.abmapOverlays());
+check('the inspector finds the switched-on layer',
+  report.switchedOn.some((row) => row.id === 'recreation'), true);
+check('and says what the last query returned per kind',
+  report.switchedOn.find((row) => row.id === 'recreation').lastFetch.total, 8);
+
 console.log('\nA queried overlay loads features for the view');
 await page.click('.panel-tab[data-tab="layers"]');
 await page.waitForTimeout(300);
-await page.locator('summary', { hasText: /Conditions/ }).first().click();
-await page.waitForTimeout(200);
+await openGroup(/Conditions/);
 await page.locator('.layer-row', { hasText: /Wildfire perimeters/ }).locator('input[type=checkbox]').check();
 await page.waitForTimeout(900);
 

@@ -352,6 +352,36 @@ export const OVERLAYS = [
     attribution: 'Recreation sites © <a href="https://www.usgs.gov/programs/national-geospatial-program/national-map">USGS</a>',
   },
   {
+    /*
+     * Where the sky is dark, which for a photography app is as much a
+     * trip-planning layer as the weather is.
+     *
+     * VIIRS Black Marble, from NASA's GIBS. Every part of this URL was read
+     * out of the service's own capabilities rather than guessed: the format is
+     * png and not jpg, which is the entire difference between this and the two
+     * 400s the first attempts returned, and the path is z/y/x — row before
+     * column — which is WMTS convention and the reverse of every other tile
+     * service in this file.
+     *
+     * `GoogleMapsCompatible_Level8` means the layer stops at z8. That is the
+     * data, not a choice: light pollution is a regional fact, and the sensor's
+     * pixel is about half a kilometre across.
+     */
+    id: 'light-pollution',
+    group: 'Conditions',
+    name: 'Light pollution',
+    description: 'Night lights from VIIRS. Dark ground is dark sky.',
+    legendNote: 'Brightness as the satellite sees it, not a Bortle class — '
+      + 'a useful proxy for where to point a camera away from.',
+    tiles: ['https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble'
+      + '/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png'],
+    tileSize: 256,
+    maxzoom: 8,
+    opacity: 0.65,
+    enabled: false,
+    attribution: 'Night lights © <a href="https://earthdata.nasa.gov/gibs">NASA GIBS</a>, VIIRS',
+  },
+  {
     id: 'public-lands',
     legend: [
       { color: '#FFE799', label: 'BLM' },
