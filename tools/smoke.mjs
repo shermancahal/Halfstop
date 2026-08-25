@@ -536,6 +536,24 @@ check('the newest note is on the waypoint card', /Gate locked at the second/.tes
  * Placed after everything that depends on an imported file: this reloads, and
  * a loaded document lives in memory rather than in storage.
  */
+/*
+ * The header's download button. It used to export only open map files, so
+ * somebody with a hundred saved waypoints and no file open pressed it and was
+ * told there was nothing to export.
+ */
+console.log('\nThe export takes folders as well as files');
+const exported = await page.evaluate(() => {
+  let captured = null;
+  const original = URL.createObjectURL;
+  URL.createObjectURL = (blob) => { captured = blob; return original.call(URL, blob); };
+  document.getElementById('download-button').click();
+  URL.createObjectURL = original;
+  return captured ? captured.text() : null;
+});
+const parsed = exported ? JSON.parse(exported) : { features: [] };
+check('saved waypoints are in the file',
+  parsed.features.some((f) => /Smoke folder/.test(f.properties?.source || '')), true);
+
 console.log('\nUnits are chosen, applied and remembered');
 await page.click('#settings-trigger');
 await page.waitForTimeout(200);

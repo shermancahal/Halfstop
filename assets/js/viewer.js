@@ -5574,20 +5574,42 @@ async function shareView() {
   }
 }
 
+/**
+ * Everything on the map right now, as one GeoJSON file.
+ *
+ * Both halves of what is on screen: the map files that are open, and the saved
+ * folders that are switched on. It used to be only the former, from a time when
+ * loading a file was the only way to get anything onto the map — so somebody
+ * with a hundred saved waypoints and no file open pressed it and got told
+ * there was nothing to export.
+ *
+ * Every feature is stamped with where it came from, because a merged file with
+ * no provenance is hard to take apart again.
+ */
 function downloadVisible() {
   const features = [];
+
   for (const entry of state.documents.values()) {
     if (!entry.visible) continue;
     for (const feature of entry.doc.geojson.features) {
       features.push({ ...feature, properties: { ...feature.properties, source: entry.name } });
     }
   }
+
+  for (const feature of state.folders.toGeoJSON({ visibleOnly: true }).features) {
+    features.push({
+      ...feature,
+      properties: { ...feature.properties, source: feature.properties.folderName || 'Saved' },
+    });
+  }
+
   if (!features.length) {
-    toast('Nothing visible to export.', { tone: 'error' });
+    toast('Nothing on the map to export yet.', { tone: 'error' });
     return;
   }
   downloadText('american-byways-maps.geojson',
     JSON.stringify({ type: 'FeatureCollection', features }, null, 2), 'application/geo+json');
+  toast(`Exported ${features.length} feature${features.length === 1 ? '' : 's'}.`, { tone: 'ok' });
 }
 
 /* ------------------------------------------------------------------ */
