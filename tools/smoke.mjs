@@ -114,7 +114,11 @@ setTimeout(()=>{this.fire('style.load');           // sources NOT loaded yet
 _apply(s){this._l.clear();this._s.clear();this._img.clear();if(s&&s.layers)for(const l of s.layers)this._l.set(l.id,l)}
 loaded(){return this._ready}isStyleLoaded(){return this._ready}
 addControl(){return this}getCanvas(){return{style:{}}}getContainer(){return document.getElementById('map')}
-addImage(i,d){this._img.set(i,d)}hasImage(i){return this._img.has(i)}imageIds(){return [...this._img.keys()]}
+// Throws before the style is up, as GL does. A stub that accepts an image at
+// any time cannot catch a registrar called too early — which is exactly how a
+// whole state's markers went missing with an empty catch block over the top.
+addImage(i,d){if(!this._ready)throw new Error('Style is not done loading');this._img.set(i,d)}
+hasImage(i){return this._img.has(i)}imageIds(){return [...this._img.keys()]}
 addSource(i,c){this._s.set(i,new Src(c.data))}getSource(i){return this._s.get(i)}removeSource(i){this._s.delete(i)}
 addLayer(l,b){if(b&&!this._l.has(b))throw new Error('before missing '+b);this._l.set(l.id,l)}
 getLayer(i){return this._l.get(i)}removeLayer(i){this._l.delete(i)}layerIds(){return [...this._l.keys()]}

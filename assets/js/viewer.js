@@ -31,7 +31,7 @@ import {
 } from './lib/pin-icons.js';
 import { toGPX } from './lib/gpx-write.js';
 import {
-  registerShieldImages, stateDesign, rasterizeShieldById,
+  registerShieldImages, shieldRegistrationReport, stateDesign, rasterizeShieldById,
   shieldImageIdFor, loadShieldBlank, shieldImageId, hasShieldBlank,
 } from './lib/route-shields.js';
 import { shieldLayerUpdates, PALETTE } from './lib/byways-style.js';
@@ -1020,6 +1020,10 @@ function exposeShieldInspector() {
        * were still asking for the design from before anything was known.
        */
       drawnFor: state.shieldsDrawnFor || '(never applied)',
+      // What the registrar last managed, and what it could not. An empty
+      // `trouble` with the right state and a layer still drawing nothing is a
+      // different fault from a registration that threw.
+      registration: shieldRegistrationReport(),
       geocoder: place?.error ? `failed: ${place.error.message}` : place ? `ok, ${place.regionCode || 'no region'}` : 'no answer',
       design,
       hasBlank: hasShieldBlank(design, 2),
@@ -1184,6 +1188,24 @@ function trackShieldState() {
 function applyShieldState(code = state.shieldState) {
   if (!styleReady() || !state.map.getLayer('road-shield')) return false;
 
+  /*
+   * Registering the images belongs here, behind the same guard as the layout.
+   *
+   * It used to run in the geocoder callback with no guard at all, which is the
+   * same too-early problem the layout had and was fixed for — except that
+   * `addImage` on a style that is not up throws, and the registrar swallowed
+   * it. So the state resolved, the layer was pointed at that state's markers,
+   * and the markers themselves were never added: the national shields drew
+   * because they come from PNGs that arrive later and land after the style is
+   * ready, and every drawn state marker was silently absent. "The shields do
+   * not show on the state level", exactly.
+   *
+   * Idempotent — it skips any image the map already has — so the `idle` loop
+   * that retries the layout now retries the images with it, and the two can no
+   * longer end up in different states.
+   */
+  registerShieldImages(state.map, { state: code, base: assetBase() });
+
   try {
     // Every shield layer, not just the plain one. The two halves of a
     // concurrency carry a sideways shift the plain shield does not, so what to
@@ -1227,7 +1249,6 @@ async function refreshShieldState() {
 
   state.shieldState = code;
   state.shieldStateName = place?.regionName || '';
-  registerShieldImages(state.map, { state: code, base: assetBase() });
 
   /*
    * The shields first, and everything else after.

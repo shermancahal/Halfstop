@@ -806,6 +806,7 @@ export function rasterizeShieldById(id, options = {}) {
  */
 export function registerShieldImages(map, { pixelRatio = 2, state = '', base = '' } = {}) {
   let added = 0;
+  const trouble = [];
 
   for (const design of shieldDesignsFor(state)) {
     for (let length = MIN_LEN; length <= MAX_LEN; length += 1) {
@@ -825,22 +826,42 @@ export function registerShieldImages(map, { pixelRatio = 2, state = '', base = '
           if (loaded || map.hasImage?.(id)) return;
           const drawn = rasterizeShield(design, length, { pixelRatio });
           if (drawn) { try { map.addImage(id, drawn, { pixelRatio }); } catch { /* raced */ } }
-        }).catch(() => {});
+        }).catch((error) => { trouble.push(`${id}: ${error.message}`); });
         continue;
       }
 
       const data = rasterizeShield(design, length, { pixelRatio });
-      if (!data) continue;
+      if (!data) { trouble.push(`${id}: nothing was drawn for it`); continue; }
       try {
         map.addImage(id, data, { pixelRatio });
         added += 1;
-      } catch {
-        // Already present, or the style changed mid-loop. Neither is fatal.
+      } catch (error) {
+        /*
+         * This used to be `catch {}` with a comment saying neither case was
+         * fatal. One of them was: `addImage` on a style that has not loaded
+         * throws, and swallowing it meant a whole state's markers were absent
+         * with nothing anywhere to say so. The registrar was being called from
+         * the geocoder callback, which lands before the style is up more often
+         * than not.
+         *
+         * Racing a duplicate is still fine, and is what the `hasImage` check
+         * distinguishes: if the image is there, somebody else added it.
+         */
+        if (!map.hasImage?.(id)) trouble.push(`${id}: ${error.message}`);
       }
     }
   }
+
+  lastRegistration = { state: state || '(none)', added, trouble };
+  if (trouble.length) {
+    console.warn(`[shields] ${trouble.length} image(s) could not be registered: ${trouble.slice(0, 4).join('; ')}`);
+  }
   return added;
 }
+
+/** What the last registration managed, for `abmapShields()` to report. */
+let lastRegistration = { state: '(never run)', added: 0, trouble: [] };
+export const shieldRegistrationReport = () => lastRegistration;
 
 /**
  * The expression that picks a shield image for a road feature.
