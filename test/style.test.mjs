@@ -893,17 +893,40 @@ test('the diagnostic and the style agree on every image id', () => {
   for (const shield of [
     'us-interstate', 'us-interstate-duplex', 'us-highway', 'us-highway-business',
     'us-state', 'us-state-duplex', 'something-unknown', '',
+    // What the Tilequery API actually returns for a state route. `us-state` is
+    // the documented value; `circle-white` is the one on the wire.
+    'circle-white', 'rectangle-white', 'diamond-white',
   ]) {
     const fromStyle = `abmap-shield-${evaluate(shield)}-3`;
     assert.equal(shieldImageIdFor(shield, 3, state), fromStyle, `disagreement on "${shield}"`);
   }
 });
 
+test('a real state route gets its state marker, not the generic one', () => {
+  /*
+   * Straight from the wire. Asking Mapbox what it puts on KY 677 came back:
+   *
+   *   class=tertiary type=tertiary ref=677 shield=circle-white reflen=3
+   *
+   * Not `us-state`, which is the value the documentation names and the value
+   * every test here had been written around. Mapbox names the shield after the
+   * shape a state's marker resembles, so this is what has to resolve to
+   * Kentucky's circle — and there is no test worth having that only exercises
+   * a value the data never contains.
+   */
+  assert.equal(shieldImageIdFor('circle-white', 3, 'KY'), 'abmap-shield-st-KY-3');
+  assert.equal(shieldImageIdFor('circle-white', 2, 'TN'), 'abmap-shield-st-TN-2');
+  // And it must not drag the nationals along with it: those look the same in
+  // every state and are named by route system, not by shape.
+  assert.equal(shieldImageIdFor('us-interstate', 2, 'KY'), 'abmap-shield-interstate-2');
+  assert.equal(shieldImageIdFor('us-highway', 2, 'KY'), 'abmap-shield-us-2');
+});
+
 test('every image the style can ask for is one the module can draw', () => {
   // A shield the expression names and nothing registers renders as a bare
   // number — the exact "shields turned into text labels" failure.
   const registrable = new Set(shieldImageIds({ state: 'TN' }));
-  for (const shield of ['us-interstate', 'us-highway', 'us-state', 'unknown']) {
+  for (const shield of ['us-interstate', 'us-highway', 'us-state', 'circle-white', 'unknown']) {
     for (const length of [2, 3, 4]) {
       const id = shieldImageIdFor(shield, length, 'TN');
       assert.ok(registrable.has(id), `${id} is asked for but never registered`);

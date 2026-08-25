@@ -344,6 +344,73 @@ check('the shield layer is on the map at all', shields.exists, true);
 check('Tennessee images are registered', shields.tennesseeImages.length > 0, true);
 check('and the layer asks for Tennessee, not the generic design',
   /st-TN/.test(shields.iconImage), true);
+check('and it knows it has applied that state, not merely resolved it',
+  await page.evaluate(async () => (await window.abmapShields()).drawnFor), 'TN');
+
+/*
+ * And it survives the style being rebuilt under it.
+ *
+ * This is the check the previous one was quietly standing in for. The state was
+ * applied exactly once, by the geocoder callback, and the style is built with
+ * no state in it — so anything that rebuilt the layers put the generic markers
+ * back permanently. On a real map that is the ordinary case rather than an edge
+ * one: the vector style finishes loading *after* the geocoder answers, so the
+ * markers were generic from the first frame and there was no second chance.
+ *
+ * Knocking the layer back to the generic expression and firing 'style.load' is
+ * what a basemap swap back to Byways Topo does.
+ */
+const rebuilt = await page.evaluate(async () => {
+  const map = window.__map;
+  map.setLayoutProperty('road-shield', 'icon-image', ['concat', 'abmap-shield-', 'state', '-2']);
+  const knocked = JSON.stringify(map.getLayer('road-shield')?.layout?.['icon-image']);
+  map.fire('style.load');
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  return {
+    knocked,
+    recovered: JSON.stringify(map.getLayer('road-shield')?.layout?.['icon-image']),
+    drawnFor: (await window.abmapShields()).drawnFor,
+  };
+});
+check('the generic expression really was put back', /st-TN/.test(rebuilt.knocked), false);
+check('a style rebuild restores the state markers', /st-TN/.test(rebuilt.recovered), true);
+check('and the record of what is drawn follows it', rebuilt.drawnFor, 'TN');
+
+/*
+ * And when the style event arrives before the layers do.
+ *
+ * This is the original failure, in the order it really happens. The lookup
+ * answers in a couple of hundred milliseconds and the vector style takes
+ * longer, so on a real map the state is known while `road-shield` does not yet
+ * exist — there is nothing to set it on. That used to be the end of it: the
+ * state had been recorded as handled, so every later pass returned early and
+ * the markers stayed generic for the life of the page.
+ *
+ * Taking the layer away, firing the style event without it, and only then
+ * putting it back is that sequence exactly.
+ */
+const late = await page.evaluate(async () => {
+  const map = window.__map;
+  const layer = map.getLayer('road-shield');
+  map.removeLayer('road-shield');
+  map.fire('style.load');
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  // Back, as the style finishing its load would put it: generic, because that
+  // is how the style document is written.
+  map.addLayer({ ...layer, layout: { ...layer.layout, 'icon-image': ['concat', 'abmap-shield-', 'state', '-2'] } });
+  const beforeIdle = JSON.stringify(map.getLayer('road-shield')?.layout?.['icon-image']);
+  map.fire('idle');
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  return {
+    beforeIdle,
+    afterIdle: JSON.stringify(map.getLayer('road-shield')?.layout?.['icon-image']),
+  };
+});
+check('the layer comes back generic, as the style document builds it',
+  /st-TN/.test(late.beforeIdle), false);
+check('and a settled frame points it at the state anyway',
+  /st-TN/.test(late.afterIdle), true);
 
 console.log('\nA state layer is offered only inside its state');
 const scoped = await page.evaluate(async () => {

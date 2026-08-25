@@ -873,7 +873,35 @@ const SHIELD_MATCH = [
     design: 'us',
     values: ['us-highway', 'us-highway-business', 'us-highway-duplex', 'us-highway-truck', 'us-highway-alternate'],
   },
-  { design: LOCAL, values: ['us-state', 'us-state-duplex'] },
+  /*
+   * The state arm, and the shape names are not a guess.
+   *
+   * Mapbox Streets v8 documents `us-state`, and it is in this list, but asking
+   * the Tilequery API what it puts on a real state route came back with
+   * something else entirely:
+   *
+   *   class=tertiary type=tertiary ref=677 shield=circle-white reflen=3
+   *
+   * That is KY 677. Mapbox names the shield by its *shape*, not by who numbered
+   * the road, and it picks the shape a state's real marker resembles —
+   * Kentucky's is a white circle. So `us-state` may never appear at all, and
+   * `circle-white`, `rectangle-white` and the rest are what actually arrives.
+   *
+   * The trailing fallback below already sent these to the state design, so this
+   * list changes no behaviour. It is here because "works by falling off the end
+   * of the table" and "works" are the same until someone tightens the fallback,
+   * and the next person reading this should not have to re-run the probe to
+   * learn that the documented value is not the live one.
+   */
+  {
+    design: LOCAL,
+    values: [
+      'us-state', 'us-state-duplex',
+      'circle-white', 'rectangle-white', 'rounded-square-white', 'square-white',
+      'diamond-white', 'pentagon-white', 'hexagon-white', 'octagon-white',
+      'triangle-white', 'trapezoid-white', 'shield-white',
+    ],
+  },
 ];
 
 /** The design a road with this `shield` value gets, from the map's state. */

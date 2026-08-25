@@ -818,7 +818,13 @@ function shieldLayers(state = '') {
         'symbol-spacing': ['interpolate', ['linear'], ['zoom'], 6, 180, 12, 260],
         // Images we generate and register ourselves — see lib/route-shields.js
         // for why this does not go through the Mapbox sprite.
-        'icon-image': shieldImageExpression(),
+        //
+        // Built with the state, like every other property on this layer. It
+        // used to be the one that ignored the argument, so a style built for a
+        // known state drew the number at that state's size and offset on a
+        // generic blank — half-applied, which looks like a design mistake
+        // rather than a bug.
+        'icon-image': shieldImageExpression(state),
         // Constant, so the number's size and offset — which are fixed per
         // shield — cannot drift out of register with the marker they sit on.
         'icon-size': 1,

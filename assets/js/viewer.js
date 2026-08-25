@@ -207,6 +207,17 @@ const state = {
   warnedGlyphRange: false,
   /** Two-letter code for the state under the map centre, for route shields. */
   shieldState: '',
+  /**
+   * The state whose markers the shield layers are *currently drawing*.
+   *
+   * Deliberately not the same field as `shieldState`, which is only what the
+   * geocoder last said. Knowing the state and having applied it are different
+   * facts, and collapsing them into one is what made every marker generic: the
+   * lookup answers in a couple of hundred milliseconds, the vector style takes
+   * longer, so the first answer arrived before `road-shield` existed, was
+   * recorded as done, and never retried.
+   */
+  shieldsDrawnFor: '',
   /** { key, position, directions } while sun/moon bearings are drawn, else null. */
   lightLines: null,
   /** The dropped-pin popup, so a second click replaces it rather than stacking. */
@@ -974,10 +985,11 @@ async function renderBuildStamp() {
  * guessed and matched nothing; USGS sub-layer indices were guessed and drew
  * fire stations.
  *
- * Route shields are the next thing that needs this. Which `shield` values
- * Mapbox actually tags roads with — and whether they distinguish one state's
- * design from another's — decides how many shield designs are worth drawing,
- * and it is not answerable from the documentation.
+ * Route shields were the next thing that needed it, and the answer is in:
+ * asking the Tilequery API what Mapbox puts on KY 677 returned
+ * `shield=circle-white`, not the documented `us-state`. Mapbox names a shield
+ * by the shape a state's marker resembles. Two rounds of guessing preceded
+ * one round of asking.
  */
 /**
  * Why the route markers look the way they do.
@@ -1000,6 +1012,14 @@ function exposeShieldInspector() {
 
     return {
       state: state.shieldState || '(never resolved)',
+      /*
+       * The state the layers are actually drawing, as opposed to the one above
+       * that the geocoder reported. These differing is the whole of the bug
+       * that made every marker generic, and it was invisible until this line
+       * existed: the state was right, the images were right, and the layers
+       * were still asking for the design from before anything was known.
+       */
+      drawnFor: state.shieldsDrawnFor || '(never applied)',
       geocoder: place?.error ? `failed: ${place.error.message}` : place ? `ok, ${place.regionCode || 'no region'}` : 'no answer',
       design,
       hasBlank: hasShieldBlank(design, 2),
@@ -1120,63 +1140,116 @@ function keepMapSized() {
 function trackShieldState() {
   let timer = null;
 
-  const update = async () => {
-    const centre = state.map.getCenter();
-    const place = await reverseGeocode([centre.lng, centre.lat]).catch(() => null);
-    const code = place?.regionCode || '';
-    if (!code || code === state.shieldState) return;
-
-    state.shieldState = code;
-    state.shieldStateName = place?.regionName || '';
-    registerShieldImages(state.map, { state: code, base: assetBase() });
-
-    /*
-     * The shields first, and everything else after.
-     *
-     * The panel work below used to run before this, which meant anything it
-     * threw took the shields with it — the images would be registered and the
-     * layers would still be asking for the previous state's, so every marker on
-     * the map stayed generic with nothing in the console to say why. The two
-     * have nothing to do with each other and no longer share a failure.
-     */
-    if (styleReady() && state.map.getLayer('road-shield')) {
-      try {
-        // Every shield layer, not just the plain one. The two halves of a
-        // concurrency carry a sideways shift the plain shield does not, so what
-        // to set on each is decided in byways-style.js beside the layers
-        // themselves — updating only 'road-shield' left the halves showing the
-        // previous state's marker after a border crossing.
-        for (const update of shieldLayerUpdates(code)) {
-          if (!state.map.getLayer(update.id)) continue;
-          for (const [property, value] of Object.entries(update.layout)) {
-            state.map.setLayoutProperty(update.id, property, value);
-          }
-          for (const [property, value] of Object.entries(update.paint)) {
-            state.map.setPaintProperty(update.id, property, value);
-          }
-        }
-      } catch (error) {
-        console.warn('[shields] could not update:', error.message);
-      }
-    }
-
-    // The layer list carries a group for whichever state the map is over, and
-    // the state's own layers come off the map at the line and back on inside
-    // it. Separately fenced: a panel that will not draw is not a reason for the
-    // markers on the map to be wrong.
-    try {
-      syncStateOverlays();
-      renderLayersTab();
-    } catch (error) {
-      console.warn('[layers] could not follow the state:', error.message);
-    }
-  };
-
   state.map.on('moveend', () => {
     clearTimeout(timer);
-    timer = setTimeout(update, 600);
+    timer = setTimeout(refreshShieldState, 600);
   });
-  update();
+
+  /*
+   * A style load rebuilds every layer from `bywaysStyle`, which is built with
+   * no state in it — so the markers come back generic even though the state is
+   * known and its images are registered. Forgetting what was drawn is what
+   * makes the next pass re-apply it.
+   */
+  state.map.on('style.load', () => {
+    state.shieldsDrawnFor = '';
+    applyShieldState();
+  });
+
+  /*
+   * The one that guarantees convergence.
+   *
+   * Everything above is an attempt that can arrive too early — the geocoder
+   * before the style, a style load before its layers. `idle` fires after every
+   * render settles, so whatever the order was, the last word is a comparison of
+   * two strings and, if they differ, one more attempt. It costs a string
+   * compare per idle and it is the difference between markers that are right
+   * and markers that are right if the timing happened to work out.
+   */
+  state.map.on('idle', () => {
+    if (state.shieldsDrawnFor !== state.shieldState) applyShieldState();
+  });
+
+  refreshShieldState();
+}
+
+/**
+ * Point the shield layers at a state's markers.
+ *
+ * Idempotent and safe to call at any time: it reports whether it managed it,
+ * and records success so the caller above knows not to keep trying. Returning
+ * false is normal — it means the style is not up yet — and the `idle` listener
+ * will come back.
+ */
+function applyShieldState(code = state.shieldState) {
+  if (!styleReady() || !state.map.getLayer('road-shield')) return false;
+
+  try {
+    // Every shield layer, not just the plain one. The two halves of a
+    // concurrency carry a sideways shift the plain shield does not, so what to
+    // set on each is decided in byways-style.js beside the layers themselves —
+    // updating only 'road-shield' left the halves showing the previous state's
+    // marker after a border crossing.
+    for (const update of shieldLayerUpdates(code)) {
+      if (!state.map.getLayer(update.id)) continue;
+      for (const [property, value] of Object.entries(update.layout)) {
+        state.map.setLayoutProperty(update.id, property, value);
+      }
+      for (const [property, value] of Object.entries(update.paint)) {
+        state.map.setPaintProperty(update.id, property, value);
+      }
+    }
+  } catch (error) {
+    console.warn('[shields] could not update:', error.message);
+    return false;
+  }
+
+  state.shieldsDrawnFor = code;
+  return true;
+}
+
+/** One pass: where are we, and do the markers match it? */
+async function refreshShieldState() {
+  const centre = state.map.getCenter();
+  const place = await reverseGeocode([centre.lng, centre.lat]).catch(() => null);
+  const code = place?.regionCode || '';
+  if (!code) return;
+
+  /*
+   * Knowing the state is not the same as having drawn it. The early return used
+   * to be `code === state.shieldState`, which meant the first lookup consumed
+   * the only chance to apply it: the answer came back before the vector style
+   * had built `road-shield`, the layout update was skipped, and every later
+   * pass returned here — leaving correctly registered state images that nothing
+   * on the map ever asked for. Panning inside one state could never recover.
+   */
+  if (code === state.shieldState && state.shieldsDrawnFor === code) return;
+
+  state.shieldState = code;
+  state.shieldStateName = place?.regionName || '';
+  registerShieldImages(state.map, { state: code, base: assetBase() });
+
+  /*
+   * The shields first, and everything else after.
+   *
+   * The panel work below used to run before this, which meant anything it threw
+   * took the shields with it — the images would be registered and the layers
+   * would still be asking for the previous state's, so every marker on the map
+   * stayed generic with nothing in the console to say why. The two have nothing
+   * to do with each other and no longer share a failure.
+   */
+  applyShieldState(code);
+
+  // The layer list carries a group for whichever state the map is over, and the
+  // state's own layers come off the map at the line and back on inside it.
+  // Separately fenced: a panel that will not draw is not a reason for the
+  // markers on the map to be wrong.
+  try {
+    syncStateOverlays();
+    renderLayersTab();
+  } catch (error) {
+    console.warn('[layers] could not follow the state:', error.message);
+  }
 }
 
 /**
