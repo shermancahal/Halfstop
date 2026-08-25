@@ -651,3 +651,46 @@ test('the id list and the registrar walk the same designs', () => {
   assert.equal(shieldDesignsFor('TN').length, shieldDesignsFor('').length + 1);
   assert.equal(shieldDesignsFor('ZZ').length, shieldDesignsFor('').length);
 });
+
+test('byways: every road class draws its ramps too', () => {
+  /*
+   * Mapbox Streets tags a slip road as its own class — `motorway_link` and so
+   * on — and these layers matched the class exactly. Every ramp in the country
+   * was therefore missing from this style while showing correctly on Street,
+   * which is how an interchange ends up drawn as two roads crossing.
+   */
+  const style = bywaysStyle('pk.test');
+  for (const className of ['motorway', 'trunk', 'primary', 'secondary', 'tertiary']) {
+    for (const id of [`road-${className}`, `road-${className}-casing`]) {
+      const layer = style.layers.find((entry) => entry.id === id);
+      assert.ok(layer, `${id} exists`);
+      const filter = JSON.stringify(layer.filter);
+      assert.ok(filter.includes(`"${className}_link"`), `${id} does not match its ramps: ${filter}`);
+    }
+  }
+});
+
+test('byways: a zoom expression is never nested where GL will reject it', () => {
+  /*
+   * `zoom` is only legal as the input to a top-level `step` or `interpolate`.
+   * Nested anywhere else the style fails validation, and GL's response to an
+   * invalid style is to abort loading and render nothing while reporting
+   * success — so this is a blank map, not a wrong colour.
+   */
+  const offenders = [];
+  const walk = (node, path, depth) => {
+    if (!Array.isArray(node)) return;
+    if (node[0] === 'zoom' && depth > 1) offenders.push(path);
+    const nested = node[0] === 'interpolate' || node[0] === 'step' ? 0 : depth + 1;
+    node.forEach((child, index) => walk(child, `${path}[${index}]`, nested));
+  };
+
+  for (const layer of bywaysStyle('pk.test').layers) {
+    for (const group of ['paint', 'layout']) {
+      for (const [property, value] of Object.entries(layer[group] || {})) {
+        walk(value, `${layer.id}.${group}.${property}`, 0);
+      }
+    }
+  }
+  assert.deepEqual(offenders, []);
+});

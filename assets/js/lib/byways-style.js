@@ -120,6 +120,46 @@ const FONT = ['DIN Pro Regular', 'Arial Unicode MS Regular'];
 const FONT_BOLD = ['DIN Pro Bold', 'Arial Unicode MS Bold'];
 
 /** Interpolate a line width across zooms, so roads thicken as you come in. */
+/*
+ * Ramps.
+ *
+ * Mapbox Streets tags a slip road as its own class — `motorway_link`,
+ * `trunk_link` and so on — and the road layers matched the class exactly, so
+ * every ramp in the country was missing from this style while showing up fine
+ * on Street. An interchange drawn without its ramps is two roads crossing.
+ *
+ * They are drawn at roughly half the width of the road they serve: a ramp is
+ * part of the interchange, not a second motorway.
+ */
+const LINK_SCALE = 0.55;
+
+const linkOf = (className) => `${className}_link`;
+
+/** Matches a road class and the ramps that belong to it. */
+const roadFilter = (className) => [
+  'match', ['get', 'class'], [className, linkOf(className)], true, false,
+];
+
+/**
+ * Full width on the mainline, narrower on its ramps.
+ *
+ * The interpolation has to be the outermost expression — GL rejects a `zoom`
+ * expression nested inside anything but a top-level `step` or `interpolate`,
+ * and rejecting means the style does not load at all — so the choice between
+ * ramp and mainline happens at each stop rather than around the whole curve.
+ */
+const roadWidth = (className, base, top) => {
+  const isLink = ['==', ['get', 'class'], linkOf(className)];
+  const pick = (value) => ['case', isLink, value * LINK_SCALE, value];
+  return [
+    'interpolate', ['linear'], ['zoom'],
+    5, pick(base * 0.5),
+    10, pick(base),
+    14, pick((base + top) / 2),
+    18, pick(top),
+  ];
+};
+
 const width = (base, top) => [
   'interpolate', ['linear'], ['zoom'],
   5, base * 0.5,
@@ -388,7 +428,7 @@ function roadLayers() {
       type: 'line',
       source: 'composite',
       'source-layer': 'road',
-      filter: ['==', ['get', 'class'], className],
+      filter: roadFilter(className),
       minzoom: className === 'motorway' ? 4 : className === 'trunk' ? 5 : 8,
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
@@ -399,7 +439,7 @@ function roadLayers() {
          * actually runs on — the ones that most need to be findable.
          */
         'line-color': PALETTE.casingDark,
-        'line-width': width(spec.base + 1.6, spec.top + 3.2),
+        'line-width': roadWidth(className, spec.base + 1.6, spec.top + 3.2),
       },
     });
   }
@@ -424,10 +464,10 @@ function roadLayers() {
       type: 'line',
       source: 'composite',
       'source-layer': 'road',
-      filter: ['==', ['get', 'class'], className],
+      filter: roadFilter(className),
       minzoom: className === 'motorway' ? 4 : className === 'trunk' ? 5 : 8,
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': spec.colour, 'line-width': width(spec.base, spec.top) },
+      paint: { 'line-color': spec.colour, 'line-width': roadWidth(className, spec.base, spec.top) },
     });
   }
 

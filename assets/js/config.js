@@ -161,32 +161,6 @@ export const BASEMAPS = [
     attribution: USGS_ATTRIBUTION,
   },
   {
-    id: 'carto-light',
-    name: 'Minimal Light',
-    group: 'Road',
-    description: 'Pale base — lets your tracks carry the map.',
-    tiles: [
-      'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
-      'https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
-    ],
-    tileSize: 256,
-    maxzoom: 19,
-    attribution: `${OSM_ATTRIBUTION}, tiles by <a href="https://carto.com/attributions">CARTO</a>`,
-  },
-  {
-    id: 'carto-dark',
-    name: 'Minimal Dark',
-    group: 'Road',
-    description: 'Dark base. Easiest at night.',
-    tiles: [
-      'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-      'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-    ],
-    tileSize: 256,
-    maxzoom: 19,
-    attribution: `${OSM_ATTRIBUTION}, tiles by <a href="https://carto.com/attributions">CARTO</a>`,
-  },
-  {
     id: 'osm',
     name: 'Street',
     group: 'Road',
@@ -197,11 +171,13 @@ export const BASEMAPS = [
     attribution: OSM_ATTRIBUTION,
   },
 
-  /* ---- Mapbox styles: shown only when MAPBOX_TOKEN is set ---- */
+  /* ---- Vector styles: shown only when MAPBOX_TOKEN is set ---- */
   {
     id: 'mapbox-outdoors',
     name: 'Mapbox Outdoors',
-    group: 'Mapbox',
+    // Grouped by what it shows, not by who makes it: a reader looking for a
+    // topo map looks under Topographic.
+    group: 'Topographic',
     description: 'Vector terrain with contours and trails.',
     style: 'mapbox://styles/mapbox/outdoors-v12',
     requiresToken: true,
@@ -210,7 +186,7 @@ export const BASEMAPS = [
   {
     id: 'mapbox-satellite-streets',
     name: 'Mapbox Satellite Streets',
-    group: 'Mapbox',
+    group: 'Imagery',
     description: 'Mapbox imagery with road and place labels.',
     style: 'mapbox://styles/mapbox/satellite-streets-v12',
     requiresToken: true,
@@ -286,7 +262,6 @@ export const OVERLAYS = [
     maxzoom: 16,
     opacity: 0.95,
     enabled: false,
-    unverified: true,
     attribution: 'Recreation sites © <a href="https://navigator.blm.gov/">BLM</a>, '
       + '<a href="https://www.usgs.gov/programs/national-geospatial-program/national-map">USGS</a>',
   },
@@ -310,7 +285,6 @@ export const OVERLAYS = [
     maxzoom: 16,
     opacity: 0.45,
     enabled: false,
-    unverified: true,
     attribution: 'Surface management © <a href="https://navigator.blm.gov/">BLM</a>',
   },
   {
@@ -324,7 +298,6 @@ export const OVERLAYS = [
     maxzoom: 16,
     opacity: 0.75,
     enabled: false,
-    unverified: true,
     attribution: USGS_ATTRIBUTION,
   },
   {
@@ -338,7 +311,6 @@ export const OVERLAYS = [
     maxzoom: 16,
     opacity: 0.85,
     enabled: false,
-    unverified: true,
     attribution: USGS_ATTRIBUTION,
   },
   {
@@ -357,7 +329,6 @@ export const OVERLAYS = [
     maxzoom: 14,
     opacity: 0.6,
     enabled: false,
-    unverified: true,
     attribution: 'Fire perimeters © <a href="https://www.nifc.gov/">NIFC</a>',
   },
   {
@@ -389,7 +360,6 @@ export const OVERLAYS = [
     maxzoom: 16,
     opacity: 0.9,
     enabled: false,
-    unverified: true,
     attribution: 'Motor Vehicle Use Maps © <a href="https://www.fs.usda.gov/">USDA Forest Service</a>',
   },
   {
@@ -411,7 +381,6 @@ export const OVERLAYS = [
     maxzoom: 12,
     opacity: 0.6,
     enabled: false,
-    unverified: true,
     attribution: 'Radar © <a href="https://www.noaa.gov/">NOAA</a>',
   },
   {
@@ -424,7 +393,6 @@ export const OVERLAYS = [
     maxzoom: 14,
     opacity: 0.5,
     enabled: false,
-    unverified: true,
     attribution: 'Coverage data © <a href="https://broadbandmap.fcc.gov/">FCC</a>',
   },
   {
@@ -452,22 +420,19 @@ export const OVERLAYS = [
     attribution: `${OSM_ATTRIBUTION}, routes by <a href="https://cycling.waymarkedtrails.org/">Waymarked Trails</a> (CC-BY-SA)`,
   },
   {
-    id: 'usgs-relief',
-    group: 'Terrain',
-    name: 'Shaded relief',
-    description: 'USGS terrain relief.',
-    tiles: ['https://basemap.nationalmap.gov/arcgis/rest/services/USGSShadedReliefOnly/MapServer/tile/{z}/{y}/{x}'],
-    tileSize: 256,
-    maxzoom: 16,
-    opacity: 0.4,
-    enabled: false,
-    attribution: USGS_ATTRIBUTION,
-  },
-  {
     id: 'hillshade',
     group: 'Terrain',
     name: 'Hillshade',
-    description: 'Esri terrain relief. Reads well under topo.',
+    /*
+     * One relief layer, not two.
+     *
+     * There was also a USGS "Shaded relief". The two looked alike because they
+     * are the same idea, and this is the better of them: Esri's is global and
+     * assembled from the best elevation model available for each region —
+     * down to lidar where there is lidar — while the USGS one is a single
+     * national product at a coarser resolution and stops at the border.
+     */
+    description: 'Terrain relief, from the best elevation data available per region.',
     tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}'],
     tileSize: 256,
     maxzoom: 16,

@@ -2181,23 +2181,22 @@ function layerRow({ entry, selected, control }) {
   return wrap;
 }
 
-/** Small marker beside a layer name: unverified endpoint, or one that is failing. */
+/**
+ * Small marker beside a layer name, when its tiles are not arriving.
+ *
+ * There used to be a second, static badge reading "unverified" — my note that
+ * an endpoint had never been confirmed working. It was a guess sitting beside a
+ * fact: this one is counted from real tile responses, so it knows. A layer that
+ * works shows nothing, and a layer that does not says so in words the reader
+ * can act on.
+ */
 function layerBadge(entry) {
-  if (layerIsBroken(entry.id)) {
-    return el('span', {
-      class: 'layer-badge is-broken',
-      title: 'This layer\u2019s tile server is not responding. The endpoint may have moved — see assets/js/config.js.',
-      text: 'not responding',
-    });
-  }
-  if (entry.unverified) {
-    return el('span', {
-      class: 'layer-badge',
-      title: 'This endpoint has not been confirmed working. If it stays blank, the service has probably moved.',
-      text: 'unverified',
-    });
-  }
-  return null;
+  if (!layerIsBroken(entry.id)) return null;
+  return el('span', {
+    class: 'layer-badge is-broken',
+    title: 'This layer\u2019s tile server is not responding. The endpoint may have moved — see assets/js/config.js.',
+    text: 'not responding',
+  });
 }
 
 function setBasemap(id) {
@@ -4706,7 +4705,7 @@ function openStyleEditor(folder, itemIds, anchor) {
       el('button', {
         class: 'button button-ghost button-small', type: 'button',
         title: `Export ${folder.name} as a GPX file`,
-        html: `${icons.download}<span>Export</span>`,
+        html: `${icons.export}<span>Export</span>`,
         onclick: () => exportFolder(folder),
       }),
       el('button', {
