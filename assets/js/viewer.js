@@ -752,6 +752,20 @@ function renderLayersTab() {
 }
 
 /** The switch, opacity slider and colour key for each overlay in one group. */
+/**
+ * What "opacity" means for a layer, which depends on what kind it is.
+ *
+ * `raster-opacity` on a fill layer is not a dimmer, it is a spec error — and
+ * the slider is one control over both kinds since queried overlays arrived. The
+ * fill sits well under the slider's value so the map stays readable through it,
+ * and the outline well over, so a faint area still has a findable edge.
+ */
+function opacityPaint(type, value) {
+  if (type === 'fill') return ['fill-opacity', value * 0.45];
+  if (type === 'line') return ['line-opacity', Math.min(1, value + 0.25)];
+  return ['raster-opacity', value];
+}
+
 function renderOverlayRows(container, entries) {
   for (const overlay of entries) {
     const entry = state.overlays.get(overlay.id);
@@ -764,7 +778,10 @@ function renderOverlayRows(container, entries) {
           entry.opacity = value;
           event.target.nextElementSibling.value = `${Math.round(value * 100)}%`;
           for (const layerId of overlayLayerIds(overlay)) {
-            if (state.map.getLayer(layerId)) state.map.setPaintProperty(layerId, 'raster-opacity', value);
+            const layer = state.map.getLayer(layerId);
+            if (!layer) continue;
+            const [property, amount] = opacityPaint(layer.type, value);
+            state.map.setPaintProperty(layerId, property, amount);
           }
         },
       }),
@@ -2400,19 +2417,21 @@ function addQueryOverlay(overlay, opacity) {
     });
   }
   if (!state.map.getLayer(fill)) {
+    const [, amount] = opacityPaint('fill', opacity);
     state.map.addLayer({
       id: fill,
       type: 'fill',
       source: fill,
-      paint: { 'fill-color': colour, 'fill-opacity': opacity * 0.45 },
+      paint: { 'fill-color': colour, 'fill-opacity': amount },
     }, firstDataLayerId());
   }
   if (!state.map.getLayer(line)) {
+    const [, amount] = opacityPaint('line', opacity);
     state.map.addLayer({
       id: line,
       type: 'line',
       source: fill,
-      paint: { 'line-color': colour, 'line-width': 1.4, 'line-opacity': Math.min(1, opacity + 0.25) },
+      paint: { 'line-color': colour, 'line-width': 1.4, 'line-opacity': amount },
     }, firstDataLayerId());
   }
 

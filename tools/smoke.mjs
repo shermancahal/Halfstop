@@ -102,7 +102,12 @@ addImage(i,d){this._img.set(i,d)}hasImage(i){return this._img.has(i)}imageIds(){
 addSource(i,c){this._s.set(i,new Src(c.data))}getSource(i){return this._s.get(i)}removeSource(i){this._s.delete(i)}
 addLayer(l,b){if(b&&!this._l.has(b))throw new Error('before missing '+b);this._l.set(l.id,l)}
 getLayer(i){return this._l.get(i)}removeLayer(i){this._l.delete(i)}layerIds(){return [...this._l.keys()]}
-moveLayer(){}setPaintProperty(){}setLayoutProperty(){}
+moveLayer(){}
+// Recorded rather than ignored: a paint property that does not belong to the
+// layer it is set on is a real bug (raster-opacity on a fill), and a stub that
+// swallows the call cannot catch it.
+setPaintProperty(i,p,v){const l=this._l.get(i);if(l){l.paint=l.paint||{};l.paint[p]=v}}
+setLayoutProperty(){}
 setStyle(s,o){this._ready=false;
   // Model both paths GL takes. With diff:true (the default) it applies the
   // difference and NEVER fires 'style.load' — it just drops the layers that are
@@ -401,6 +406,26 @@ const fire = await page.evaluate(() => {
 check('the fill layer is added', fire.fill, true);
 check('and the outline with it', fire.line, true);
 check('and the perimeters reach the source', fire.features, 1);
+
+// The slider is one control over two kinds of layer now. `raster-opacity` on a
+// fill layer is not a dimmer, it is a spec error, so what it sets has to follow
+// the layer type.
+const slider = page.locator('.layer-row', { hasText: /Wildfire perimeters/ })
+  .locator('xpath=following-sibling::*[1]').locator('input[type=range]');
+await slider.fill('30').catch(() => {});
+await page.waitForTimeout(300);
+const paints = await page.evaluate(() => {
+  const map = window.__map;
+  return {
+    fill: Object.keys(map.getLayer('overlay-wildfire')?.paint || {}),
+    line: Object.keys(map.getLayer('overlay-wildfire--1')?.paint || {}),
+    fillValue: map.getLayer('overlay-wildfire')?.paint?.['fill-opacity'],
+  };
+});
+check('the fill is dimmed as a fill', paints.fill.includes('fill-opacity'), true);
+check('and never as a raster', paints.fill.includes('raster-opacity'), false);
+check('the outline is dimmed as a line', paints.line.includes('line-opacity'), true);
+check('and the slider actually moved it', paints.fillValue < 0.3, true);
 
 // A raster basemap bakes its overlays into the style document, and a queried
 // overlay cannot be baked into anything. It has to be added on that path too,
