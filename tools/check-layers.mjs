@@ -157,6 +157,26 @@ function layerNames(body) {
     if (Array.isArray(parsed.features) && parsed.features.length) {
       return parsed.features.slice(0, 24).map((feature) => {
         const props = feature.properties || {};
+
+        /*
+         * A geocoding answer, which is a feature collection too but describes
+         * somewhere rather than something. What matters here is only whether
+         * the state is in it and where — as a feature of its own, or buried in
+         * another feature's `context`. Reading that off the wire is what turns
+         * "the shields are generic" into a one-line fix.
+         */
+        if (Array.isArray(feature.place_type)) {
+          const context = (feature.context || [])
+            .map((entry) => `${String(entry.id).split('.')[0]}=${entry.short_code || entry.text}`)
+            .join(' ');
+          return [
+            `place_type=${feature.place_type.join('|')}`,
+            `text=${feature.text}`,
+            props.short_code ? `short_code=${props.short_code}` : '',
+            context && `context[ ${context} ]`,
+          ].filter(Boolean).join(' ');
+        }
+
         const keep = ['class', 'type', 'ref', 'shield', 'reflen', 'name', 'surface'];
         const shown = keep.filter((key) => props[key] !== undefined)
           .map((key) => `${key}=${props[key]}`).join(' ');

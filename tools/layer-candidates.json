@@ -1,8 +1,28 @@
 [
   {
-    "id": "cap:fcc-mobile-fields",
-    "note": "Cell coverage per carrier becomes possible the day a provider field appears here.",
-    "url": "https://services6.arcgis.com/clPWQMwZfdWn4MQZ/arcgis/rest/services/FCC_Mobile_Broadband/FeatureServer/195/query?where=1%3D1&outFields=*&resultRecordCount=1&returnGeometry=false&f=pjson"
+    "id": "geo:app-url-as-shipped",
+    "note": "Exactly what the app sends, at the reporter's own view in Texas. Reported 422 in the browser. Four types with limit=5 — v5 allows limit>1 only alongside a single type.",
+    "url": "https://api.mapbox.com/geocoding/v5/mapbox.places/-97.69575518906544,32.29939042130714.json?access_token={token}&types=address,place,locality,region&limit=5"
+  },
+  {
+    "id": "geo:same-without-limit",
+    "note": "The same four types with the limit dropped. If this is a 200 the limit is the whole fault.",
+    "url": "https://api.mapbox.com/geocoding/v5/mapbox.places/-97.69575518906544,32.29939042130714.json?access_token={token}&types=address,place,locality,region"
+  },
+  {
+    "id": "geo:no-types-at-all",
+    "note": "The candidate fix: ask for the hierarchy and read the state out of it, so no combination of types and limit can be illegal.",
+    "url": "https://api.mapbox.com/geocoding/v5/mapbox.places/-97.69575518906544,32.29939042130714.json?access_token={token}"
+  },
+  {
+    "id": "geo:region-only",
+    "note": "One type with limit=1 — the legal shape, and the one the earlier probe used, which is why it passed while the app failed.",
+    "url": "https://api.mapbox.com/geocoding/v5/mapbox.places/-97.69575518906544,32.29939042130714.json?access_token={token}&types=region&limit=1"
+  },
+  {
+    "id": "geo:kentucky-no-types",
+    "note": "The same fix over Kentucky, to be sure the shape is not a Texas accident.",
+    "url": "https://api.mapbox.com/geocoding/v5/mapbox.places/-85.730495,37.291094.json?access_token={token}"
   },
   {
     "id": "cap:tn-services",
@@ -11,12 +31,8 @@
   },
   {
     "id": "img:ky-aerial-6in",
-    "note": "The statewide six-inch mosaic. Answers, but draws nothing over Hardyville where the three-inch does \u2014 so it needs a different sublayer or renderer before it is worth offering.",
-    "at": [
-      -85.73,
-      37.29,
-      12
-    ],
+    "note": "The statewide six-inch mosaic. Answers, but draws nothing over Hardyville where the three-inch does — so it needs a different sublayer or renderer before it is worth offering.",
+    "at": [-85.73, 37.29, 12],
     "url": "https://kyraster.ky.gov/arcgis/rest/services/ImageServices/Ky_KYAPED_Imagery_WGS84WM/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
   }
 ]
