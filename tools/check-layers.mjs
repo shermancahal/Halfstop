@@ -67,13 +67,33 @@ function bbox3857(z, x, y) {
   return [west, north - size, west + size, north];
 }
 
-function tileURL(template) {
-  const [w, s, e, n] = bbox3857(Z, X, Y);
+/**
+ * The tile to ask for, which is not always the default one.
+ *
+ * A layer that only covers one state is correctly empty everywhere else, and
+ * the default tile is over Tennessee — so Kentucky's lidar hillshade came back
+ * blank and looked broken when it was working perfectly and simply had nothing
+ * to draw there. A candidate can name its own place: `"at": [lon, lat, zoom]`.
+ */
+function tileFor(entry) {
+  if (!Array.isArray(entry?.at)) return { z: Z, x: X, y: Y };
+  const [lon, lat, zoom = Z] = entry.at;
+  const n = 2 ** zoom;
+  const rad = (lat * Math.PI) / 180;
+  return {
+    z: zoom,
+    x: Math.floor(((lon + 180) / 360) * n),
+    y: Math.floor(((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * n),
+  };
+}
+
+function tileURL(template, tile = { z: Z, x: X, y: Y }) {
+  const [w, s, e, n] = bbox3857(tile.z, tile.x, tile.y);
   return template
-    .replace(/\{z\}/g, String(Z))
-    .replace(/\{x\}/g, String(X))
-    .replace(/\{y\}/g, String(Y))
-    .replace(/\{quadkey\}/g, quadkey(Z, X, Y))
+    .replace(/\{z\}/g, String(tile.z))
+    .replace(/\{x\}/g, String(tile.x))
+    .replace(/\{y\}/g, String(tile.y))
+    .replace(/\{quadkey\}/g, quadkey(tile.z, tile.x, tile.y))
     .replace(/\{bbox-epsg-3857\}/g, `${w},${s},${e},${n}`)
     .replace(/\{s\}/g, 'a');
 }
@@ -162,7 +182,7 @@ async function probe(entry) {
     return { ...entry, skipped: 'needs a Mapbox token' };
   }
 
-  const url = tileURL(template.replace(/\{token\}/g, token));
+  const url = tileURL(template.replace(/\{token\}/g, token), tileFor(entry));
   const started = Date.now();
   try {
     const response = await fetch(url, {
@@ -173,6 +193,11 @@ async function probe(entry) {
         // by the page is the second way a layer shows nothing, and status
         // alone cannot tell the two apart.
         Origin: ORIGIN,
+        // And the Referer with it, because that is the header Mapbox checks a
+        // URL-restricted token against — not Origin. Without it every
+        // token-gated probe fails from CI with a 403 that says nothing about
+        // whether the endpoint works, which is worse than not probing at all.
+        Referer: `${ORIGIN}/Map/`,
       },
       redirect: 'follow',
       // Thirty seconds, not ten. The USGS contour and transport services take

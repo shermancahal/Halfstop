@@ -1,7 +1,7 @@
 [
   {
     "id": "geo:v5",
-    "note": "The geocoder the app uses to learn which state it is over. If this is dead, every route marker is generic and nothing says why.",
+    "note": "The geocoder the app reads the state from. A URL-restricted token needs a Referer, which the probe now sends.",
     "url": "https://api.mapbox.com/geocoding/v5/mapbox.places/-84.28,35.96.json?access_token={token}&types=region&limit=1"
   },
   {
@@ -10,20 +10,52 @@
     "url": "https://api.mapbox.com/search/geocode/v6/reverse?longitude=-84.28&latitude=35.96&types=region&access_token={token}"
   },
   {
-    "id": "cap:ky-images",
-    "url": "https://kyraster.ky.gov/arcgis/rest/services/ImageServices?f=pjson"
-  },
-  {
     "id": "img:ky-hillshade-5ft",
-    "note": "Five-foot lidar hillshade for the whole commonwealth. An ImageServer exports through exportImage, not export.",
+    "note": "Over Kentucky this time. The default tile is in Tennessee, where a Kentucky service is correctly blank.",
+    "at": [
+      -85.73,
+      37.29,
+      12
+    ],
     "url": "https://kyraster.ky.gov/arcgis/rest/services/ElevationServices/Ky_DEM_KYAPED_5FT_Hillshade_WGS84WM/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
   },
   {
     "id": "img:ky-hillshade-multi",
+    "at": [
+      -85.73,
+      37.29,
+      12
+    ],
     "url": "https://kyraster.ky.gov/arcgis/rest/services/ElevationServices/Ky_DEM_KYAPED_5FT_MultiDirectionalHillshade/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
   },
   {
-    "id": "img:ky-slope",
-    "url": "https://kyraster.ky.gov/arcgis/rest/services/ElevationServices/Ky_Slope_USGS_10M_Percent_Rise/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
+    "id": "img:ky-aerial-6in",
+    "note": "KyFromAbove statewide aerial, Web Mercator.",
+    "at": [
+      -85.73,
+      37.29,
+      12
+    ],
+    "url": "https://kyraster.ky.gov/arcgis/rest/services/ImageServices/Ky_KYAPED_Imagery_WGS84WM/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
+  },
+  {
+    "id": "img:ky-aerial-3in",
+    "note": "Phase 3, three-inch.",
+    "at": [
+      -85.73,
+      37.29,
+      12
+    ],
+    "url": "https://kyraster.ky.gov/arcgis/rest/services/ImageServices/Ky_KYAPED_Phase3_3IN_WGS84WM/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
+  },
+  {
+    "id": "img:ky-topo-2016",
+    "note": "Kentucky's own topographic sheets.",
+    "at": [
+      -85.73,
+      37.29,
+      12
+    ],
+    "url": "https://kyraster.ky.gov/arcgis/rest/services/ImageServices/Ky_USGS_Topographic_Maps_2016/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
   }
 ]
