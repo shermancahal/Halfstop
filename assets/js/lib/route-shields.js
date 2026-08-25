@@ -38,10 +38,16 @@ export const SHIELD_DESIGNS = ['interstate', 'us', 'state', 'default'];
  */
 const SHIELD_IMAGE_ROOT = 'assets/shields';
 
-/** `st-TN` at three characters wants the wide blank, if that state has one. */
+/**
+ * The blank for a design, if there is one.
+ *
+ * Keys are the state code for `st-XX` and the design name itself for the two
+ * national shields — every interstate marker in the country is the same marker,
+ * so it needs no state. Three characters or more wants the wide blank where one
+ * exists; a state with no blank at all returns null and gets drawn instead.
+ */
 export function shieldBlankFor(design, length) {
-  if (!design.startsWith('st-')) return null;
-  const code = design.slice(3);
+  const code = design.startsWith('st-') ? design.slice(3) : design;
   const available = SHIELD_IMAGES[code];
   if (!available) return null;
 
@@ -513,13 +519,12 @@ export function rasterizeShield(design, length, { pixelRatio = 2 } = {}) {
   ctx.lineJoin = 'round';
 
   /*
-   * A state with a real blank is not drawn here at all — the image is loaded
-   * and registered instead, which the caller does because it needs the network
-   * and this function is synchronous. Returning null says "not mine".
+   * Always draws, even for a design that has a real blank.
+   *
+   * Preferring the blank is `registerShieldImages`' decision, not this
+   * function's: an early return here left nothing to fall back to when a PNG
+   * failed to load, which is the one case the drawing exists for.
    */
-  if (shieldBlankFor(design, length)) return null;
-
-  // A per-state design with no blank: approximate it.
   if (design.startsWith('st-')) {
     const entry = STATE_SHIELDS[design.slice(3)];
     if (!entry) return null;
@@ -726,13 +731,31 @@ export function rasterizeShieldById(id, options = {}) {
  * Idempotent, and safe to call after each style load — a style swap discards
  * registered images, so this has to run again on the other side of one.
  */
-export function registerShieldImages(map, { pixelRatio = 2, state = '' } = {}) {
+export function registerShieldImages(map, { pixelRatio = 2, state = '', base = '' } = {}) {
   let added = 0;
 
   for (const design of shieldDesignsFor(state)) {
     for (let length = MIN_LEN; length <= MAX_LEN; length += 1) {
       const id = shieldImageId(design, length);
       if (map.hasImage && map.hasImage(id)) continue;
+
+      /*
+       * A design with a real sign blank gets the blank, which arrives over the
+       * network and therefore later. Drawing one now as a placeholder would
+       * take the id and stop the real one ever being registered — GL will not
+       * replace an image that is already there — so this leaves the slot empty
+       * and lets the load fill it. The drawing stays as the answer if it never
+       * arrives.
+       */
+      if (shieldBlankFor(design, length)) {
+        loadShieldBlank(map, id, { base, pixelRatio }).then((loaded) => {
+          if (loaded || map.hasImage?.(id)) return;
+          const drawn = rasterizeShield(design, length, { pixelRatio });
+          if (drawn) { try { map.addImage(id, drawn, { pixelRatio }); } catch { /* raced */ } }
+        }).catch(() => {});
+        continue;
+      }
+
       const data = rasterizeShield(design, length, { pixelRatio });
       if (!data) continue;
       try {

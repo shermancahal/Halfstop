@@ -539,9 +539,12 @@ const blank = await page.evaluate(async () => {
   const ok = await shields.loadShieldBlank(fake, 'abmap-shield-st-TN-2', { base: './' });
   const missing = await shields.loadShieldBlank(fake, 'abmap-shield-st-KY-2', { base: './' });
   const national = await shields.loadShieldBlank(fake, 'abmap-shield-interstate-2', { base: './' });
+  const wide = await shields.loadShieldBlank(fake, 'abmap-shield-us-3', { base: './' });
 
   return {
-    ok, missing, national, added,
+    ok, missing, national, wide, added,
+    // The interstate number has to clear the red band across the top.
+    interstate: shields.shieldTextOffset('interstate', 2),
     // Tennessee's name runs along the bottom of its marker, so its number sits
     // high; Illinois's runs along the top, so its number sits low. If both come
     // back zero the measurement step did not happen.
@@ -551,9 +554,12 @@ const blank = await page.evaluate(async () => {
 });
 
 check('a state with a blank loads it', blank.ok, true);
-check('and registers it under the id the style asked for', blank.added, ['abmap-shield-st-TN-2']);
 check('a state without one falls through to the drawing', blank.missing, false);
-check('and so do the national shields', blank.national, false);
+check('the interstate has a blank of its own now', blank.national, true);
+check('and a wide one for three digits', blank.wide, true);
+check('all four register under the ids the style asks for', blank.added, [
+  'abmap-shield-st-TN-2', 'abmap-shield-interstate-2', 'abmap-shield-us-3',
+]);
 check('a name along the top pushes the number down', blank.illinois[1] > 0.1, true);
 check('and one along the bottom pushes it up', blank.tennessee[1] < -0.1, true);
 

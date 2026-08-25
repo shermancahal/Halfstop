@@ -12,6 +12,30 @@
  */
 
 export const SHIELD_BOXES = {
+  "interstate-narrow": {
+    "dx": 0,
+    "dy": -0.5,
+    "w": 30,
+    "h": 19
+  },
+  "interstate-wide": {
+    "dx": 0,
+    "dy": 0.5,
+    "w": 32,
+    "h": 21
+  },
+  "us-narrow": {
+    "dx": 0,
+    "dy": -1,
+    "w": 30,
+    "h": 30
+  },
+  "us-wide": {
+    "dx": 0,
+    "dy": -1,
+    "w": 40,
+    "h": 30
+  },
   "AL-narrow": {
     "dx": 0,
     "dy": -3.5,
@@ -448,6 +472,14 @@ export const SHIELD_BOXES = {
 
 /** Which state codes have a real blank, at which widths. */
 export const SHIELD_IMAGES = {
+  "interstate": [
+    "narrow",
+    "wide"
+  ],
+  "us": [
+    "narrow",
+    "wide"
+  ],
   "AL": [
     "narrow",
     "wide"

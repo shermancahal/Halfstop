@@ -39,6 +39,12 @@ const SIZES = { narrow: { width: 44, height: 40 }, wide: { width: 66, height: 40
  * entry keeps the drawn fallback in lib/route-shields.js.
  */
 const BLANKS = {
+  // The two national shields. Keyed by design name rather than a state code,
+  // because that is what the style asks for: every interstate marker in the
+  // country is the same marker.
+  interstate: { narrow: 'I-blank', wide: 'I-blank_wide' },
+  us: { narrow: 'US_blank', wide: 'US_blank_wide' },
+
   AL: { narrow: 'Alabama_blank', wide: 'Alabama_blank_wide' },
   AK: { narrow: 'Alaska_blank_shield' },
   AZ: { narrow: 'Arizona_blank', wide: 'Arizona_blank_wide' },

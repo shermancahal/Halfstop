@@ -26,11 +26,13 @@ holes in the field, and the largest rectangle avoids them.
 Writes the images here, `boxes.json` beside them, and
 `assets/js/lib/shield-boxes.js` for the app to import.
 
-## Not here
+## The drawn fallback
 
-The two national shields — Interstate and US route — have no blank in this set
-and are still drawn on a canvas in `assets/js/lib/route-shields.js`, as are the
-handful of states with no blank (Delaware, Iowa, Kentucky, Mississippi, New
-Jersey, Texas among them). Dropping their blanks into the source directory and
-adding a line to the `BLANKS` table in the build tool is all it takes to switch
-them over.
+A handful of states have no blank here — Delaware, Iowa, Kentucky, Mississippi,
+New Jersey and Texas among them — and are still approximated on a canvas in
+`assets/js/lib/route-shields.js`. Those drawings also stand in for any shield
+whose PNG fails to load, which is why they are kept for the two national
+shields as well even though both now have real blanks.
+
+Adding a state is a line in the `BLANKS` table in the build tool and a blank in
+the source directory.
