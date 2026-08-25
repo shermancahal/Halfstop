@@ -54,6 +54,9 @@ const X = 137;
 const Y = 201;
 const EMPTY_BYTES = 1000;
 
+/** The published site, so the CORS answer is the one the real page would get. */
+const ORIGIN = 'https://shermancahal.github.io';
+
 const SPAN = 20037508.342789244;
 
 /** The tile's bounds in web mercator metres, which is what {bbox-epsg-3857} is. */
@@ -142,7 +145,14 @@ async function probe(entry) {
   const started = Date.now();
   try {
     const response = await fetch(url, {
-      headers: { 'User-Agent': 'american-byways-maps layer check (github.com/shermancahal/Map)' },
+      headers: {
+        'User-Agent': 'american-byways-maps layer check (github.com/shermancahal/Map)',
+        // Sent so the answer says whether a browser could have made this
+        // request. A tile that fetches perfectly from a script and is refused
+        // by the page is the second way a layer shows nothing, and status
+        // alone cannot tell the two apart.
+        Origin: ORIGIN,
+      },
       redirect: 'follow',
       signal: AbortSignal.timeout(20000),
     });
@@ -168,6 +178,7 @@ async function probe(entry) {
           : bytes < EMPTY_BYTES ? (entry.seasonal ? 'empty (seasonal)' : 'blank')
             : 'ok',
       text,
+      cors: response.headers.get('access-control-allow-origin') || '',
       names: isImage ? [] : layerNames(decoded),
     };
   } catch (error) {
@@ -197,7 +208,8 @@ if (asJSON) {
       continue;
     }
     const size = result.bytes === undefined ? '' : `${String(result.bytes).padStart(7)}B`;
-    console.log(`  ${(mark[result.verdict] || '????').padEnd(5)} ${result.id.padEnd(34)} ${String(result.status ?? '').padEnd(4)} ${size}  ${result.type || ''}`);
+    const cors = result.status === undefined ? '' : (result.cors ? `cors:${result.cors}` : 'CORS:none');
+    console.log(`  ${(mark[result.verdict] || '????').padEnd(5)} ${result.id.padEnd(34)} ${String(result.status ?? '').padEnd(4)} ${size}  ${(result.type || '').padEnd(12)} ${cors}`);
     if (result.names?.length) {
       for (const name of result.names) console.log(`        - ${name}`);
     } else if (result.verdict !== 'ok' && result.text) {
