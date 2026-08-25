@@ -265,7 +265,15 @@ test('style: any configured multi-source overlay is well formed', () => {
 });
 
 test('style: a single-source overlay is unchanged by the parts machinery', () => {
-  const plain = OVERLAYS.find((o) => !o.sources);
+  /*
+   * Chosen by what it is, not by where it sits in the list.
+   *
+   * This used to take the first overlay with no `sources`, which was a plain
+   * raster until a queried one was added at the top — and then the test failed
+   * for a layer it was never about. A positional pick is a test that breaks
+   * whenever the catalogue is reordered.
+   */
+  const plain = OVERLAYS.find((o) => !o.sources && !o.query && o.tiles);
   const parts = overlayParts(plain);
   assert.equal(parts.length, 1);
   assert.equal(parts[0].layerId, `overlay-${plain.id}`);
@@ -273,7 +281,10 @@ test('style: a single-source overlay is unchanged by the parts machinery', () =>
 });
 
 test('style: opacity is carried through to raster paint', () => {
-  const custom = [{ ...OVERLAYS[0], opacity: 0.42 }];
+  // A raster overlay, explicitly: a queried one has no raster paint to carry
+  // an opacity into, and buildRasterStyle correctly skips it.
+  const raster = OVERLAYS.find((o) => !o.query && (o.tiles || o.sources));
+  const custom = [{ ...raster, opacity: 0.42 }];
   const style = buildRasterStyle(rasterBasemaps[0], custom);
   assert.equal(style.layers[1].paint['raster-opacity'], 0.42);
 });

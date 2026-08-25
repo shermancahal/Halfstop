@@ -159,6 +159,9 @@ const ndfdLayer = (layer) => ({
   // different shapes, and one name over both is how the wrong key gets drawn.
   legendScale: wmsLegendScale(`${NWS_GEOSERVER}/ndfd/wms`, `ndfd:${layer}`),
 });
+/** USGS structures — one sublayer per kind of place, which is why it is here. */
+const USGS_STRUCTURES = 'https://carto.nationalmap.gov/arcgis/rest/services/structures/MapServer';
+
 const ESRI_ATTRIBUTION = 'Imagery © <a href="https://www.esri.com/">Esri</a>, Maxar, Earthstar Geographics';
 
 /**
@@ -296,85 +299,57 @@ export const DEFAULT_BASEMAP_WITH_TOKEN = 'byways-topo';
 // colours carry meaning has to say what they mean, or it is decoration.
 export const OVERLAYS = [
   {
+    /*
+     * Sites you can actually use, drawn as the thing they are.
+     *
+     * This was two raster services stacked on top of each other, which meant
+     * the map filled with server-drawn names in somebody else's typeface and
+     * nothing on it could be clicked. Queried as points instead: an icon per
+     * site, and a tap gives you its name and what kind of place it is.
+     *
+     * The icon comes from *which sublayer answered*, not from a code inside
+     * the row. USGS splits its structures service by type — 25 is literally
+     * "Campgrounds", 29 is "Picnic Areas" — so the type is known before the
+     * data arrives and no code lookup can go stale.
+     *
+     * The BLM half is gone rather than repaired. Its service answered
+     * `{"error":{"code":404,"message":"Service not found"}}`: that half of the
+     * old switch had been drawing nothing, invisibly, exactly as the wildfire
+     * and cell-coverage layers once did. The replacements BLM now publishes —
+     * BLM_Natl_Recs_pts among them — are a separate piece of work, and half a
+     * layer that works beats a whole one that lies.
+     */
     id: 'recreation',
-    legend: [
-      { color: '#1B5E20', label: 'BLM recreation site' },
-      { color: '#4E342E', label: 'USGS: campground, trailhead, cabin or shelter' },
-      { color: '#6D4C41', label: 'USGS: ranger station, visitor center or headquarters' },
-      { color: '#8D6E63', label: 'USGS: historic site, monument or point of interest' },
-    ],
-    legendNote: 'Two services drawn together — BLM recreation sites and the USGS National Map '
-      + 'structures layers. Each draws in its own agency symbology; if one is down the other '
-      + 'still appears.',
     group: 'Land & access',
     name: 'Recreation sites',
-    description: 'Campgrounds, trailheads, cabins, ranger stations and historic sites.',
-    // Two agencies, one switch. Nobody planning a trip thinks "I want the BLM
-    // campgrounds but not the Forest Service ones" — they want somewhere to
-    // sleep. Each source is drawn as its own raster layer so they stack, and
-    // one failing does not blank the other.
-    sources: [
-      {
-        name: 'BLM',
-        tiles: ['https://gis.blm.gov/arcgis/rest/services/recreation/BLM_Natl_Recreation_Site_Points/MapServer/export'
-          + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'],
-      },
-      {
-        // The USGS structures sub-layers, read off the live service rather than
-        // guessed. The first attempt at this used 16, 17 and 18 — which are
-        // emergency services, so the map filled with fire and police stations.
-        // The indices are listed here by name so the next person can see what
-        // each number is instead of trusting the string.
-        //
-        //   24 Recreation            29 Picnic Areas
-        //   25 Campgrounds           30 Headquarters
-        //   26 Trailheads            31 Visitor / Information Centers
-        //   27 Cabins                32 Ranger Stations
-        //   28 Shelters              46 Historic Sites / Points of Interest
-        //                            47 National Symbols / Monuments
-        name: 'USGS National Map',
-        tiles: ['https://carto.nationalmap.gov/arcgis/rest/services/structures/MapServer/export'
-          + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=512,512&format=png32&transparent=true'
-          + '&layers=show:24,25,26,27,28,29,30,31,32,46,47&f=image'],
-        tileSize: 512,
-      },
-    ],
-    tileSize: 256,
-    maxzoom: 16,
-    opacity: 0.95,
+    description: 'Campgrounds, trailheads, cabins and picnic areas. Tap one for details.',
+    query: {
+      // `{layer}` is filled per sublayer, `{bbox}` per view. GeoJSON output
+      // lower-cases field names, so the popup reads `name`, not `NAME`.
+      url: `${USGS_STRUCTURES}/{layer}/query`
+        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
+        + '&spatialRel=esriSpatialRelIntersects&outFields=NAME'
+        + '&returnGeometry=true&outSR=4326&resultRecordCount=200&f=geojson',
+      points: [
+        { layer: 25, icon: 'tent', label: 'Campground' },
+        { layer: 26, icon: 'trailhead', label: 'Trailhead' },
+        { layer: 27, icon: 'cabin', label: 'Cabin' },
+        { layer: 28, icon: 'cabin', label: 'Shelter' },
+        { layer: 29, icon: 'picnic', label: 'Picnic area' },
+        { layer: 31, icon: 'ranger', label: 'Visitor center' },
+        { layer: 32, icon: 'ranger', label: 'Ranger station' },
+        { layer: 46, icon: 'historic', label: 'Historic site' },
+      ],
+      /*
+       * Eight requests a view is the cost of eight types, so this does not
+       * start until the view is a region rather than a continent. Below it the
+       * icons would overlap into a smear anyway.
+       */
+      minzoom: 9,
+    },
+    opacity: 1,
     enabled: false,
-    attribution: 'Recreation sites © <a href="https://navigator.blm.gov/">BLM</a>, '
-      + '<a href="https://www.usgs.gov/programs/national-geospatial-program/national-map">USGS</a>',
-  },
-  {
-    /*
-     * Where the sky is dark, which for a photography app is as much a
-     * trip-planning layer as the weather is.
-     *
-     * VIIRS Black Marble, from NASA's GIBS. Every part of this URL was read
-     * out of the service's own capabilities rather than guessed: the format is
-     * png and not jpg, which is the entire difference between this and the two
-     * 400s the first attempts returned, and the path is z/y/x — row before
-     * column — which is WMTS convention and the reverse of every other tile
-     * service in this file.
-     *
-     * `GoogleMapsCompatible_Level8` means the layer stops at z8. That is the
-     * data, not a choice: light pollution is a regional fact, and the sensor's
-     * pixel is about half a kilometre across.
-     */
-    id: 'light-pollution',
-    group: 'Conditions',
-    name: 'Light pollution',
-    description: 'Night lights from VIIRS. Dark ground is dark sky.',
-    legendNote: 'Brightness as the satellite sees it, not a Bortle class — '
-      + 'a useful proxy for where to point a camera away from.',
-    tiles: ['https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble'
-      + '/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png'],
-    tileSize: 256,
-    maxzoom: 8,
-    opacity: 0.65,
-    enabled: false,
-    attribution: 'Night lights © <a href="https://earthdata.nasa.gov/gibs">NASA GIBS</a>, VIIRS',
+    attribution: 'Recreation sites © <a href="https://www.usgs.gov/programs/national-geospatial-program/national-map">USGS</a>',
   },
   {
     id: 'public-lands',

@@ -1579,3 +1579,13 @@ html, body { height: 100%; overflow: hidden; }
 .detail-block-summary:hover::after { border-left-color: var(--ink-1); }
 .detail-block[open] > .detail-block-summary::after { transform: rotate(90deg); }
 .detail-block-summary .count { margin-left: 0; }
+
+/* Shown only when the page is behind what is deployed, which is a state the
+   reader can do something about — so it is a button, not a note. */
+.build-newer {
+  display: block; width: 100%; margin: 6px 0 0; padding: 6px 8px;
+  font: inherit; font-size: .72rem; text-align: left; cursor: pointer;
+  color: var(--ink-1); background: var(--surface-2, rgba(180, 68, 31, .1));
+  border: 1px solid var(--line); border-radius: var(--radius-sm, 6px);
+}
+.build-newer:hover { border-color: var(--accent, #b4441f); }

@@ -229,6 +229,8 @@ const PIXEL = Buffer.from(
   'base64',
 );
 
+let pretendNewerBuild = false;
+
 await page.route('**/*', async (route) => {
   const url = route.request().url();
   if (route.request().resourceType() === 'image' && !url.startsWith(new URL(URL_UNDER_TEST).origin)) {
@@ -254,6 +256,26 @@ await page.route('**/*', async (route) => {
           })),
         ] },
       } }] }] }] }),
+    });
+  }
+  /*
+   * One recreation sublayer per request, as USGS publishes them. The stub
+   * answers each with a single point so the merge — and the icon that comes
+   * from which sublayer answered — is what the check is looking at.
+   */
+  if (/structures\/MapServer\/(\d+)\/query/.test(url)) {
+    const sub = Number(/structures\/MapServer\/(\d+)\/query/.exec(url)[1]);
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/geo+json',
+      body: JSON.stringify({
+        type: 'FeatureCollection',
+        features: [{
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [-84.28 + sub / 1000, 35.96] },
+          properties: { name: `Site ${sub}` },
+        }],
+      }),
     });
   }
   if (/WFIGS_Interagency_Perimeters/.test(url)) {
@@ -288,6 +310,19 @@ await page.route('**/*', async (route) => {
       status: 200,
       contentType: 'text/plain',
       body: 'commit: 0123456789abcdef\nbuilt: 2026-08-24T00:00:00Z\n',
+    });
+  }
+  /*
+   * Pretend the server has moved on.
+   *
+   * The stale-page notice can only be exercised by making build.json disagree
+   * with the fingerprint the page already loaded, which is precisely the state
+   * GitHub Pages leaves a reader in for ten minutes after every deploy.
+   */
+  if (pretendNewerBuild && /build\.json/.test(url)) {
+    return route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ build: 'deadbeef' }),
     });
   }
   if (url.startsWith(new URL(URL_UNDER_TEST).origin)) return route.continue();
@@ -654,6 +689,39 @@ check('every step in the colormap has a swatch', scale.swatches, 12);
 check('the nodata sentinel is not one of them', scale.labels.includes(''), false);
 check('a long ramp splits into more than one column', scale.split, true);
 check('and the prose that restated it is gone', scale.prose, 0);
+
+/*
+ * Recreation sites, which used to be two rasters of server-drawn names with
+ * nothing on them clickable. The check is that a point carries the icon of the
+ * sublayer that produced it — that is the whole mechanism.
+ */
+console.log('\nRecreation sites draw as icons, one per kind of place');
+await page.click('.panel-tab[data-tab="layers"]');
+await page.waitForTimeout(300);
+await page.locator('summary', { hasText: /Land & access/ }).first().click();
+await page.waitForTimeout(200);
+await page.locator('.layer-row', { hasText: /Recreation sites/ }).locator('input[type=checkbox]').check();
+await page.waitForTimeout(900);
+const rec = await page.evaluate(() => {
+  const map = window.__map;
+  const features = map.getSource('overlay-recreation')?._d?.features || [];
+  const layer = map.getLayer('overlay-recreation');
+  return {
+    type: layer?.type,
+    count: features.length,
+    icons: [...new Set(features.map((feature) => feature.properties.icon))].sort(),
+    labelled: features.every((feature) => !!feature.properties.kindLabel),
+    named: features.every((feature) => !!feature.properties.name),
+    iconImages: map.imageIds().filter((id) => id.startsWith('pin-')).length,
+  };
+});
+check('it is a symbol layer, not a fill', rec.type, 'symbol');
+check('every sublayer contributed a site', rec.count, 8);
+check('and each carries the icon of its own kind',
+  rec.icons, ['cabin', 'historic', 'picnic', 'ranger', 'tent', 'trailhead']);
+check('with a kind to show in the popup', rec.labelled, true);
+check('and a name', rec.named, true);
+check('the pin images the icons name are registered', rec.iconImages > 0, true);
 
 console.log('\nA queried overlay loads features for the view');
 await page.click('.panel-tab[data-tab="layers"]');
@@ -1050,6 +1118,25 @@ check('and one along the bottom pushes it up', blank.tennessee[1] < -0.1, true);
 console.log('\nThe build stamp is readable');
 const stamp = (await page.locator('#build-stamp').innerText().catch(() => '')).trim();
 check('build stamp is shown', stamp.length > 0, true);
+
+/*
+ * The stale-page notice. Last of everything, because it reloads.
+ *
+ * A page can be running code older than what is deployed for ten minutes after
+ * every push — Pages caches HTML and there is no header to change that — and
+ * because the asset URLs are content-hashed, stale HTML pins the whole bundle.
+ * That state is indistinguishable from a deploy that did not run, which is what
+ * it was mistaken for twice.
+ */
+console.log('\nA page running older code than the server says so');
+check('nothing is claimed while the page is current',
+  await page.locator('.build-newer').count(), 0);
+
+pretendNewerBuild = true;
+await page.reload({ waitUntil: 'networkidle' });
+await page.waitForSelector('.build-newer', { timeout: 5000 }).catch(() => {});
+check('and it offers a reload once the server has moved on',
+  await page.locator('.build-newer').count(), 1);
 
 await browser.close();
 hosted?.server.close();

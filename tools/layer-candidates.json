@@ -1,47 +1,41 @@
 [
   {
-    "id": "rec:usgs-query-smokies",
-    "note": "The last query returned zero features over suburban Indianapolis, which says nothing - there are no federal campgrounds there. Asking over the Smokies, where there certainly are, so an empty answer means the query is wrong rather than the place being empty.",
+    "id": "land:blm-sma-sublayers",
+    "note": "Public lands is a cached raster with the six agency colours baked into the PNG, so it cannot be hatched. Stripes need polygons. This asks the surface-management service which sublayers it has and whether any of them will answer a query.",
     "expect": "data",
-    "find": "\"(?:NAME|FCODE|FTYPE|ADMINTYPE)\":\\s*\"?[^,\"]{0,32}\"?",
-    "url": "https://carto.nationalmap.gov/arcgis/rest/services/structures/MapServer/25/query?where=1%3D1&outFields=NAME%2CFCODE%2CFTYPE%2CADMINTYPE&geometry=-84.0%2C35.4%2C-83.0%2C36.0&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&resultRecordCount=5&f=geojson"
+    "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_Cached_without_PriUnk/MapServer/layers?f=pjson"
   },
   {
-    "id": "rec:usgs-fcode-domain",
-    "note": "FCODE is a numeric code, not a word. Its coded-value domain is what maps a point to a tent, a caravan or a picnic table - without it the icons would be a guess at what each number means.",
+    "id": "land:padus-agency-query",
+    "note": "The other way to the same polygons. PAD-US already backs the land-manager lookup in the details panel, so if it will answer a bbox query with Mang_Name the app can draw BLM itself - and the pattern becomes a styling decision rather than a data problem.",
     "expect": "data",
-    "find": "\\{\"name\":\"[^\"]{0,40}\",\"code\":[0-9]+\\}",
-    "url": "https://carto.nationalmap.gov/arcgis/rest/services/structures/MapServer/25?f=pjson"
+    "find": "\"(?:Mang_Name|Mang_Type|Own_Name)\":\\s*\"[^\"]{0,24}\"",
+    "url": "https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services/PADUS4_0Fee/FeatureServer/0/query?where=Mang_Name%3D%27BLM%27&outFields=Mang_Name%2CMang_Type%2CUnit_Nm&geometry=-112.0%2C38.0%2C-111.0%2C39.0&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&returnGeometry=false&resultRecordCount=3&f=geojson"
   },
   {
-    "id": "rec:blm-recreation-folder",
-    "note": "BLM_Natl_Recreation_Site_Points answered 404 Service not found, so the name in the catalogue has moved. Asking the folder what it holds now - the raster half of this layer may have been dead for a while.",
+    "id": "rec:blm-recs-pts-fields",
+    "note": "The replacement for the 404ing BLM recreation service. If its fields name a site type it can join the USGS points under the same icons.",
     "expect": "data",
-    "url": "https://gis.blm.gov/arcgis/rest/services/recreation?f=pjson"
-  },
-  {
-    "id": "land:blm-sma-vectors",
-    "note": "Public lands is a cached raster - the six colours are baked into the PNG, so a pattern cannot be applied to it. Hatching BLM specifically needs the polygons as vectors. This asks whether the surface-management layer will answer a query at all, and what names the agency field uses.",
-    "expect": "data",
-    "find": "\"(?:ADMIN_UNIT_NAME|ADMIN_AGENCY_CODE|ADMIN_DEPT_CODE|name)\":\\s*\"[^\"]{0,32}\"",
-    "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_Cached_without_PriUnk/MapServer/0?f=pjson"
+    "url": "https://gis.blm.gov/arcgis/rest/services/recreation/BLM_Natl_Recs_pts/MapServer/0?f=pjson"
   },
   {
     "id": "lp:lorenz-tile-2024",
     "note": "The atlas viewer names its own tiles: image_tiles/tiles2024/tile_{z}_{x}_{y}.png. This is the calibrated sky-brightness overlay rather than a photograph of streetlights, so it is the better of the two if it draws.",
-    "at": [-86.013, 39.654, 7],
+    "at": [
+      -86.013,
+      39.654,
+      7
+    ],
     "url": "https://djlorenz.github.io/astronomy/image_tiles/tiles2024/tile_{z}_{x}_{y}.png"
-  },
-  {
-    "id": "road:blm-gtlf-layers",
-    "note": "GTLF exists after all - the transportation folder lists BLM_Natl_GTLF_Public_Display. Its layers and fields carry the OHV designation per route.",
-    "expect": "data",
-    "url": "https://gis.blm.gov/arcgis/rest/services/transportation/BLM_Natl_GTLF_Public_Display/MapServer?f=pjson"
   },
   {
     "id": "img:ky-aerial-6in",
     "note": "The statewide six-inch mosaic. Answers, but draws nothing over Hardyville where the three-inch does - so it needs a different sublayer or renderer before it is worth offering.",
-    "at": [-85.73, 37.29, 12],
+    "at": [
+      -85.73,
+      37.29,
+      12
+    ],
     "url": "https://kyraster.ky.gov/arcgis/rest/services/ImageServices/Ky_KYAPED_Imagery_WGS84WM/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
   }
 ]

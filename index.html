@@ -200,6 +200,13 @@
 
 <!-- Mapbox token, kept out of git. Copy assets/js/token.example.js to token.js. -->
 <script src="assets/js/token.js"></script>
+<!--
+  Which build this page is. Written by tools/build-dist.mjs and cache-busted
+  like every other asset, so a page served from a stale cache carries the old
+  value while build.json — fetched fresh — carries the new one. That difference
+  is the only reliable way the app can tell it is out of date.
+-->
+<script src="assets/js/build.js"></script>
 <script type="module" src="assets/js/viewer.js"></script>
 </body>
 </html>

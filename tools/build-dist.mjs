@@ -258,6 +258,28 @@ async function main() {
   const digest = (data) => createHash('sha256').update(data).digest('hex').slice(0, 8);
   const versions = new Map(assets.map((asset) => [asset.name, digest(asset.data)]));
 
+  /*
+   * A fingerprint of the whole bundle, written twice.
+   *
+   * Once into assets/js/build.js, which is cache-busted like everything else,
+   * so a page served from a stale cache carries the *old* fingerprint. Once
+   * into build.json at the root, which is fetched fresh at runtime and carries
+   * the current one. When they disagree, the page is running code older than
+   * what is deployed — which is exactly the state that has cost this project
+   * several rounds of "the changes did not appear", each time indistinguishable
+   * from a broken deploy until somebody compared commits by hand.
+   *
+   * Built from the other assets' digests rather than from a commit, so it works
+   * the same for a local `npm run dist` as it does in CI, where no commit is in
+   * scope at this point anyway.
+   */
+  const buildId = digest([...versions.entries()].sort()
+    .map(([name, hash]) => `${name}:${hash}`).join('\n'));
+  const buildScript = `window.ABMAP_BUILD = '${buildId}';\n`;
+  assets.push({ name: 'assets/js/build.js', data: encoderFor(buildScript) });
+  versions.set('assets/js/build.js', digest(buildScript));
+  staged.push({ name: 'build.json', data: encoderFor(`{"build":"${buildId}"}\n`) });
+
   let stamped = 0;
   for (const page of html) {
     page.text = page.text.replace(/(src|href)="(assets\/[^"?#]+\.(?:js|css))"/g, (match, attr, href) => {

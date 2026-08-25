@@ -464,6 +464,7 @@ async function main() {
     if (initialStyle.vector || overlay.query) addOverlayLayer(overlay);
   }
   renderBuildStamp();
+  checkForNewerBuild();
   renderLayersTab();
   renderOfflineTab();
   renderFoldersTab();
@@ -989,6 +990,45 @@ async function fillArcGISLegend(host, { url, layer } = {}) {
  * Silently absent when there is no deployed.txt, which is the normal state for
  * a local checkout.
  */
+/**
+ * Say so when the page is running code older than what is deployed.
+ *
+ * GitHub Pages serves HTML with a ten-minute cache and there is no way to set
+ * headers on it, so for a window after every deploy a hard refresh still
+ * returns the previous page — and because the asset URLs are content-hashed,
+ * stale HTML pins the entire bundle. Twice in one afternoon that looked exactly
+ * like a deploy that had not run, and both times it was answered by reading
+ * deployed.txt by hand.
+ *
+ * `window.ABMAP_BUILD` comes from a cache-busted script, so a stale page holds
+ * the old fingerprint; build.json is fetched with no store, so it holds the
+ * current one. They disagree only when the page is behind.
+ */
+async function checkForNewerBuild() {
+  const running = globalThis.ABMAP_BUILD;
+  if (!running || !dom.buildStamp) return;
+
+  try {
+    const response = await fetch('build.json', { cache: 'no-store' });
+    if (!response.ok) return;
+    const { build } = await response.json();
+    if (!build || build === running) return;
+
+    const reload = el('button', {
+      class: 'build-newer', type: 'button',
+      text: 'A newer build is available — reload',
+      // `true` forces a fetch past the cache in the engines that still honour
+      // it, and is harmless in the ones that do not.
+      onclick: () => globalThis.location.reload(true),
+    });
+    dom.buildStamp.after(reload);
+    dom.buildStamp.hidden = false;
+  } catch {
+    // Offline, or no build.json because this is a source checkout rather than
+    // a built package. Neither is worth saying anything about.
+  }
+}
+
 async function renderBuildStamp() {
   if (!dom.buildStamp) return;
   try {
@@ -2806,9 +2846,11 @@ async function refreshQueryOverlay(overlay) {
   const source = state.map?.getSource?.(fill);
   if (!source) return;
 
-  const { minzoom = 0, url } = overlay.query;
+  const { minzoom = 0, url, points } = overlay.query;
   const empty = { type: 'FeatureCollection', features: [] };
   if ((state.map.getZoom?.() ?? 0) < minzoom) { source.setData(empty); return; }
+
+  if (points) { await refreshPointOverlay(overlay, source, empty); return; }
 
   try {
     const response = await fetch(queryURL(url, state.map));
@@ -2827,9 +2869,55 @@ async function refreshQueryOverlay(overlay) {
   }
 }
 
+/**
+ * Several sublayers, one layer of icons.
+ *
+ * USGS splits its structures service by kind of place, so a campground and a
+ * picnic area are different endpoints rather than different rows. Asking each
+ * and merging is what makes the icon knowable: the sublayer that answered is
+ * the type, decided before the data arrives rather than looked up in a code
+ * table that can be renumbered.
+ *
+ * One slow or missing sublayer must not empty the map, so each is settled
+ * independently and whatever came back is drawn.
+ */
+async function refreshPointOverlay(overlay, source, empty) {
+  const { url, points } = overlay.query;
+
+  const answers = await Promise.all(points.map(async (kind) => {
+    try {
+      const target = queryURL(url.replace('{layer}', String(kind.layer)), state.map);
+      const response = await fetch(target);
+      if (!response.ok) return [];
+      const data = await response.json();
+      if (data.error || !Array.isArray(data.features)) return [];
+      return data.features.map((feature) => ({
+        ...feature,
+        properties: {
+          ...feature.properties,
+          // What the popup and the icon both read. `name` lower-case: ArcGIS
+          // GeoJSON output lower-cases field names, and asking for NAME does
+          // not change what comes back.
+          icon: kind.icon,
+          kindLabel: kind.label,
+          name: feature.properties?.name || kind.label,
+        },
+      }));
+    } catch {
+      return [];
+    }
+  }));
+
+  const features = answers.flat();
+  source.setData(features.length ? { type: 'FeatureCollection', features } : empty);
+  noteLayerHealth(overlayLayerIds(overlay)[0], answers.some((list) => list.length > 0));
+}
+
 function addQueryOverlay(overlay, opacity) {
   const [fill, line] = overlayLayerIds(overlay);
   const colour = overlay.query.color || '#D84315';
+
+  if (overlay.query.points) { addPointOverlay(overlay, fill); return; }
 
   if (!state.map.getSource(fill)) {
     state.map.addSource(fill, {
@@ -2855,6 +2943,57 @@ function addQueryOverlay(overlay, opacity) {
       source: fill,
       paint: { 'line-color': colour, 'line-width': 1.4, 'line-opacity': amount },
     }, firstDataLayerId());
+  }
+
+  refreshQueryOverlay(overlay);
+}
+
+/**
+ * A queried overlay drawn as icons rather than as shapes.
+ *
+ * The pin images are already registered for the waypoint editor — a tent, a
+ * caravan, a picnic table — so this reuses them rather than inventing a second
+ * icon set that would drift out of step with the first.
+ */
+function addPointOverlay(overlay, layerId) {
+  if (!state.map.getSource(layerId)) {
+    state.map.addSource(layerId, {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+      attribution: overlay.attribution || '',
+    });
+  }
+
+  if (!state.map.getLayer(layerId)) {
+    // The images the icon expression names have to exist before it is asked
+    // for them; registering is idempotent, so doing it here costs nothing and
+    // removes the ordering question entirely.
+    registerPinImages(state.map);
+
+    state.map.addLayer({
+      id: layerId,
+      type: 'symbol',
+      source: layerId,
+      layout: {
+        'icon-image': ['concat', 'pin-', ['coalesce', ['get', 'icon'], 'pin']],
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 9, 0.7, 14, 1],
+        'icon-allow-overlap': false,
+        // The name only once there is room for it. At the zoom this layer
+        // starts, a label on every site is the wall of text this replaced.
+        'text-field': ['step', ['zoom'], '', 12, ['get', 'name']],
+        'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Regular'],
+        'text-size': 11,
+        'text-offset': [0, 1.1],
+        'text-anchor': 'top',
+        'text-optional': true,
+      },
+      paint: {
+        'text-color': '#3a3026',
+        'text-halo-color': 'rgba(255,255,255,0.9)',
+        'text-halo-width': 1.2,
+      },
+    });
+    bindFeatureInteractions(layerId);
   }
 
   refreshQueryOverlay(overlay);
