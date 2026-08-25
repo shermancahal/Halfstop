@@ -18,7 +18,7 @@ import assert from 'node:assert/strict';
 
 import { buildRasterStyle, overlayParts, overlayIdFromLayer, styleFor } from '../assets/js/lib/engine.js';
 import { BASEMAPS, OVERLAYS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN } from '../assets/js/config.js';
-import { bywaysStyle, PALETTE } from '../assets/js/lib/byways-style.js';
+import { bywaysStyle, PALETTE, shieldLayerUpdates } from '../assets/js/lib/byways-style.js';
 import {
   shieldDesign,
   shieldImageId,
@@ -461,6 +461,39 @@ test('byways: a concurrency gets two shields, not one hyphenated one', () => {
   const textX = (layer) => JSON.stringify(layer.layout['text-offset']);
   assert.notEqual(textX(first), textX(second), 'each half puts its number over its own shield');
   assert.notEqual(textX(first), JSON.stringify(plain.layout['text-offset']));
+});
+
+test('byways: state routes get shields, which means tertiary roads do', () => {
+  // The bug this is here for: the shield layers covered motorway through
+  // secondary, and Mapbox classes a road by what it carries rather than by who
+  // numbered it. A two-lane state highway is `tertiary` as often as not, so
+  // across whole states the only markers drawn were the interstates and US
+  // routes — which is indistinguishable from the feature being broken.
+  const layers = bywaysStyle('pk.test').layers;
+  for (const id of ['road-shield', 'road-shield-first', 'road-shield-second']) {
+    const filter = JSON.stringify(layers.find((layer) => layer.id === id).filter);
+    assert.ok(filter.includes('tertiary'), `${id} skips tertiary roads`);
+    assert.ok(filter.includes('secondary'), `${id} skips secondary roads`);
+  }
+});
+
+test('byways: a state change updates every shield layer, halves included', () => {
+  const updates = shieldLayerUpdates('TN');
+  assert.deepEqual(updates.map((u) => u.id),
+    ['road-shield', 'road-shield-first', 'road-shield-second']);
+
+  // The halves sit either side of the line and the plain shield sits on it, so
+  // their text offsets cannot all be the same — that equality is exactly what
+  // updating only 'road-shield' used to produce.
+  const offsets = updates.map((u) => JSON.stringify(u.layout['text-offset']));
+  assert.notEqual(offsets[1], offsets[0]);
+  assert.notEqual(offsets[1], offsets[2]);
+
+  // And each update has to carry the state, or a border crossing changes
+  // nothing.
+  const tennessee = JSON.stringify(shieldLayerUpdates('TN'));
+  const arizona = JSON.stringify(shieldLayerUpdates('AZ'));
+  assert.notEqual(tennessee, arizona);
 });
 
 test('byways: unpaved roads are marked, and say so in their label', () => {

@@ -26,7 +26,7 @@
  */
 
 import {
-  shieldImageExpression, SHIELD_TEXT_COLOUR,
+  shieldImageExpression, SHIELD_TEXT_COLOUR, shieldTextColour,
   shieldTextSizeExpression, shieldTextOffsetExpression, shieldDisplayWidth,
 } from './route-shields.js';
 
@@ -677,6 +677,65 @@ function labelLayers() {
 
 /* ---- route shields ---- */
 
+/*
+ * Concurrencies — one road carrying two route numbers — reach us as a single
+ * feature with `ref` of "23-60" and a `shield` of `us-highway-duplex`. Drawn as
+ * one shield that is a marker reading 23-60, which is not a sign that exists
+ * anywhere. Two markers is what the road actually has on it.
+ *
+ * Both halves have to be present to split: a `-duplex` shield is the tag that
+ * says the hyphen is a separator rather than part of a number.
+ */
+const REF = ['coalesce', ['get', 'ref'], ''];
+const REF_CUT = ['index-of', '-', REF];
+const IS_DUPLEX = ['all',
+  ['>', REF_CUT, 0],
+  ['in', 'duplex', ['coalesce', ['get', 'shield'], '']],
+];
+const FIRST_REF = ['slice', REF, 0, REF_CUT];
+// A three-way concurrency would leave "60-119" behind the first hyphen, so the
+// second shield stops at the next one.
+const SECOND_REF = ['let', 'rest', ['slice', REF, ['+', REF_CUT, 1]],
+  ['case',
+    ['>', ['index-of', '-', ['var', 'rest']], 0],
+    ['slice', ['var', 'rest'], 0, ['index-of', '-', ['var', 'rest']]],
+    ['var', 'rest']],
+];
+
+// An interstate marker outranks a county route where they land together.
+const SHIELD_ORDER = ['match', ['get', 'class'],
+  'motorway', 1, 'trunk', 2, 'primary', 3, 'secondary', 4, 5];
+
+/** Every shield layer's id, and how far off centre its number sits. */
+export const SHIELD_LAYERS = [
+  { id: 'road-shield', shift: 0, length: null },
+  { id: 'road-shield-first', shift: -(shieldDisplayWidth(2) / 2 + 1), length: ['length', FIRST_REF] },
+  { id: 'road-shield-second', shift: shieldDisplayWidth(2) / 2 + 1, length: ['length', SECOND_REF] },
+];
+
+/**
+ * What to set on each shield layer when the map crosses into another state.
+ *
+ * The marker, the size of its number and where that number sits are one design
+ * decision, and they are made here rather than at the call site — the two
+ * halves of a concurrency carry a sideways shift the plain shield does not, and
+ * a caller updating only the plain one is how the halves came to keep the
+ * previous state's marker after a border crossing.
+ */
+export function shieldLayerUpdates(state = '') {
+  return SHIELD_LAYERS.map(({ id, shift, length }) => ({
+    id,
+    layout: {
+      // Sized from the number it is actually carrying, exactly as the layer
+      // was built — half of a concurrency is as wide as its own half.
+      'icon-image': shieldImageExpression(state, { length }),
+      'text-size': shieldTextSizeExpression(state),
+      'text-offset': shieldTextOffsetExpression(state, 2, shift),
+    },
+    paint: { 'text-color': shieldTextColour(state) },
+  }));
+}
+
 /**
  * US route shields.
  *
@@ -693,31 +752,19 @@ function labelLayers() {
  */
 function shieldLayers(state = '') {
   /*
-   * Concurrencies — one road carrying two route numbers — reach us as a single
-   * feature with `ref` of "23-60" and a `shield` of `us-highway-duplex`. Drawn
-   * as one shield that is a marker reading 23-60, which is not a sign that
-   * exists anywhere. Two markers is what the road actually has on it.
+   * Tertiary is in here, and its absence is why state route markers were
+   * missing across whole states. Mapbox classes a road by what it carries, not
+   * by who numbered it: a two-lane state highway through farmland is `tertiary`
+   * as often as it is `secondary`, and in Kentucky, Vermont or West Virginia
+   * that is most of the state network. Leaving it out meant the shields drew
+   * for the interstates and US routes — which are never tertiary — and for
+   * almost nothing else, which reads exactly like a broken feature.
    *
-   * Both halves have to be present to split: a `-duplex` shield is the tag that
-   * says the hyphen is a separator rather than part of a number.
+   * It costs nothing at low zoom: tertiary roads are not in the tiles until
+   * z8, so the layer has nothing to draw before then anyway.
    */
-  const ref = ['coalesce', ['get', 'ref'], ''];
-  const cut = ['index-of', '-', ref];
-  const isDuplex = ['all',
-    ['>', cut, 0],
-    ['in', 'duplex', ['coalesce', ['get', 'shield'], '']],
-  ];
-  const firstRef = ['slice', ref, 0, cut];
-  // A three-way concurrency would leave "60-119" behind the first hyphen, so
-  // the second shield stops at the next one.
-  const secondRef = ['let', 'rest', ['slice', ref, ['+', cut, 1]],
-    ['case',
-      ['>', ['index-of', '-', ['var', 'rest']], 0],
-      ['slice', ['var', 'rest'], 0, ['index-of', '-', ['var', 'rest']]],
-      ['var', 'rest']],
-  ];
-
-  const onARoad = ['match', ['get', 'class'], ['motorway', 'trunk', 'primary', 'secondary'], true, false];
+  const onARoad = ['match', ['get', 'class'],
+    ['motorway', 'trunk', 'primary', 'secondary', 'tertiary'], true, false];
 
   /** Half a concurrency: its own number, its own image, shifted off centre. */
   const half = (id, text, shiftPx) => ({
@@ -725,7 +772,7 @@ function shieldLayers(state = '') {
     type: 'symbol',
     source: 'composite',
     'source-layer': 'road',
-    filter: ['all', ['has', 'ref'], onARoad, isDuplex],
+    filter: ['all', ['has', 'ref'], onARoad, IS_DUPLEX],
     minzoom: 6,
     layout: {
       'symbol-placement': 'line',
@@ -746,8 +793,7 @@ function shieldLayers(state = '') {
       'text-ignore-placement': false,
       'text-optional': false,
       'icon-optional': false,
-      'symbol-sort-key': ['match', ['get', 'class'],
-        'motorway', 1, 'trunk', 2, 'primary', 3, 4],
+      'symbol-sort-key': SHIELD_ORDER,
     },
     paint: { 'text-color': SHIELD_TEXT_COLOUR },
   });
@@ -764,7 +810,7 @@ function shieldLayers(state = '') {
       filter: ['all',
         ['has', 'ref'],
         onARoad,
-        ['!', isDuplex],
+        ['!', IS_DUPLEX],
       ],
       minzoom: 6,
       layout: {
@@ -802,12 +848,11 @@ function shieldLayers(state = '') {
         'text-optional': false,
         'icon-optional': false,
         // An interstate marker outranks a county route when they land together.
-        'symbol-sort-key': ['match', ['get', 'class'],
-          'motorway', 1, 'trunk', 2, 'primary', 3, 4],
+        'symbol-sort-key': SHIELD_ORDER,
       },
       paint: { 'text-color': SHIELD_TEXT_COLOUR },
     },
-    half('road-shield-first', firstRef, -apart),
-    half('road-shield-second', secondRef, apart),
+    half('road-shield-first', FIRST_REF, -apart),
+    half('road-shield-second', SECOND_REF, apart),
   ];
 }

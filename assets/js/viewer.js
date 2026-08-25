@@ -31,9 +31,10 @@ import {
 } from './lib/pin-icons.js';
 import { toGPX } from './lib/gpx-write.js';
 import {
-  registerShieldImages, shieldImageExpression, shieldTextColour, stateDesign, rasterizeShieldById,
-  shieldImageIdFor, loadShieldBlank, shieldTextSizeExpression, shieldTextOffsetExpression,
+  registerShieldImages, stateDesign, rasterizeShieldById,
+  shieldImageIdFor, loadShieldBlank,
 } from './lib/route-shields.js';
+import { shieldLayerUpdates } from './lib/byways-style.js';
 import { Account, isConfigured as accountsAvailable } from './lib/account.js';
 import {
   formatDD, formatDMS, formatDDM, toUTM, distanceBearing, compassPoint, reverseGeocode,
@@ -1029,12 +1030,20 @@ function trackShieldState() {
 
     if (!styleReady() || !state.map.getLayer('road-shield')) return;
     try {
-      state.map.setLayoutProperty('road-shield', 'icon-image', shieldImageExpression(code));
-      // The number's size and position belong to the marker it sits on, so
-      // they move with the state as much as the picture does.
-      state.map.setLayoutProperty('road-shield', 'text-size', shieldTextSizeExpression(code));
-      state.map.setLayoutProperty('road-shield', 'text-offset', shieldTextOffsetExpression(code));
-      state.map.setPaintProperty('road-shield', 'text-color', shieldTextColour(code));
+      // Every shield layer, not just the plain one. The two halves of a
+      // concurrency carry a sideways shift the plain shield does not, so what
+      // to set on each is decided in byways-style.js beside the layers
+      // themselves — updating only 'road-shield' left the halves showing the
+      // previous state's marker after a border crossing.
+      for (const update of shieldLayerUpdates(code)) {
+        if (!state.map.getLayer(update.id)) continue;
+        for (const [property, value] of Object.entries(update.layout)) {
+          state.map.setLayoutProperty(update.id, property, value);
+        }
+        for (const [property, value] of Object.entries(update.paint)) {
+          state.map.setPaintProperty(update.id, property, value);
+        }
+      }
     } catch (error) {
       console.warn('[shields] could not update:', error.message);
     }
