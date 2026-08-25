@@ -80,6 +80,21 @@ const OSM_ATTRIBUTION = '© <a href="https://www.openstreetmap.org/copyright">Op
 const USGS_ATTRIBUTION = 'Map data © <a href="https://www.usgs.gov/">USGS</a> — The National Map';
 const NOAA_ATTRIBUTION = 'Forecast data © <a href="https://www.weather.gov/">NOAA / National Weather Service</a>';
 
+/*
+ * One state's own services.
+ *
+ * Kentucky's public GIS is split across two servers: kygisserver for map
+ * services and kyraster for imagery and elevation, both published in Web
+ * Mercator on purpose so a web map can use them directly.
+ */
+const KY_RASTER = 'https://kyraster.ky.gov/arcgis/rest/services';
+const KY_ATTRIBUTION = 'Imagery and elevation © <a href="https://kyfromabove.ky.gov/">KyFromAbove</a>'
+  + ' / Commonwealth of Kentucky';
+
+/** The query an ArcGIS image or map service wants for one tile. */
+const ESRI_IMAGE = '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857'
+  + '&size=256,256&format=png32&transparent=true&f=image';
+
 /**
  * A NOAA GeoServer layer, as a tile template and as its own colour key.
  *
@@ -581,6 +596,58 @@ export const OVERLAYS = [
    * switch is worse than an absent one: it costs somebody the time it takes to
    * work out that the map is not broken.
    */
+  /*
+   * Kentucky's own data.
+   *
+   * The commonwealth publishes aerial photography at three inches and hillshade
+   * derived from five-foot lidar, statewide, in Web Mercator, with CORS open —
+   * all of which is better than any national service in this list, and none of
+   * which exists a foot over the state line. That is what `states` is for: the
+   * panel offers these only while the map is over Kentucky, so the layer list
+   * does not become fifty states of switches that draw nothing.
+   *
+   * These are ImageServers, which export through `exportImage` rather than the
+   * MapServer's `export`. Every one was checked over Hardyville rather than
+   * over the Smokies, because a Kentucky service is correctly empty in
+   * Tennessee and the default probe tile said "blank" for all of them.
+   */
+  {
+    id: 'ky-aerial',
+    states: ['KY'],
+    name: 'Aerial (3 in)',
+    description: 'KyFromAbove orthoimagery. Three-inch resolution — close enough to count fence posts.',
+    tiles: [`${KY_RASTER}/ImageServices/Ky_KYAPED_Phase3_3IN_WGS84WM/ImageServer/exportImage${ESRI_IMAGE}`],
+    tileSize: 256,
+    maxzoom: 19,
+    opacity: 1,
+    enabled: false,
+    attribution: KY_ATTRIBUTION,
+  },
+  {
+    id: 'ky-hillshade',
+    states: ['KY'],
+    name: 'Lidar hillshade (5 ft)',
+    description: 'Terrain from five-foot lidar. Old roadbeds, quarry benches and hollows the '
+      + 'ten-metre national hillshade cannot see.',
+    tiles: [`${KY_RASTER}/ElevationServices/Ky_DEM_KYAPED_5FT_MultiDirectionalHillshade/ImageServer/exportImage${ESRI_IMAGE}`],
+    tileSize: 256,
+    maxzoom: 18,
+    opacity: 0.7,
+    enabled: false,
+    attribution: KY_ATTRIBUTION,
+  },
+  {
+    id: 'ky-topo',
+    states: ['KY'],
+    name: 'Kentucky topo sheets',
+    description: 'The state\u2019s own 2016 topographic series.',
+    tiles: [`${KY_RASTER}/ImageServices/Ky_USGS_Topographic_Maps_2016/ImageServer/exportImage${ESRI_IMAGE}`],
+    tileSize: 256,
+    maxzoom: 17,
+    opacity: 0.9,
+    enabled: false,
+    attribution: KY_ATTRIBUTION,
+  },
   {
     id: 'trails-hiking',
     group: 'Routes',

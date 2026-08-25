@@ -288,6 +288,33 @@ check('document layers present', afterImport.documentLayers > 0, true);
  * each says it immediately — so every basemap has to have a preview, including
  * the one nothing can render server-side.
  */
+/*
+ * A layer that only exists inside one state.
+ *
+ * Kentucky publishes three-inch aerial and five-foot lidar hillshade, and both
+ * stop at the state line. Fifty states of those in one flat list would be
+ * unusable, so an overlay names the states it covers and the panel offers it
+ * only inside them. The stub map sits over Tennessee, so none of them should be
+ * on offer here — which is the half of the behaviour that is easy to get wrong
+ * and impossible to notice.
+ */
+console.log('\nA state layer is offered only inside its state');
+const scoped = await page.evaluate(async () => {
+  const config = await import('./assets/js/config.js');
+  return config.OVERLAYS.filter((entry) => entry.states).map((entry) => entry.id);
+});
+check('the catalogue has some', scoped.length > 0, true);
+
+await page.click('.panel-tab[data-tab="layers"]');
+await page.waitForTimeout(600);
+const offered = await page.evaluate((ids) => ids.filter((id) => {
+  const rows = [...document.querySelectorAll('#overlay-list .layer-option-label')];
+  return rows.some((node) => node.dataset.layer === id);
+}), scoped);
+check('and none of them is offered over Tennessee', offered, []);
+check('while the layers that apply everywhere still are',
+  await page.locator('#overlay-list .layer-row').count() > 0, true);
+
 console.log('\nEvery basemap previews itself');
 await page.click('.panel-tab[data-tab="layers"]');
 await page.waitForTimeout(700);

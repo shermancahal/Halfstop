@@ -2507,7 +2507,9 @@ function layerRow({ entry, selected, control, preview = false }) {
       control,
       preview ? basemapThumb(entry) : null,
       el('span', { class: 'layer-option-name' }, [
-        el('span', { class: 'layer-option-label', text: entry.name }),
+        // The id on the label, so a test can ask which layers are on offer
+        // rather than matching on names that are meant to change.
+        el('span', { class: 'layer-option-label', dataset: { layer: entry.id }, text: entry.name }),
         layerBadge(entry),
       ]),
     ]),
