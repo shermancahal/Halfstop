@@ -1,20 +1,11 @@
 [
   {
-    "id": "leg:nohrsc-3",
-    "note": "Layer 3 is the snow depth raster; 0 is the group it sits in.",
-    "url": "https://mapservices.weather.noaa.gov/raster/services/snow/NOHRSC_Snow_Analysis/MapServer/WMSServer?service=WMS&version=1.3.0&request=GetLegendGraphic&layer=3&format=image/png"
-  },
-  {
-    "id": "img:nohrsc-export-3",
-    "seasonal": true,
-    "url": "https://mapservices.weather.noaa.gov/raster/rest/services/snow/NOHRSC_Snow_Analysis/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&layers=show:3&f=image"
-  },
-  {
     "id": "cap:fcc-4g-fields",
     "url": "https://services6.arcgis.com/clPWQMwZfdWn4MQZ/arcgis/rest/services/FCC_Mobile_Broadband/FeatureServer/195/query?where=1%3D1&outFields=*&resultRecordCount=1&returnGeometry=false&f=pjson"
   },
   {
-    "id": "cap:nifc-perimeter-fields",
-    "url": "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query?where=1%3D1&outFields=*&resultRecordCount=1&returnGeometry=false&f=pjson"
+    "id": "cap:nohrsc-legend-json",
+    "note": "ArcGIS draws its own key as base64 swatches. If this answers, snow depth can carry a real scale.",
+    "url": "https://mapservices.weather.noaa.gov/raster/rest/services/snow/NOHRSC_Snow_Analysis/MapServer/legend?f=pjson"
   }
 ]

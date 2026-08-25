@@ -110,7 +110,7 @@ function layerNames(body) {
     // A query answer describes its own columns, which is how you find the one
     // that names a carrier without downloading the whole layer.
     if (Array.isArray(parsed.fields) && parsed.fields.length) {
-      return parsed.fields.map((field) => `${field.name} (${field.type || '?'}) ${field.alias || ''}`.trim()).slice(0, 60);
+      return parsed.fields.map((field) => field.name);
     }
     const layers = parsed.layers || parsed.services || parsed.folders || [];
     for (const layer of layers) {
@@ -221,7 +221,11 @@ if (asJSON) {
     const cors = result.status === undefined ? '' : (result.cors ? `cors:${result.cors}` : 'CORS:none');
     console.log(`  ${(mark[result.verdict] || '????').padEnd(5)} ${result.id.padEnd(34)} ${String(result.status ?? '').padEnd(4)} ${size}  ${(result.type || '').padEnd(12)} ${cors}`);
     if (result.names?.length) {
-      for (const name of result.names) console.log(`        - ${name}`);
+      // Eight to a line. A service with sixty fields is worth reading, and
+      // sixty lines of it is not.
+      for (let at = 0; at < result.names.length; at += 8) {
+        console.log(`        ${result.names.slice(at, at + 8).join(', ')}`);
+      }
     } else if (result.verdict !== 'ok' && result.text) {
       console.log(`        ${result.text.slice(0, 160)}`);
     }
