@@ -394,7 +394,21 @@ await page.route('**/*', async (route) => {
     });
   }
   if (url.startsWith(new URL(URL_UNDER_TEST).origin)) return route.continue();
-  if (/\.css($|\?)/.test(url)) return route.fulfill({ status: 200, contentType: 'text/css', body: '' });
+  if (/\.css($|\?)/.test(url)) {
+    /*
+     * The engine's stylesheet, reduced to the one rule that collides with ours.
+     *
+     * Empty CSS here meant the load order could never be wrong in this suite,
+     * and the popup card came back #fff on the real site in dark mode twice
+     * before anybody found it. Same specificity as ours, so whichever loads
+     * last takes the background — which is exactly what is being checked.
+     */
+    return route.fulfill({
+      status: 200,
+      contentType: 'text/css',
+      body: '.mapboxgl-popup-content,.maplibregl-popup-content{background:#fff;color:#000}',
+    });
+  }
   if (/api\.mapbox\.com\/geocoding/.test(url)) {
     return route.fulfill({
       status: 200,
@@ -1585,6 +1599,43 @@ await page.waitForTimeout(300);
 await page.locator('.popup-bar button').nth(1).click();
 await page.waitForTimeout(200);
 check('Close closes it', await page.locator('.drop-pin').count(), 0);
+
+/*
+ * The engine's own stylesheet must not win against ours.
+ *
+ * Both define `.mapboxgl-popup-content` at the same specificity, so whichever
+ * loads last takes the background — and the engine's was being appended at
+ * runtime, after ours. In dark mode that handed the popup card back to #fff
+ * while the panel behind it stayed dark. Reported twice before it was found,
+ * because a synthetic card in a page with no engine CSS looks perfectly fine.
+ */
+console.log('\nThe engine\'s chrome styles lose to ours, not the other way round');
+check('the engine stylesheet is inserted ahead of the app\'s', await page.evaluate(() => {
+  const sheets = [...document.head.querySelectorAll('link[rel="stylesheet"], style')];
+  const engine = sheets.findIndex((n) => /mapbox-gl\.css|maplibre-gl\.css/.test(n.getAttribute('href') || ''));
+  const app = sheets.findIndex((n) => /viewer\.css/.test(n.getAttribute('href') || ''));
+  // -1 for the engine means it never loaded, which this check cannot speak to.
+  return engine === -1 || app === -1 || engine < app;
+}), true);
+
+/*
+ * And the consequence, which is the part anybody actually sees.
+ *
+ * Checked on `color` rather than `background`: this suite runs in the default
+ * light scheme, where the app's popup background and the engine's are both
+ * #fff and a background check cannot tell a win from a loss. The engine sets
+ * `color:#000`; the app sets --ink, which is #1c1815. Those differ in every
+ * scheme, so the check means something in the one this suite runs in.
+ */
+check('so a popup card keeps the app\'s ink, not the engine\'s',
+  await page.evaluate(() => {
+    const card = document.createElement('div');
+    card.className = 'mapboxgl-popup-content';
+    document.body.append(card);
+    const ink = getComputedStyle(card).color;
+    card.remove();
+    return ink;
+  }), 'rgb(28, 24, 21)');
 
 /*
  * A layer whose key comes from the service, not from the catalogue.

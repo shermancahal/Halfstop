@@ -26,12 +26,29 @@ const SOURCES = {
   },
 };
 
+/**
+ * The engine's stylesheet goes in FIRST, ahead of ours.
+ *
+ * It used to be appended, which put it last in document order — and since our
+ * popup rules and its popup rules have exactly the same specificity
+ * (`.mapboxgl-popup-content` either way), last one wins. So every override
+ * this app makes to the engine's chrome was being quietly reverted the moment
+ * the engine loaded: in dark mode the popup card came back `#fff` while the
+ * panel behind it stayed dark, which is precisely what got reported twice.
+ *
+ * Inserting it before our own stylesheets makes vendor CSS the base it should
+ * always have been, and fixes the whole class rather than the one rule anybody
+ * happened to notice.
+ */
 function loadStylesheet(href) {
   if (document.querySelector(`link[href="${href}"]`)) return;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
   link.href = href;
-  document.head.append(link);
+
+  const ours = document.head.querySelector('link[rel="stylesheet"], style');
+  if (ours) document.head.insertBefore(link, ours);
+  else document.head.append(link);
 }
 
 function loadScript(src) {
