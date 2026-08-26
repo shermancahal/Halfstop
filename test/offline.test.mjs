@@ -16,6 +16,8 @@ import {
   normalizeBounds, crossesAntimeridian, tileRange, countTiles,
   estimateBytes, formatBytes, areaKm2,
   createRegion, measureRegion, regionDefinition, buildManifest, regionsToGeoJSON,
+  tieredPlan,
+  countTieredTiles,
 } from '../assets/js/lib/offline.js';
 
 // The Cherokee National Forest, roughly — the ground this app was built for.
@@ -262,4 +264,82 @@ test('store: change fires on every mutation, so the panel stays honest', () => {
   store.update(region.id, { name: 'Renamed' });
   store.remove(region.id);
   assert.equal(changes, 3);
+});
+
+/*
+ * The tiered download.
+ *
+ * A contiguous pyramid spends almost everything on the top level, covering
+ * ground nobody will look at closely. These fix the shape that replaces it:
+ * broad and middle over the whole region, street level only where the saved
+ * points are.
+ */
+const TIER_BOX = { west: -84.6, south: 35.6, east: -83.9, north: 36.2 };
+const PINS = [[-84.28, 35.96], [-84.1, 36.05], [-84.5, 35.7]];
+
+test('tiered: the close zoom follows the waypoints, not the region', () => {
+  const plan = tieredPlan(TIER_BOX, PINS);
+  assert.equal(plan.length, 3);
+  assert.deepEqual(plan.map((tier) => tier.zoom), [8, 11, 14]);
+  assert.equal(plan[0].boxes.length, 1, 'broad covers the region');
+  assert.equal(plan[1].boxes.length, 1, 'mid covers the region');
+  assert.equal(plan[2].boxes.length, PINS.length, 'close covers one box per pin');
+});
+
+test('tiered: it is dramatically cheaper than the same range in full', () => {
+  /*
+   * The whole argument for the feature, asserted rather than claimed. If a
+   * change ever makes this merely a bit cheaper, the trade stops being worth
+   * the complexity and somebody should know.
+   */
+  const full = countTiles(TIER_BOX, 8, 14);
+  const tiered = countTieredTiles(tieredPlan(TIER_BOX, PINS));
+  assert.ok(tiered * 10 < full, `tiered ${tiered} should be far under full ${full}`);
+});
+
+test('tiered: overlapping waypoint boxes are not billed twice', () => {
+  // Two pins a few hundred metres apart share most of their tiles. Summing
+  // rectangles would count those twice and overstate the download to somebody
+  // deciding whether to press it on hotel wifi.
+  const together = countTieredTiles(tieredPlan(TIER_BOX, [[-84.28, 35.96], [-84.281, 35.961]]));
+  const apart = countTieredTiles(tieredPlan(TIER_BOX, [[-84.28, 35.96], [-84.0, 36.1]]));
+  assert.ok(together < apart, 'two pins on top of each other cost less than two far apart');
+});
+
+test('tiered: the close box is the same distance on the ground at any latitude', () => {
+  /*
+   * A degree of longitude shrinks towards the poles and a degree of latitude
+   * does not. Using one number for both would quietly give an Alaskan pin half
+   * the east-west coverage of a Texan one, which nobody would notice until
+   * they were standing in it.
+   */
+  const at = (lat) => {
+    const [box] = tieredPlan({ west: -150, south: lat - 1, east: -148, north: lat + 1 },
+      [[-149, lat]])[2].boxes;
+    return { lon: box.east - box.west, lat: box.north - box.south };
+  };
+  const south = at(30);
+  const north = at(65);
+
+  assert.ok(Math.abs(south.lat - north.lat) < 1e-9, 'latitude span does not vary');
+  assert.ok(north.lon > south.lon * 1.5, 'longitude span widens towards the pole');
+});
+
+test('tiered: no waypoints means no close tier rather than an empty one', () => {
+  // A region saved before anything was pinned. Two tiers is the honest answer;
+  // a third with no boxes in it would render as a zoom level that downloads
+  // nothing.
+  const plan = tieredPlan(TIER_BOX, []);
+  assert.equal(plan.length, 2);
+  assert.ok(countTieredTiles(plan) > 0);
+});
+
+test('tiered: rubbish in is null or zero, never a throw', () => {
+  assert.equal(tieredPlan(null), null);
+  assert.equal(tieredPlan({ west: 'x' }), null);
+  assert.equal(countTieredTiles(null), 0);
+  assert.equal(countTieredTiles([]), 0);
+  // A pin with a missing or non-numeric coordinate is skipped, not plotted at
+  // the origin — which is in the Atlantic.
+  assert.equal(tieredPlan(TIER_BOX, [[NaN, 35], null, [-84.28, 35.96]])[2].boxes.length, 1);
 });

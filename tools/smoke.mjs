@@ -107,7 +107,7 @@ getWest(){return this.w}getSouth(){return this.s}getEast(){return this.e}getNort
 extend(){return this}isEmpty(){return false}}
 class Src{constructor(d){this._d=d}setData(d){this._d=d}}
 class Popup{setLngLat(){return this}setDOMContent(n){document.body.appendChild(n);return this}addTo(){return this}remove(){return this}}
-class M extends E{constructor(o){super();this._s=new Map();this._l=new Map();this._img=new Map();
+class M extends E{constructor(o){super();window.__mapOptions=o;this._s=new Map();this._l=new Map();this._img=new Map();
 this._ready=false;window.__map=this;this._apply(o.style);
 setTimeout(()=>{this.fire('style.load');           // sources NOT loaded yet
   setTimeout(()=>{this._ready=true;this.fire('styledata');this.fire('idle');this.fire('load')},30)},0)}
@@ -1038,6 +1038,22 @@ await page.keyboard.press('Escape');
  * night about twice a decade, so what is worth having is the number, not a
  * switch that draws nothing almost every night.
  */
+/*
+ * The picture of the map, which is the offline that needs no tiles and no
+ * token. The check is that the button is wired and the map was built able to
+ * be read back — WebGL discards its drawing buffer by default, and a snapshot
+ * feature built without preserveDrawingBuffer saves a blank rectangle while
+ * looking like it worked.
+ */
+console.log('\nThe visible map can be saved as a picture');
+const snapshot = await page.evaluate(() => ({
+  button: !!document.getElementById('snapshot-button'),
+  preserved: window.__mapOptions?.preserveDrawingBuffer === true,
+}));
+check('the button is there', snapshot.button, true);
+check('and the map keeps its drawing buffer so it can be read back',
+  snapshot.preserved, true);
+
 console.log('\nSpace weather reaches the Photography panel');
 await page.click('.panel-tab[data-tab="waypoints"]');
 await page.waitForTimeout(400);

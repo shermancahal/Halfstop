@@ -387,6 +387,19 @@ async function main() {
     hash: 'view',
     attributionControl: { compact: true },
     maxPitch: 75,
+    /*
+     * Needed to read the map back out as an image.
+     *
+     * WebGL is allowed to throw away the drawing buffer after each frame, and
+     * by default it does — which makes `toDataURL` return a blank rectangle
+     * rather than failing, so a snapshot feature built without this looks like
+     * it works and saves nothing.
+     *
+     * It costs a little memory and, on some mobile GPUs, a little speed. Worth
+     * it: a saved picture of the map is the one form of offline that needs no
+     * tiles, no token and no network at all.
+     */
+    preserveDrawingBuffer: true,
   });
 
   state.map.addControl(new gl.NavigationControl({ visualizePitch: true }), 'top-right');
@@ -629,6 +642,7 @@ function wirePanel() {
   });
   document.getElementById('share-button')?.addEventListener('click', shareView);
   document.getElementById('download-button')?.addEventListener('click', downloadVisible);
+  document.getElementById('snapshot-button')?.addEventListener('click', saveMapImage);
   document.getElementById('fit-button')?.addEventListener('click', fitAll);
 }
 
@@ -3619,6 +3633,71 @@ function applyVisibility() {
     for (const id of layerIdsFor(entry.key)) {
       if (state.map.getLayer(id)) state.map.setLayoutProperty(id, 'visibility', visibility);
     }
+  }
+}
+
+/**
+ * Say something for a moment, using the status line already on the page.
+ *
+ * `setStatus` only renders its text while busy is true, so a failure passed to
+ * it with false is silent — which is how a message that was written to be read
+ * ends up never appearing.
+ */
+function briefly(text, ms = 4000) {
+  setStatus(true, text);
+  setTimeout(() => setStatus(false), ms);
+}
+
+/**
+ * Save what is on screen as a picture.
+ *
+ * The cheapest offline there is: the tiles are already rendered and paid for,
+ * so writing the canvas to a PNG costs nothing further — no further tile
+ * requests, no token, and it works on a phone with the radio off. It is not a
+ * map, it cannot be panned or zoomed, and that is the trade: for a trailhead
+ * you will look at twice it is the right one.
+ *
+ * The name carries the place and the zoom, because a folder of screenshots
+ * called map-1.png through map-9.png is not a record of anything.
+ */
+function saveMapImage() {
+  const canvas = state.map?.getCanvas?.();
+  if (!canvas) return;
+
+  const centre = state.map.getCenter();
+  const stamp = [
+    'byways',
+    `${centre.lat.toFixed(4)}_${centre.lng.toFixed(4)}`,
+    `z${state.map.getZoom().toFixed(1)}`,
+  ].join('-');
+
+  try {
+    /*
+     * Drawn once more before it is read.
+     *
+     * Even with preserveDrawingBuffer the buffer holds whatever was last
+     * painted, and if the map settled a while ago that can be a frame from
+     * before the last layer finished. Forcing a repaint first is the difference
+     * between a picture of the map and a picture of the map as it was.
+     */
+    state.map.triggerRepaint?.();
+    const url = canvas.toDataURL('image/png');
+    if (!url || url.length < 2000) {
+      // A blank buffer comes back as a valid but tiny data URL rather than as
+      // an error, so length is the only signal that the capture failed.
+      briefly('The map could not be captured on this device.');
+      return;
+    }
+
+    const link = el('a', { href: url, download: `${stamp}.png` });
+    document.body.append(link);
+    link.click();
+    link.remove();
+  } catch {
+    // A cross-origin tile taints the canvas and makes toDataURL throw. Every
+    // source in the catalogue is checked for CORS by tools/check-layers.mjs
+    // precisely so this does not happen, but a user-added one might not be.
+    briefly('A map source would not allow the image to be saved.');
   }
 }
 

@@ -225,6 +225,91 @@ export function createRegion({ name, bounds, minZoom = 8, maxZoom = 12, basemapI
 }
 
 /**
+ * The three zooms worth having, and where each of them is worth having it.
+ *
+ * A contiguous pyramid is the wrong shape for how a map is actually used in the
+ * field. z8 to z14 over one region is about five thousand tiles, and almost all
+ * of them are the top level covering ground nobody will look at closely — you
+ * need the whole area at a glance, the road network at a middle zoom, and
+ * street-level detail only where you are actually going.
+ *
+ * So: the broad and middle zooms cover the region, and the close zoom covers
+ * only small boxes around the points you saved. Over a 50km region with twenty
+ * waypoints that is a few hundred tiles instead of several thousand, for a map
+ * that is more useful rather than less — the detail is where the detail was
+ * wanted.
+ *
+ * Intermediate levels are skipped on purpose. A renderer shows z11 tiles
+ * scaled while you are between 11 and 14; slightly soft for a moment beats
+ * four times the download.
+ *
+ * @param waypoints [lon, lat] pairs — the places the close zoom is drawn around
+ * @param radiusKm how far around each point to take the close zoom
+ */
+export function tieredPlan(bounds, waypoints = [], {
+  broad = 8, mid = 11, close = 14, radiusKm = 2,
+} = {}) {
+  const box = normalizeBounds(bounds);
+  if (!box) return null;
+
+  const level = (zoom) => Math.max(0, Math.min(MAX_ZOOM, Math.round(zoom)));
+  const tiers = [
+    { zoom: level(broad), boxes: [box], covers: 'the whole region' },
+    { zoom: level(mid), boxes: [box], covers: 'the whole region' },
+  ];
+
+  /*
+   * A degree of longitude shrinks with latitude and a degree of latitude does
+   * not, so the box around a point is not square in degrees. Using one number
+   * for both would make the close zoom cover half as much ground east-west in
+   * Alaska as in Texas, silently.
+   */
+  const latSpan = radiusKm / 111.32;
+  const around = [];
+  for (const point of waypoints) {
+    const [lon, lat] = point || [];
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+    const lonSpan = radiusKm / (111.32 * Math.max(0.05, Math.cos((lat * Math.PI) / 180)));
+    around.push(normalizeBounds({
+      west: lon - lonSpan, east: lon + lonSpan,
+      south: lat - latSpan, north: lat + latSpan,
+    }));
+  }
+
+  if (around.length) {
+    tiers.push({ zoom: level(close), boxes: around.filter(Boolean), covers: 'around each waypoint' });
+  }
+
+  return tiers;
+}
+
+/**
+ * What a tiered plan costs.
+ *
+ * Boxes around neighbouring waypoints overlap, and counting them separately
+ * would bill the same tile twice — which matters because the number is shown to
+ * somebody deciding whether to press download over a hotel wifi. Counted as a
+ * set of tile keys rather than a sum of rectangles.
+ */
+export function countTieredTiles(tiers) {
+  const seen = new Set();
+  for (const tier of tiers || []) {
+    for (const box of tier.boxes || []) {
+      // `spans` is the existing splitter — an Alaska box that crosses the
+      // antimeridian becomes two ordinary west-to-east boxes.
+      for (const part of spans(box)) {
+        const range = tileRange(part, tier.zoom);
+        if (!range) continue;
+        for (let x = range.minX; x <= range.maxX; x += 1) {
+          for (let y = range.minY; y <= range.maxY; y += 1) seen.add(`${tier.zoom}/${x}/${y}`);
+        }
+      }
+    }
+  }
+  return seen.size;
+}
+
+/**
  * What this region costs and whether it is over budget.
  *
  * Returned as data rather than rendered text so the same numbers drive the
