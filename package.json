@@ -13,6 +13,7 @@
     "build:icons": "node tools/build-app-icons.mjs",
     "check": "node tools/build-catalog.mjs --check",
     "dist": "node tools/build-dist.mjs --zip",
+    "dist:app": "node tools/build-dist.mjs --app",
     "test": "node --test test/*.test.mjs",
     "validate:style": "node tools/validate-style.mjs",
     "smoke": "node tools/smoke.mjs",

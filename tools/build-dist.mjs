@@ -7,9 +7,11 @@
  * copies out only what the site actually needs, adds an .htaccess tuned for
  * shared Apache hosting, and writes plain-text upload instructions alongside.
  *
- * Usage:  node tools/build-dist.mjs [--zip]
+ * Usage:  node tools/build-dist.mjs [--zip] [--app]
  *         --zip  also write dist/american-byways-maps.zip for hosts whose file
  *                manager can upload-and-extract an archive
+ *         --app  build for the Capacitor shell: use the app's Mapbox token
+ *                rather than the website's. See docs/mobile-app.md.
  */
 
 import { readFile, writeFile, mkdir, rm, readdir, stat } from 'node:fs/promises';
@@ -45,6 +47,53 @@ const INCLUDE_DIRS = ['assets', 'data'];
 const EXCLUDE = new Set(['.DS_Store', 'Thumbs.db', '.gitkeep']);
 
 const wantsZip = process.argv.includes('--zip');
+const wantsApp = process.argv.includes('--app');
+
+/**
+ * Which Mapbox token this build should carry.
+ *
+ * There are two, and they are not interchangeable. The website's is URL-
+ * restricted to its origin; a Capacitor webview loads from `capacitor://
+ * localhost` or `https://localhost` and sends no `Referer` at all, so that
+ * token is rejected on every request from inside the app — a blank map, a 401
+ * in a console nobody is watching, and nothing else to go on.
+ *
+ * So `--app` refuses to fall back. Silently shipping the website's token into
+ * an app bundle produces exactly that failure, and shipping the app's
+ * unrestricted token to the website would throw away the one protection the
+ * web deployment has. Neither is a thing to guess at, so an unset app token is
+ * an error rather than a default.
+ *
+ * Exported for the tests: the whole point is the refusal, and a refusal that
+ * is never exercised is a comment.
+ */
+export function chooseToken({ source = '', wantApp = false, env = {} } = {}) {
+  const read = (name) => {
+    const match = new RegExp(`${name}\\s*=\\s*['"]([^'"]*)['"]`).exec(source);
+    return (match ? match[1] : '').trim();
+  };
+  const web = env.MAPBOX_TOKEN?.trim() || read('ABMAP_MAPBOX_TOKEN');
+  const app = env.MAPBOX_TOKEN_APP?.trim() || read('ABMAP_MAPBOX_TOKEN_APP');
+
+  if (!wantApp) {
+    return { token: web, kind: 'web', where: env.MAPBOX_TOKEN?.trim() ? 'MAPBOX_TOKEN' : 'assets/js/token.js' };
+  }
+  if (!app) {
+    throw new Error(
+      'No app token. --app needs ABMAP_MAPBOX_TOKEN_APP in assets/js/token.js '
+      + '(or MAPBOX_TOKEN_APP in the environment): a second pk. token with no URL '
+      + 'restriction, because a Capacitor webview sends no Referer. See docs/mobile-app.md.',
+    );
+  }
+  if (app === web) {
+    throw new Error(
+      'The app token and the website token are the same. Keeping them separate is '
+      + 'the point: an APK or IPA is a zip, so a token pulled out of one should cost '
+      + 'a single revocation, not take the website down with it.',
+    );
+  }
+  return { token: app, kind: 'app', where: env.MAPBOX_TOKEN_APP?.trim() ? 'MAPBOX_TOKEN_APP' : 'assets/js/token.js' };
+}
 
 async function collect(dir, base = dir, out = []) {
   for (const name of (await readdir(dir)).sort()) {
@@ -228,6 +277,15 @@ Full documentation is in README.md in the project repository.
 async function main() {
   console.log('Building the upload package…\n');
 
+  /*
+   * Settle the token before anything is written. `--app` with no app token is
+   * a hard error, and discovering that after dist/ has been wiped and restaged
+   * leaves a half-built directory that looks like a finished one.
+   */
+  const tokenPath = path.join(ROOT, 'assets', 'js', 'token.js');
+  const tokenSource = existsSync(tokenPath) ? await readFile(tokenPath, 'utf8') : '';
+  const chosen = chooseToken({ source: tokenSource, wantApp: wantsApp, env: process.env });
+
   // Always rebuild the catalogue first: shipping a stale catalog.json means the
   // library page silently disagrees with the files next to it.
   const { execPath } = process;
@@ -361,18 +419,39 @@ async function main() {
   const encoder = new TextEncoder();
   console.log(`  Cache-busted ${stamped} asset reference(s) across ${html.length} page(s).`);
 
-  // token.js is gitignored, so it may not exist. Always emit one: the pages load
-  // it with a plain <script> tag, and a missing file would 404 on every visit.
-  const tokenPath = path.join(ROOT, 'assets', 'js', 'token.js');
-  if (existsSync(tokenPath)) {
-    const token = await readFile(tokenPath, 'utf8');
-    const configured = /ABMAP_MAPBOX_TOKEN\s*=\s*['"]\s*\S/.test(token);
-    console.log(configured
-      ? '  Mapbox token: found in assets/js/token.js — included in the package'
-      : '  Mapbox token: assets/js/token.js is empty — the open basemaps will be used');
-  } else {
+  /*
+   * token.js is gitignored, so it may not exist. Always emit one: the pages
+   * load it with a plain <script> tag, and a missing file would 404 on every
+   * visit.
+   *
+   * For a web build the file is passed through as it is. For `--app` it is
+   * rewritten so `ABMAP_MAPBOX_TOKEN` holds the *app* token — the page only
+   * ever reads that one name, and the alternative (teaching the client which
+   * shell it is in) puts a decision in the browser that the build already
+   * knows the answer to.
+   */
+  if (wantsApp) {
+    // Rewritten rather than appended: leaving the website's value in the file
+    // would ship both tokens in the bundle, which defeats separating them.
+    const rewritten = tokenSource
+      .replace(/window\.ABMAP_MAPBOX_TOKEN\s*=\s*['"][^'"]*['"]/,
+        `window.ABMAP_MAPBOX_TOKEN = '${chosen.token}'`)
+      .replace(/window\.ABMAP_MAPBOX_TOKEN_APP\s*=\s*['"][^'"]*['"]/,
+        "window.ABMAP_MAPBOX_TOKEN_APP = ''");
+    const index = staged.findIndex((entry) => entry.name === 'assets/js/token.js');
+    const data = encoder.encode(rewritten.includes(chosen.token)
+      ? rewritten
+      : `window.ABMAP_MAPBOX_TOKEN = '${chosen.token}';\n`);
+    if (index >= 0) staged[index] = { name: 'assets/js/token.js', data };
+    else staged.push({ name: 'assets/js/token.js', data });
+    console.log(`  Mapbox token: the APP token, from ${chosen.where} — for the Capacitor shell, not the website`);
+  } else if (!existsSync(tokenPath)) {
     staged.push({ name: 'assets/js/token.js', data: encoder.encode("window.ABMAP_MAPBOX_TOKEN = '';\n") });
     console.log('  Mapbox token: none configured — shipping an empty assets/js/token.js');
+  } else {
+    console.log(chosen.token
+      ? '  Mapbox token: found in assets/js/token.js — included in the package'
+      : '  Mapbox token: assets/js/token.js is empty — the open basemaps will be used');
   }
 
   staged.push({ name: '.htaccess', data: encoder.encode(HTACCESS) });
@@ -400,7 +479,10 @@ async function main() {
   console.log('Instructions are repeated in dist/UPLOAD-INSTRUCTIONS.txt.');
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+// Guarded so `chooseToken` can be imported by the tests without staging a build.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((error) => {
+    console.error(error.message || error);
+    process.exit(1);
+  });
+}

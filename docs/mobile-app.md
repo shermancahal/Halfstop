@@ -50,6 +50,20 @@ separate — an IPA or an APK is a zip, anyone can pull strings out of one, and
 two tokens means a leak from the binary is one revocation instead of two. Set a
 usage limit on it in the Mapbox dashboard before you ship.
 
+Put it in `assets/js/token.js` — which is gitignored, so it never reaches the
+repository — beside the website's:
+
+```js
+window.ABMAP_MAPBOX_TOKEN     = 'pk.…';   // the website, URL-restricted
+window.ABMAP_MAPBOX_TOKEN_APP = 'pk.…';   // the app, unrestricted
+```
+
+`npm run dist` ships the first and ignores the second. `npm run dist:app`
+ships the second **in place of** the first, so an app bundle never carries the
+website's key. It refuses to run rather than falling back: building the app
+with the website's URL-restricted token would 401 on every tile with a blank
+map and nothing to go on, and that is not a thing to guess at.
+
 Never an `sk.` token. If you later use Mapbox's native SDK for offline packs,
 its `DOWNLOADS:READ` secret token is a **build-time** credential: it belongs in
 `~/.netrc` on the build machine or in a CI secret, never in the repository,
@@ -78,10 +92,14 @@ You also need, per platform:
 at `dist`, so build the site first — Capacitor copies whatever is there.
 
 ```sh
-npm run dist          # writes dist/, including token.js and the service worker
+npm run dist:app      # writes dist/ with the APP token — not `npm run dist`
 npx cap add ios
 npx cap add android
 ```
+
+`dist:app`, every time you build for the shell. `npm run dist` puts the
+website's token in `dist/`, and `cap sync` would copy it straight into the
+bundle.
 
 That creates `ios/` and `android/`. Add both to `.gitignore` until you have a
 signing setup worth committing.
@@ -130,13 +148,13 @@ site in `viewer.js` is one function.
 ## 6. Build and run
 
 ```sh
-npm run dist && npx cap sync     # rebuild the site and copy it into both projects
-npx cap open ios                 # Xcode
-npx cap open android             # Android Studio
+npm run dist:app && npx cap sync   # rebuild with the app token, copy into both projects
+npx cap open ios                   # Xcode
+npx cap open android               # Android Studio
 ```
 
 `cap sync` is the step people forget. Editing files in `assets/` changes nothing
-in the app until `npm run dist && npx cap sync` has run — the native project
+in the app until `npm run dist:app && npx cap sync` has run — the native project
 holds a *copy*.
 
 ## 7. Things that behave differently inside the shell
