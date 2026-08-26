@@ -538,8 +538,14 @@ function waitForStyle(timeoutMs = 15000) {
 
 /** Push the configured site identity into the shared page chrome. */
 function applyBranding() {
-  const name = document.getElementById('brand-name');
-  if (name) name.textContent = SITE.name;
+  // Both copies, from the one source. The panel carries the name on screens too
+  // narrow for the header to hold it, and a rename that reached only one of
+  // them would leave the old name showing on exactly the devices where it is
+  // the only place the name appears at all.
+  for (const id of ['brand-name', 'panel-brand-name']) {
+    const node = document.getElementById(id);
+    if (node) node.textContent = SITE.name;
+  }
   const parent = document.getElementById('brand-parent');
   if (parent && SITE.parent?.name) parent.textContent = SITE.parent.name;
 }

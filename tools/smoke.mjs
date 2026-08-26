@@ -1561,6 +1561,36 @@ await page.waitForTimeout(200);
 check('Close closes it', await page.locator('.drop-pin').count(), 0);
 
 /*
+ * The name, on a screen too narrow for the header to carry it.
+ *
+ * Measured rather than assumed: at 402px the header's visible children already
+ * come to 323px with 120px of gaps inside a 370px content box, and the title
+ * wants 143 more. It cannot go up there without dropping the navigation, so
+ * the panel carries it and opening the menu is where you see it.
+ */
+console.log('\nThe name is somewhere, at every width');
+await page.setViewportSize({ width: 402, height: 874 });
+await page.waitForTimeout(300);
+check('the header drops the title on a phone', await page.locator('.brand-text').isVisible(), false);
+
+// Open it only if it is not already. Below 820px the hamburger is hidden while
+// the panel is up — clicking it unconditionally waits on a control that is
+// deliberately not there, which is a timeout rather than a failure.
+if (await page.locator('#panel-toggle').isVisible()) await page.locator('#panel-toggle').click();
+await page.waitForTimeout(350);
+check('and the menu carries it instead', await page.locator('.panel-brand').isVisible(), true);
+check('spelled from the one source both copies read',
+  (await page.locator('#panel-brand-name').innerText()).trim(),
+  (await page.locator('#brand-name').innerText()).trim());
+
+if (await page.locator('#panel-close').isVisible()) await page.locator('#panel-close').click();
+await page.setViewportSize({ width: 1280, height: 900 });
+await page.waitForTimeout(300);
+check('while a wide header keeps the title and the menu does not repeat it',
+  [await page.locator('.brand-text').isVisible(), await page.locator('.panel-brand').isVisible()],
+  [true, false]);
+
+/*
  * Offline.
  *
  * A service worker that registers but does not actually answer a request is
