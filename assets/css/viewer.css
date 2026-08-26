@@ -1622,3 +1622,12 @@ html, body { height: 100%; overflow: hidden; }
   background: #7b4fa8; opacity: .7;
 }
 .scrub-mark-label { font-size: .6rem; color: var(--ink-3); white-space: nowrap; }
+
+/* Five tabs where there were four. The glyph carries the recognition so the
+   words can shrink instead of the row wrapping into two rows of unrelated
+   buttons. */
+.sky-tab { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.sky-tab-icon { display: block; line-height: 0; }
+.sky-tab-icon svg { width: 16px; height: 16px; }
+.sky-tab-text { font-size: .68rem; white-space: nowrap; }
+@media (max-width: 360px) { .sky-tab-text { font-size: .62rem; } }

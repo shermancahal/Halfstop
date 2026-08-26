@@ -1,14 +1,35 @@
 [
   {
+    "id": "sw:solar-wind-mag",
+    "note": "Bz is the leading indicator and Kp is the lagging one. A southward interplanetary field is what actually opens the door, and DSCOVR sits far enough upstream to give a quarter-hour to an hour of warning - which is the difference between a readout that says 'this quarter-day was quiet' and one that says 'go now'.",
+    "expect": "data",
+    "find": "\"(?:bz_gsm|bt|time_tag)\"",
+    "url": "https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json"
+  },
+  {
+    "id": "sw:solar-wind-plasma",
+    "note": "Speed and density from the same spacecraft. Bz southward with a fast wind behind it is the combination worth driving for.",
+    "expect": "data",
+    "find": "\"(?:speed|density|time_tag)\"",
+    "url": "https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json"
+  },
+  {
+    "id": "sw:alerts",
+    "note": "The G1-G5 watches and warnings, so a storm surfaces on its own rather than waiting for somebody to open the panel and check.",
+    "expect": "data",
+    "find": "\"(?:message|issue_datetime|product_id)\"",
+    "url": "https://services.swpc.noaa.gov/products/alerts.json"
+  },
+  {
     "id": "land:padus-service-types",
-    "note": "Three attempts at PAD-US, three 400s - and the last one said Invalid URL for the service root itself, not just the query. So the path shape is wrong, not the parameters: PADUS3_0ManagerName is probably a MapServer rather than a FeatureServer. This prints each service beside its type instead of assuming one.",
+    "note": "Three attempts at PAD-US, three 400s, and the last said Invalid URL for the service root rather than the query - so the path shape is wrong, not the parameters. This prints each service beside its type instead of assuming FeatureServer a fourth time.",
     "expect": "data",
     "find": "\"name\"\\s*:\\s*\"PADUS3_0[^\"]{0,32}\"\\s*,\\s*\"type\"\\s*:\\s*\"[A-Za-z]+\"",
     "url": "https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services?f=pjson"
   },
   {
     "id": "land:blm-sma-identify-query",
-    "note": "The other route to BLM polygons, and closer to home. The surface-management service the public lands layer already uses has a sublayer of its own; if it answers a bbox query with geometry, hatching becomes a styling decision and PAD-US stops mattering.",
+    "note": "The closer route to BLM polygons: the surface-management service the public lands layer already uses. If its sublayer answers a bbox query with geometry, hatching becomes a styling decision and PAD-US stops mattering.",
     "expect": "data",
     "find": "\"(?:ADMIN_AGENCY_CODE|ADMIN_UNIT_NAME|ADMIN_DEPT_CODE)\"\\s*:\\s*\"?[^,\"}]{0,24}\"?",
     "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_Cached_without_PriUnk/MapServer/0/query?where=1%3D1&outFields=*&geometry=-111.6%2C38.4%2C-111.4%2C38.6&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&returnGeometry=false&resultRecordCount=3&f=geojson"

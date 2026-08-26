@@ -36,6 +36,11 @@ export const icons = {
   camera: svg('<path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><circle cx="12" cy="12.5" r="3.5"/>'),
   cloud: svg('<path d="M17.5 19a4.5 4.5 0 0 0 .5-9 6 6 0 0 0-11.6 1.6A3.7 3.7 0 0 0 7 19Z"/>'),
   alert: svg('<path d="M10.3 3.9 2 18.1A2 2 0 0 0 3.7 21h16.6a2 2 0 0 0 1.7-2.9L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4.5"/><path d="M12 17.2h.01"/>'),
+  /* An arch over a horizon — the aurora as it is drawn on every forecast page,
+     and distinct enough from `cloud` at 16px not to be mistaken for weather. */
+  aurora: svg('<path d="M4 20a8 8 0 0 1 16 0"/><path d="M7.5 20a4.5 4.5 0 0 1 9 0"/><path d="M2 20h20"/>'),
+  /* The band, for the Milky Way: a diagonal sweep with stars either side. */
+  galaxy: svg('<path d="M4 19C7 13 12 8 20 5"/><path d="M6.5 5.5h.01"/><path d="M10 8.5h.01"/><path d="M16.5 15h.01"/><path d="M19.5 11h.01"/>'),
   crosshair: svg('<circle cx="12" cy="12" r="8"/><path d="M12 2v3"/><path d="M12 19v3"/><path d="M2 12h3"/><path d="M19 12h3"/><circle cx="12" cy="12" r="1.6"/>'),
   pencil: svg('<path d="M12.5 20H21"/><path d="M16.4 3.6a2.1 2.1 0 0 1 3 3L7.5 18.5 3.5 20l1.5-4Z"/>'),
   note: svg('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z"/><path d="M14 2v6h6"/><path d="M8.5 13.5h7"/><path d="M8.5 17h4.5"/>'),

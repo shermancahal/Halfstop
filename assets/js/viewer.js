@@ -2137,18 +2137,30 @@ function skyPanels(position, date, phases) {
   const [lon, lat] = position;
   const open = state.skyPanel;
 
+  /*
+   * An icon on each, because the row is now five wide.
+   *
+   * Four text labels fitted a 320px panel; five wrap, and a wrapped tab strip
+   * reads as two rows of unrelated buttons. The glyph carries the recognition
+   * and lets the words shrink — and each is the shape that thing is drawn as
+   * everywhere else: a sun for the light phases, a moon, the band for the
+   * Milky Way, an arch for the aurora, a pin for what goes on the map.
+   */
   const tabs = [
-    { id: 'twilight', label: 'Light phases' },
-    { id: 'moon', label: `Moon ${Math.round(moonIllumination(date).fraction * 100)}%` },
-    { id: 'milkyway', label: 'Milky Way' },
-    { id: 'lines', label: 'On the map' },
+    { id: 'twilight', label: 'Light', icon: icons.sun },
+    { id: 'moon', label: `Moon ${Math.round(moonIllumination(date).fraction * 100)}%`, icon: icons.moon },
+    { id: 'milkyway', label: 'Milky Way', icon: icons.galaxy },
+    { id: 'aurora', label: 'Aurora', icon: icons.aurora },
+    { id: 'lines', label: 'On the map', icon: icons.pin },
   ];
 
   const row = el('div', { class: 'sky-tabs' }, tabs.map((tab) => el('button', {
     class: `sky-tab${open === tab.id ? ' is-open' : ''}`,
     type: 'button',
     'aria-expanded': open === tab.id ? 'true' : 'false',
-    text: tab.label,
+    // The label stays in the markup rather than becoming a title, so the tabs
+    // are still readable to a screen reader and still findable by their words.
+    html: `<span class="sky-tab-icon">${tab.icon}</span><span class="sky-tab-text">${tab.label}</span>`,
     onclick: () => {
       state.skyPanel = open === tab.id ? '' : tab.id;
       rememberSkyPanel();
@@ -2160,6 +2172,7 @@ function skyPanels(position, date, phases) {
   if (open === 'twilight') twilightPanel(body, phases, date, lat, lon);
   else if (open === 'moon') moonPanel(body, date, lat, lon);
   else if (open === 'milkyway') milkyWayPanel(body, date, lat, lon);
+  else if (open === 'aurora') auroraPanel(body, [lon, lat]);
   else if (open === 'lines') linesPanel(body, position, date);
 
   return open ? [row, body] : [row];
@@ -2292,17 +2305,6 @@ function milkyWayPanel(body, date, lat, lon) {
     el('span', { class: 'core-row-label', text: label }),
     el('span', { class: 'core-row-value', text: value }),
   ]))));
-
-  /*
-   * Aurora, last and lazily.
-   *
-   * Below the moon and the window because that is its rank here: from these
-   * latitudes it decides a night about twice a decade, and the other 3,650
-   * times the useful thing it says is "quiet". Fetched when this section is
-   * opened rather than on load — the OVATION grid is close to a megabyte, which
-   * matters to somebody standing at a trailhead on one bar.
-   */
-  body.append(auroraRow([lon, lat]));
 
   if (night.marks.length) {
     body.append(el('div', { class: 'core-marks' }, [
@@ -2590,35 +2592,52 @@ function nightScrubber(position, date) {
  * over *this* point in the next half hour. Kp alone would say "storm" to
  * somebody in Texas for whom it still means nothing.
  */
-function auroraRow(position) {
-  const value = el('span', { class: 'core-row-value', text: '…' });
-  const row = el('div', { class: 'core-rows' }, [
-    el('div', { class: 'core-row' }, [
-      el('span', { class: 'core-row-label', text: 'Aurora' }),
-      value,
-    ]),
-  ]);
+function auroraPanel(body, position) {
+  const chance = el('span', { class: 'core-row-value', text: '…' });
+  const kpValue = el('span', { class: 'core-row-value', text: '…' });
+  const verdict = el('p', { class: 'legend-note', style: 'margin:8px 0 0' });
 
+  body.append(el('div', { class: 'core-rows' }, [
+    el('div', { class: 'core-row' }, [
+      el('span', { class: 'core-row-label', text: 'Chance here, next 30 min' }),
+      chance,
+    ]),
+    el('div', { class: 'core-row' }, [
+      el('span', { class: 'core-row-label', text: 'Planetary K index' }),
+      kpValue,
+    ]),
+  ]));
+  body.append(verdict);
+
+  /*
+   * Said plainly, because the numbers alone mislead at this latitude.
+   *
+   * Kp 5 is a storm and reads as exciting; from Tennessee it still means
+   * nothing you can see. The percentage is the one that answers the question
+   * asked, and it is the one given first.
+   */
   Promise.all([kpNow(), auroraChance(position)]).then(([kp, here]) => {
-    if (!row.isConnected) return;
+    if (!body.isConnected) return;
 
     if (!kp && !here) {
-      // Offline, or NOAA is having an afternoon. Saying nothing is better than
-      // saying "quiet", which would be a claim.
-      value.textContent = 'not available';
+      // Offline, or NOAA is having an afternoon. Saying "quiet" would be a
+      // claim; saying nothing is the truth.
+      chance.textContent = 'not available';
+      kpValue.textContent = '—';
+      verdict.textContent = 'No answer from the Space Weather Prediction Center just now.';
       return;
     }
 
-    const parts = [];
-    if (here) parts.push(`${Math.round(here.chance)}% here`);
-    if (kp) parts.push(`Kp ${kp.kp}`);
-    value.textContent = parts.join(' · ');
-
-    const note = kp ? describeKp(kp.kp) : '';
-    if (note) row.append(el('p', { class: 'legend-note', style: 'margin:4px 0 0', text: note }));
+    chance.textContent = here ? `${Math.round(here.chance)}%` : 'no data for this point';
+    kpValue.textContent = kp ? String(kp.kp) : '—';
+    verdict.textContent = kp ? describeKp(kp.kp) : '';
   });
 
-  return row;
+  body.append(el('p', {
+    class: 'hint', style: 'margin:10px 0 0',
+    text: 'OVATION models where the aurora is, not whether you will see it — '
+      + 'cloud, the moon and your northern horizon all still apply.',
+  }));
 }
 
 /** Draw bearings on the map: where things rise, set, and are right now. */

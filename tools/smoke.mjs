@@ -1045,15 +1045,26 @@ await page.locator('.waypoint-card').first().click();
 await page.waitForTimeout(800);
 await page.locator('.detail-block').filter({ hasText: 'Photography' }).first()
   .evaluate((node) => { node.open = true; });
-await page.locator('.sky-tab', { hasText: /Milky Way/ }).first().click();
+// Every tab carries a glyph now, because five text labels wrap in a 320px
+// panel and a wrapped tab strip reads as two rows of unrelated buttons.
+const tabs = await page.evaluate(() => ({
+  count: document.querySelectorAll('.sky-tab').length,
+  withIcons: document.querySelectorAll('.sky-tab .sky-tab-icon svg').length,
+  labels: [...document.querySelectorAll('.sky-tab-text')].map((node) => node.textContent),
+}));
+check('there are five sky tabs', tabs.count, 5);
+check('and every one of them has an icon', tabs.withIcons, 5);
+check('including Aurora', tabs.labels.includes('Aurora'), true);
+
+await page.locator('.sky-tab', { hasText: /Aurora/ }).first().click();
 await page.waitForTimeout(900);
-const aurora = await page.evaluate(() => {
-  const row = [...document.querySelectorAll('.core-row')]
-    .find((node) => node.textContent.trim().startsWith('Aurora'));
-  return { text: row?.textContent.trim() || '(no row)' };
-});
-check('the chance at this point is reported', /12% here/.test(aurora.text), true);
-check('alongside the planetary K index', /Kp 5/.test(aurora.text), true);
+const aurora = await page.evaluate(() => ({
+  text: [...document.querySelectorAll('.core-row')].map((node) => node.textContent.trim()).join(' | '),
+  note: [...document.querySelectorAll('.legend-note')].map((node) => node.textContent).join(' '),
+}));
+check('the chance at this point is reported', /12%/.test(aurora.text), true);
+check('alongside the planetary K index', /5/.test(aurora.text), true);
+check('and Kp is translated into what it means here', /storm/.test(aurora.note), true);
 
 console.log('\nThe Milky Way band is drawn, and the night can be scrubbed');
 await page.click('.panel-tab[data-tab="waypoints"]');
