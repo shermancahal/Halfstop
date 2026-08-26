@@ -45,7 +45,7 @@
     "id": "roads:mvum-attributes",
     "note": "Three real roads out of Shawnee National Forest with every field, so the panel is written against the attributes the service actually returns rather than the ones the MVUM legend implies. Seasonal dates and permitted vehicle classes are the two the reader wants and the two most likely to be named something unguessable.",
     "expect": "data",
-    "find": "\"attributes\"",
+    "find": "\"[A-Za-z][A-Za-z0-9_]{2,30}\"\\s*:\\s*(?:\"[^\"]{0,30}\"|-?\\d+(?:\\.\\d+)?|null)",
     "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_02/MapServer/1/query?where=1%3D1&outFields=*&geometry=-88.8%2C37.45%2C-88.6%2C37.55&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&returnGeometry=false&resultRecordCount=3&f=json"
   },
   {
@@ -59,7 +59,21 @@
     "id": "roads:gtlf-attributes",
     "note": "Three real BLM routes in central Utah with every field. GTLF publishes route designations - open, limited, closed, and to which vehicle types - and this is what says under which names.",
     "expect": "data",
-    "find": "\"attributes\"",
+    "find": "\"[A-Za-z][A-Za-z0-9_]{2,30}\"\\s*:\\s*(?:\"[^\"]{0,30}\"|-?\\d+(?:\\.\\d+)?|null)",
     "url": "https://gis.blm.gov/arcgis/rest/services/transportation/BLM_Natl_GTLF_Public_Display/MapServer/0/query?where=1%3D1&outFields=*&geometry=-111.6%2C38.4%2C-111.4%2C38.6&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&returnGeometry=false&resultRecordCount=3&f=json"
+  },
+  {
+    "id": "roads:mvum-fields",
+    "note": "The field list for Motor Vehicle Use Map: Roads, with each field's type. This is the authoritative answer to what a road's class, its seasonal dates and its permitted vehicle types are actually called - the first pass asked for the attributes and got back only the word 'attributes', which was a bad regex rather than a quiet service.",
+    "expect": "data",
+    "find": "\"name\"\\s*:\\s*\"[A-Za-z][A-Za-z0-9_]{2,40}\"\\s*,\\s*\"type\"\\s*:\\s*\"esriFieldType[A-Za-z]+\"",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_02/MapServer/1?f=pjson"
+  },
+  {
+    "id": "roads:gtlf-fields",
+    "note": "The same for the first BLM route sublayer. GTLF names its designation in the sublayer itself - 'Roads Managed for Public Motorized Use' and seven others - so the per-feature fields may add route number, surface and season on top of that rather than repeating it.",
+    "expect": "data",
+    "find": "\"name\"\\s*:\\s*\"[A-Za-z][A-Za-z0-9_]{2,40}\"\\s*,\\s*\"type\"\\s*:\\s*\"esriFieldType[A-Za-z]+\"",
+    "url": "https://gis.blm.gov/arcgis/rest/services/transportation/BLM_Natl_GTLF_Public_Display/MapServer/0?f=pjson"
   }
 ]

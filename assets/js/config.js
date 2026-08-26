@@ -783,6 +783,9 @@ export const OVERLAYS = [
    */
   {
     id: 'ky-aerial',
+    // Probed over Kentucky rather than the default tile in Tennessee, where this
+    // layer is correctly empty and looked broken for it.
+    at: [-84.5, 37.8],
     states: ['KY'],
     name: 'Aerial (3 in)',
     description: 'KyFromAbove orthoimagery. Three-inch resolution — close enough to count fence posts.',
@@ -795,6 +798,9 @@ export const OVERLAYS = [
   },
   {
     id: 'ky-hillshade',
+    // Probed over Kentucky rather than the default tile in Tennessee, where this
+    // layer is correctly empty and looked broken for it.
+    at: [-84.5, 37.8],
     states: ['KY'],
     name: 'Lidar hillshade (5 ft)',
     description: 'Terrain from five-foot lidar. Old roadbeds, quarry benches and hollows the '
@@ -808,6 +814,9 @@ export const OVERLAYS = [
   },
   {
     id: 'ky-topo',
+    // Probed over Kentucky rather than the default tile in Tennessee, where this
+    // layer is correctly empty and looked broken for it.
+    at: [-84.5, 37.8],
     states: ['KY'],
     name: 'Kentucky topo sheets',
     description: 'The state\u2019s own 2016 topographic series.',

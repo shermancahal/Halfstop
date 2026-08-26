@@ -67,17 +67,36 @@ function bbox3857(z, x, y) {
   return [west, north - size, west + size, north];
 }
 
+/** The default tile above, as the point it is centred on. */
+const HOME = [-83.67, 36.0];
+
 /**
  * The tile to ask for, which is not always the default one.
+ *
+ * Two ways the default is wrong, and both have had this tool report a working
+ * layer as a broken one:
  *
  * A layer that only covers one state is correctly empty everywhere else, and
  * the default tile is over Tennessee — so Kentucky's lidar hillshade came back
  * blank and looked broken when it was working perfectly and simply had nothing
- * to draw there. A candidate can name its own place: `"at": [lon, lat, zoom]`.
+ * to draw there. An entry can name its own place: `"at": [lon, lat, zoom]`.
+ *
+ * And a layer has a zoom range. Asking the light pollution layer for z9 when
+ * it publishes to z8 is a 400 from the server and a FAIL in this report, for a
+ * layer that is fine — the request was outside what it offers. The zoom is
+ * clamped to the range the entry itself declares, which is the same range the
+ * app will ask within.
  */
 function tileFor(entry) {
-  if (!Array.isArray(entry?.at)) return { z: Z, x: X, y: Y };
-  const [lon, lat, zoom = Z] = entry.at;
+  const [lon, lat, asked] = Array.isArray(entry?.at) ? entry.at : [...HOME, undefined];
+  const floor = Number.isFinite(entry?.minzoom) ? entry.minzoom : 0;
+  const ceiling = Number.isFinite(entry?.maxzoom) ? entry.maxzoom : 22;
+  const zoom = Math.min(Math.max(asked ?? Z, floor), ceiling);
+
+  // Keep the exact default tile when nothing moved it, so the numbers in the
+  // report stay comparable with every previous run.
+  if (!Array.isArray(entry?.at) && zoom === Z) return { z: Z, x: X, y: Y };
+
   const n = 2 ** zoom;
   const rad = (lat * Math.PI) / 180;
   return {
