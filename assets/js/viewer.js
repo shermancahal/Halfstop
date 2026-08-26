@@ -3763,13 +3763,50 @@ function showDropPin(position) {
     properties: { kind: 'waypoint', name: 'Dropped pin', description: '' },
   };
 
-  const popup = new state.gl.Popup({ closeButton: true, maxWidth: '320px', offset: 12 })
+  /*
+   * Our own close control rather than the engine's.
+   *
+   * The library's is a bare glyph tucked into the corner, roughly 26px, sitting
+   * over the title. That is a hard target on a phone and gives no hint what it
+   * does. A labelled button on its own row above the name clears the title
+   * entirely and is comfortably thumb-sized.
+   */
+  const popup = new state.gl.Popup({ closeButton: false, maxWidth: '320px', offset: 12 })
     .setLngLat(position);
   state.dropPopup = popup;
+
+  const closeBar = el('div', { class: 'popup-bar' }, [
+    labelledButton(icons.close, 'Close', {
+      tone: 'ghost', title: 'Close this pin',
+      onclick: () => popup.remove(),
+    }),
+  ]);
 
   const nameInput = el('input', {
     class: 'drop-pin-name', value: 'Dropped pin', 'aria-label': 'Name for this pin',
     oninput: (event) => { feature.properties.name = event.target.value.trim() || 'Dropped pin'; },
+  });
+
+  /*
+   * Symbol and note, chosen before saving rather than after.
+   *
+   * Both were previously only reachable by saving the pin, finding it again and
+   * opening its editor — three steps to record the thing you are standing in
+   * front of. They write straight onto the feature, so whatever is set here is
+   * what lands in the folder.
+   */
+  const iconPicker = el('select', { class: 'drop-pin-icon', 'aria-label': 'Symbol for this pin' },
+    [...pinIconGroups()].map(([group, choices]) => el('optgroup', { label: group },
+      choices.map((choice) => el('option', {
+        value: choice.id, text: choice.name, selected: choice.id === DEFAULT_PIN_ICON,
+      })))));
+  feature.properties.icon = DEFAULT_PIN_ICON;
+  iconPicker.addEventListener('change', () => { feature.properties.icon = iconPicker.value; });
+
+  const noteInput = el('textarea', {
+    class: 'drop-pin-note', rows: '2', 'aria-label': 'Field notes for this pin',
+    placeholder: 'Field notes — what is here, where to park, what to watch for…',
+    oninput: (event) => { feature.properties.description = event.target.value; },
   });
 
   const coords = formatDD(position);
@@ -3777,6 +3814,7 @@ function showDropPin(position) {
   const weatherLine = el('dd', { text: '…' });
 
   content.append(
+    closeBar,
     nameInput,
     el('dl', { class: 'popup-stats' }, [
       el('dt', { text: 'Coordinates' }),
@@ -3796,13 +3834,14 @@ function showDropPin(position) {
       el('dt', { text: 'Elevation' }), elevationLine,
       el('dt', { text: 'Weather' }), weatherLine,
     ]),
+    el('div', { class: 'drop-pin-fields' }, [iconPicker, noteInput]),
     saveToFolderActions(feature, popup),
-    el('button', {
-      class: 'button button-ghost button-small drop-pin-more', type: 'button',
-      text: 'Full details for this point',
+    labelledButton(icons.info, 'Details', {
+      tone: 'ghost', title: 'Everything known about this place',
       onclick: () => { popup.remove(); showPointDetails(position); },
     }),
   );
+  content.lastElementChild.classList.add('drop-pin-more');
 
   // Both lookups need the network and neither blocks the popup: the
   // coordinates are the part you need standing at a trailhead with one bar,
@@ -4022,16 +4061,34 @@ function saveToFolderActions(feature, popup) {
   ]);
   select.value = folders.length ? folders[folders.length - 1].id : '__new__';
 
-  return el('div', { class: 'popup-actions' }, [
+  /*
+   * The new folder is named inline, not by window.prompt.
+   *
+   * A prompt is a modal that takes the whole map away to ask one question, and
+   * inside the iOS shell it arrives as a native system alert over a full-screen
+   * app — which reads like an error rather than a field. It also cannot be
+   * corrected once dismissed. This row appears only when "New folder" is the
+   * choice, and disappears again when it is not.
+   */
+  const newName = el('input', {
+    type: 'text', class: 'popup-new-folder', value: 'Saved places',
+    placeholder: 'Name the new folder', 'aria-label': 'Name for the new folder',
+  });
+  const showName = () => { newName.hidden = select.value !== '__new__'; };
+  select.addEventListener('change', showName);
+  showName();
+
+  // Stacked, in the order the decision is actually made: which folder, what to
+  // call it if it is new, then commit. Side by side, the name field wrapped
+  // below the button that consumes it.
+  return el('div', { class: 'popup-actions popup-save' }, [
     select,
+    newName,
     el('button', {
-      type: 'button', text: 'Save to folder',
+      type: 'button', class: 'is-primary', text: 'Save to folder',
       onclick: () => {
-        const name = select.value === '__new__'
-          ? window.prompt('Name the new folder', 'Saved places')
-          : null;
-        if (select.value === '__new__' && name === null) return;
-        saveFeatureToFolder(feature, select.value, name);
+        saveFeatureToFolder(feature, select.value,
+          select.value === '__new__' ? newName.value : null);
         popup.remove();
         openTab('folders');
       },

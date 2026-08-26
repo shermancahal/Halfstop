@@ -45,6 +45,16 @@
    * floating map controls under the home indicator. `viewport-fit=cover` in
    * the page's viewport meta is what makes these report anything at all.
    */
+  /*
+   * Popups sit ON the map rather than in a panel, so they need their own
+   * background token. In dark mode `--surface` and `--paper-2` are the same
+   * colour, which made a popup's own inputs and selects — themselves
+   * `--surface` — disappear into the card they were sitting on, leaving a
+   * black rectangle with a hairline round it. The card drops to `--paper` so
+   * the controls on it read as controls.
+   */
+  --popup-bg: var(--surface);
+
   --safe-top:    env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left:   env(safe-area-inset-left, 0px);
@@ -70,6 +80,7 @@
     --warn:         #d7a55c;
     --surface:      #1d1917;
     --surface-2:    #211c19;
+    --popup-bg:     var(--paper);
     --shadow-sm:    0 1px 2px rgba(0, 0, 0, .4);
     --shadow-md:    0 2px 8px rgba(0, 0, 0, .45);
     --shadow-lg:    0 8px 32px rgba(0, 0, 0, .55);
@@ -94,6 +105,7 @@
   --warn:         #d7a55c;
   --surface:      #1d1917;
   --surface-2:    #211c19;
+  --popup-bg:     var(--paper);
   --shadow-sm:    0 1px 2px rgba(0, 0, 0, .4);
   --shadow-md:    0 2px 8px rgba(0, 0, 0, .45);
   --shadow-lg:    0 8px 32px rgba(0, 0, 0, .55);

@@ -106,7 +106,12 @@ class Bounds{constructor(w,s,e,n){this.w=w;this.s=s;this.e=e;this.n=n}
 getWest(){return this.w}getSouth(){return this.s}getEast(){return this.e}getNorth(){return this.n}
 extend(){return this}isEmpty(){return false}}
 class Src{constructor(d){this._d=d}setData(d){this._d=d}}
-class Popup{setLngLat(){return this}setDOMContent(n){document.body.appendChild(n);return this}addTo(){return this}remove(){return this}}
+class Popup{setLngLat(){return this}
+// Detaches on remove(), as the real one does. A no-op remove() left every
+// popup in the DOM, so "the close button closes it" could not be tested at
+// all — and a stale card is indistinguishable from a live one to a selector.
+setDOMContent(n){this._n=n;document.body.appendChild(n);return this}
+addTo(){return this}remove(){this._n?.remove();return this}}
 class M extends E{constructor(o){super();window.__mapOptions=o;this._s=new Map();this._l=new Map();this._img=new Map();
 this._ready=false;window.__map=this;this._apply(o.style);
 setTimeout(()=>{this.fire('style.load');           // sources NOT loaded yet
@@ -1455,6 +1460,71 @@ await page.reload({ waitUntil: 'networkidle' });
 await page.waitForSelector('.build-newer', { timeout: 5000 }).catch(() => {});
 check('and it offers a reload once the server has moved on',
   await page.locator('.build-newer').count(), 1);
+
+/*
+ * The dropped-pin card.
+ *
+ * It carries a lot now — a symbol, field notes and a folder name are all set
+ * before the pin is saved rather than after — and every one of them has to
+ * survive into the folder or the extra fields are decoration.
+ */
+console.log('\nA dropped pin is described before it is saved');
+await page.evaluate(() => window.__map.fire('click', {
+  lngLat: { lng: -84.28, lat: 35.96 }, point: { x: 400, y: 400 },
+}));
+await page.waitForTimeout(400);
+
+check('the card opens', await page.locator('.drop-pin').count(), 1);
+check('with a labelled close control, not a bare glyph',
+  (await page.locator('.popup-bar button').innerText()).trim(), 'Close');
+check('the details action is a button, named for what it shows',
+  (await page.locator('.drop-pin-more').innerText()).trim(), 'Details');
+check('a symbol can be chosen here', await page.locator('.drop-pin-icon').count(), 1);
+check('and field notes written here', await page.locator('.drop-pin-note').count(), 1);
+
+/*
+ * The name field belongs to one choice, so it is checked against both.
+ *
+ * Earlier sections of this suite have already made folders, so the select
+ * lands on an existing one and the field starts hidden — which is the correct
+ * behaviour and the reason a "starts visible" check was wrong rather than the
+ * code being wrong.
+ */
+const folderSelect = page.locator('.popup-save select');
+check('naming is hidden while an existing folder is the choice',
+  await page.locator('.popup-new-folder').isVisible(), false);
+await folderSelect.selectOption('__new__');
+check('and appears inline for a new one, rather than as a system prompt',
+  await page.locator('.popup-new-folder').isVisible(), true);
+
+await page.locator('.drop-pin-name').fill('Cave spring');
+await page.locator('.drop-pin-note').fill('Water here in August. Gate is unlocked.');
+const symbol = await page.locator('.drop-pin-icon option').nth(3).getAttribute('value');
+await page.locator('.drop-pin-icon').selectOption(symbol);
+await page.locator('.popup-new-folder').fill('Field notes');
+await page.locator('.popup-save button').click();
+await page.waitForTimeout(500);
+
+const saved = await page.evaluate(() => {
+  const folders = JSON.parse(window.localStorage.getItem('ab-maps-folders-v1') || '{}');
+  const list = folders.folders || folders.items || [];
+  const folder = list.find((entry) => entry.name === 'Field notes');
+  const item = folder?.items?.[0]?.feature?.properties;
+  return { folder: folder?.name, name: item?.name, note: item?.description, icon: item?.icon };
+});
+check('the folder is created with the name that was typed', saved.folder, 'Field notes');
+check('the pin keeps the name it was given', saved.name, 'Cave spring');
+check('the field notes reach the saved pin', saved.note, 'Water here in August. Gate is unlocked.');
+check('and so does the symbol', saved.icon, symbol);
+
+// A second card, to check the close button rather than the save button.
+await page.evaluate(() => window.__map.fire('click', {
+  lngLat: { lng: -84.3, lat: 35.9 }, point: { x: 300, y: 300 },
+}));
+await page.waitForTimeout(300);
+await page.locator('.popup-bar button').click();
+await page.waitForTimeout(200);
+check('Close closes it', await page.locator('.drop-pin').count(), 0);
 
 /*
  * Offline.
