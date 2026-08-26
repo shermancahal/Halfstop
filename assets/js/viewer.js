@@ -154,6 +154,9 @@ function rememberCoordFormats(open) {
 }
 
 const state = {
+  // Tapping the map asks what is there. The pin has its own button, because
+  // inspecting is what you do repeatedly and dropping a pin is deliberate.
+  probing: true,
   gl: null,
   map: null,
   engine: null,
@@ -424,6 +427,25 @@ async function main() {
     onAdd: () => {
       const group = el('div', { class: 'mapboxgl-ctrl mapboxgl-ctrl-group map-tools' });
 
+      /*
+       * Inspecting first, and on by default.
+       *
+       * Asking what a line is turns out to be the thing you do over and over —
+       * every road you consider driving — while dropping a pin is deliberate
+       * and occasional. So the tap does the frequent thing, the button stays
+       * lit to say so, and the pin has its own control below.
+       */
+      const probe = el('button', {
+        class: 'map-tool is-on', type: 'button',
+        title: 'Tap the map to see what is there',
+        'aria-label': 'Tap the map to see what is there',
+        'aria-pressed': 'true',
+        html: icons.search,
+      });
+      probe.addEventListener('click', () => armProbe(probe));
+      group.append(probe);
+      state.probeButton = probe;
+
       // Drops the pin at the middle of the screen rather than where a finger
       // landed. On a phone that is the useful half: you can pan the map under
       // the crosshair far more precisely than you can tap a spot.
@@ -437,16 +459,6 @@ async function main() {
           showDropPin([centre.lng, centre.lat]);
         },
       }));
-
-      const probe = el('button', {
-        class: 'map-tool', type: 'button',
-        title: 'Ask what is under a spot on the map',
-        'aria-label': 'Ask what is under a spot on the map',
-        'aria-pressed': 'false',
-        html: icons.search,
-      });
-      probe.addEventListener('click', () => armProbe(probe));
-      group.append(probe);
 
       return group;
     },
@@ -689,8 +701,7 @@ function wirePanel() {
     renderWaypointsTab();
   });
   document.getElementById('share-button')?.addEventListener('click', shareView);
-  document.getElementById('download-button')?.addEventListener('click', downloadVisible);
-  document.getElementById('snapshot-button')?.addEventListener('click', saveMapImage);
+  wireOfflineMenu();
   document.getElementById('fit-button')?.addEventListener('click', fitAll);
 }
 
@@ -1924,6 +1935,42 @@ function wireSettingsMenu() {
   drop.addEventListener('click', (event) => event.stopPropagation());
 }
 
+/**
+ * Everything about taking the map away with you, behind one control.
+ *
+ * It used to be three separate things: a download button in the header, a
+ * camera beside it, and an "Offline regions" section at the foot of the Layers
+ * tab — below eleven basemaps and five overlay groups, which is the same as
+ * not being there. They answer one question and now live in one place.
+ */
+function wireOfflineMenu() {
+  const trigger = document.getElementById('offline-trigger');
+  const drop = document.getElementById('offline-panel');
+  const menu = document.getElementById('offline-menu');
+  if (!trigger || !drop) return;
+
+  const setOpen = (open) => {
+    drop.hidden = !open;
+    trigger.setAttribute('aria-expanded', String(open));
+    // Rendered on open rather than kept live: the region list is the only
+    // thing in here that changes, and nobody is watching it while it is shut.
+    if (open) renderOfflineTab();
+  };
+
+  trigger.addEventListener('click', (event) => {
+    event.stopPropagation();
+    setOpen(drop.hidden);
+  });
+  document.addEventListener('click', (event) => {
+    if (drop.hidden) return;
+    if (!menu?.contains(event.target)) setOpen(false);
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !drop.hidden) { setOpen(false); trigger.focus(); }
+  });
+  drop.addEventListener('click', (event) => event.stopPropagation());
+}
+
 /** Redraw everything that shows a number with a unit on it. */
 function applyUnits() {
   // The scale bar is the map's own control and cannot be re-configured in
@@ -3064,6 +3111,27 @@ function renderOfflineTab() {
   }
 
   dom.offline.append(
+    el('h3', { class: 'offline-heading', text: 'On this screen' }),
+    el('div', { class: 'folder-actions' }, [
+      /*
+       * The picture first, because it is the one that always works.
+       *
+       * It costs no tiles, needs no account and no network, and on a phone in
+       * a canyon it is often the whole answer. The tile regions below it are
+       * the heavier, app-only option.
+       */
+      labelledButton(icons.camera, 'Save as a picture', {
+        tone: 'secondary',
+        title: 'Save this view as an image — uses no map data',
+        onclick: saveMapImage,
+      }, 'snapshot-button'),
+      labelledButton(icons.download, 'Export GeoJSON', {
+        tone: 'ghost',
+        title: 'Download everything on the map as GeoJSON',
+        onclick: downloadVisible,
+      }, 'download-button'),
+    ]),
+    el('h3', { class: 'offline-heading', text: 'Map regions' }),
     el('p', {
       class: 'hint',
       style: 'margin:-4px 0 10px',
@@ -3867,13 +3935,12 @@ function wireMapClicks() {
      * One shot rather than a mode you can forget you are in: the next tap
      * answers a question, and the one after that drops a pin as always.
      */
+    /*
+     * A mode rather than a one-shot, now that it is the default: you look at
+     * one road, then the one it joins, then the one after that. Switching it
+     * off after every answer would mean re-arming between each.
+     */
     if (state.probing) {
-      state.probing = false;
-      dom.app?.classList.remove('is-probing');
-      for (const node of document.querySelectorAll('.map-tool.is-on')) {
-        node.classList.remove('is-on');
-        node.setAttribute('aria-pressed', 'false');
-      }
       probePoint([event.lngLat.lng, event.lngLat.lat], tapTolerance(event));
       return;
     }
@@ -4097,12 +4164,15 @@ const EMPTY_VALUES = new Set(['', 'null', 'Null', 'NULL', '<Null>', 'N/A', 'na',
  * raw that is a dozen rows of "Yes"; paired up it is the answer to the only
  * question anybody taps a forest road to ask.
  */
-function vehicleRows(attributes) {
+function vehicleClasses(attributes) {
   const open = [];
+  let total = 0;
   for (const [name, value] of Object.entries(attributes)) {
     if (/_datesopen$/i.test(name)) continue;
     const dates = attributes[`${name}_datesopen`] ?? attributes[`${name}_DATESOPEN`];
+    // No `_datesopen` sibling means this is not a vehicle column at all.
     if (dates === undefined) continue;
+    total += 1;
 
     const allowed = String(value ?? '').trim();
     // The service writes the class name itself when open and leaves it empty
@@ -4112,7 +4182,7 @@ function vehicleRows(attributes) {
     const when = String(dates ?? '').trim();
     open.push(prettyField(name) + (when && !/^01\/01.*12\/31$/.test(when) ? ` (${when})` : ''));
   }
-  return open;
+  return { open, total };
 }
 
 function attributeRows(result) {
@@ -4131,8 +4201,24 @@ function attributeRows(result) {
       if (hit) wanted.push([field.label || prettyField(hit[0]), hit[1]]);
     }
     if (result.vehicles) {
-      const open = vehicleRows(result.attributes);
-      wanted.push(['Open to', open.length ? open.join(', ') : 'nothing listed as permitted']);
+      const classes = vehicleClasses(result.attributes);
+      /*
+       * Only when the service actually published vehicle columns.
+       *
+       * A row with none of them is a feature this schema says nothing about —
+       * a trail sublayer, say — and printing "Open to: …" against it would be
+       * inventing a statement. Silence is the honest output.
+       *
+       * And when the columns ARE there and none is open, that is not "no
+       * restrictions noted": on a Motor Vehicle Use Map the designation IS the
+       * permission, so an undesignated route is a closed one. Saying anything
+       * softer than that could put somebody down a road they may not drive.
+       */
+      if (classes.total) {
+        wanted.push(['Open to', classes.open.length
+          ? classes.open.join(', ')
+          : 'no class designated — on an MVUM that means closed to motor vehicles']);
+      }
     }
     if (wanted.length) return wanted;
   }
@@ -4239,7 +4325,9 @@ function armProbe(button) {
   button.classList.toggle('is-on', state.probing);
   button.setAttribute('aria-pressed', String(state.probing));
   dom.app?.classList.toggle('is-probing', state.probing);
-  if (state.probing) toast('Tap a road or an area to see what it is.', { tone: 'info' });
+  toast(state.probing
+    ? 'Tap the map to see what is there.'
+    : 'Tapping the map drops a pin again.', { tone: 'info' });
 }
 
 /** Show the Details tab for a place that is not a saved pin. */
@@ -4924,14 +5012,18 @@ function latestNote(props) {
  * it is more than all of it. A mark each lets the word be short enough to fit,
  * and gives a target big enough to hit without reading first.
  */
-function labelledButton(icon, label, { onclick, title = '', tone = 'secondary' } = {}) {
-  return el('button', {
+function labelledButton(icon, label, { onclick, title = '', tone = 'secondary' } = {}, id = '') {
+  const button = el('button', {
     class: `button button-${tone} button-small button-with-icon`,
     type: 'button',
     title: title || label,
     html: `${icon}<span>${escapeHTML(label)}</span>`,
     onclick,
   });
+  // Some of these are the only way to reach an action that used to have its
+  // own place in the header, so they keep the id that named it.
+  if (id) button.id = id;
+  return button;
 }
 
 /** A plain section heading, with the same mark the collapsible ones carry. */

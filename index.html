@@ -49,12 +49,20 @@
       <button class="icon-button" id="fit-button" type="button" title="Zoom to all loaded maps" aria-label="Zoom to all loaded maps">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V5a2 2 0 0 1 2-2h3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2h-3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/></svg>
       </button>
-      <button class="icon-button" id="download-button" type="button" title="Download everything on the map as GeoJSON" aria-label="Download everything on the map as GeoJSON">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
-      </button>
-      <button class="icon-button" id="snapshot-button" type="button" title="Save this view as a picture — works offline, uses no map data" aria-label="Save this view as a picture">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><circle cx="12" cy="12.5" r="3.5"/></svg>
-      </button>
+      <!--
+        Everything about taking the map away with you, in one place.
+        It used to be three: a download button here, a camera beside it, and an
+        "Offline regions" section buried at the foot of the Layers tab below
+        eleven basemaps and five overlay groups.
+      -->
+      <div class="settings-menu offline-menu" id="offline-menu">
+        <button class="icon-button" id="offline-trigger" type="button"
+                title="Take this map offline" aria-label="Take this map offline"
+                aria-haspopup="dialog" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
+        </button>
+        <div class="account-drop offline-drop" id="offline-panel" role="dialog" aria-label="Offline" hidden></div>
+      </div>
       <button class="icon-button" id="share-button" type="button" title="Copy a link to this view" aria-label="Copy a link to this view">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4"/><path d="m15.4 6.5-6.8 4"/></svg>
       </button>
@@ -120,13 +128,6 @@
             </h2>
             <p class="hint" style="margin:-4px 0 10px">Overlays stack over the map above. Each has its own opacity.</p>
             <div id="overlay-list"></div>
-          </div>
-          <div class="panel-section">
-            <h2 class="panel-title">
-              <span>Offline regions</span>
-              <span class="count" id="offline-count"></span>
-            </h2>
-            <div id="offline-panel"></div>
           </div>
         </div>
 

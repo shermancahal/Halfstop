@@ -1124,6 +1124,15 @@ html, body { height: 100%; overflow: hidden; }
 }
 :root[data-theme="dark"] .land-badge.is-public { color: #a5d6a7; background: rgba(46, 125, 50, .18); }
 
+/* Everything about taking the map away, in one dropdown. */
+.offline-drop { width: min(330px, calc(100vw - 24px)); max-height: 70vh; overflow-y: auto; padding: 14px; }
+.offline-heading {
+  margin: 0 0 8px; font-size: .64rem; font-weight: 600; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.offline-heading + .folder-actions { margin-bottom: 14px; }
+.offline-drop .folder-actions + .offline-heading { margin-top: 4px; }
+
 /* The map's own two tools, stacked under the engine's controls. */
 .map-tools { overflow: hidden; }
 .map-tool {

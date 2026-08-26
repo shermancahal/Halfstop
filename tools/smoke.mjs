@@ -304,6 +304,7 @@ await page.route('**/*', async (route) => {
    */
   if (/MapServer\/identify/.test(url)) {
     const blm = /gis\.blm\.gov/.test(url);
+    const nothingOpen = await page.evaluate(() => Boolean(window.__identifyNothingOpen)).catch(() => false);
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -334,10 +335,10 @@ await page.route('**/*', async (route) => {
             seasonal: 'yes',
             surfacetype: 'Native material',
             operationalmaintlevel: '2 - High clearance vehicles',
-            motorcycle: 'motorcycle',
-            motorcycle_datesopen: '01/01-12/31',
-            otherwheeled_ohv: 'otherwheeled_ohv',
-            otherwheeled_ohv_datesopen: '05/15-10/31',
+            motorcycle: nothingOpen ? '' : 'motorcycle',
+            motorcycle_datesopen: nothingOpen ? '' : '01/01-12/31',
+            otherwheeled_ohv: nothingOpen ? '' : 'otherwheeled_ohv',
+            otherwheeled_ohv_datesopen: nothingOpen ? '' : '05/15-10/31',
             tracked_ohv_lt50inches: '',
             tracked_ohv_lt50_datesopen: '',
           },
@@ -1105,6 +1106,12 @@ check('the newest note is on the waypoint card', /Gate locked at the second/.tes
  * told there was nothing to export.
  */
 console.log('\nThe export takes folders as well as files');
+// It lives in the offline menu now rather than in the header — one control for
+// every way of taking the map with you, instead of three scattered ones.
+await page.click('#offline-trigger');
+await page.waitForTimeout(300);
+check('the offline menu holds the export and the picture', await page.evaluate(() => Boolean(
+  document.getElementById('download-button') && document.getElementById('snapshot-button'))), true);
 const exported = await page.evaluate(() => {
   let captured = null;
   const original = URL.createObjectURL;
@@ -1569,9 +1576,15 @@ check('and it offers a reload once the server has moved on',
  * survive into the folder or the extra fields are decoration.
  */
 console.log('\nA dropped pin is described before it is saved');
-await page.evaluate(() => window.__map.fire('click', {
-  lngLat: { lng: -84.28, lat: 35.96 }, point: { x: 400, y: 400 },
-}));
+/*
+ * Reached by its own button, not by tapping the map.
+ *
+ * Tapping now asks what is under the finger, because that is the thing you do
+ * over and over. The pin is deliberate, so it has a control — which also drops
+ * it at the centre of the screen, where you can put it precisely by panning
+ * rather than by hitting a spot with a thumb.
+ */
+await page.locator('.map-tool').nth(1).click();
 await page.waitForTimeout(400);
 
 check('the card opens', await page.locator('.drop-pin').count(), 1);
@@ -1652,9 +1665,7 @@ check('and the symbol that was chosen is the one that was saved',
   typeof saved.icon === 'string' && saved.icon.length > 0 && symbol !== null, true);
 
 // A second card, to check the close button rather than the save button.
-await page.evaluate(() => window.__map.fire('click', {
-  lngLat: { lng: -84.3, lat: 35.9 }, point: { x: 300, y: 300 },
-}));
+await page.locator('.map-tool').nth(1).click();
 await page.waitForTimeout(300);
 await page.locator('.popup-bar button').nth(1).click();
 await page.waitForTimeout(200);
@@ -1681,10 +1692,13 @@ await page.waitForTimeout(700);
 
 const tools = page.locator('.map-tool');
 check('there are two map tools under the zoom controls', await tools.count(), 2);
-check('and neither is armed to begin with', await page.locator('.map-tool.is-on').count(), 0);
-
-await tools.nth(1).click();
-check('the probe says it is armed', await page.locator('.map-tool.is-on').count(), 1);
+// Inspecting is what you do repeatedly — every road you consider driving —
+// so the tap does that by default and the button is lit to say so. A mode
+// with no visible state is a trap.
+check('the inspector is on from the start, and says so',
+  await tools.nth(0).evaluate((node) => node.classList.contains('is-on')), true);
+check('and it is the first of the two, above the pin',
+  await tools.nth(0).getAttribute('aria-pressed'), 'true');
 
 await page.evaluate(() => window.__map.fire('click', {
   lngLat: { lng: -111.5, lat: 38.5 }, point: { x: 400, y: 400 },
@@ -1692,8 +1706,10 @@ await page.evaluate(() => window.__map.fire('click', {
 }));
 await page.waitForTimeout(900);
 
-check('using it disarms it, so the next tap drops a pin as usual',
-  await page.locator('.map-tool.is-on').count(), 0);
+// A mode, not a one-shot: you look at one road, then the one it joins. Having
+// to re-arm between each would make the common case the awkward one.
+check('and it stays on after answering, so the next road is one tap away',
+  await page.locator('.map-tool.is-on').count(), 1);
 
 const card = await page.evaluate(() => {
   const node = document.querySelector('.identify-card');
@@ -1727,6 +1743,32 @@ check('the MVUM vehicle columns fold into one line',
   card['Forest Service MVUM'].pairs['Open to'], 'Motorcycle, Otherwheeled ohv (05/15-10/31)');
 check('a class with no dates and no value is not listed as open',
   card['Forest Service MVUM'].pairs['Open to'].includes('Tracked'), false);
+
+/*
+ * What the card says when nothing is designated.
+ *
+ * On a Motor Vehicle Use Map the designation IS the permission, so a route
+ * with no class designated is a closed one. Anything softer than saying so —
+ * "no restrictions noted", say — inverts the meaning and could put somebody
+ * down a road they may not drive.
+ */
+await page.evaluate(() => {
+  window.__identifyNothingOpen = true;
+  window.__map.fire('click', { lngLat: { lng: -84.1, lat: 35.6 }, point: { x: 300, y: 300 },
+    originalEvent: { pointerType: 'mouse' } });
+});
+await page.waitForTimeout(900);
+const closed = await page.evaluate(() => {
+  const group = [...document.querySelectorAll('.identify-group')]
+    .find((n) => /Forest Service/.test(n.textContent));
+  const pairs = [...(group?.querySelectorAll('dt') || [])].map((dt, i) => [
+    dt.textContent.trim(), group.querySelectorAll('dd')[i]?.textContent.trim()]);
+  return Object.fromEntries(pairs)['Open to'] || '';
+});
+check('an undesignated route is called closed, not unrestricted',
+  /closed to motor vehicles/i.test(closed), true);
+check('and it never claims the absence of a rule is permission',
+  /no restriction|unrestricted|permitted/i.test(closed), false);
 
 await page.locator('.identify-card .popup-bar button').nth(1).click();
 await page.waitForTimeout(200);
