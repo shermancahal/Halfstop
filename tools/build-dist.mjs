@@ -27,6 +27,16 @@ const ZIP_NAME = 'american-byways-maps.zip';
 /** Everything the deployed site needs, and nothing else. */
 const INCLUDE_FILES = ['index.html', 'library.html', 'map.html'];
 
+/**
+ * Root files copied through verbatim, without cache-busting.
+ *
+ * sw.js in particular must keep its filename: a service worker is registered by
+ * path, and a browser checks for a new one by re-fetching that exact URL. Give
+ * it a `?v=` and every build would register a second, separate worker while the
+ * old one kept serving the old cache forever.
+ */
+const ROOT_FILES = ['manifest.webmanifest', 'sw.js'];
+
 const textEncoder = new TextEncoder();
 const encoderFor = (text) => textEncoder.encode(text);
 const INCLUDE_DIRS = ['assets', 'data'];
@@ -112,6 +122,20 @@ const HTACCESS = `# American Byways Maps — Apache configuration
   ExpiresByType text/javascript           "access plus 1 hour"
   ExpiresByType image/svg+xml             "access plus 1 day"
   ExpiresByType application/gpx+xml       "access plus 1 day"
+</IfModule>
+
+# ---------------------------------------------------------------------------
+# The service worker
+#
+# It must never be served from cache. A browser re-fetches sw.js by that exact
+# URL to find out whether there is a new version, so a cached copy pins not
+# just the worker but every asset the worker is holding — indefinitely, because
+# the check that would notice is the thing being cached.
+# ---------------------------------------------------------------------------
+<IfModule mod_headers.c>
+  <Files "sw.js">
+    Header set Cache-Control "no-cache, max-age=0, must-revalidate"
+  </Files>
 </IfModule>
 
 # ---------------------------------------------------------------------------
@@ -292,6 +316,46 @@ async function main() {
 
   for (const page of html) staged.push({ name: page.name, data: encoderFor(page.text) });
   staged.push(...assets);
+
+  /*
+   * The service worker, with its two placeholders filled in.
+   *
+   * The precache list is the cache-busted URL of every asset plus the pages
+   * themselves, which is the whole site: 376 KB is small enough that picking a
+   * subset would only mean guessing wrong about which page someone opens first
+   * while offline. Built from `versions`, so an asset's precached URL is always
+   * the same URL the pages ask for — a mismatch would precache a file nobody
+   * ever requests and quietly leave the real one uncached.
+   */
+  const precache = [
+    './',
+    ...html.map((page) => `./${page.name}`),
+    ...ROOT_FILES.filter((name) => name !== 'sw.js').map((name) => `./${name}`),
+    ...assets.map((asset) => {
+      const version = versions.get(asset.name);
+      return version ? `./${asset.name}?v=${version}` : `./${asset.name}`;
+    }),
+  ];
+
+  for (const name of ROOT_FILES) {
+    const source = path.join(ROOT, name);
+    if (!existsSync(source)) {
+      console.error(`Missing required file: ${name}`);
+      process.exit(1);
+    }
+    let text = await readFile(source, 'utf8');
+    if (name === 'sw.js') {
+      text = text
+        .replace("'__BUILD__'", JSON.stringify(buildId))
+        .replace('/*__PRECACHE__*/', `\n  ${precache.map((url) => JSON.stringify(url)).join(',\n  ')},\n`);
+      if (text.includes('__BUILD__') || text.includes('__PRECACHE__')) {
+        console.error('sw.js placeholders did not substitute — the deployed worker would cache nothing.');
+        process.exit(1);
+      }
+    }
+    staged.push({ name, data: encoderFor(text) });
+  }
+  console.log(`  Service worker: build ${buildId}, ${precache.length} files precached.`);
 
   const bytes = staged.reduce((sum, entry) => sum + entry.data.length, 0);
   const encoder = new TextEncoder();

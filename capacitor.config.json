@@ -1,0 +1,22 @@
+{
+  "appId": "com.americanbyways.gps",
+  "appName": "American Byways GPS",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "ios": {
+    "contentInset": "never",
+    "limitsNavigationsToAppBoundDomains": false
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": true,
+      "backgroundColor": "#b4441f",
+      "androidScaleType": "CENTER_CROP"
+    }
+  }
+}

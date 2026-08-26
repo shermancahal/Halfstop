@@ -157,7 +157,19 @@ const check = (label, actual, expected) => {
 };
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
-const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+
+/*
+ * Service workers are switched off for everything below, and switched back on
+ * for the one check that is about them.
+ *
+ * Not squeamishness: `page.route` does not intercept requests that pass through
+ * a service worker, so with the worker running, every mocked third-party
+ * service above — the weather colour scale, the recreation sublayers, the
+ * aurora feed — went to the real network instead of to its fixture. The suite
+ * did not fail, it hung, halfway through and with no indication why.
+ */
+const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' });
+const page = await context.newPage();
 
 const consoleErrors = [];
 page.on('pageerror', (error) => consoleErrors.push(`pageerror: ${error.message}`));
@@ -1443,6 +1455,115 @@ await page.reload({ waitUntil: 'networkidle' });
 await page.waitForSelector('.build-newer', { timeout: 5000 }).catch(() => {});
 check('and it offers a reload once the server has moved on',
   await page.locator('.build-newer').count(), 1);
+
+/*
+ * Offline.
+ *
+ * A service worker that registers but does not actually answer a request is
+ * indistinguishable from one that works, right up until somebody drives out of
+ * signal. This is the only check that sees the difference, and it does it in a
+ * clean context so nothing above is affected by a worker taking control.
+ *
+ * Also worth stating what is NOT expected to work offline: basemap tiles come
+ * from Mapbox and the others, the worker passes cross-origin requests straight
+ * through, and caching somebody else's tiles here would be both unbounded and
+ * against their terms. The app shell comes back; the map is grey until an
+ * offline pack is loaded.
+ */
+if (!external) {
+  console.log('\nThe app comes back with no network');
+  const offlineContext = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  /*
+   * The same third-party stubbing the main context gets, and it is load-bearing
+   * rather than tidiness. `engine.js` appends the Mapbox GL script tag whether
+   * or not a `mapboxgl` global is already there, and a failed load rejects
+   * inside the viewer's init — so aborting that one request stops the app
+   * before it ever reaches the line that registers the worker. Which is what
+   * this check then reports as "no worker installed", pointing at the wrong
+   * thing entirely.
+   */
+  await offlineContext.route('**/*', (route) => {
+    const target = route.request().url();
+    if (target.startsWith(new URL(URL_UNDER_TEST).origin)) return route.continue();
+    if (route.request().resourceType() === 'image') {
+      return route.fulfill({ status: 200, contentType: 'image/png', body: PIXEL });
+    }
+    if (/\.css($|\?)/.test(target)) return route.fulfill({ status: 200, contentType: 'text/css', body: '' });
+    return route.fulfill({ status: 200, contentType: 'application/javascript', body: GL });
+  });
+  const offlinePage = await offlineContext.newPage();
+  await offlinePage.addInitScript(GL);
+  await offlinePage.goto(URL_UNDER_TEST, { waitUntil: 'load' });
+
+  /*
+   * Polled to a deadline rather than sampled once, for two reasons that both
+   * bit: `serviceWorker.ready` never settles at all when nothing registers, so
+   * an unraced await would hang the suite instead of failing it — and `ready`
+   * resolves as soon as a registration HAS an active worker, which can be while
+   * that worker is still 'activating', because the activate handler sweeps old
+   * caches before it claims. Asserting 'activated' on the first tick reported a
+   * working worker as broken.
+   */
+  const state = await offlinePage.evaluate(async () => {
+    const deadline = Date.now() + 20000;
+    let last = 'never registered';
+    while (Date.now() < deadline) {
+      const registration = await navigator.serviceWorker.getRegistration();
+      last = registration?.active?.state || registration?.installing?.state || last;
+      if (last === 'activated') return last;
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    return last;
+  });
+  check('a worker installs and activates', state, 'activated');
+
+  // Wait for the precache to finish before pulling the plug. Without this the
+  // check races the install and fails intermittently, which is worse than not
+  // having it: a flaky check gets re-run until it passes.
+  const cached = await offlinePage.evaluate(async () => {
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      const names = await caches.keys();
+      const name = names.find((key) => key.startsWith('abmap-'));
+      if (name) {
+        const keys = await (await caches.open(name)).keys();
+        if (keys.length > 100) return keys.length;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    return 0;
+  });
+  check('and precaches the site', cached > 100, true);
+
+  await offlineContext.setOffline(true);
+  try {
+    await offlinePage.reload({ waitUntil: 'load' });
+    check('the map page loads with the network down',
+      await offlinePage.locator('#map').count(), 1);
+
+    // The inspector is exposed at the end of the viewer's init, so it is the
+    // one global that means the whole startup path ran — not merely that the
+    // HTML came back. Waited for, because init is asynchronous and reading it
+    // on the load event reads it before it exists.
+    const ran = await offlinePage.waitForFunction(
+      () => typeof globalThis.abmapOverlays === 'function', null, { timeout: 20000 },
+    ).then(() => true).catch(() => false);
+    check('its scripts came back too, so the app actually ran', ran, true);
+    check('and the layer panel built itself from the cached catalogue',
+      await offlinePage.locator('.layer-row').count() > 0, true);
+
+    await offlinePage.goto(new URL('library.html', URL_UNDER_TEST).href, { waitUntil: 'load' });
+    check('and so does the library, which was never visited online',
+      await offlinePage.locator('#catalog-grid').count(), 1);
+  } catch (error) {
+    // A navigation that cannot be served offline throws rather than returning
+    // a page, and an uncaught throw here would take every check after it with
+    // it — including the report of what actually failed.
+    check(`offline navigation (${error.message.split('\n')[0]})`, false, true);
+  }
+
+  await offlineContext.setOffline(false);
+  await offlineContext.close();
+}
 
 await browser.close();
 hosted?.server.close();

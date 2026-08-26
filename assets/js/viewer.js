@@ -57,6 +57,7 @@ import {
 import { registerNPSImages, npsIconSVG } from './lib/nps-icons.js';
 import { kpNow, auroraChance, describeKp } from './lib/aurora.js';
 import { describeSync } from './lib/sync.js';
+import { registerServiceWorker, applyServiceWorkerUpdate } from './lib/pwa.js';
 import {
   OfflineStore, MAX_ZOOM as OFFLINE_MAX_ZOOM, TILE_BUDGET,
   measureRegion, buildManifest, regionsToGeoJSON, formatBytes as formatTileBytes,
@@ -481,6 +482,7 @@ async function main() {
   }
   renderBuildStamp();
   checkForNewerBuild();
+  registerServiceWorker({ onUpdate: offerNewerBuild });
   renderLayersTab();
   renderOfflineTab();
   renderFoldersTab();
@@ -1025,6 +1027,29 @@ async function fillArcGISLegend(host, { url, layer } = {}) {
  * Silently absent when there is no deployed.txt, which is the normal state for
  * a local checkout.
  */
+function newerBuildButton() {
+  return el('button', {
+    class: 'build-newer', type: 'button',
+    text: 'A newer build is available — reload',
+    onclick: async () => {
+      // Hand over to the waiting service worker first. Reloading without this
+      // comes back controlled by the old worker, still serving the old cache,
+      // and the button appears to do nothing.
+      await applyServiceWorkerUpdate();
+      // `true` forces a fetch past the cache in the engines that still honour
+      // it, and is harmless in the ones that do not.
+      globalThis.location.reload(true);
+    },
+  });
+}
+
+/** Show the reload prompt once, however the newer build was noticed. */
+function offerNewerBuild() {
+  if (!dom.buildStamp || document.querySelector('.build-newer')) return;
+  dom.buildStamp.after(newerBuildButton());
+  dom.buildStamp.hidden = false;
+}
+
 /**
  * Say so when the page is running code older than what is deployed.
  *
@@ -1037,7 +1062,8 @@ async function fillArcGISLegend(host, { url, layer } = {}) {
  *
  * `window.ABMAP_BUILD` comes from a cache-busted script, so a stale page holds
  * the old fingerprint; build.json is fetched with no store, so it holds the
- * current one. They disagree only when the page is behind.
+ * current one. They disagree only when the page is behind. The service worker
+ * reports the same thing by a different route, through `offerNewerBuild`.
  */
 async function checkForNewerBuild() {
   const running = globalThis.ABMAP_BUILD;
@@ -1049,15 +1075,7 @@ async function checkForNewerBuild() {
     const { build } = await response.json();
     if (!build || build === running) return;
 
-    const reload = el('button', {
-      class: 'build-newer', type: 'button',
-      text: 'A newer build is available — reload',
-      // `true` forces a fetch past the cache in the engines that still honour
-      // it, and is harmless in the ones that do not.
-      onclick: () => globalThis.location.reload(true),
-    });
-    dom.buildStamp.after(reload);
-    dom.buildStamp.hidden = false;
+    offerNewerBuild();
   } catch {
     // Offline, or no build.json because this is a source checkout rather than
     // a built package. Neither is worth saying anything about.

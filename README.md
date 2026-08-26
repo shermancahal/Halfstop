@@ -302,6 +302,37 @@ fails loudly, with no document root to misconfigure.
 
 ---
 
+## Installing it as an app
+
+The site is a progressive web app: `manifest.webmanifest` and `sw.js` are built
+into every deploy, so a browser will offer to install it.
+
+- **Android / desktop Chrome** — an install prompt appears in the address bar.
+- **iOS** — Share → Add to Home Screen. Safari does not offer a prompt.
+
+Installed, it opens without browser chrome and the app itself starts with no
+network, because the service worker precaches the whole site — around 900 KB.
+
+**Offline here means the app, not the map.** Basemap tiles belong to Mapbox,
+USGS, Esri and NOAA; the worker passes every cross-origin request straight
+through and stores none of it, which is both correct under their terms and the
+only way the cache stays bounded. Map coverage away from signal is the separate
+thing in the **Offline** tab: a tiered tile download, or a snapshot of the
+current view that costs no tiles at all.
+
+The worker is deliberately network-first for HTML and for `build.json`, and
+cache-first only for `?v=`-stamped asset URLs, which change whenever their
+contents do. A cache-first worker would have made this project's recurring
+"the deploy did not appear" problem permanent instead of ten minutes long.
+
+`assets/js/lib/pwa.js` also *removes* a worker when it finds itself on a page
+with no build stamp — so running `npm start` on the same origin as a deployed
+copy does not serve you yesterday's app.
+
+For iOS and Android store builds, see **`docs/mobile-app.md`**.
+
+---
+
 ## How it is put together
 
 ```
@@ -326,11 +357,17 @@ assets/
 data/
   maps/                     published map files (+ optional .meta.json sidecars)
   catalog.json              generated — do not edit by hand
+manifest.webmanifest        web app manifest — name, colours, icons
+sw.js                       service worker — precaches the site for offline use
+capacitor.config.json       the native shell's config (see docs/mobile-app.md)
 tools/
   build-catalog.mjs         scans data/maps/, writes data/catalog.json
   build-dist.mjs            stages an upload-ready copy in dist/
+  build-app-icons.mjs       renders mark.svg to the PNG icons the app needs
+  raster.mjs                dependency-free SVG rasteriser and PNG writer
   zip.mjs                   dependency-free ZIP writer used by build-dist
   serve.mjs                 local dev server
+assets/js/lib/pwa.js        service worker registration and the update handshake
 assets/js/lib/sky.js        sun, moon and galactic core positions and times
 assets/js/lib/storms.js     NWS warnings and published storm motion
 test/parsers.test.mjs       parser and geometry tests
@@ -359,8 +396,10 @@ Mapbox later is a config change rather than a rewrite. That is what makes the
   for organising saved waypoints with GPX export.
 - **Next** — Mapbox vector styles, 3D terrain and Mapbox Studio layers behind the
   existing engine abstraction.
-- **Next** — an offline-capable installable version with cached tiles, which is
-  the part of GaiaGPS that matters most away from signal.
+- **Shipped** — installable as an app. A web manifest and a service worker mean
+  it can be added to a phone's home screen and opens with no network; see
+  **Installing it as an app** below, and `docs/mobile-app.md` for the path to
+  the App Store and Play Store.
 - **Later** — drawing and editing routes in the browser and exporting them back
   out as GPX; syncing folders across devices, which is the one thing
   `localStorage` cannot do.

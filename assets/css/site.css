@@ -37,6 +37,18 @@
 
   --wrap: 1140px;
   --header-h: 60px;
+
+  /*
+   * Display cutouts. Zero in every browser tab, non-zero only when the page is
+   * running installed — as a standalone PWA or inside the Capacitor shell —
+   * where the header would otherwise sit under the iOS status bar and the
+   * floating map controls under the home indicator. `viewport-fit=cover` in
+   * the page's viewport meta is what makes these report anything at all.
+   */
+  --safe-top:    env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left:   env(safe-area-inset-left, 0px);
+  --safe-right:  env(safe-area-inset-right, 0px);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -130,7 +142,9 @@ pre code { background: none; padding: 0; }
 
 .site-header {
   position: sticky; top: 0; z-index: 50;
-  height: var(--header-h);
+  height: calc(var(--header-h) + var(--safe-top));
+  padding-top: var(--safe-top);
+  padding-left: var(--safe-left); padding-right: var(--safe-right);
   display: flex; align-items: center;
   background: color-mix(in srgb, var(--paper) 88%, transparent);
   backdrop-filter: saturate(150%) blur(10px);

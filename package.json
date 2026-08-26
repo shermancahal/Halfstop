@@ -10,6 +10,7 @@
   "scripts": {
     "start": "node tools/serve.mjs",
     "build": "node tools/build-catalog.mjs",
+    "build:icons": "node tools/build-app-icons.mjs",
     "check": "node tools/build-catalog.mjs --check",
     "dist": "node tools/build-dist.mjs --zip",
     "test": "node --test test/*.test.mjs",

@@ -10,6 +10,7 @@ import { SITE } from './config.js';
 import { loadCatalog, facet, filterMaps } from './lib/catalog.js';
 import { el, escapeHTML, initTheme, formatDate } from './lib/ui.js';
 import { formatDistance, formatElevation } from './lib/geo.js';
+import { registerServiceWorker } from './lib/pwa.js';
 
 const dom = {};
 let catalog = { maps: [] };
@@ -196,3 +197,7 @@ async function main() {
 }
 
 main();
+
+// The library page shares the worker's scope, so installing from here works
+// too — and an already-installed app opened on this page keeps its cache warm.
+registerServiceWorker();

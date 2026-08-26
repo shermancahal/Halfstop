@@ -1,0 +1,22 @@
+{
+  "name": "American Byways GPS",
+  "short_name": "Byways GPS",
+  "description": "Topo, satellite and street maps with published byway routes, waypoints, weather and night-sky planning.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#faf7f2",
+  "theme_color": "#b4441f",
+  "categories": ["navigation", "travel", "utilities"],
+  "icons": [
+    { "src": "assets/img/mark.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "assets/img/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/img/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Library", "short_name": "Library", "url": "library.html" }
+  ]
+}
