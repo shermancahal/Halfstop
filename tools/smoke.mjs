@@ -281,6 +281,32 @@ await page.route('**/*', async (route) => {
    * answers each with a single point so the merge — and the icon that comes
    * from which sublayer answered — is what the check is looking at.
    */
+  /*
+   * An ArcGIS legend, in the shape those services publish it.
+   *
+   * The BLM, MVUM and recreation layers all declare a `legendJSON`, and until
+   * now nothing in the app read it — the row rendered its note and no key,
+   * which is indistinguishable from a service that answered with nothing. This
+   * fixture is what proves the difference.
+   */
+  if (/MapServer\/legend\?f=pjson/.test(url)) {
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ layers: [{
+        layerId: 0,
+        layerName: 'Roads',
+        legend: [
+          { label: 'Open to all vehicles', imageData: PIXEL.toString('base64'), contentType: 'image/png' },
+          { label: 'Open seasonally', imageData: PIXEL.toString('base64'), contentType: 'image/png' },
+          // Unlabelled rows are published by these services and must not draw a
+          // swatch with nothing beside it.
+          { label: '   ', imageData: PIXEL.toString('base64'), contentType: 'image/png' },
+        ],
+      }] }),
+    });
+  }
+
   if (/structures\/MapServer\/(\d+)\/query/.test(url)) {
     const sub = Number(/structures\/MapServer\/(\d+)\/query/.exec(url)[1]);
     return route.fulfill({
@@ -1559,6 +1585,38 @@ await page.waitForTimeout(300);
 await page.locator('.popup-bar button').nth(1).click();
 await page.waitForTimeout(200);
 check('Close closes it', await page.locator('.drop-pin').count(), 0);
+
+/*
+ * A layer whose key comes from the service, not from the catalogue.
+ *
+ * Three layers have carried a `legendJSON` since they were added and nothing
+ * read it, so BLM routes showed its note and no key at all. The fetcher for it
+ * existed and was never called.
+ */
+console.log('\nA service-published key reaches the panel');
+await openGroup('Land & access');
+await page.waitForTimeout(900);
+const blmKey = await page.evaluate(() => {
+  const row = [...document.querySelectorAll('.layer-row')]
+    .find((node) => node.textContent.includes('BLM routes'));
+  // The row and its description are appended as a pair, so they are adjacent
+  // siblings inside the group — not nested in a wrapper of their own. Asking
+  // the parent for ".layer-desc" returns the FIRST layer's description in the
+  // whole group, which is how this check reported an empty key for a key that
+  // was being filled correctly.
+  const desc = row?.nextElementSibling?.classList.contains('layer-desc')
+    ? row.nextElementSibling
+    : null;
+  const slot = desc?.querySelector('.legend-slot');
+  return {
+    found: !!row,
+    rows: [...(slot?.querySelectorAll('.legend-item') || [])].map((n) => n.textContent.trim()),
+    swatches: slot?.querySelectorAll('img.legend-swatch').length || 0,
+  };
+});
+check('the BLM routes row is there', blmKey.found, true);
+check('and its key is filled from the service', blmKey.rows, ['Open to all vehicles', 'Open seasonally']);
+check('each class drawn with the swatch the service published', blmKey.swatches, 2);
 
 /*
  * The name, on a screen too narrow for the header to carry it.

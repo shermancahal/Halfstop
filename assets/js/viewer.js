@@ -1088,31 +1088,82 @@ async function checkForNewerBuild() {
   }
 }
 
+/*
+ * Where the build line's clock is read.
+ *
+ * Fixed to Indiana rather than the reader's own zone, because the only
+ * question this line answers is "is the thing I am looking at the thing that
+ * was just published", and that is asked against the publisher's clock. A
+ * phone in another timezone showing its own local time makes two numbers that
+ * have to be reconciled before they mean anything.
+ */
+const BUILD_ZONE = 'America/Indiana/Indianapolis';
+
+function buildTime(value) {
+  // deployed.txt writes "2026-08-26 14:10:17Z"; build.json writes ISO. The
+  // space form is not required to parse, and does not in every engine.
+  const date = new Date(String(value || '').trim().replace(' ', 'T'));
+  if (Number.isNaN(date.getTime())) return '';
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: BUILD_ZONE,
+      year: 'numeric', month: 'short', day: 'numeric',
+      hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+    }).format(date);
+  } catch {
+    // An engine without that zone in its database. Better the raw stamp than
+    // an empty line.
+    return date.toISOString().replace('T', ' ').slice(0, 16) + 'Z';
+  }
+}
+
 async function renderBuildStamp() {
   if (!dom.buildStamp) return;
+
+  const show = (id, when) => {
+    const stamp = buildTime(when);
+    const text = [id && `build ${id}`, stamp].filter(Boolean).join(' · ');
+    if (!text) return false;
+    dom.buildStamp.textContent = text;
+    dom.buildStamp.hidden = false;
+    return true;
+  };
+
   try {
     const response = await fetch('deployed.txt', { cache: 'no-cache' });
-    if (!response.ok) return;
+    if (response.ok) {
+      const fields = Object.fromEntries(
+        (await response.text()).split('\n')
+          .map((line) => line.split(':').map((part) => part.trim()))
+          .filter((pair) => pair.length >= 2)
+          .map(([key, ...rest]) => [key, rest.join(':').trim()]),
+      );
 
-    const fields = Object.fromEntries(
-      (await response.text()).split('\n')
-        .map((line) => line.split(':').map((part) => part.trim()))
-        .filter((pair) => pair.length >= 2)
-        .map(([key, ...rest]) => [key, rest.join(':').trim()]),
-    );
-
-    const commit = (fields.commit || '').slice(0, 7);
-    const built = fields.built || '';
-    if (!commit && !built) return;
-
-    dom.buildStamp.textContent = [commit && `build ${commit}`, built].filter(Boolean).join(' · ');
-    // Also in the console, so it can be read from a screenshot of the console
-    // or copied into a bug report without hunting for it in the panel.
-    console.info(`[build] ${Object.entries(fields).map(([k, v]) => `${k}=${v}`).join(' ')}`);
-    dom.buildStamp.title = Object.entries(fields).map(([k, v]) => `${k}: ${v}`).join('\n');
-    dom.buildStamp.hidden = false;
+      const commit = (fields.commit || '').slice(0, 7);
+      if (commit || fields.built) {
+        // Also in the console, so it can be read from a screenshot of the
+        // console or copied into a bug report without hunting for it.
+        console.info(`[build] ${Object.entries(fields).map(([k, v]) => `${k}=${v}`).join(' ')}`);
+        dom.buildStamp.title = Object.entries(fields).map(([k, v]) => `${k}: ${v}`).join('\n');
+        if (show(commit, fields.built)) return;
+      }
+    }
   } catch {
-    // Offline, or a deployment without the stamp. Not worth reporting.
+    // Offline, or a build with no deployed.txt — which is every app build.
+  }
+
+  /*
+   * The fallback the app always has. build.json is written by build-dist for
+   * every build, so the line appears inside the Capacitor shell too, where
+   * there is no deployed.txt and this used to render nothing at all.
+   */
+  try {
+    const response = await fetch('build.json', { cache: 'no-store' });
+    if (!response.ok) return;
+    const { build, built } = await response.json();
+    show(build, built);
+  } catch {
+    // A source checkout rather than a built package. Nothing to say.
   }
 }
 
@@ -2417,7 +2468,7 @@ function renderCoreHero(hero, night, cover) {
 function shootingWindow(night) {
   const box = el('details', { class: 'core-guide' }, [
     el('summary', { class: 'core-guide-summary' }, [
-      el('span', { class: 'core-guide-mark', text: 'i' }),
+      el('span', { class: 'core-guide-mark', html: icons.moon }),
       el('span', { text: 'Best times to shoot' }),
     ]),
   ]);
@@ -2692,20 +2743,26 @@ function linesPanel(body, position, date) {
 
   const active = state.lightLines?.key === position.join(',');
   if (active) body.append(nightScrubber(position, date));
-  body.append(el('button', {
-    class: `button ${active ? 'button-secondary' : 'button-primary'} button-small sky-lines-toggle`,
-    // `sky-lines-toggle` is a layout class and the storm panel uses it too, so
-    // it identifies nothing. This does — and a test that clicked the wrong one
-    // of the two reported the whole feature as missing.
-    dataset: { toggle: 'sky-lines' },
-    type: 'button',
-    text: active ? 'Hide the lines' : 'Draw the lines on the map',
-    // The date matters now: the band is drawn for a moment, and the scrubber
-    // moves that moment. Without it here the stored moment was `undefined`,
-    // which threw inside the handler — where a throw does not reach the
-    // caller, so the button simply did nothing and said nothing.
-    onclick: () => toggleLightLines(position, all, date),
-  }));
+  // Built the same way as every other action in the app — a mark and a short
+  // label — rather than as a bare word on a slab of colour.
+  const linesButton = labelledButton(
+    active ? icons.eyeOff : icons.pin,
+    active ? 'Hide the lines' : 'Draw the lines on the map',
+    {
+      tone: active ? 'secondary' : 'primary',
+      // The date matters: the band is drawn for a moment, and the scrubber
+      // moves that moment. Without it here the stored moment was `undefined`,
+      // which threw inside the handler — where a throw does not reach the
+      // caller, so the button simply did nothing and said nothing.
+      onclick: () => toggleLightLines(position, all, date),
+    },
+  );
+  // `sky-lines-toggle` is a layout class and the storm panel uses it too, so it
+  // identifies nothing. This does — and a test that clicked the wrong one of
+  // the two reported the whole feature as missing.
+  linesButton.classList.add('sky-lines-toggle');
+  linesButton.dataset.toggle = 'sky-lines';
+  body.append(linesButton);
 
   body.append(el('div', { class: 'core-rows' }, all.map((entry) => el('div', { class: 'core-row' }, [
     el('span', { class: 'core-row-label' }, [
@@ -3117,6 +3174,18 @@ function layerRow({ entry, selected, control, preview = false }) {
   if (scaleHost) fillWMSLegend(scaleHost, entry.legendScale);
 
   /*
+   * The same thing for the services that publish their key as ArcGIS JSON.
+   *
+   * Three layers — BLM routes, the MVUM and the recreation sites — have
+   * carried a `legendJSON` since they were added, and nothing read it. The
+   * fetcher for it existed and was never called, so those rows showed their
+   * note and no key at all, which looks exactly like a service that answered
+   * with nothing.
+   */
+  const serviceHost = entry.legendJSON ? el('div', { class: 'legend-slot' }) : null;
+  if (serviceHost) fillArcGISLegend(serviceHost, entry.legendJSON);
+
+  /*
    * A key made of the symbols themselves.
    *
    * For a layer drawn as icons, a list of coloured squares explains nothing —
@@ -3136,11 +3205,12 @@ function layerRow({ entry, selected, control, preview = false }) {
     ])))
     : null;
 
-  const descriptionNode = description || key || note || scaleHost || symbolKey || entry.legendImage
+  const descriptionNode = description || key || note || scaleHost || serviceHost || symbolKey || entry.legendImage
     ? el('div', { class: 'layer-desc', hidden: true }, [
       description && !scaleHost ? el('p', { class: 'layer-desc-text', text: description }) : null,
       key ? legendList(key, note) : null,
       symbolKey,
+      serviceHost,
       !key && note ? el('p', { class: 'legend-note', text: note }) : null,
       scaleHost,
       entry.legendImage
@@ -5072,17 +5142,21 @@ async function fillStormRows(host, position) {
   const tracked = result.alerts.filter((alert) => alert.geometry);
   if (tracked.length) {
     const showing = state.storms?.key === position.join(',');
-    host.append(el('button', {
-      class: `button ${showing ? 'button-secondary' : 'button-primary'} button-small sky-lines-toggle`,
-      dataset: { toggle: 'storm-areas' },
-      type: 'button',
-      text: showing ? 'Hide the warning areas' : 'Show the warning areas on the map',
-      onclick: () => {
-        state.storms = showing ? null : { key: position.join(','), alerts: tracked };
-        refreshStormData();
-        renderDetailsTab();
+    const stormButton = labelledButton(
+      showing ? icons.eyeOff : icons.alert,
+      showing ? 'Hide the warning areas' : 'Show the warning areas on the map',
+      {
+        tone: showing ? 'secondary' : 'primary',
+        onclick: () => {
+          state.storms = showing ? null : { key: position.join(','), alerts: tracked };
+          refreshStormData();
+          renderDetailsTab();
+        },
       },
-    }));
+    );
+    stormButton.classList.add('sky-lines-toggle');
+    stormButton.dataset.toggle = 'storm-areas';
+    host.append(stormButton);
   }
 
   host.append(el('p', {

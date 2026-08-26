@@ -247,9 +247,21 @@ html, body { height: 100%; overflow: hidden; }
 .popup-note-mark svg { width: 13px; height: 13px; }
 .popup-note-text { font-size: .81rem; color: var(--ink-2); line-height: 1.4; }
 .popup-note-date { font-size: .68rem; color: var(--ink-3); margin-top: 3px; }
-.popup-stats { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: .81rem; border-top: 1px solid var(--line); padding-top: 8px; }
-.popup-stats dt { color: var(--ink-3); }
-.popup-stats dd { margin: 0; font-variant-numeric: tabular-nums; }
+.popup-stats { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: .81rem; border-top: 1px solid var(--line); padding-top: 9px; }
+/*
+ * A step brighter than the panel's own labels.
+ *
+ * A popup sits over the map, not on a panel, so it is read against terrain and
+ * imagery in whatever light the reader is standing in. --ink-3 on --paper is
+ * comfortable on a desktop panel and disappears on a phone held at arm's
+ * length, which is where this card is actually used.
+ */
+.popup-stats dt { color: var(--ink-2); }
+.popup-stats dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+.mapboxgl-popup-content .icon-button,
+.maplibregl-popup-content .icon-button { color: var(--ink-2); }
+.mapboxgl-popup-content .icon-button:hover,
+.maplibregl-popup-content .icon-button:hover { color: var(--ink); background: var(--popup-control); }
 
 /* ---------- responsive ---------- */
 
@@ -1174,7 +1186,7 @@ html, body { height: 100%; overflow: hidden; }
   border-top: 1px solid var(--line);
   background: var(--surface);
   font-size: .68rem; letter-spacing: .03em; color: var(--ink-3);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums; text-align: center;
 }
 
 /* Repeat count on a toast that is still firing */
@@ -1534,12 +1546,12 @@ html, body { height: 100%; overflow: hidden; }
 }
 .core-guide-summary::-webkit-details-marker { display: none; }
 .core-guide-summary:hover { border-color: var(--line-strong); color: var(--ink); }
+/* A mark, like every other button in the app carries, rather than a lone
+   italic "i" in a grey disc that matched nothing else on the page. */
 .core-guide-mark {
-  flex: none; width: 15px; height: 15px; border-radius: 999px;
-  display: grid; place-items: center;
-  background: var(--ink-3); color: var(--paper);
-  font-size: .6rem; font-weight: 700; font-style: italic;
+  flex: none; display: inline-flex; color: var(--clay);
 }
+.core-guide-mark svg { width: 15px; height: 15px; }
 .core-guide[open] .core-guide-summary { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 .core-guide-body {
   padding: 10px 9px; border: 1px solid var(--line); border-top: 0;

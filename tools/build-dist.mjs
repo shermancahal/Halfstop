@@ -404,7 +404,18 @@ async function main() {
   const buildScript = `window.ABMAP_BUILD = '${buildId}';\n`;
   assets.push({ name: 'assets/js/build.js', data: encoderFor(buildScript) });
   versions.set('assets/js/build.js', digest(buildScript));
-  staged.push({ name: 'build.json', data: encoderFor(`{"build":"${buildId}"}\n`) });
+  /*
+   * The build time goes in beside the fingerprint.
+   *
+   * deployed.txt is written by the Pages workflow, so it exists on the website
+   * and nowhere else — the Capacitor bundle has no such file and the panel's
+   * build line was simply blank in the app. build.json ships with every build,
+   * web or app, so it is the one place both can read.
+   */
+  staged.push({
+    name: 'build.json',
+    data: encoderFor(`{"build":"${buildId}","built":"${new Date().toISOString()}"}\n`),
+  });
 
   /*
    * Which hrefs were actually rewritten, not merely how many.
