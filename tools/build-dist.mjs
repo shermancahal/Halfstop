@@ -80,9 +80,12 @@ export function chooseToken({ source = '', wantApp = false, env = {} } = {}) {
   }
   if (!app) {
     throw new Error(
-      'No app token. --app needs ABMAP_MAPBOX_TOKEN_APP in assets/js/token.js '
-      + '(or MAPBOX_TOKEN_APP in the environment): a second pk. token with no URL '
-      + 'restriction, because a Capacitor webview sends no Referer. See docs/mobile-app.md.',
+      'No app token.\n\n'
+      + 'assets/js/token.js is gitignored, so a fresh clone does not have one:\n'
+      + '    cp assets/js/token.example.js assets/js/token.js\n\n'
+      + 'Then set ABMAP_MAPBOX_TOKEN_APP in it (or MAPBOX_TOKEN_APP in the environment)\n'
+      + 'to a second pk. token with NO URL restriction — a Capacitor webview sends no\n'
+      + 'Referer, so a restricted token 401s on every tile. See docs/mobile-app.md.',
     );
   }
   if (app === web) {
@@ -93,6 +96,47 @@ export function chooseToken({ source = '', wantApp = false, env = {} } = {}) {
     );
   }
   return { token: app, kind: 'app', where: env.MAPBOX_TOKEN_APP?.trim() ? 'MAPBOX_TOKEN_APP' : 'assets/js/token.js' };
+}
+
+/**
+ * The token.js an `--app` build ships.
+ *
+ * The page only ever reads `ABMAP_MAPBOX_TOKEN`, so the app's value is written
+ * under that name and the `_APP` line is emptied — the bundle carries one
+ * token, not both, which is the entire point of having two.
+ *
+ * Everything else in the file is preserved, Supabase config included: the app
+ * signs in the same way the website does, and an earlier version of this that
+ * fell back to a one-line file quietly switched accounts off in the app for
+ * anyone whose token.js did not happen to contain both Mapbox lines.
+ */
+const WEB_LINE = /window\.ABMAP_MAPBOX_TOKEN\s*=\s*['"][^'"]*['"]/;
+const APP_LINE = /window\.ABMAP_MAPBOX_TOKEN_APP\s*=\s*['"][^'"]*['"]/;
+const EMPTY_APP = "window.ABMAP_MAPBOX_TOKEN_APP = ''";
+
+export function appTokenFile(source, token) {
+  const blanked = source.replace(APP_LINE, EMPTY_APP);
+  const line = `window.ABMAP_MAPBOX_TOKEN = '${token}'`;
+  // Appended only when there is nothing to replace — a file written by hand
+  // with just the app line in it.
+  return WEB_LINE.test(blanked) ? blanked.replace(WEB_LINE, line) : `${blanked.trimEnd()}\n${line};\n`.trimStart();
+}
+
+/**
+ * The token.js a normal web build ships.
+ *
+ * Identical to the source file except that the app's token is stripped out.
+ * The app token is deliberately NOT URL-restricted — it has to be, because a
+ * Capacitor webview sends no Referer — so shipping it in the website's page
+ * source would publish an unrestricted key to anyone who views source, which
+ * is precisely the exposure that having two tokens is meant to prevent.
+ *
+ * CI never hits this, because the workflow writes a fresh three-line token.js
+ * from repository secrets. A local `npm run dist`, or the FTP deploy, reads
+ * whatever is on disk — which is where the app token lives.
+ */
+export function webTokenFile(source) {
+  return source.replace(APP_LINE, EMPTY_APP);
 }
 
 async function collect(dir, base = dir, out = []) {
@@ -431,17 +475,8 @@ async function main() {
    * knows the answer to.
    */
   if (wantsApp) {
-    // Rewritten rather than appended: leaving the website's value in the file
-    // would ship both tokens in the bundle, which defeats separating them.
-    const rewritten = tokenSource
-      .replace(/window\.ABMAP_MAPBOX_TOKEN\s*=\s*['"][^'"]*['"]/,
-        `window.ABMAP_MAPBOX_TOKEN = '${chosen.token}'`)
-      .replace(/window\.ABMAP_MAPBOX_TOKEN_APP\s*=\s*['"][^'"]*['"]/,
-        "window.ABMAP_MAPBOX_TOKEN_APP = ''");
+    const data = encoder.encode(appTokenFile(tokenSource, chosen.token));
     const index = staged.findIndex((entry) => entry.name === 'assets/js/token.js');
-    const data = encoder.encode(rewritten.includes(chosen.token)
-      ? rewritten
-      : `window.ABMAP_MAPBOX_TOKEN = '${chosen.token}';\n`);
     if (index >= 0) staged[index] = { name: 'assets/js/token.js', data };
     else staged.push({ name: 'assets/js/token.js', data });
     console.log(`  Mapbox token: the APP token, from ${chosen.where} — for the Capacitor shell, not the website`);
@@ -449,9 +484,15 @@ async function main() {
     staged.push({ name: 'assets/js/token.js', data: encoder.encode("window.ABMAP_MAPBOX_TOKEN = '';\n") });
     console.log('  Mapbox token: none configured — shipping an empty assets/js/token.js');
   } else {
+    const stripped = webTokenFile(tokenSource);
+    const index = staged.findIndex((entry) => entry.name === 'assets/js/token.js');
+    const data = encoder.encode(stripped);
+    if (index >= 0) staged[index] = { name: 'assets/js/token.js', data };
+    else staged.push({ name: 'assets/js/token.js', data });
     console.log(chosen.token
       ? '  Mapbox token: found in assets/js/token.js — included in the package'
       : '  Mapbox token: assets/js/token.js is empty — the open basemaps will be used');
+    if (stripped !== tokenSource) console.log('  The app token was stripped — it does not belong in the website.');
   }
 
   staged.push({ name: '.htaccess', data: encoder.encode(HTACCESS) });

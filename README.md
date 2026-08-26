@@ -179,19 +179,39 @@ basemap/overlay catalogue.
 
 ### Adding a Mapbox token
 
-```js
-export const MAPBOX_TOKEN = 'pk.your_public_token_here';
+Tokens live in `assets/js/token.js`, which is **gitignored and therefore not in
+a fresh clone** — you create it from the example:
+
+```sh
+cp assets/js/token.example.js assets/js/token.js
 ```
 
-That is the only change required. With a token present the site loads Mapbox GL
-JS instead of MapLibre GL, and the Mapbox styles in `BASEMAPS` — which are hidden
-without one — appear in the layer picker. Without a token the site runs fully on
-the open USGS/Esri/OpenStreetMap basemaps and needs no account at all.
+```js
+window.ABMAP_MAPBOX_TOKEN     = 'pk.…';   // the website
+window.ABMAP_MAPBOX_TOKEN_APP = '';       // the iOS/Android app, if you build one
+```
 
-A `pk.*` token is a **public** token and is meant to ship in client code, but
-restrict it to your domain in the Mapbox account settings so it cannot be reused
-elsewhere. Set `MAP_ENGINE` to `'mapbox'` or `'maplibre'` to override the
-automatic choice.
+You do not need this file to deploy. GitHub Actions writes it during the build
+from the `MAPBOX_TOKEN` repository secret, so the published site gets a token
+without one ever being committed. It is only needed to run the vector basemaps
+locally, or to build the app.
+
+With a token present the site loads Mapbox GL JS instead of MapLibre GL, and the
+Mapbox styles in `BASEMAPS` — hidden without one — appear in the layer picker.
+Without a token the site runs fully on the open USGS/Esri/OpenStreetMap basemaps
+and needs no account at all. Set `MAP_ENGINE` to `'mapbox'` or `'maplibre'` to
+override the automatic choice.
+
+A `pk.` token is a **public** token, meant to ship in client code — but restrict
+it to your origin in the Mapbox dashboard (Account → Tokens → URL restrictions),
+which is the only thing stopping someone from copying it onto their own site.
+The wildcard is legal only in the subdomain position, so use the bare origin:
+`https://shermancahal.github.io`.
+
+`ABMAP_MAPBOX_TOKEN_APP` is a **second** `pk.` token, and it cannot carry that
+restriction: a Capacitor webview sends no `Referer`, so a restricted token 401s
+on every tile from inside the app. `npm run dist:app` ships that one in place of
+the website's; `npm run dist` ignores it. See `docs/mobile-app.md`.
 
 ### Photos on pins
 

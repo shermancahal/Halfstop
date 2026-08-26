@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { chooseToken } from '../tools/build-dist.mjs';
+import { chooseToken, appTokenFile, webTokenFile } from '../tools/build-dist.mjs';
 
 const FILE = `
 window.ABMAP_MAPBOX_TOKEN = 'pk.website';
@@ -69,4 +69,60 @@ test('choosing a token never runs the build', () => {
   // Importing build-dist.mjs must not stage anything. If `main()` ran on
   // import, this test file would silently rebuild dist/ on every `npm test`.
   assert.equal(typeof chooseToken, 'function');
+});
+
+/* ---------------------------------------------------------- the app bundle */
+
+test('an app build writes the app token under the name the page reads', () => {
+  const out = appTokenFile(FILE, 'pk.application');
+  assert.match(out, /window\.ABMAP_MAPBOX_TOKEN = 'pk\.application'/);
+});
+
+test('and carries only one token, not both', () => {
+  // An APK is a zip. Shipping the website's key alongside the app's would
+  // hand away in the bundle exactly what having two tokens is meant to protect.
+  const out = appTokenFile(FILE, 'pk.application');
+  assert.equal(out.includes('pk.website'), false);
+  assert.match(out, /ABMAP_MAPBOX_TOKEN_APP = ''/);
+});
+
+test('the rest of the file survives, so accounts still work in the app', () => {
+  assert.match(appTokenFile(FILE, 'pk.application'), /ABMAP_SUPABASE_URL = 'https:\/\/example\.supabase\.co'/);
+});
+
+test('a hand-written file with only the app line still gets a usable one', () => {
+  // The likely shape when someone writes token.js themselves rather than
+  // copying the example: no plain ABMAP_MAPBOX_TOKEN line to replace. The
+  // first version of this dropped everything else in the file on that path.
+  const minimal = "window.ABMAP_MAPBOX_TOKEN_APP = 'pk.application';\nwindow.ABMAP_SUPABASE_KEY = 'sb_publishable_x';\n";
+  const out = appTokenFile(minimal, 'pk.application');
+  assert.match(out, /window\.ABMAP_MAPBOX_TOKEN = 'pk\.application';/);
+  assert.match(out, /ABMAP_SUPABASE_KEY = 'sb_publishable_x'/);
+  assert.match(out, /ABMAP_MAPBOX_TOKEN_APP = ''/);
+});
+
+test('an empty website token is not a reason to refuse an app build', () => {
+  // Running `npm start` locally needs no Mapbox token at all, so plenty of
+  // checkouts will have only the app one filled in.
+  const onlyApp = "window.ABMAP_MAPBOX_TOKEN = '';\nwindow.ABMAP_MAPBOX_TOKEN_APP = 'pk.application';\n";
+  assert.equal(chooseToken({ source: onlyApp, wantApp: true }).token, 'pk.application');
+  assert.match(appTokenFile(onlyApp, 'pk.application'), /window\.ABMAP_MAPBOX_TOKEN = 'pk\.application'/);
+});
+
+test('a web build strips the app token instead of publishing it', () => {
+  // The app token cannot be URL-restricted — a Capacitor webview sends no
+  // Referer — so putting it in the website's page source publishes an
+  // unrestricted key to anyone who views source. CI writes a fresh token.js
+  // from secrets and never sees this, but a local `npm run dist` reads the
+  // file on disk, which is where the app token lives.
+  const out = webTokenFile(FILE);
+  assert.equal(out.includes('pk.application'), false);
+  assert.match(out, /ABMAP_MAPBOX_TOKEN_APP = ''/);
+  assert.match(out, /window\.ABMAP_MAPBOX_TOKEN = 'pk\.website'/, 'the website token still ships');
+  assert.match(out, /ABMAP_SUPABASE_URL = 'https:\/\/example\.supabase\.co'/, 'and everything else survives');
+});
+
+test('stripping is a no-op when no app token is configured', () => {
+  const plain = "window.ABMAP_MAPBOX_TOKEN = 'pk.website';\n";
+  assert.equal(webTokenFile(plain), plain);
 });
