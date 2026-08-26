@@ -118,7 +118,11 @@ setTimeout(()=>{this.fire('style.load');           // sources NOT loaded yet
   setTimeout(()=>{this._ready=true;this.fire('styledata');this.fire('idle');this.fire('load')},30)},0)}
 _apply(s){this._l.clear();this._s.clear();this._img.clear();if(s&&s.layers)for(const l of s.layers)this._l.set(l.id,l)}
 loaded(){return this._ready}isStyleLoaded(){return this._ready}
-addControl(){return this}getCanvas(){return{style:{}}}getContainer(){return document.getElementById('map')}
+// Mounts the control, as the real one does: calls onAdd and appends what it
+// hands back. A no-op here meant the app's own two map tools were never in the
+// DOM under test, so nothing could check them.
+addControl(c){if(c&&typeof c.onAdd==='function'){const n=c.onAdd(this);
+if(n&&n.nodeType===1)(document.getElementById('map')||document.body).appendChild(n)}return this}getCanvas(){return{style:{}}}getContainer(){return document.getElementById('map')}
 // Throws before the style is up, as GL does. A stub that accepts an image at
 // any time cannot catch a registrar called too early — which is exactly how a
 // whole state's markers went missing with an empty catch block over the top.
@@ -289,6 +293,58 @@ await page.route('**/*', async (route) => {
    * which is indistinguishable from a service that answered with nothing. This
    * fixture is what proves the difference.
    */
+  /*
+   * An ArcGIS identify, in the two different shapes the road services use.
+   *
+   * BLM names its designations in fields and puts the road class in the
+   * SUBLAYER name; the Forest Service spreads permission across a column per
+   * vehicle with a `_datesopen` beside each. Both are read off the live
+   * services rather than from their printed legends, and the card has to make
+   * one readable answer out of the pair.
+   */
+  if (/MapServer\/identify/.test(url)) {
+    const blm = /gis\.blm\.gov/.test(url);
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ results: blm
+        ? [{
+          layerId: 1,
+          layerName: 'Roads Managed for Limited Public Motorized Use',
+          attributes: {
+            OBJECTID: 4411,
+            ROUTE_PRMRY_NM: 'Cathedral Valley Road',
+            PLAN_ASSET_CLASS: 'Road',
+            PLAN_OHV_ROUTE_DSGNTN: 'Limited',
+            OHV_ROUTE_DSGNTN_LIM: 'Licensed vehicles only',
+            OHV_DSGNTN_LIM_EXPLAIN: 'Street-legal vehicles only; no OHV use.',
+            PLAN_SEASON_RSTRCT_CODE: 'Closed when wet',
+            OBSRVE_SRFCE_TYPE: 'Native',
+            Shape_Length: 8123.4,
+            GlobalID: 'ignored',
+            NEPA_DOC_NUM: '<Null>',
+          },
+        }]
+        : [{
+          layerId: 1,
+          layerName: 'Motor Vehicle Use Map: Roads',
+          attributes: {
+            OBJECTID: 91,
+            name: 'FR 1472',
+            seasonal: 'yes',
+            surfacetype: 'Native material',
+            operationalmaintlevel: '2 - High clearance vehicles',
+            motorcycle: 'motorcycle',
+            motorcycle_datesopen: '01/01-12/31',
+            otherwheeled_ohv: 'otherwheeled_ohv',
+            otherwheeled_ohv_datesopen: '05/15-10/31',
+            tracked_ohv_lt50inches: '',
+            tracked_ohv_lt50_datesopen: '',
+          },
+        }] }),
+    });
+  }
+
   if (/MapServer\/legend\?f=pjson/.test(url)) {
     return route.fulfill({
       status: 200,
@@ -1603,6 +1659,81 @@ await page.waitForTimeout(300);
 await page.locator('.popup-bar button').nth(1).click();
 await page.waitForTimeout(200);
 check('Close closes it', await page.locator('.drop-pin').count(), 0);
+
+/*
+ * Tapping a road to find out what it is.
+ *
+ * Both layers are server-rendered images, so there is nothing in the browser
+ * to click — the answer comes from asking each service what is under the
+ * point, and the card has to hold two agencies that use the same words to mean
+ * different things.
+ */
+console.log('\nA tap can ask what a road is');
+// Earlier sections leave another tab showing, and a checkbox in a hidden tab
+// panel is present but unclickable.
+await page.click('.panel-tab[data-tab="layers"]');
+await page.waitForTimeout(300);
+await openGroup('Land & access');
+for (const name of ['Forest roads (MVUM)', 'BLM routes']) {
+  await page.locator('.layer-row', { hasText: name }).locator('input[type=checkbox]').check();
+}
+await page.waitForTimeout(700);
+
+const tools = page.locator('.map-tool');
+check('there are two map tools under the zoom controls', await tools.count(), 2);
+check('and neither is armed to begin with', await page.locator('.map-tool.is-on').count(), 0);
+
+await tools.nth(1).click();
+check('the probe says it is armed', await page.locator('.map-tool.is-on').count(), 1);
+
+await page.evaluate(() => window.__map.fire('click', {
+  lngLat: { lng: -111.5, lat: 38.5 }, point: { x: 400, y: 400 },
+  originalEvent: { pointerType: 'touch', width: 40, height: 40 },
+}));
+await page.waitForTimeout(900);
+
+check('using it disarms it, so the next tap drops a pin as usual',
+  await page.locator('.map-tool.is-on').count(), 0);
+
+const card = await page.evaluate(() => {
+  const node = document.querySelector('.identify-card');
+  if (!node) return null;
+  const rows = {};
+  for (const group of node.querySelectorAll('.identify-group')) {
+    const source = group.querySelector('.identify-source')?.textContent.trim();
+    const pairs = [...group.querySelectorAll('dt')].map((dt, i) => [
+      dt.textContent.trim(), group.querySelectorAll('dd')[i]?.textContent.trim(),
+    ]);
+    rows[source] = { designation: group.querySelector('.identify-designation')?.textContent.trim(),
+      pairs: Object.fromEntries(pairs) };
+  }
+  return rows;
+});
+
+check('both agencies answer into one card',
+  Object.keys(card || {}).sort(), ['BLM travel management', 'Forest Service MVUM']);
+check('BLM\'s designation comes from the sublayer name, where it lives',
+  card['BLM travel management'].designation, 'Roads Managed for Limited Public Motorized Use');
+check('and the limit is spelled out rather than left as the word "Limited"',
+  card['BLM travel management'].pairs['The limit'], 'Street-legal vehicles only; no OHV use.');
+check('internal bookkeeping is not shown',
+  Object.keys(card['BLM travel management'].pairs).some((k) => /object|global|shape/i.test(k)), false);
+check('nor are the service\'s own nulls',
+  JSON.stringify(card['BLM travel management'].pairs).includes('Null'), false);
+
+// The Forest Service spreads permission over a column per vehicle. Listed raw
+// that is a dozen rows of "yes"; the card pairs each with its dates instead.
+check('the MVUM vehicle columns fold into one line',
+  card['Forest Service MVUM'].pairs['Open to'], 'Motorcycle, Otherwheeled ohv (05/15-10/31)');
+check('a class with no dates and no value is not listed as open',
+  card['Forest Service MVUM'].pairs['Open to'].includes('Tracked'), false);
+
+await page.locator('.identify-card .popup-bar button').nth(1).click();
+await page.waitForTimeout(200);
+for (const name of ['Forest roads (MVUM)', 'BLM routes']) {
+  await page.locator('.layer-row', { hasText: name }).locator('input[type=checkbox]').uncheck();
+}
+await page.waitForTimeout(400);
 
 /*
  * The engine's own stylesheet must not win against ours.

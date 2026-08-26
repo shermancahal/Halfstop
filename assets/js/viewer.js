@@ -413,6 +413,46 @@ async function main() {
   }), 'top-right');
   if (gl.FullscreenControl) state.map.addControl(new gl.FullscreenControl(), 'top-right');
 
+  /*
+   * Two of our own, in the same corner and under the rest.
+   *
+   * A real control rather than a floating div, so it stacks with the engine's
+   * own group instead of having to be positioned against it — and so it moves
+   * with them if the corner ever changes.
+   */
+  state.map.addControl({
+    onAdd: () => {
+      const group = el('div', { class: 'mapboxgl-ctrl mapboxgl-ctrl-group map-tools' });
+
+      // Drops the pin at the middle of the screen rather than where a finger
+      // landed. On a phone that is the useful half: you can pan the map under
+      // the crosshair far more precisely than you can tap a spot.
+      group.append(el('button', {
+        class: 'map-tool', type: 'button',
+        title: 'Drop a pin at the centre of the map',
+        'aria-label': 'Drop a pin at the centre of the map',
+        html: icons.pin,
+        onclick: () => {
+          const centre = state.map.getCenter();
+          showDropPin([centre.lng, centre.lat]);
+        },
+      }));
+
+      const probe = el('button', {
+        class: 'map-tool', type: 'button',
+        title: 'Ask what is under a spot on the map',
+        'aria-label': 'Ask what is under a spot on the map',
+        'aria-pressed': 'false',
+        html: icons.search,
+      });
+      probe.addEventListener('click', () => armProbe(probe));
+      group.append(probe);
+
+      return group;
+    },
+    onRemove: () => {},
+  }, 'top-right');
+
   state.map.on('sourcedata', (event) => {
     if (event.sourceId && event.isSourceLoaded) noteLayerHealth(event.sourceId, true);
   });
@@ -3821,6 +3861,23 @@ function bindFeatureInteractions(layerId) {
  */
 function wireMapClicks() {
   state.map.on('click', (event) => {
+    /*
+     * Armed by the probe button, and disarmed by using it.
+     *
+     * One shot rather than a mode you can forget you are in: the next tap
+     * answers a question, and the one after that drops a pin as always.
+     */
+    if (state.probing) {
+      state.probing = false;
+      dom.app?.classList.remove('is-probing');
+      for (const node of document.querySelectorAll('.map-tool.is-on')) {
+        node.classList.remove('is-on');
+        node.setAttribute('aria-pressed', 'false');
+      }
+      probePoint([event.lngLat.lng, event.lngLat.lat], tapTolerance(event));
+      return;
+    }
+
     const live = [...state.interactiveLayers].filter((id) => state.map.getLayer(id));
     const hits = live.length ? state.map.queryRenderedFeatures(event.point, { layers: live }) : [];
     if (hits.length) return;   // a saved pin or track owns this click
@@ -3952,6 +4009,238 @@ function showDropPin(position) {
   popup.setDOMContent(content).addTo(state.map);
 }
 
+
+
+/* ------------------------------------------------------------------ identify */
+
+/**
+ * How far from the tap a feature still counts as tapped, in screen pixels.
+ *
+ * Taken from the pointer event rather than from the device, because the device
+ * is the wrong question: an iPad with a trackpad, a phone with a mouse and a
+ * stylus on a touchscreen all break "is this a touch device". The event knows
+ * what made it — and `width`/`height` are the real contact patch, so a thumb
+ * gets more room than a fingertip.
+ *
+ * A road line is drawn two or three pixels wide. Asking for it within five
+ * pixels of a mouse pointer is generous; asking within five of a finger is
+ * asking somebody to hit a hair.
+ */
+function tapTolerance(event) {
+  const source = event?.originalEvent || event;
+  const kind = source?.pointerType || '';
+  const patch = Math.max(source?.width || 0, source?.height || 0);
+
+  if (kind === 'mouse') return 5;
+  if (kind === 'pen') return 8;
+  if (kind === 'touch') {
+    // Chrome reports 1x1 for a synthetic touch and Safari has reported the
+    // full finger box; clamp so neither extreme decides the answer.
+    return Math.round(Math.min(30, Math.max(18, patch / 2 || 22)));
+  }
+  // No pointer information at all — a keyboard activation, or an older engine.
+  return 12;
+}
+
+/** The overlays that are switched on AND can answer a question about a point. */
+function identifiableOverlays() {
+  return OVERLAYS.filter((entry) => entry.identify && state.overlays.get(entry.id)?.visible);
+}
+
+/**
+ * Ask one ArcGIS service what is under a point.
+ *
+ * `identify` rather than a spatial query, because it takes a tolerance in
+ * screen pixels and the whole problem is that a road is thinner than a finger.
+ * It wants the map's own extent and pixel size to convert that tolerance into
+ * ground distance, which is why both are passed rather than assumed.
+ */
+async function identifyAt(entry, position, { tolerance, bounds, size }) {
+  const url = `${entry.identify.url}?f=json`
+    + `&geometry=${encodeURIComponent(JSON.stringify({ x: position[0], y: position[1] }))}`
+    + '&geometryType=esriGeometryPoint&sr=4326'
+    + `&layers=${encodeURIComponent(`all:${entry.identify.layers}`)}`
+    + `&tolerance=${tolerance}`
+    + `&mapExtent=${bounds.join(',')}`
+    + `&imageDisplay=${size.join(',')}`
+    + '&returnGeometry=false';
+
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`${entry.name}: ${response.status}`);
+  const body = await response.json();
+  return (body?.results || []).map((result) => ({
+    source: entry.identify.source || entry.name,
+    // For the BLM routes this IS the answer: the service publishes the
+    // designation as the sublayer name rather than as a field, so "Roads
+    // Managed for Limited Public Motorized Use" arrives here and nowhere else.
+    designation: result.layerName || '',
+    attributes: result.attributes || {},
+    fields: entry.identify.fields || null,
+    vehicles: Boolean(entry.identify.vehicles),
+  }));
+}
+
+/** A field name as a human reads it: SEASONAL_START -> Seasonal start. */
+function prettyField(name) {
+  const words = String(name).replace(/[_-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').trim();
+  return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase();
+}
+
+/** Values ArcGIS uses for "nothing here", which are not worth a row. */
+const EMPTY_VALUES = new Set(['', 'null', 'Null', 'NULL', '<Null>', 'N/A', 'na', ' ']);
+
+/**
+ * The MVUM's vehicle columns, folded into one readable block.
+ *
+ * The schema is a column per class — `motorcycle`, `otherwheeled_ohv`,
+ * `tracked_ohv_lt50inches` — each with a `<class>_datesopen` beside it. Listed
+ * raw that is a dozen rows of "Yes"; paired up it is the answer to the only
+ * question anybody taps a forest road to ask.
+ */
+function vehicleRows(attributes) {
+  const open = [];
+  for (const [name, value] of Object.entries(attributes)) {
+    if (/_datesopen$/i.test(name)) continue;
+    const dates = attributes[`${name}_datesopen`] ?? attributes[`${name}_DATESOPEN`];
+    if (dates === undefined) continue;
+
+    const allowed = String(value ?? '').trim();
+    // The service writes the class name itself when open and leaves it empty
+    // when not, so anything present and not a plain no counts.
+    if (!allowed || /^(no|n|0|closed)$/i.test(allowed)) continue;
+
+    const when = String(dates ?? '').trim();
+    open.push(prettyField(name) + (when && !/^01\/01.*12\/31$/.test(when) ? ` (${when})` : ''));
+  }
+  return open;
+}
+
+function attributeRows(result) {
+  const entries = Object.entries(result.attributes)
+    .filter(([name, value]) => {
+      if (/^(objectid|shape|globalid|fid)/i.test(name)) return false;
+      return !EMPTY_VALUES.has(String(value ?? '').trim());
+    });
+
+  // A curated order when the catalogue names one, so the two fields anybody
+  // actually wants — when it is open, and to what — are not row nineteen.
+  if (result.fields?.length) {
+    const wanted = [];
+    for (const field of result.fields) {
+      const hit = entries.find(([name]) => name.toLowerCase() === field.name.toLowerCase());
+      if (hit) wanted.push([field.label || prettyField(hit[0]), hit[1]]);
+    }
+    if (result.vehicles) {
+      const open = vehicleRows(result.attributes);
+      wanted.push(['Open to', open.length ? open.join(', ') : 'nothing listed as permitted']);
+    }
+    if (wanted.length) return wanted;
+  }
+  // Otherwise everything readable, capped: a raw ArcGIS row can be forty
+  // columns of internal bookkeeping and a card over a map cannot hold that.
+  return entries.slice(0, 10).map(([name, value]) => [prettyField(name), value]);
+}
+
+/**
+ * One card for everything under the tap, grouped by who published it.
+ *
+ * Both agencies answer in the same words and mean different things by them —
+ * "open to all vehicles" is a different legal statement under a Forest Service
+ * MVUM than under a BLM travel management plan — so the source is a heading
+ * rather than a footnote.
+ */
+function showIdentifyResults(position, groups, { pending = false } = {}) {
+  state.dropPopup?.remove();
+
+  const content = el('div', { class: 'identify-card' });
+  const popup = new state.gl.Popup({ closeButton: false, maxWidth: '340px', offset: 12 })
+    .setLngLat(position);
+  state.dropPopup = popup;
+
+  content.append(el('h3', { class: 'identify-title', text: pending ? 'Looking…' : 'On this spot' }));
+  const body = el('div', { class: 'identify-body' });
+  content.append(body);
+
+  if (!pending) {
+    if (!groups.length) {
+      body.append(el('p', {
+        class: 'hint',
+        text: 'Nothing mapped within reach of that tap. Try a little closer to the line, '
+          + 'or switch on a road layer first.',
+      }));
+    }
+    for (const group of groups) {
+      const rows = attributeRows(group);
+      body.append(el('div', { class: 'identify-group' }, [
+        el('p', { class: 'identify-source', text: group.source }),
+        group.designation ? el('p', { class: 'identify-designation', text: group.designation }) : null,
+        rows.length
+          ? el('dl', { class: 'popup-stats' }, rows.flatMap(([label, value]) => [
+            el('dt', { text: label }),
+            el('dd', { text: String(value) }),
+          ]))
+          : null,
+      ]));
+    }
+    body.append(el('p', {
+      class: 'source-note',
+      text: 'The agency’s current map is the legal authority for what is open. '
+        + 'Seasonal closures change and a published layer lags them.',
+    }));
+  }
+
+  content.append(el('div', { class: 'popup-bar' }, [
+    labelledButton(icons.info, 'Details', {
+      tone: 'ghost',
+      onclick: () => { popup.remove(); showPointDetails(position); },
+    }),
+    labelledButton(icons.close, 'Close', { tone: 'ghost', onclick: () => popup.remove() }),
+  ]));
+
+  popup.setDOMContent(content).addTo(state.map);
+  return { popup, body };
+}
+
+/** Run every visible identifiable layer against one point, and show the answer. */
+async function probePoint(position, tolerance) {
+  const layers = identifiableOverlays();
+  if (!layers.length) {
+    toast('Switch on a road or land layer first — there is nothing to ask.', { tone: 'info' });
+    return;
+  }
+
+  showIdentifyResults(position, [], { pending: true });
+
+  const bounds = state.map.getBounds();
+  const extent = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+  const canvas = state.map.getCanvas();
+  const size = [Math.round(canvas.clientWidth || 800), Math.round(canvas.clientHeight || 600), 96];
+
+  // Every layer at once, and one slow service does not hold up the rest.
+  const answers = await Promise.allSettled(layers.map((entry) => identifyAt(entry, position, {
+    tolerance, bounds: extent, size,
+  })));
+
+  const groups = [];
+  for (const [index, answer] of answers.entries()) {
+    if (answer.status === 'rejected') {
+      console.warn(`[identify] ${layers[index].name}:`, answer.reason?.message || answer.reason);
+      continue;
+    }
+    groups.push(...answer.value);
+  }
+
+  showIdentifyResults(position, groups);
+}
+
+/** Arm the next tap to ask what is under it, rather than drop a pin. */
+function armProbe(button) {
+  state.probing = !state.probing;
+  button.classList.toggle('is-on', state.probing);
+  button.setAttribute('aria-pressed', String(state.probing));
+  dom.app?.classList.toggle('is-probing', state.probing);
+  if (state.probing) toast('Tap a road or an area to see what it is.', { tone: 'info' });
+}
 
 /** Show the Details tab for a place that is not a saved pin. */
 function showPointDetails(position) {

@@ -565,6 +565,38 @@ export const OVERLAYS = [
      * `layers=show:1,2` is Motor Vehicle Use Map: Roads and Trails, named by
      * the service itself. Checked drawing before being switched to.
      */
+    /*
+     * What a tap on one of these lines can ask.
+     *
+     * The same sublayers the raster draws, so the card can only describe a
+     * line that is actually on screen. `identify` rather than a spatial query
+     * because it takes a tolerance in screen pixels, and the whole difficulty
+     * is that a road is drawn thinner than a finger is wide.
+     */
+    identify: {
+      url: 'https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_02/MapServer/identify',
+      layers: '1,2',
+      source: 'Forest Service MVUM',
+      /*
+       * The MVUM schema is one column per vehicle class, each with a matching
+       * `<class>_datesopen`: motorcycle / motorcycle_datesopen,
+       * otherwheeled_ohv / otherwheeled_ohv_datesopen, and so on. Read off the
+       * service rather than from the printed legend.
+       *
+       * So there is no useful fixed field list here — `vehicles: true` tells
+       * the card to pair them up instead, which answers "what may I drive on
+       * this, and when" in one block however many classes a district
+       * publishes.
+       */
+      vehicles: true,
+      fields: [
+        { name: 'name', label: 'Road' },
+        { name: 'seasonal', label: 'Seasonal' },
+        { name: 'surfacetype', label: 'Surface' },
+        { name: 'operationalmaintlevel', label: 'Maintained to' },
+        { name: 'jurisdiction', label: 'Jurisdiction' },
+      ],
+    },
     tiles: ['https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_02/MapServer/export'
       + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=512,512&format=png32'
       + '&transparent=true&layers=show:1,2&f=image'],
@@ -600,6 +632,42 @@ export const OVERLAYS = [
     },
     legendNote: 'Ground Transportation Linear Features. BLM travel management '
       + 'plans are the authority for what is open; this is their published map of it.',
+    /*
+     * GTLF publishes the designation as the sublayer NAME, not as a field:
+     * "Roads Managed for Public Motorized Use", "…for Limited Public Motorized
+     * Use", and six more. So which sublayer answers is the answer, and the
+     * card reads it off `layerName` rather than hunting for a column.
+     *
+     * The four asked here are the four the raster draws. The other four are
+     * non-motorised and unassessed trails, which are a different question from
+     * "can I drive this".
+     */
+    identify: {
+      url: 'https://gis.blm.gov/arcgis/rest/services/transportation/'
+        + 'BLM_Natl_GTLF_Public_Display/MapServer/identify',
+      layers: '0,1,2,3',
+      source: 'BLM travel management',
+      /*
+       * Read off the service's own field list. GTLF names its designations
+       * rather than spreading them over a column per vehicle the way the MVUM
+       * does, so a fixed order works here — and the order is the reader's:
+       * what is it, may I drive it, when, and what does the limit actually
+       * say. OHV_DSGNTN_LIM_EXPLAIN is the one worth surfacing; it is where a
+       * "limited" designation stops being a word and says what the limit is.
+       */
+      fields: [
+        { name: 'ROUTE_PRMRY_NM', label: 'Route' },
+        { name: 'PLAN_ASSET_CLASS', label: 'Class' },
+        { name: 'PLAN_OHV_ROUTE_DSGNTN', label: 'OHV designation' },
+        { name: 'OHV_ROUTE_DSGNTN_LIM', label: 'Limited to' },
+        { name: 'OHV_DSGNTN_LIM_EXPLAIN', label: 'The limit' },
+        { name: 'PLAN_SEASON_RSTRCT_CODE', label: 'Seasonal' },
+        { name: 'PLAN_ALLOW_MODE_TRNSPRT', label: 'Allowed' },
+        { name: 'PLAN_ACCESS_RSTRCT', label: 'Access' },
+        { name: 'OBSRVE_SRFCE_TYPE', label: 'Surface' },
+        { name: 'ROUTE_SPCL_DSGNTN_TYPE', label: 'Special designation' },
+      ],
+    },
     tiles: ['https://gis.blm.gov/arcgis/rest/services/transportation/'
       + 'BLM_Natl_GTLF_Public_Display/MapServer/export'
       + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=512,512&format=png32'

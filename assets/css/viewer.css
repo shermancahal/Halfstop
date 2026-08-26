@@ -1124,6 +1124,42 @@ html, body { height: 100%; overflow: hidden; }
 }
 :root[data-theme="dark"] .land-badge.is-public { color: #a5d6a7; background: rgba(46, 125, 50, .18); }
 
+/* The map's own two tools, stacked under the engine's controls. */
+.map-tools { overflow: hidden; }
+.map-tool {
+  display: grid; place-items: center;
+  width: 29px; height: 29px; padding: 0; cursor: pointer;
+  background: var(--surface); color: var(--ink-2);
+  border: 0; border-bottom: 1px solid var(--line);
+}
+.map-tool:last-child { border-bottom: 0; }
+.map-tool:hover { background: var(--paper-2); color: var(--ink); }
+.map-tool svg { width: 17px; height: 17px; }
+/* Armed: the next tap asks a question instead of dropping a pin, and the
+   button has to say so — a mode with no visible state is a trap. */
+.map-tool.is-on { background: var(--clay); color: #fff; }
+.app.is-probing .maplibregl-canvas-container,
+.app.is-probing .mapboxgl-canvas-container { cursor: crosshair; }
+
+/* What a tap turned out to be sitting on. */
+.identify-card { min-width: 244px; }
+.identify-title {
+  font-family: var(--font-serif); font-size: 1.02rem; font-weight: 600;
+  margin: 0 0 9px; color: var(--ink);
+}
+.identify-group + .identify-group { margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--line); }
+/* The agency is a heading, not a footnote: both of them say "open to all
+   vehicles" and neither means quite the same thing by it. */
+.identify-source {
+  margin: 0; font-size: .64rem; font-weight: 600; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.identify-designation {
+  margin: 2px 0 6px; font-size: .88rem; font-weight: 600; color: var(--ink);
+}
+.identify-body .popup-stats { border-top: 0; padding-top: 4px; }
+.identify-body .source-note { margin-top: 10px; }
+
 /* Dropped-pin popup */
 .drop-pin { min-width: 236px; }
 .drop-pin-name {
