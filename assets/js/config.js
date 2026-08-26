@@ -575,6 +575,45 @@ export const OVERLAYS = [
     enabled: false,
     attribution: 'Motor Vehicle Use Maps © <a href="https://www.fs.usda.gov/">USDA Forest Service</a>',
   },
+  {
+    /*
+     * The other half of legal off-road, and the bigger half out west.
+     *
+     * The Forest Service layer above covers national forest. Most of the
+     * driveable public land in Nevada, Utah and Arizona is BLM, and until now
+     * this app had nothing for it — which made "where am I allowed to drive"
+     * answerable in half the country and silent in the other half.
+     *
+     * GTLF's sublayers *are* the designation: 0 and 1 are roads managed for
+     * public and for limited public motorized use, 2 and 3 the same for trails.
+     * That is why only those four are drawn. Sublayers 4 to 7 are the
+     * non-motorized and unassessed trails, which belong on a hiking map rather
+     * than this one.
+     */
+    id: 'blm-routes',
+    group: 'Land & access',
+    name: 'BLM routes (GTLF)',
+    description: 'BLM roads and trails managed for motor vehicles.',
+    legendJSON: {
+      url: 'https://gis.blm.gov/arcgis/rest/services/transportation/'
+        + 'BLM_Natl_GTLF_Public_Display/MapServer/legend?f=pjson',
+    },
+    legendNote: 'Ground Transportation Linear Features. BLM travel management '
+      + 'plans are the authority for what is open; this is their published map of it.',
+    tiles: ['https://gis.blm.gov/arcgis/rest/services/transportation/'
+      + 'BLM_Natl_GTLF_Public_Display/MapServer/export'
+      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=512,512&format=png32'
+      + '&transparent=true&layers=show:0,1,2,3&f=image'],
+    tileSize: 512,
+    // Rendered per request like the MVUM, so the same floor applies: a national
+    // view of every BLM route is illegible and the most expensive thing anyone
+    // can ask this service for.
+    minzoom: 10,
+    maxzoom: 16,
+    opacity: 0.9,
+    enabled: false,
+    attribution: 'Routes © <a href="https://navigator.blm.gov/">BLM</a>',
+  },
   /*
    * Weather, as a group rather than a single radar switch.
    *

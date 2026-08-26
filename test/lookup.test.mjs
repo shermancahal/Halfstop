@@ -21,6 +21,7 @@ import {
   expandAgency,
   parseISODuration,
   parseWMSLegend,
+  arcgisLegendRows,
 } from '../assets/js/lib/lookup.js';
 
 /** Replace global fetch for one test, restoring it afterwards. */
@@ -361,5 +362,94 @@ test('legend: nothing usable is an empty list, never a throw', () => {
   for (const body of [null, undefined, {}, { Legend: [] }, { Legend: [{}] },
     { Legend: [{ rules: [{ symbolizers: [{}] }] }] }]) {
     assert.deepEqual(parseWMSLegend(body), []);
+  }
+});
+
+/*
+ * ArcGIS legends, and which of two names to show.
+ *
+ * Both fixtures are the real shapes: BLM's GTLF labels every sublayer's single
+ * class the same generic way, and the Forest Service MVUM puts the real
+ * distinctions in the class labels instead.
+ */
+const GTLF_LEGEND = {
+  layers: [
+    {
+      layerId: 0,
+      layerName: 'Roads Managed for Public Motorized Use',
+      legend: [{ label: 'Transportation System - Road', imageData: 'AAA' }],
+    },
+    {
+      layerId: 1,
+      layerName: 'Roads Managed for Limited Public Motorized Use',
+      legend: [{ label: 'Transportation System - Road', imageData: 'BBB' }],
+    },
+    {
+      layerId: 2,
+      layerName: 'Trails Managed for Public Motorized Use',
+      legend: [{ label: 'Trail', imageData: 'CCC' }],
+    },
+  ],
+};
+
+test('legend: a sublayer with one class is named by the sublayer', () => {
+  /*
+   * GTLF's three route layers all label their single class "Transportation
+   * System - Road" or "Trail". Taking the class labels would draw three rows
+   * saying almost the same thing and throw away the designation, which is the
+   * only part anybody switched the layer on for.
+   */
+  assert.deepEqual(arcgisLegendRows(GTLF_LEGEND).map((row) => row.label), [
+    'Roads Managed for Public Motorized Use',
+    'Roads Managed for Limited Public Motorized Use',
+    'Trails Managed for Public Motorized Use',
+  ]);
+});
+
+test('legend: a sublayer with several classes keeps its class labels', () => {
+  // Here the classes are the distinctions and the sublayer name is the thing
+  // that would say nothing.
+  const mvum = {
+    layers: [{
+      layerId: 1,
+      layerName: 'Motor Vehicle Use Map: Roads',
+      legend: [
+        { label: 'Roads open to all Vehicles, Yearlong', imageData: 'AAA' },
+        { label: 'Roads open to all Vehicles, Seasonal', imageData: 'BBB' },
+      ],
+    }],
+  };
+  assert.deepEqual(arcgisLegendRows(mvum).map((row) => row.label), [
+    'Roads open to all Vehicles, Yearlong',
+    'Roads open to all Vehicles, Seasonal',
+  ]);
+});
+
+test('legend: naming a sublayer takes only that one', () => {
+  assert.deepEqual(arcgisLegendRows(GTLF_LEGEND, 2).map((row) => row.label), [
+    'Trails Managed for Public Motorized Use',
+  ]);
+});
+
+test('legend: a class with no swatch or no label is not a row', () => {
+  // Both the MVUM and GTLF keys publish an unlabelled class, and a swatch with
+  // nothing beside it reads as a rendering fault rather than as a category.
+  const ragged = {
+    layers: [{
+      layerId: 0,
+      layerName: 'Something',
+      legend: [
+        { label: 'Real', imageData: 'AAA' },
+        { label: '   ', imageData: 'BBB' },
+        { label: 'No swatch' },
+      ],
+    }],
+  };
+  assert.deepEqual(arcgisLegendRows(ragged).map((row) => row.label), ['Real']);
+});
+
+test('legend: nothing usable is an empty list, never a throw', () => {
+  for (const body of [null, undefined, {}, { layers: [] }, { layers: [{ legend: [] }] }]) {
+    assert.deepEqual(arcgisLegendRows(body), []);
   }
 });

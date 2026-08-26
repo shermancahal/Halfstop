@@ -418,3 +418,51 @@ export function parseWMSLegend(body) {
       return true;
     });
 }
+
+/**
+ * Turn an ArcGIS legend document into rows the panel can draw.
+ *
+ * The shape is `{layers: [{layerId, layerName, legend: [{label, imageData}]}]}`,
+ * and the interesting decision is which of those two names to show.
+ *
+ * A service that draws one thing per sublayer labels its single class
+ * generically — BLM's route layers all say "Transportation System - Road" —
+ * while the sublayer itself is called "Roads Managed for Limited Public
+ * Motorized Use". Flattening the classes there produces four identical rows and
+ * throws away the only part anybody needed. So a sublayer contributing exactly
+ * one class is labelled by its own name.
+ *
+ * Where a sublayer has several classes, those classes are the distinctions —
+ * the MVUM's seasonal and vehicle-width rows — and the sublayer name would be
+ * the thing that says nothing. So they win instead.
+ *
+ * @param layer optional sublayer id; without it, every sublayer is included.
+ * @returns {{label: string, imageData: string, contentType: string}[]}
+ */
+export function arcgisLegendRows(body, layer) {
+  const layers = (body?.layers || []).filter(
+    (entry) => typeof layer !== 'number' || entry.layerId === layer,
+  );
+
+  const rows = [];
+  for (const entry of layers) {
+    const classes = (entry.legend || []).filter((item) => item.imageData);
+    if (!classes.length) continue;
+
+    const single = classes.length === 1;
+    for (const item of classes) {
+      const label = single
+        ? (entry.layerName || item.label || '')
+        : (item.label || entry.layerName || '');
+      // A swatch with nothing beside it reads as a rendering fault. Both the
+      // MVUM and GTLF keys publish one.
+      if (!String(label).trim()) continue;
+      rows.push({
+        label: String(label).trim(),
+        imageData: item.imageData,
+        contentType: item.contentType || 'image/png',
+      });
+    }
+  }
+  return rows;
+}

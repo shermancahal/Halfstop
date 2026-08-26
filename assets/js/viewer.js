@@ -52,7 +52,7 @@ import {
 } from './lib/runtime-layers.js';
 import {
   landManager, forecast, weatherClass, publicLand, elevation, skyCover,
-  parseWMSLegend,
+  parseWMSLegend, arcgisLegendRows,
 } from './lib/lookup.js';
 import { registerNPSImages, npsIconSVG } from './lib/nps-icons.js';
 import { kpNow, auroraChance, describeKp } from './lib/aurora.js';
@@ -979,31 +979,19 @@ async function fillArcGISLegend(host, { url, layer } = {}) {
     const response = await fetch(url);
     if (!response.ok) return;
     const body = await response.json();
-    /*
-     * One sublayer, or all of them.
-     *
-     * A service that draws several sublayers at once has no single key — the
-     * MVUM export renders roads and trails together — and naming one of them
-     * would explain a fraction of what is on screen. With no `layer` the
-     * classes are taken from every sublayer, in the order the service lists
-     * them, which is the order it drew them in.
-     */
-    const wanted = typeof layer === 'number'
-      ? (body.layers || []).filter((entry) => entry.layerId === layer)
-      : (body.layers || []);
-    // An unlabelled class is a swatch with nothing beside it, which reads as a
-    // rendering fault. The MVUM key has one.
-    const classes = wanted.flatMap((entry) => entry.legend || [])
-      .filter((item) => item.imageData && String(item.label ?? '').trim());
+    // Which sublayers, and whether a row is named by its class or by the
+    // sublayer it came from, is decided in lookup.js beside the other
+    // service-response readers — and tested there.
+    const classes = arcgisLegendRows(body, layer);
     if (!classes.length) return;
 
     host.replaceChildren(el('ul', { class: 'legend' }, classes.map((item) => el('li', { class: 'legend-item' }, [
       el('img', {
         class: 'legend-swatch is-image',
-        src: `data:${item.contentType || 'image/png'};base64,${item.imageData}`,
+        src: `data:${item.contentType};base64,${item.imageData}`,
         alt: '',
       }),
-      el('span', { text: item.label || '' }),
+      el('span', { text: item.label }),
     ]))));
   } catch {
     // No key. The description above it still says what the layer is.
