@@ -1,9 +1,28 @@
 [
   {
-    "id": "land:padus-services",
-    "note": "The host publishes hundreds of services and the first one printed was 040720_3DEP, which is not it. Narrowing to the ones whose name mentions PAD-US, so the query URL is built from a real name rather than a third guess.",
+    "id": "road:blm-gtlf-export",
+    "note": "GTLF is confirmed to exist and its sublayers ARE the OHV designation - 0 and 1 are roads open and limited, 2 and 3 the same for trails. Those four are what an overlander needs. Checking the export draws before it becomes a switch, because a layer that answers 200 with an empty tile looks exactly like one that is switched off.",
+    "at": [-111.5, 38.5, 11],
+    "url": "https://gis.blm.gov/arcgis/rest/services/transportation/BLM_Natl_GTLF_Public_Display/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=512,512&format=png32&transparent=true&layers=show:0,1,2,3&f=image"
+  },
+  {
+    "id": "road:blm-gtlf-legend",
+    "note": "And its own key, so the panel describes what the service draws rather than a colour list written here - which is the mistake the Forest Service layer was carrying until today.",
     "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]*(?:PADUS|PAD_US|PadUs|Protected)[^\"]*\"",
-    "url": "https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services?f=pjson"
+    "find": "\"label\"\\s*:\\s*\"[^\"]{0,48}\"",
+    "url": "https://gis.blm.gov/arcgis/rest/services/transportation/BLM_Natl_GTLF_Public_Display/MapServer/legend?f=pjson"
+  },
+  {
+    "id": "land:padus-manager-query",
+    "note": "The service is PADUS3_0, not PADUS4_0Fee - which is why the earlier query was a 400. Hatching BLM land needs polygons, and this asks whether the manager-name service will hand them over for a bounding box, and what it calls the agency.",
+    "expect": "data",
+    "find": "\"(?:Mang_Name|MANG_NAME|Mang_Type|Unit_Nm)\"\\s*:\\s*\"?[^,\"}]{0,28}\"?",
+    "url": "https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services/PADUS3_0ManagerName/FeatureServer/0/query?where=1%3D1&outFields=*&geometry=-111.6%2C38.4%2C-111.4%2C38.6&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&returnGeometry=false&resultRecordCount=3&f=geojson"
+  },
+  {
+    "id": "land:padus-manager-fields",
+    "note": "Its field list, in case the query shape above is wrong too. Reading the service rather than guessing a third time.",
+    "expect": "data",
+    "url": "https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services/PADUS3_0ManagerName/FeatureServer/0?f=pjson"
   }
 ]

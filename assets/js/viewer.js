@@ -55,6 +55,7 @@ import {
   parseWMSLegend,
 } from './lib/lookup.js';
 import { registerNPSImages, npsIconSVG } from './lib/nps-icons.js';
+import { kpNow, auroraChance, describeKp } from './lib/aurora.js';
 import { describeSync } from './lib/sync.js';
 import {
   OfflineStore, MAX_ZOOM as OFFLINE_MAX_ZOOM, TILE_BUDGET,
@@ -2304,6 +2305,17 @@ function milkyWayPanel(body, date, lat, lon) {
     el('span', { class: 'core-row-value', text: value }),
   ]))));
 
+  /*
+   * Aurora, last and lazily.
+   *
+   * Below the moon and the window because that is its rank here: from these
+   * latitudes it decides a night about twice a decade, and the other 3,650
+   * times the useful thing it says is "quiet". Fetched when this section is
+   * opened rather than on load — the OVATION grid is close to a megabyte, which
+   * matters to somebody standing at a trailhead on one bar.
+   */
+  body.append(auroraRow([lon, lat]));
+
   if (night.marks.length) {
     body.append(el('div', { class: 'core-marks' }, [
       el('div', { class: 'core-marks-label', text: 'Band above the horizon' }),
@@ -2580,6 +2592,45 @@ function nightScrubber(position, date) {
       el('span', { class: 'scrub-mark-label', text: mark.label }),
     ]))) : null,
   ]);
+}
+
+/**
+ * Tonight's space weather, in one line.
+ *
+ * Two numbers that answer different halves: the planetary K index is how
+ * disturbed the field is right now, and OVATION's grid is the chance of aurora
+ * over *this* point in the next half hour. Kp alone would say "storm" to
+ * somebody in Texas for whom it still means nothing.
+ */
+function auroraRow(position) {
+  const value = el('span', { class: 'core-row-value', text: '…' });
+  const row = el('div', { class: 'core-rows' }, [
+    el('div', { class: 'core-row' }, [
+      el('span', { class: 'core-row-label', text: 'Aurora' }),
+      value,
+    ]),
+  ]);
+
+  Promise.all([kpNow(), auroraChance(position)]).then(([kp, here]) => {
+    if (!row.isConnected) return;
+
+    if (!kp && !here) {
+      // Offline, or NOAA is having an afternoon. Saying nothing is better than
+      // saying "quiet", which would be a claim.
+      value.textContent = 'not available';
+      return;
+    }
+
+    const parts = [];
+    if (here) parts.push(`${Math.round(here.chance)}% here`);
+    if (kp) parts.push(`Kp ${kp.kp}`);
+    value.textContent = parts.join(' · ');
+
+    const note = kp ? describeKp(kp.kp) : '';
+    if (note) row.append(el('p', { class: 'legend-note', style: 'margin:4px 0 0', text: note }));
+  });
+
+  return row;
 }
 
 /** Draw bearings on the map: where things rise, set, and are right now. */

@@ -279,6 +279,30 @@ await page.route('**/*', async (route) => {
       }),
     });
   }
+  // NOAA space weather, in the shapes the live services publish.
+  if (/ovation_aurora_latest/.test(url)) {
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        'Observation Time': '2026-08-26T00:00:00Z',
+        'Forecast Time': '2026-08-26T00:30:00Z',
+        // The smoke pin is -84.28, 35.96 — which is 276 east, latitude 36.
+        coordinates: [[0, -90, 0], [276, 36, 12], [276, 37, 9]],
+      }),
+    });
+  }
+  if (/noaa-planetary-k-index/.test(url)) {
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        ['time_tag', 'Kp', 'Kp_fraction'],
+        ['2026-08-25T18:00:00', '2', '2.00'],
+        ['2026-08-25T21:00:00', '5', '4.67'],
+      ]),
+    });
+  }
   if (/WFIGS_Interagency_Perimeters/.test(url)) {
     return route.fulfill({ status: 200, contentType: 'application/geo+json', body: JSON.stringify(PERIMETERS) });
   }
@@ -1009,6 +1033,28 @@ await page.keyboard.press('Escape');
  * rather than about the numbers: an arc feature with more than two points, and
  * a scrubber that changes it.
  */
+/*
+ * Aurora as a readout rather than a layer. From these latitudes it decides a
+ * night about twice a decade, so what is worth having is the number, not a
+ * switch that draws nothing almost every night.
+ */
+console.log('\nSpace weather reaches the Photography panel');
+await page.click('.panel-tab[data-tab="waypoints"]');
+await page.waitForTimeout(400);
+await page.locator('.waypoint-card').first().click();
+await page.waitForTimeout(800);
+await page.locator('.detail-block').filter({ hasText: 'Photography' }).first()
+  .evaluate((node) => { node.open = true; });
+await page.locator('.sky-tab', { hasText: /Milky Way/ }).first().click();
+await page.waitForTimeout(900);
+const aurora = await page.evaluate(() => {
+  const row = [...document.querySelectorAll('.core-row')]
+    .find((node) => node.textContent.trim().startsWith('Aurora'));
+  return { text: row?.textContent.trim() || '(no row)' };
+});
+check('the chance at this point is reported', /12% here/.test(aurora.text), true);
+check('alongside the planetary K index', /Kp 5/.test(aurora.text), true);
+
 console.log('\nThe Milky Way band is drawn, and the night can be scrubbed');
 await page.click('.panel-tab[data-tab="waypoints"]');
 await page.waitForTimeout(400);
