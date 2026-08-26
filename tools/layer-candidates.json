@@ -33,5 +33,33 @@
     "expect": "data",
     "find": "\"(?:ADMIN_AGENCY_CODE|ADMIN_UNIT_NAME|ADMIN_DEPT_CODE)\"\\s*:\\s*\"?[^,\"}]{0,24}\"?",
     "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_Cached_without_PriUnk/MapServer/0/query?where=1%3D1&outFields=*&geometry=-111.6%2C38.4%2C-111.4%2C38.6&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&returnGeometry=false&resultRecordCount=3&f=geojson"
+  },
+  {
+    "id": "roads:mvum-service",
+    "note": "What the MVUM service says it holds. The raster we draw is layers=show:1,2, but a click has to name a sublayer to identify against, and the field a road's class lives in is whatever this says it is. Printing the sublayer list and their fields is the whole of what is needed to design the panel.",
+    "expect": "data",
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,48}\"",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_02/MapServer?f=pjson"
+  },
+  {
+    "id": "roads:mvum-attributes",
+    "note": "Three real roads out of Shawnee National Forest with every field, so the panel is written against the attributes the service actually returns rather than the ones the MVUM legend implies. Seasonal dates and permitted vehicle classes are the two the reader wants and the two most likely to be named something unguessable.",
+    "expect": "data",
+    "find": "\"attributes\"",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_02/MapServer/1/query?where=1%3D1&outFields=*&geometry=-88.8%2C37.45%2C-88.6%2C37.55&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&returnGeometry=false&resultRecordCount=3&f=json"
+  },
+  {
+    "id": "roads:gtlf-service",
+    "note": "The same question of the BLM route service. It draws four sublayers and the panel needs to know which one a given line came from before it can say anything about it.",
+    "expect": "data",
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,48}\"",
+    "url": "https://gis.blm.gov/arcgis/rest/services/transportation/BLM_Natl_GTLF_Public_Display/MapServer?f=pjson"
+  },
+  {
+    "id": "roads:gtlf-attributes",
+    "note": "Three real BLM routes in central Utah with every field. GTLF publishes route designations - open, limited, closed, and to which vehicle types - and this is what says under which names.",
+    "expect": "data",
+    "find": "\"attributes\"",
+    "url": "https://gis.blm.gov/arcgis/rest/services/transportation/BLM_Natl_GTLF_Public_Display/MapServer/0/query?where=1%3D1&outFields=*&geometry=-111.6%2C38.4%2C-111.4%2C38.6&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&returnGeometry=false&resultRecordCount=3&f=json"
   }
 ]
