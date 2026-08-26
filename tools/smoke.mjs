@@ -995,7 +995,11 @@ await page.waitForTimeout(300);
 await page.locator('.waypoint-card').first().click();
 await page.waitForTimeout(900);
 
-const locationSection = () => page.locator('.panel-section').filter({ hasText: 'Location' }).first();
+// Location is a foldable block now, like the rest of the panel — so this
+// looks inside the block rather than for the flat section it used to be.
+const locationSection = () => page.locator('.detail-block').filter({ hasText: 'Location' }).first();
+check('the Location block is open by default, not tidied away',
+  await locationSection().evaluate((node) => node.open), true);
 check('decimal degrees are on screen without opening anything',
   await locationSection().locator('.detail-line-label', { hasText: /^Decimal$/ }).count(), 1);
 check('the other formats start hidden',

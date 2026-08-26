@@ -29,6 +29,9 @@ export const icons = {
   copy: svg('<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>'),
   brush: svg('<path d="M9.5 14.5 3 21"/><path d="M14 4.5 19.5 10"/><path d="M7.5 12.5 11.5 8.5a2 2 0 0 1 2.8 0l1.2 1.2a2 2 0 0 1 0 2.8l-4 4Z"/><path d="M17 3.5a2.1 2.1 0 0 1 3 3L18 8.5 15 5.5Z"/>'),
   file: svg('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z"/><path d="M14 2v6h6"/>'),
+  // The same folder the panel's tab and the map's quick button already draw,
+  // so "save into a folder" carries the mark of the place it saves into.
+  folder: svg('<path d="M3 7a2 2 0 0 1 2-2h3.6a2 2 0 0 1 1.4.6L11.4 7H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>'),
 
   /* Details-panel section marks. A panel of eight stacked headings reads as one
      wall of small capitals; a mark per section gives the eye somewhere to land

@@ -461,6 +461,7 @@ html, body { height: 100%; overflow: hidden; }
    only after it is pressed. */
 .popup-save { display: grid; gap: 6px; }
 .popup-save > button { width: 100%; }
+.popup-save-open { justify-content: center; }
 .popup-save-open[hidden] { display: none; }
 .popup-save-panel { display: grid; gap: 5px; }
 .popup-save-panel[hidden] { display: none; }
@@ -816,9 +817,24 @@ html, body { height: 100%; overflow: hidden; }
 /* Headline card: condition sets the wash behind it, so a glance reads the
    weather before any of the text does. */
 .weather-now {
+  position: relative; isolation: isolate;
   display: flex; align-items: center; gap: 13px;
   padding: 13px 14px; border-radius: var(--radius);
   border: 1px solid var(--line);
+}
+/*
+ * The sky, on its own layer underneath the text.
+ *
+ * It used to be the card's own background, and dark mode dimmed the card with
+ * `filter: brightness(.62)` to stop the daytime wash glowing. A filter applies
+ * to everything inside the element, so it dimmed the temperature and the
+ * conditions along with the sky — and a second rule then replaced the gradient
+ * with a flat surface, leaving a filter whose only remaining job was making
+ * the words hard to read. Which is exactly what it was doing.
+ */
+.weather-now::before {
+  content: ''; position: absolute; inset: 0; z-index: -1;
+  border-radius: inherit;
   background: linear-gradient(135deg, var(--wash-a, var(--paper-2)), var(--wash-b, var(--surface-2)));
 }
 /* The wash carries the forecast before you read a word of it, so these are
@@ -859,19 +875,20 @@ html, body { height: 100%; overflow: hidden; }
 
 /* Dark theme: keep the hue, drop the brightness. The sky should still read as
    a sky at night, just not glow. */
+/* Dark theme: dim the sky, not the forecast printed on it. The flat
+   `background: var(--surface-2)` that used to sit here is gone with it — it
+   threw the wash away and left the filter with nothing to do but grey out the
+   text. */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .weather-now { filter: saturate(.82) brightness(.62); }
+  :root:not([data-theme="light"]) .weather-now::before { filter: saturate(.82) brightness(.62); }
   :root:not([data-theme="light"]) .weather-now .weather-temp,
-  :root:not([data-theme="light"]) .weather-now .weather-when,
-  :root:not([data-theme="light"]) .weather-now .weather-short { color: #f2ede3; }
+  :root:not([data-theme="light"]) .weather-now .weather-when { color: #f7f3ec; }
+  :root:not([data-theme="light"]) .weather-now .weather-short { color: #f7f3ec; opacity: .92; }
 }
-:root[data-theme="dark"] .weather-now { filter: saturate(.82) brightness(.62); }
+:root[data-theme="dark"] .weather-now::before { filter: saturate(.82) brightness(.62); }
 :root[data-theme="dark"] .weather-now .weather-temp,
-:root[data-theme="dark"] .weather-now .weather-when,
-:root[data-theme="dark"] .weather-now .weather-short { color: #f2ede3; }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .weather-now { background: var(--surface-2); }
-}
+:root[data-theme="dark"] .weather-now .weather-when { color: #f7f3ec; }
+:root[data-theme="dark"] .weather-now .weather-short { color: #f7f3ec; opacity: .92; }
 
 .weather-glyph { flex: none; width: 42px; height: 42px; color: var(--ink-2); }
 .weather-glyph svg { width: 100%; height: 100%; }

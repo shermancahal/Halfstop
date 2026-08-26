@@ -4199,10 +4199,20 @@ function saveToFolderActions(feature, popup) {
     ]),
   ]);
 
-  const opener = el('button', {
-    type: 'button', class: 'is-primary popup-save-open', text: 'Save to folder',
+  /*
+   * The same weight as Details and Close, and a mark instead of a slab.
+   *
+   * A full-width clay button for a thing nobody had asked for yet was the
+   * loudest element on a card that has to fit over a map, and it cost a whole
+   * row of height to say two words. The commit button inside the panel keeps
+   * the colour — that one IS the decision.
+   */
+  const opener = labelledButton(icons.folder, 'Save to folder', {
+    tone: 'ghost',
+    title: 'Save this pin into a folder',
     onclick: () => { panel.hidden = false; opener.hidden = true; select.focus(); },
   });
+  opener.classList.add('popup-save-open');
 
   return el('div', { class: 'popup-actions popup-save' }, [opener, panel]);
 }
@@ -4727,13 +4737,15 @@ function locationSection(position, { recorded = null } = {}) {
     if (rows) manager.replaceChildren(...rows);
   });
 
-  return el('div', { class: 'panel-section' }, [
-    sectionTitle('Location', icons.crosshair),
-    detailRow('Decimal', dd, { copy: dd }),
-    heightRow,
-    more,
-    manager,
-  ]);
+  // Foldable like the rest of the panel, and open unless this reader closed it
+  // — the coordinates are the one thing you want without asking, so the
+  // default is not "tidy", it is "there".
+  return collapsibleSection('location', 'Location', (body) => {
+    body.append(detailRow('Decimal', dd, { copy: dd }));
+    if (heightRow) body.append(heightRow);
+    if (more) body.append(more);
+    body.append(manager);
+  }, { icon: icons.crosshair });
 }
 
 /**
@@ -4749,8 +4761,8 @@ function renderPointDetails(position) {
     el('h2', { class: 'panel-title', style: 'margin:0', text: 'Dropped pin' }),
     el('p', { class: 'hint', style: 'margin:6px 0 11px', text: 'Not saved yet — this is wherever you last clicked the map.' }),
     el('div', { class: 'picker-row' }, [
-      el('button', {
-        class: 'button button-secondary button-small', type: 'button', text: 'Save as waypoint',
+      labelledButton(icons.pin, 'Save as waypoint', {
+        tone: 'secondary',
         onclick: () => {
           const folders = state.folders.list();
           const target = folders.length ? folders[folders.length - 1] : state.folders.create('Saved places');
@@ -4765,8 +4777,9 @@ function renderPointDetails(position) {
           openTab('folders');
         },
       }),
-      el('button', {
-        class: 'button button-ghost button-small', type: 'button', text: 'Clear',
+      labelledButton(icons.close, 'Clear', {
+        tone: 'ghost',
+        title: 'Forget this dropped pin',
         onclick: () => { state.scratchPoint = null; state.dropPopup?.remove(); renderDetailsTab(); },
       }),
     ]),
