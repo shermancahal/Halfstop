@@ -175,12 +175,17 @@ pre code { background: none; padding: 0; }
   backdrop-filter: saturate(150%) blur(10px);
   border-bottom: 1px solid var(--line);
 }
-.site-header .wrap { display: flex; align-items: center; gap: 20px; }
+/* Shrinkable, so a header that runs out of room crowds rather than overflows.
+   The grid column above refuses to widen for it now, so the alternative to
+   shrinking is clipping its own controls. */
+.site-header .wrap { display: flex; align-items: center; gap: 20px; min-width: 0; }
+@media (max-width: 700px) { .site-header .wrap { gap: 10px; } }
 
-.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); margin-right: auto; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); margin-right: auto; min-width: 0; }
 .brand:hover { color: var(--ink); }
 .brand-mark { width: 30px; height: 30px; flex: none; }
-.brand-text { display: flex; flex-direction: column; line-height: 1.1; }
+.brand-text { display: flex; flex-direction: column; line-height: 1.1; min-width: 0; }
+.brand-name, .brand-parent { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .brand-name { font-family: var(--font-serif); font-size: 1.02rem; font-weight: 600; }
 .brand-parent { font-size: .68rem; color: var(--ink-3); letter-spacing: .07em; text-transform: uppercase; }
 

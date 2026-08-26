@@ -1847,6 +1847,37 @@ check('and its key is filled from the service', blmKey.rows, ['Open to all vehic
 check('each class drawn with the swatch the service published', blmKey.swatches, 2);
 
 /*
+ * Nothing may be wider than the screen, at any phone width.
+ *
+ * `.app` had no explicit grid column, so it got an implicit `auto` one that
+ * sized to the max-content of its widest item — the header. On a 440pt phone
+ * the header wanted 582px, the column became 582, and .app-body and
+ * .map-surface went with it: the map was 142px wider than the screen and
+ * everything at its right edge, the zoom controls and the map tools included,
+ * was off it. 430 and below never showed it, which is why a 402pt simulator
+ * did not, and why this is checked at several widths rather than one.
+ */
+console.log('\nNothing is wider than the screen it is on');
+for (const width of [402, 430, 440, 480, 768]) {
+  await page.setViewportSize({ width, height: 900 });
+  await page.waitForTimeout(250);
+  const fits = await page.evaluate((w) => {
+    const doc = document.documentElement;
+    const over = [...document.querySelectorAll('body *')]
+      .filter((node) => node.getBoundingClientRect().right > w + 1)
+      // A popup deliberately hanging off the edge is the engine's business.
+      .filter((node) => !node.closest('.mapboxgl-popup, .maplibregl-popup'))
+      .map((node) => (typeof node.className === 'string' && node.className
+        ? `.${node.className.split(' ')[0]}` : node.tagName));
+    return { scrolls: doc.scrollWidth > doc.clientWidth, over: [...new Set(over)].slice(0, 4) };
+  }, width);
+  check(`at ${width}px the page does not scroll sideways`, fits.scrolls, false);
+  check(`and nothing hangs off the right at ${width}px`, fits.over, []);
+}
+await page.setViewportSize({ width: 1280, height: 900 });
+await page.waitForTimeout(250);
+
+/*
  * The name, on a screen too narrow for the header to carry it.
  *
  * Measured rather than assumed: at 402px the header's visible children already

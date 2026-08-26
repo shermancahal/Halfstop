@@ -6,6 +6,20 @@ html, body { height: 100%; overflow: hidden; }
 
 .app {
   display: grid;
+  /*
+   * An explicit column, and one that is allowed to be narrower than its
+   * contents.
+   *
+   * Without it the grid gets an implicit `auto` column, which sizes to the
+   * max-content of its widest item — the header. On a 440pt phone the header
+   * wants 582px, so the column became 582, and .app-body and .map-surface went
+   * with it: the map was 142px wider than the screen and everything at its
+   * right edge, including the zoom controls and the map tools, was off it.
+   *
+   * Nothing below 430px ever showed this, which is why a 402pt simulator did
+   * not. minmax(0, 1fr) makes the header's own overflow the header's problem.
+   */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: calc(var(--header-h) + var(--safe-top)) 1fr;
   height: 100vh; height: 100dvh;
 }
@@ -671,9 +685,17 @@ html, body { height: 100%; overflow: hidden; }
 }
 .panel-brand-mark { width: 22px; height: 22px; flex: none; border-radius: 5px; }
 
-@media (max-width: 430px) {
+/*
+ * The title goes before the header is forced to squeeze.
+ *
+ * 430px was one pixel too tight for the current crop of large phones: a 440pt
+ * screen kept the title, the header then needed 582px, and it dragged the map
+ * off the side of the screen with it. The panel carries the name below this
+ * width, so nothing is lost by dropping it earlier.
+ */
+@media (max-width: 560px) {
   .brand-text { display: none; }
-  #download-button, #fit-button { display: none; }
+  #fit-button { display: none; }
   .panel-brand { display: flex; }
 }
 
