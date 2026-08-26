@@ -42,7 +42,7 @@ import {
 } from './lib/place.js';
 import {
   sunTimes, sunPosition, moonTimes, moonPosition, moonIllumination,
-  lightPhases, lightDirections, currentDirections, destinationPoint, milkyWayGround,
+  lightPhases, lightDirections, currentDirections, destinationPoint, milkyWayGround, milkyWayTrack,
   milkyWayNight, bestMilkyWayNights, nightQuality, galacticCentre,
 } from './lib/sky.js';
 import { activeAlerts, describeMotion, alertsToGeoJSON } from './lib/storms.js';
@@ -2491,7 +2491,9 @@ function bestNightsList(date, lat, lon, cover) {
  */
 function nightScrubber(position, date) {
   const [lon, lat] = position;
-  const night = milkyWayNight(date, lat, lon);
+  // Already computed when the lines went on. Sampling the whole night again
+  // here would be the second time for the same answer.
+  const night = state.lightLines?.night || milkyWayNight(date, lat, lon);
   const span = night?.dark;
   if (!span) {
     return el('p', {
@@ -2503,6 +2505,22 @@ function nightScrubber(position, date) {
   const from = span.from.valueOf();
   const to = span.to.valueOf();
   const peak = night.windowPeak?.when?.valueOf() ?? (from + to) / 2;
+
+  /*
+   * The moments worth knowing while dragging.
+   *
+   * A slider with two ends and nothing between them makes you scrub blind to
+   * find the answer. These are the four things that decide a night: when the
+   * core is highest in the dark, and when the moon leaves or arrives to ruin
+   * it. Anything outside the window is dropped rather than clamped to an end,
+   * where it would claim something happens at dusk that does not.
+   */
+  const inWindow = (value) => Number.isFinite(value) && value >= from && value <= to;
+  const marks = [
+    night.windowPeak?.when ? { at: night.windowPeak.when.valueOf(), label: 'peak' } : null,
+    night.moonless?.from ? { at: night.moonless.from.valueOf(), label: 'moon down' } : null,
+    night.moonless?.to ? { at: night.moonless.to.valueOf(), label: 'moon up' } : null,
+  ].filter((mark) => mark && inWindow(mark.at)).sort((a, b) => a.at - b.at);
 
   const readout = el('span', { class: 'scrub-time' });
   const show = (at) => {
@@ -2552,6 +2570,15 @@ function nightScrubber(position, date) {
       el('span', { text: clockTime(span.from) }),
       el('span', { text: clockTime(span.to) }),
     ]),
+    marks.length ? el('ul', { class: 'scrub-marks' }, marks.map((mark) => el('li', {
+      class: 'scrub-mark',
+      // Positioned along the track so the label sits under the moment it names.
+      style: `left:${(((mark.at - from) / (to - from)) * 100).toFixed(1)}%`,
+      title: `${mark.label} · ${clockTime(new Date(mark.at))}`,
+    }, [
+      el('span', { class: 'scrub-mark-tick' }),
+      el('span', { class: 'scrub-mark-label', text: mark.label }),
+    ]))) : null,
   ]);
 }
 
@@ -2635,7 +2662,17 @@ function toggleLightLines(position, directions, date = new Date()) {
     return;
   }
 
-  state.lightLines = { key: position.join(','), position, directions, date };
+  /*
+   * The night is computed once here, not on every scrub.
+   *
+   * `milkyWayNight` samples the whole night two minutes at a time to find the
+   * dark window; doing that again for each drag of the slider would be a
+   * hundred of those a second. The window does not move within one night, so it
+   * is worked out when the lines go on and carried with them.
+   */
+  const [lon, lat] = position;
+  const night = milkyWayNight(date, lat, lon);
+  state.lightLines = { key: position.join(','), position, directions, date, night };
   refreshLightLines();
   renderDetailsTab();
 }
@@ -2731,6 +2768,35 @@ function refreshLightLines() {
       },
       geometry: { type: 'LineString', coordinates: [lines.position, sky.core.position] },
     });
+  }
+
+  /*
+   * The core's path across the night, under everything else.
+   *
+   * The band is one instant; this is the shape of the whole night, which is
+   * what you plan around — the core will have moved thirty degrees west by the
+   * time you have walked in. Hour marks along it because a curve alone says
+   * where and not when.
+   */
+  const window = lines.night?.dark;
+  if (window) {
+    const track = milkyWayTrack(lines.position, window.from, window.to, { maxKm: REACH });
+    if (track.length > 1) {
+      features.push({
+        type: 'Feature',
+        properties: { body: 'core', kind: 'track' },
+        geometry: { type: 'LineString', coordinates: track.map((point) => point.position) },
+      });
+
+      const onTheHour = track.filter((point) => point.when.getMinutes() === 0);
+      for (const point of onTheHour) {
+        features.push({
+          type: 'Feature',
+          properties: { body: 'core', kind: 'hour', label: clockTime(point.when) },
+          geometry: { type: 'Point', coordinates: point.position },
+        });
+      }
+    }
   }
 
   if (sky.line.length > 1) {

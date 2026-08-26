@@ -113,6 +113,47 @@ export function runtimeLayers({ labels = true } = {}) {
       },
   {
     /*
+     * Where the core goes across the whole night.
+     *
+     * Under the band, thinner and dashed, because it is context rather than the
+     * subject: the band is what you will photograph, and this is where it is
+     * heading. Drawn first so the band and the bearings sit on top of it.
+     */
+    id: 'light-track',
+    type: 'line',
+    source: LIGHT_SOURCE,
+    filter: ['==', ['get', 'kind'], 'track'],
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': '#7b4fa8',
+      'line-width': 1.6,
+      'line-dasharray': [1.5, 2],
+      'line-opacity': 0.6,
+    },
+  },
+  {
+    // An hour at a time along that track. Without them the curve says where the
+    // core goes and not when, which is half an answer for someone deciding what
+    // time to leave.
+    id: 'light-track-hour',
+    type: 'symbol',
+    source: LIGHT_SOURCE,
+    filter: ['==', ['get', 'kind'], 'hour'],
+    layout: {
+      'text-field': ['get', 'label'],
+      'text-size': 10,
+      'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Regular'],
+      'text-allow-overlap': false,
+      'text-padding': 6,
+    },
+    paint: {
+      'text-color': '#57327d',
+      'text-halo-color': 'rgba(255,255,255,0.95)',
+      'text-halo-width': 2,
+    },
+  },
+  {
+    /*
      * The Milky Way's band, which is a curve rather than a bearing.
      *
      * Its own layer because it is the one feature here that is not a straight

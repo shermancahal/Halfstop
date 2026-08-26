@@ -645,6 +645,61 @@ export function milkyWayGround([lon, lat], date, { maxKm = 40, minAltitude = 0, 
 }
 
 /**
+ * Where the core will be, all night, as ground positions.
+ *
+ * `milkyWayGround` answers "where is the band right now". This answers the
+ * question a photographer actually plans around: where does the core *go*
+ * between dusk and dawn, so which way will it have moved by the time you have
+ * hiked in and set up.
+ *
+ * Same projection as the band — along its bearing, pulled in as it climbs — so
+ * the track and the band are in the same picture and can be read together. It
+ * curves because the core rises in the south-east, transits south, and sets in
+ * the south-west, and the pull-in makes that an arc rather than a fan.
+ *
+ * Every point carries its own time and altitude, so the caller can label hours
+ * along it without recomputing anything.
+ *
+ * @returns {{when: Date, altitude: number, azimuth: number, position: number[]}[]}
+ */
+export function milkyWayTrack([lon, lat], from, to, {
+  maxKm = 40, stepMinutes = 15, minAltitude = 0,
+} = {}) {
+  const start = from?.valueOf?.();
+  const end = to?.valueOf?.();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
+
+  const points = [];
+  const step = Math.max(1, stepMinutes) * 60000;
+
+  /*
+   * Sampled on the clock, not from wherever the window happens to open.
+   *
+   * Dark begins at an arbitrary minute — 21:47 tonight, 21:44 tomorrow — and
+   * stepping a quarter-hour from there gives :47, :02, :17, :32 and never a
+   * whole hour, so a caller labelling the hours along the track finds none to
+   * label. Anchoring to the epoch puts every sample on a clean quarter, and
+   * every real time zone is a whole number of quarter-hours from UTC, so those
+   * are clean local quarters too.
+   */
+  const first = Math.ceil(start / step) * step;
+
+  for (let at = first; at <= end; at += step) {
+    const when = new Date(at);
+    const core = galacticCentre(when, lat, lon);
+    if (core.altitude <= minAltitude) continue;
+    const height = Math.min(90, Math.max(0, core.altitude));
+    points.push({
+      when,
+      altitude: core.altitude,
+      azimuth: core.azimuth,
+      position: destinationPoint([lon, lat], core.azimuth, maxKm * (1 - height / 90)),
+    });
+  }
+  return points;
+}
+
+/**
  * The highest the core ever gets from a given latitude.
  *
  * Worth stating plainly because it is the first thing that surprises people:

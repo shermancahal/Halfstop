@@ -1057,6 +1057,27 @@ check('and moving it moves the band', scrubbed.first !== band.first, true);
 check('the Now button is there to get back', await page.locator('.scrub-now').count(), 1);
 
 /*
+ * The night's whole path, not just this instant. The band tells you what the
+ * frame holds now; the track tells you where it will be by the time you have
+ * walked in, which is the thing the panel's numbers cannot show.
+ */
+const track = await page.evaluate(() => {
+  const features = window.__map.getSource('light-directions')?._d?.features || [];
+  const line = features.find((feature) => feature.properties.kind === 'track');
+  const hours = features.filter((feature) => feature.properties.kind === 'hour');
+  return {
+    present: !!line,
+    points: line?.geometry.coordinates.length ?? 0,
+    hours: hours.length,
+    labelled: hours.every((hour) => !!hour.properties.label),
+  };
+});
+check('the core track is drawn across the night', track.present, true);
+check('sampled finely enough to read as a curve', track.points > 8, true);
+check('with the hours marked along it', track.hours > 0, true);
+check('and every hour mark carries its time', track.labelled, true);
+
+/*
  * The spoke from the pin to the band, which is the "where do I stand and which
  * way do I face" half. Without it the arc is a shape floating near the pin
  * rather than something anchored to where the reader is.
@@ -1069,12 +1090,15 @@ const spoke = await page.evaluate(() => {
     present: !!core,
     label: core?.properties.label || '',
     startsAtPin: core ? JSON.stringify(core.geometry.coordinates[0]) : '',
-    cores: features.filter((feature) => feature.properties.body === 'core').length,
+    // The spoke specifically: the band and the night's track are also 'core',
+    // and counting all of them measures the wrong thing.
+    spokes: features.filter((feature) => feature.properties.body === 'core'
+      && !feature.properties.kind).length,
   };
 });
 if (spoke.present) {
   check('the core spoke carries its bearing in degrees', /\d+°/.test(spoke.label), true);
-  check('and there is one core line, not two collinear ones', spoke.cores, 2);
+  check('and there is one core bearing, not two collinear ones', spoke.spokes, 1);
 }
 
 console.log('\nCollapsed Details sections survive a reload');

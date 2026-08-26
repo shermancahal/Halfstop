@@ -30,6 +30,7 @@ import {
   milkyWayArc,
   nightQuality,
   milkyWayGround,
+  milkyWayTrack,
 } from '../assets/js/lib/sky.js';
 
 /* Places chosen for what they prove, not for sentiment. */
@@ -597,4 +598,44 @@ test('milky way: the core is reported as absent when it is below the horizon', (
    * caller requires them.
    */
   assert.ok(ground.line.length <= 1, 'not enough of the band is up to draw');
+});
+
+/*
+ * The core's path across a night.
+ *
+ * `milkyWayGround` is one instant; this is the shape of the whole window, which
+ * is what a photographer plans around — the core will have moved well west by
+ * the time you have walked in and set up.
+ */
+test('milky way: the track walks westward across the night', () => {
+  const at = [-84.28, 35.96];
+  const from = new Date(Date.UTC(2026, 6, 27, 3, 0, 0));
+  const to = new Date(Date.UTC(2026, 6, 27, 8, 0, 0));
+  const track = milkyWayTrack(at, from, to, { maxKm: 40, stepMinutes: 15 });
+
+  assert.ok(track.length > 10, 'five hours at a quarter-hour should be twenty-odd points');
+
+  // The core rises in the south-east, transits south and sets south-west, so
+  // its bearing increases through the night. Checking the ends rather than
+  // every step, because a sample can straddle the transit.
+  assert.ok(track[track.length - 1].azimuth > track[0].azimuth,
+    'the bearing to the core should swing west as the night goes on');
+
+  for (const point of track) {
+    assert.ok(point.altitude > 0, 'points below the horizon are not on the track');
+    assert.ok(point.when instanceof Date, 'every point carries its own time');
+    assert.ok(Math.abs(point.position[1] - at[1]) < 0.6, 'and lands near the observer');
+  }
+});
+
+test('milky way: a track needs a real window, and says so quietly', () => {
+  // Called from the map refresh, where a missing or inverted window is normal
+  // — a night with no astronomical dark has none. It must not throw its way up
+  // into the layer that draws the sun and moon lines.
+  const at = [-84.28, 35.96];
+  const when = new Date(Date.UTC(2026, 6, 27, 4, 0, 0));
+  assert.deepEqual(milkyWayTrack(at, null, when), []);
+  assert.deepEqual(milkyWayTrack(at, when, null), []);
+  assert.deepEqual(milkyWayTrack(at, when, when), []);
+  assert.deepEqual(milkyWayTrack(at, when, new Date(when.valueOf() - 3600000)), []);
 });

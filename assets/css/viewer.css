@@ -1613,3 +1613,12 @@ html, body { height: 100%; overflow: hidden; }
   display: flex; justify-content: space-between;
   font-size: .66rem; color: var(--ink-3); font-variant-numeric: tabular-nums;
 }
+/* The moments worth knowing while dragging, under the moment they name. The
+   track is relative so a percentage lands where the slider thumb would. */
+.scrub-marks { position: relative; list-style: none; margin: 2px 0 0; padding: 0; height: 22px; }
+.scrub-mark { position: absolute; top: 0; transform: translateX(-50%); text-align: center; }
+.scrub-mark-tick {
+  display: block; width: 1px; height: 4px; margin: 0 auto 1px;
+  background: #7b4fa8; opacity: .7;
+}
+.scrub-mark-label { font-size: .6rem; color: var(--ink-3); white-space: nowrap; }
