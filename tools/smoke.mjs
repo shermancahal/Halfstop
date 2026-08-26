@@ -1056,6 +1056,14 @@ check('there are five sky tabs', tabs.count, 5);
 check('and every one of them has an icon', tabs.withIcons, 5);
 check('including Aurora', tabs.labels.includes('Aurora'), true);
 
+// Three across then two, rather than the three rows a two-column grid gave.
+const tabRows = await page.evaluate(() => {
+  const tops = [...document.querySelectorAll('.sky-tab')]
+    .map((node) => Math.round(node.getBoundingClientRect().top));
+  return new Set(tops).size;
+});
+check('laid out in two rows, not three', tabRows, 2);
+
 await page.locator('.sky-tab', { hasText: /Aurora/ }).first().click();
 await page.waitForTimeout(900);
 const aurora = await page.evaluate(() => ({

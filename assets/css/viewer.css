@@ -1170,11 +1170,16 @@ html, body { height: 100%; overflow: hidden; }
 /* Four things that are all "more about the sky here" used to be a text
    dropdown, an always-open card and a lone button — three affordances for one
    idea. One row of buttons, one box below. */
+/* Three across, then whatever is left filling the row under them.
+   A two-column grid put five tabs on three rows; flex-basis of a third with
+   room to grow gives 3 + 2, and stays right if a sixth is ever added rather
+   than hard-coding where the break falls. */
 .sky-tabs {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 12px 0 0;
+  display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 0;
 }
 .sky-tab {
-  padding: 7px 9px; border-radius: var(--radius-sm);
+  flex: 1 1 calc(33.333% - 4px); min-width: 0;
+  padding: 7px 6px; border-radius: var(--radius-sm);
   border: 1px solid var(--line); background: var(--surface-2);
   font: inherit; font-size: .74rem; font-weight: 600; color: var(--ink-2);
   cursor: pointer; white-space: nowrap;
@@ -1629,5 +1634,11 @@ html, body { height: 100%; overflow: hidden; }
 .sky-tab { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .sky-tab-icon { display: block; line-height: 0; }
 .sky-tab-icon svg { width: 16px; height: 16px; }
-.sky-tab-text { font-size: .68rem; white-space: nowrap; }
+.sky-tab-text {
+  font-size: .68rem;
+  /* Three to a row in a 320px panel is about ninety pixels a tab; the longest
+     label is "On the map", which fits, and an unexpected longer one should
+     ellipsis rather than force a fourth row. */
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 @media (max-width: 360px) { .sky-tab-text { font-size: .62rem; } }
