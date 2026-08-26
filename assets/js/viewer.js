@@ -1137,6 +1137,13 @@ function exposeShieldInspector() {
       // `trouble` with the right state and a layer still drawing nothing is a
       // different fault from a registration that threw.
       registration: shieldRegistrationReport(),
+      // How much patience the self-healer has left. Zero with images still
+      // missing is the state that used to be permanent.
+      healing: (() => {
+        const missing = shieldImageIds({ state: state.shieldState })
+          .filter((id) => !state.map?.hasImage?.(id));
+        return { stillMissing: missing.length, examples: missing.slice(0, 3) };
+      })(),
       geocoder: place?.error ? `failed: ${place.error.message}` : place ? `ok, ${place.regionCode || 'no region'}` : 'no answer',
       design,
       hasBlank: hasShieldBlank(design, 2),
@@ -1358,19 +1365,42 @@ function trackShieldState() {
  * created at all, re-registering it every frame forever would be a busy loop
  * that never fixes anything.
  */
-let shieldHealAttempts = 0;
-function healShieldImages() {
+let shieldHealAt = 0;
+function healShieldImages(now = Date.now()) {
   if (!styleReady() || !state.map.getLayer('road-shield')) return;
-  if (shieldHealAttempts > 12) return;
 
   const wanted = shieldImageIds({ state: state.shieldState });
   const missing = wanted.filter((id) => !state.map.hasImage?.(id));
-  if (!missing.length) { shieldHealAttempts = 0; return; }
+  if (!missing.length) return;
 
-  shieldHealAttempts += 1;
+  /*
+   * Rate-limited, never abandoned — and the difference matters.
+   *
+   * The first version of this counted settled frames where anything was
+   * missing and gave up after twelve. Two thirds of these images are PNG sign
+   * blanks fetched over the network, so for the first second after
+   * registration they are all legitimately absent, and `idle` fires several
+   * times a second: the budget was gone before the first blank landed, and the
+   * healer was dead for the rest of the page's life. Whatever had registered
+   * by then kept working until something was lost, which is precisely "it was
+   * working for a while".
+   *
+   * Counting successes instead of failures would fix that case and still leave
+   * the shape wrong. Any cap means a page that has been open long enough, or
+   * unlucky enough, stops repairing itself — and this is the one thing on the
+   * map with no other line of defence, because a missing image fails silently.
+   *
+   * What the cap was really protecting against is re-registering on every
+   * frame, so that is what this limits. Once a second at most, forever.
+   */
+  if (now - shieldHealAt < HEAL_INTERVAL) return;
+  shieldHealAt = now;
+
   console.warn(`[shields] ${missing.length} image(s) missing (${missing.slice(0, 3).join(', ')}) — re-registering.`);
   registerShieldImages(state.map, { state: state.shieldState, base: assetBase() });
 }
+
+const HEAL_INTERVAL = 1000;
 
 /**
  * Point the shield layers at a state's markers.

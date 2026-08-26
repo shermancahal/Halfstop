@@ -536,6 +536,44 @@ const healed = await page.evaluate(async () => {
 check('an image really was removed', healed.gone, true);
 check('and a settled frame puts it back', healed.back, true);
 
+/*
+ * And it never stops being willing to.
+ *
+ * The first healer counted settled frames where anything was missing and gave
+ * up after twelve. Most of these images are PNG blanks fetched over the
+ * network, so they are all legitimately absent for the first second, and
+ * `idle` fires several times a second — the budget was gone before the first
+ * blank landed, and the healer was dead for the rest of the page's life.
+ * Whatever had registered kept working until something was lost: "it was
+ * working for a while", exactly.
+ *
+ * The guard is now a rate limit rather than a cap, so the property worth
+ * checking is that repair still happens after a long run of frames. Three
+ * removals spread past the throttle: if any cap existed, the last would not
+ * come back.
+ */
+const repeatedly = await page.evaluate(async () => {
+  const map = window.__map;
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const results = [];
+
+  for (let round = 0; round < 3; round += 1) {
+    // Far more settled frames than any cap would have survived.
+    for (let tick = 0; tick < 30; tick += 1) map.fire('idle');
+    // Past the once-a-second throttle, so the next attempt is allowed.
+    await wait(1100);
+
+    const victim = map.imageIds().find((id) => id.startsWith('abmap-shield-'));
+    map.removeImage(victim);
+    map.fire('idle');
+    await wait(300);
+    results.push(map.hasImage(victim));
+  }
+  return results;
+});
+check('it repairs every time, however long the page has been open',
+  repeatedly, [true, true, true]);
+
 console.log('\nA state layer is offered only inside its state');
 const scoped = await page.evaluate(async () => {
   const config = await import('./assets/js/config.js');
