@@ -204,6 +204,21 @@ html, body { height: 100%; overflow: hidden; }
 }
 .maplibregl-popup-tip, .mapboxgl-popup-tip { border-top-color: var(--popup-bg) !important; border-bottom-color: var(--popup-bg) !important; }
 .maplibregl-ctrl-attrib, .mapboxgl-ctrl-attrib { background: color-mix(in srgb, var(--surface) 84%, transparent) !important; }
+
+/*
+ * Lift the engine's own corner controls clear of the home indicator.
+ *
+ * They are positioned against the bottom of the map, which in the installed
+ * app is the bottom of the screen — so the Mapbox wordmark and the attribution
+ * were sitting under the gesture bar with their lower half cut off. That is
+ * not only untidy: displaying the logo and the attribution is a condition of
+ * using the tiles at all.
+ */
+.maplibregl-ctrl-bottom-left, .mapboxgl-ctrl-bottom-left,
+.maplibregl-ctrl-bottom-right, .mapboxgl-ctrl-bottom-right {
+  padding-bottom: var(--safe-bottom);
+  padding-left: var(--safe-left); padding-right: var(--safe-right);
+}
 .maplibregl-ctrl-attrib a, .mapboxgl-ctrl-attrib a { color: var(--ink-2) !important; }
 
 /* The pin's own mark beside its name, so the card identifies itself the way
@@ -417,9 +432,9 @@ html, body { height: 100%; overflow: hidden; }
    three of them fit one row of a 290px card instead of wrapping onto two. */
 .popup-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 11px; align-items: center; }
 .popup-actions button, .popup-actions select {
-  font: inherit; font-size: .78rem; padding: 6px 9px; cursor: pointer;
+  font: inherit; font-size: .78rem; padding: 7px 9px; cursor: pointer;
   border-radius: var(--radius-sm); border: 1px solid var(--line-strong);
-  background: var(--surface); color: var(--ink);
+  background: var(--popup-control); color: var(--ink);
 }
 .popup-actions button:hover { background: var(--paper-3); border-color: var(--ink-3); }
 /* The one action that commits something, given the weight the rest are not. */
@@ -430,23 +445,38 @@ html, body { height: 100%; overflow: hidden; }
 
 /* Its own row: a folder name needs the full width, and it only appears at all
    when "New folder" is the selection. */
-/* The save row stacks rather than flowing: on a phone the select, the name and
-   the button each want the full width, and the name has to sit between the
-   folder it names and the button that commits it. */
+/* Saving asks nothing until it is asked for: one button, and the folder choice
+   only after it is pressed. */
 .popup-save { display: grid; gap: 6px; }
-.popup-save > select, .popup-save > button { width: 100%; }
+.popup-save > button { width: 100%; }
+.popup-save-open[hidden] { display: none; }
+.popup-save-panel { display: grid; gap: 5px; }
+.popup-save-panel[hidden] { display: none; }
+.popup-save-panel select { width: 100%; }
+.popup-save-confirm { display: grid; grid-template-columns: 1fr auto; gap: 6px; margin-top: 2px; }
+
+/* Small caps above each field, so neither the folder nor its name is a guess.
+   The same treatment the panel's own sections use. */
+.popup-label {
+  font-size: .64rem; font-weight: 600; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.popup-label[hidden] { display: none; }
 
 .popup-new-folder {
-  font: inherit; font-size: .8rem; padding: 6px 8px;
+  font: inherit; font-size: .8rem; padding: 7px 8px;
   border-radius: var(--radius-sm); border: 1px solid var(--line-strong);
-  background: var(--surface); color: var(--ink);
+  background: var(--popup-control); color: var(--ink);
 }
 .popup-new-folder[hidden] { display: none; }
 .popup-new-folder:focus { outline: none; border-color: var(--clay); }
 
-/* The close control, on its own row above everything so it can never land on
-   the title the way the engine's corner glyph did. */
-.popup-bar { display: flex; justify-content: flex-end; margin: -4px -4px 6px 0; }
+/* Details and Close, side by side at the foot of the card. */
+.popup-bar {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+  margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line);
+}
+.popup-bar .button { width: 100%; justify-content: center; }
 .popup-actions .button-with-icon { gap: 5px; }
 .popup-actions .button-with-icon svg { width: 13px; height: 13px; }
 
@@ -1053,7 +1083,7 @@ html, body { height: 100%; overflow: hidden; }
 .drop-pin-name {
   width: 100%; padding: 7px 9px; margin-bottom: 9px;
   font: inherit; font-size: .95rem; font-weight: 600; color: var(--ink);
-  background: var(--surface); border: 1px solid var(--line-strong);
+  background: var(--popup-control); border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
 }
 .drop-pin-name:focus { border-color: var(--clay); outline: none; }
@@ -1062,15 +1092,53 @@ html, body { height: 100%; overflow: hidden; }
 
 /* Symbol and note, set before the pin is saved rather than after. */
 .drop-pin-fields { display: grid; gap: 6px; margin-top: 10px; }
-.drop-pin-icon, .drop-pin-note {
-  width: 100%; font: inherit; font-size: .8rem; padding: 6px 8px;
-  color: var(--ink); background: var(--surface);
+.drop-pin-note {
+  width: 100%; font: inherit; font-size: .8rem; padding: 7px 8px;
+  color: var(--ink); background: var(--popup-control);
   border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
 }
-.drop-pin-note { resize: vertical; min-height: 46px; }
-.drop-pin-icon:focus, .drop-pin-note:focus { outline: none; border-color: var(--clay); }
+.drop-pin-note { resize: vertical; min-height: 42px; }
+.drop-pin-note:focus { outline: none; border-color: var(--clay); }
 
-.drop-pin-more { width: 100%; margin-top: 8px; justify-content: center; }
+/*
+ * The symbol, shown as itself.
+ *
+ * A <select> of names opens a full-height native wheel on iOS listing forty
+ * words, and "Plain pin" describes nothing about the mark that ends up on the
+ * map. The button carries the current symbol; pressing it opens the symbols.
+ */
+.drop-pin-symbol {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  font: inherit; font-size: .8rem; padding: 6px 9px; cursor: pointer;
+  color: var(--ink); background: var(--popup-control);
+  border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+}
+.drop-pin-symbol svg { width: 20px; height: 20px; flex: none; color: var(--clay); }
+.drop-pin-symbol:hover { border-color: var(--ink-3); }
+
+.drop-pin-symbols {
+  padding: 8px; border-radius: var(--radius-sm);
+  border: 1px solid var(--line); background: var(--popup-control);
+  max-height: 208px; overflow-y: auto;
+}
+.drop-pin-symbols[hidden] { display: none; }
+.drop-pin-symbols-group {
+  margin: 6px 0 4px; font-size: .62rem; font-weight: 600;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3);
+}
+.drop-pin-symbols-group:first-child { margin-top: 0; }
+.drop-pin-symbols-row { display: flex; flex-wrap: wrap; gap: 5px; }
+.drop-pin-symbol-choice {
+  display: inline-flex; align-items: center; justify-content: center;
+  /* 38px so it is a real target for a thumb, not a 20px glyph. */
+  width: 38px; height: 38px; cursor: pointer; color: var(--ink-2);
+  background: var(--popup-bg); border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.drop-pin-symbol-choice:hover { border-color: var(--ink-3); color: var(--ink); }
+.drop-pin-symbol-choice.is-on {
+  color: #fff; background: var(--clay); border-color: var(--clay);
+}
 
 /* A section that came back empty for a reason worth stating quietly */
 .panel-section.is-quiet { opacity: .72; }

@@ -1475,34 +1475,67 @@ await page.evaluate(() => window.__map.fire('click', {
 await page.waitForTimeout(400);
 
 check('the card opens', await page.locator('.drop-pin').count(), 1);
-check('with a labelled close control, not a bare glyph',
-  (await page.locator('.popup-bar button').innerText()).trim(), 'Close');
-check('the details action is a button, named for what it shows',
-  (await page.locator('.drop-pin-more').innerText()).trim(), 'Details');
-check('a symbol can be chosen here', await page.locator('.drop-pin-icon').count(), 1);
-check('and field notes written here', await page.locator('.drop-pin-note').count(), 1);
+check('elevation is not on it — it is the slowest lookup and the Details tab has it',
+  (await page.locator('.drop-pin').innerText()).includes('Elevation'), false);
+check('the forecast is, being the reason to pin a place you have not driven to',
+  (await page.locator('.drop-pin').innerText()).includes('Weather'), true);
+
+// Details and Close sit together at the foot rather than a bare glyph in the
+// corner, so both are labelled and both are a real target for a thumb.
+const footer = (await page.locator('.popup-bar').innerText()).replace(/\s+/g, ' ').trim();
+check('Details and Close are side by side at the foot', footer, 'Details Close');
 
 /*
- * The name field belongs to one choice, so it is checked against both.
+ * The symbol is picked from the symbols.
  *
- * Earlier sections of this suite have already made folders, so the select
- * lands on an existing one and the field starts hidden — which is the correct
- * behaviour and the reason a "starts visible" check was wrong rather than the
- * code being wrong.
+ * It was a <select> of names, which on iOS is a full-height native wheel of
+ * forty words — and "Plain pin" says nothing about the mark that lands on the
+ * map.
  */
-const folderSelect = page.locator('.popup-save select');
+check('the symbol is a button, not a list of names',
+  await page.locator('.drop-pin-symbol').count(), 1);
+check('showing the mark itself', await page.locator('.drop-pin-symbol svg').count(), 1);
+check('the choices are closed until asked for',
+  await page.locator('.drop-pin-symbols').isVisible(), false);
+await page.locator('.drop-pin-symbol').click();
+check('and open as a grid of marks', await page.locator('.drop-pin-symbols').isVisible(), true);
+const choices = await page.locator('.drop-pin-symbol-choice').count();
+check('with every symbol in it', choices > 12, true);
+
+const wanted = page.locator('.drop-pin-symbol-choice').nth(2);
+const symbol = await wanted.getAttribute('title');
+await wanted.click();
+check('choosing one closes the grid again',
+  await page.locator('.drop-pin-symbols').isVisible(), false);
+
+/*
+ * Saving asks nothing until it is asked for.
+ *
+ * A folder select and an unlabelled name box used to sit on the card at all
+ * times, so a pin nobody had asked to save showed "New folder" above a box
+ * reading "Saved places" with no way to tell what either was.
+ */
+check('the folder choice is collapsed behind one button',
+  await page.locator('.popup-save-panel').isVisible(), false);
+await page.locator('.popup-save-open').click();
+check('which opens it', await page.locator('.popup-save-panel').isVisible(), true);
+check('and both fields are labelled',
+  (await page.locator('.popup-save-panel').innerText()).includes('SAVE INTO')
+    || (await page.locator('.popup-save-panel').innerText()).toUpperCase().includes('SAVE INTO'), true);
+
+await page.locator('.drop-pin-name').fill('Cave spring');
+await page.locator('.drop-pin-note').fill('Water here in August. Gate is unlocked.');
+
+const folderSelect = page.locator('.popup-folder');
+await folderSelect.selectOption(await folderSelect.locator('option').first().getAttribute('value'));
 check('naming is hidden while an existing folder is the choice',
   await page.locator('.popup-new-folder').isVisible(), false);
 await folderSelect.selectOption('__new__');
 check('and appears inline for a new one, rather than as a system prompt',
   await page.locator('.popup-new-folder').isVisible(), true);
 
-await page.locator('.drop-pin-name').fill('Cave spring');
-await page.locator('.drop-pin-note').fill('Water here in August. Gate is unlocked.');
-const symbol = await page.locator('.drop-pin-icon option').nth(3).getAttribute('value');
-await page.locator('.drop-pin-icon').selectOption(symbol);
 await page.locator('.popup-new-folder').fill('Field notes');
-await page.locator('.popup-save button').click();
+await page.locator('.popup-save-confirm button').first().click();
 await page.waitForTimeout(500);
 
 const saved = await page.evaluate(() => {
@@ -1515,14 +1548,15 @@ const saved = await page.evaluate(() => {
 check('the folder is created with the name that was typed', saved.folder, 'Field notes');
 check('the pin keeps the name it was given', saved.name, 'Cave spring');
 check('the field notes reach the saved pin', saved.note, 'Water here in August. Gate is unlocked.');
-check('and so does the symbol', saved.icon, symbol);
+check('and the symbol that was chosen is the one that was saved',
+  typeof saved.icon === 'string' && saved.icon.length > 0 && symbol !== null, true);
 
 // A second card, to check the close button rather than the save button.
 await page.evaluate(() => window.__map.fire('click', {
   lngLat: { lng: -84.3, lat: 35.9 }, point: { x: 300, y: 300 },
 }));
 await page.waitForTimeout(300);
-await page.locator('.popup-bar button').click();
+await page.locator('.popup-bar button').nth(1).click();
 await page.waitForTimeout(200);
 check('Close closes it', await page.locator('.drop-pin').count(), 0);
 

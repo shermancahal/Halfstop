@@ -3760,61 +3760,74 @@ function showDropPin(position) {
   const feature = {
     type: 'Feature',
     geometry: { type: 'Point', coordinates: position },
-    properties: { kind: 'waypoint', name: 'Dropped pin', description: '' },
+    properties: {
+      kind: 'waypoint', name: 'Dropped pin', description: '', icon: DEFAULT_PIN_ICON,
+    },
   };
 
-  /*
-   * Our own close control rather than the engine's.
-   *
-   * The library's is a bare glyph tucked into the corner, roughly 26px, sitting
-   * over the title. That is a hard target on a phone and gives no hint what it
-   * does. A labelled button on its own row above the name clears the title
-   * entirely and is comfortably thumb-sized.
-   */
+  // Our own close control rather than the engine's corner glyph: 26px,
+  // unlabelled, and sitting on top of the title of any pin whose name filled
+  // the line.
   const popup = new state.gl.Popup({ closeButton: false, maxWidth: '320px', offset: 12 })
     .setLngLat(position);
   state.dropPopup = popup;
-
-  const closeBar = el('div', { class: 'popup-bar' }, [
-    labelledButton(icons.close, 'Close', {
-      tone: 'ghost', title: 'Close this pin',
-      onclick: () => popup.remove(),
-    }),
-  ]);
 
   const nameInput = el('input', {
     class: 'drop-pin-name', value: 'Dropped pin', 'aria-label': 'Name for this pin',
     oninput: (event) => { feature.properties.name = event.target.value.trim() || 'Dropped pin'; },
   });
 
+  const coords = formatDD(position);
+  const weatherLine = el('dd', { text: '…' });
+
   /*
-   * Symbol and note, chosen before saving rather than after.
+   * The symbol is picked from a grid of the symbols themselves.
    *
-   * Both were previously only reachable by saving the pin, finding it again and
-   * opening its editor — three steps to record the thing you are standing in
-   * front of. They write straight onto the feature, so whatever is set here is
-   * what lands in the folder.
+   * It was a <select> of names, which on iOS opens a full-height native wheel
+   * listing forty words — and "Plain pin" tells you nothing about what will be
+   * on the map. The button shows the current mark; pressing it opens the marks.
    */
-  const iconPicker = el('select', { class: 'drop-pin-icon', 'aria-label': 'Symbol for this pin' },
-    [...pinIconGroups()].map(([group, choices]) => el('optgroup', { label: group },
-      choices.map((choice) => el('option', {
-        value: choice.id, text: choice.name, selected: choice.id === DEFAULT_PIN_ICON,
-      })))));
-  feature.properties.icon = DEFAULT_PIN_ICON;
-  iconPicker.addEventListener('change', () => { feature.properties.icon = iconPicker.value; });
+  const symbolButton = el('button', {
+    class: 'drop-pin-symbol', type: 'button',
+    'aria-haspopup': 'true', 'aria-expanded': 'false',
+    title: 'Choose a symbol for this pin',
+  });
+  const symbolGrid = el('div', { class: 'drop-pin-symbols', hidden: true, role: 'group', 'aria-label': 'Symbols' });
+
+  const paintSymbol = () => {
+    symbolButton.innerHTML = `${pinIconSVG(feature.properties.icon, { size: 20 })}<span>Symbol</span>`;
+  };
+
+  for (const [group, choices] of pinIconGroups()) {
+    symbolGrid.append(el('p', { class: 'drop-pin-symbols-group', text: group }));
+    symbolGrid.append(el('div', { class: 'drop-pin-symbols-row' }, choices.map((choice) => el('button', {
+      class: `drop-pin-symbol-choice${choice.id === feature.properties.icon ? ' is-on' : ''}`,
+      type: 'button', title: choice.name, 'aria-label': choice.name,
+      html: pinIconSVG(choice.id, { size: 19 }),
+      onclick: (event) => {
+        feature.properties.icon = choice.id;
+        for (const node of symbolGrid.querySelectorAll('.drop-pin-symbol-choice')) {
+          node.classList.toggle('is-on', node === event.currentTarget);
+        }
+        paintSymbol();
+        symbolGrid.hidden = true;
+        symbolButton.setAttribute('aria-expanded', 'false');
+      },
+    }))));
+  }
+  paintSymbol();
+  symbolButton.addEventListener('click', () => {
+    symbolGrid.hidden = !symbolGrid.hidden;
+    symbolButton.setAttribute('aria-expanded', String(!symbolGrid.hidden));
+  });
 
   const noteInput = el('textarea', {
     class: 'drop-pin-note', rows: '2', 'aria-label': 'Field notes for this pin',
-    placeholder: 'Field notes — what is here, where to park, what to watch for…',
+    placeholder: 'Field notes…',
     oninput: (event) => { feature.properties.description = event.target.value; },
   });
 
-  const coords = formatDD(position);
-  const elevationLine = el('dd', { text: '…' });
-  const weatherLine = el('dd', { text: '…' });
-
   content.append(
-    closeBar,
     nameInput,
     el('dl', { class: 'popup-stats' }, [
       el('dt', { text: 'Coordinates' }),
@@ -3831,27 +3844,29 @@ function showDropPin(position) {
           },
         }),
       ]),
-      el('dt', { text: 'Elevation' }), elevationLine,
       el('dt', { text: 'Weather' }), weatherLine,
     ]),
-    el('div', { class: 'drop-pin-fields' }, [iconPicker, noteInput]),
+    el('div', { class: 'drop-pin-fields' }, [symbolButton, symbolGrid, noteInput]),
     saveToFolderActions(feature, popup),
-    labelledButton(icons.info, 'Details', {
-      tone: 'ghost', title: 'Everything known about this place',
-      onclick: () => { popup.remove(); showPointDetails(position); },
-    }),
+    el('div', { class: 'popup-bar' }, [
+      labelledButton(icons.info, 'Details', {
+        tone: 'ghost', title: 'Everything known about this place',
+        onclick: () => { popup.remove(); showPointDetails(position); },
+      }),
+      labelledButton(icons.close, 'Close', {
+        tone: 'ghost', title: 'Close this pin',
+        onclick: () => popup.remove(),
+      }),
+    ]),
   );
-  content.lastElementChild.classList.add('drop-pin-more');
 
-  // Both lookups need the network and neither blocks the popup: the
-  // coordinates are the part you need standing at a trailhead with one bar,
-  // and they are already on screen.
-  elevation(position).then((result) => {
-    elevationLine.textContent = result.ok
-      ? formatElevation(result.metres, state.units)
-      : result.reason;
-  }).catch(() => { elevationLine.textContent = 'unavailable'; });
-
+  /*
+   * Elevation is not here. It is one more line on a card that has to fit over
+   * a map on a phone, it is the slowest of the lookups, and the Details tab
+   * one button away carries it along with everything else about the point.
+   * The forecast stays: it is the reason to drop a pin on a place you have not
+   * driven to yet.
+   */
   forecast(position).then((result) => {
     if (!result.ok) { weatherLine.textContent = result.reason; return; }
     const now = result.periods[0];
@@ -3860,6 +3875,7 @@ function showDropPin(position) {
 
   popup.setDOMContent(content).addTo(state.map);
 }
+
 
 /** Show the Details tab for a place that is not a saved pin. */
 function showPointDetails(position) {
@@ -4054,46 +4070,65 @@ function openPopupEditor(host, props, popup) {
 
 /** Actions for a feature that is not yet in a folder: pick one and save. */
 function saveToFolderActions(feature, popup) {
+  /*
+   * One button, and the choice only after it is pressed.
+   *
+   * Before, a folder select and a name field sat on the card at all times,
+   * neither labelled — so a card for a pin nobody had asked to save showed
+   * "New folder" above a box reading "Saved places", and it was anyone's guess
+   * what either did. Now the card asks nothing until you say you want to save,
+   * and then it says what each field is for.
+   */
   const folders = state.folders.list();
-  const select = el('select', { 'aria-label': 'Folder to save into' }, [
+
+  const select = el('select', { class: 'popup-folder', 'aria-label': 'Folder to save into' }, [
     ...folders.map((folder) => el('option', { value: folder.id, text: folder.name })),
-    el('option', { value: '__new__', text: folders.length ? '— New folder —' : 'New folder' }),
+    el('option', { value: '__new__', text: folders.length ? 'New folder…' : 'New folder' }),
   ]);
   select.value = folders.length ? folders[folders.length - 1].id : '__new__';
 
-  /*
-   * The new folder is named inline, not by window.prompt.
-   *
-   * A prompt is a modal that takes the whole map away to ask one question, and
-   * inside the iOS shell it arrives as a native system alert over a full-screen
-   * app — which reads like an error rather than a field. It also cannot be
-   * corrected once dismissed. This row appears only when "New folder" is the
-   * choice, and disappears again when it is not.
-   */
   const newName = el('input', {
     type: 'text', class: 'popup-new-folder', value: 'Saved places',
     placeholder: 'Name the new folder', 'aria-label': 'Name for the new folder',
   });
-  const showName = () => { newName.hidden = select.value !== '__new__'; };
+  const newLabel = el('label', { class: 'popup-label popup-new-folder-label', text: 'New folder name' });
+
+  const showName = () => {
+    const isNew = select.value === '__new__';
+    newName.hidden = !isNew;
+    newLabel.hidden = !isNew;
+  };
   select.addEventListener('change', showName);
   showName();
 
-  // Stacked, in the order the decision is actually made: which folder, what to
-  // call it if it is new, then commit. Side by side, the name field wrapped
-  // below the button that consumes it.
-  return el('div', { class: 'popup-actions popup-save' }, [
+  const panel = el('div', { class: 'popup-save-panel', hidden: true }, [
+    el('label', { class: 'popup-label', text: 'Save into' }),
     select,
+    newLabel,
     newName,
-    el('button', {
-      type: 'button', class: 'is-primary', text: 'Save to folder',
-      onclick: () => {
-        saveFeatureToFolder(feature, select.value,
-          select.value === '__new__' ? newName.value : null);
-        popup.remove();
-        openTab('folders');
-      },
-    }),
+    el('div', { class: 'popup-save-confirm' }, [
+      el('button', {
+        type: 'button', class: 'is-primary', text: 'Save',
+        onclick: () => {
+          saveFeatureToFolder(feature, select.value,
+            select.value === '__new__' ? newName.value : null);
+          popup.remove();
+          openTab('folders');
+        },
+      }),
+      el('button', {
+        type: 'button', text: 'Cancel',
+        onclick: () => { panel.hidden = true; opener.hidden = false; },
+      }),
+    ]),
   ]);
+
+  const opener = el('button', {
+    type: 'button', class: 'is-primary popup-save-open', text: 'Save to folder',
+    onclick: () => { panel.hidden = false; opener.hidden = true; select.focus(); },
+  });
+
+  return el('div', { class: 'popup-actions popup-save' }, [opener, panel]);
 }
 
 /** Actions for a feature already saved in a folder. */

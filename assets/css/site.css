@@ -54,6 +54,13 @@
    * the controls on it read as controls.
    */
   --popup-bg: var(--surface);
+  /*
+   * And a second token for the controls ON that card. In dark mode `--surface`
+   * sits only a shade above `--paper`, so inputs read as black rectangles
+   * rather than as fields; `--paper-3` is the step that is actually visible at
+   * arm's length on a phone.
+   */
+  --popup-control: var(--surface);
 
   --safe-top:    env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -81,6 +88,7 @@
     --surface:      #1d1917;
     --surface-2:    #211c19;
     --popup-bg:     var(--paper);
+    --popup-control: var(--paper-3);
     --shadow-sm:    0 1px 2px rgba(0, 0, 0, .4);
     --shadow-md:    0 2px 8px rgba(0, 0, 0, .45);
     --shadow-lg:    0 8px 32px rgba(0, 0, 0, .55);
@@ -106,6 +114,7 @@
   --surface:      #1d1917;
   --surface-2:    #211c19;
   --popup-bg:     var(--paper);
+  --popup-control: var(--paper-3);
   --shadow-sm:    0 1px 2px rgba(0, 0, 0, .4);
   --shadow-md:    0 2px 8px rgba(0, 0, 0, .45);
   --shadow-lg:    0 8px 32px rgba(0, 0, 0, .55);
