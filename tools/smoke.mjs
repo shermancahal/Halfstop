@@ -331,10 +331,11 @@ await page.route('**/*', async (route) => {
           layerName: 'Motor Vehicle Use Map: Roads',
           attributes: {
             OBJECTID: 91,
-            name: 'FR 1472',
-            seasonal: 'yes',
-            surfacetype: 'Native material',
-            operationalmaintlevel: '2 - High clearance vehicles',
+            name: 'GILFORD',
+            seasonal: 'yearlong',
+            surfacetype: 'NAT - NATIVE MATERIAL',
+            operationalmaintlevel: '2 - HIGH CLEARANCE VEHICLES',
+            jurisdiction: 'FS - FOREST SERVICE',
             motorcycle: nothingOpen ? '' : 'motorcycle',
             motorcycle_datesopen: nothingOpen ? '' : '01/01-12/31',
             otherwheeled_ohv: nothingOpen ? '' : 'otherwheeled_ohv',
@@ -1732,6 +1733,30 @@ check('BLM\'s designation comes from the sublayer name, where it lives',
   card['BLM travel management'].designation, 'Roads Managed for Limited Public Motorized Use');
 check('and the limit is spelled out rather than left as the word "Limited"',
   card['BLM travel management'].pairs['The limit'], 'Street-legal vehicles only; no OHV use.');
+/*
+ * The agency's vocabulary, said the way a person would say it.
+ *
+ * Read straight out these mislead. "yearlong" sounds like a year-long
+ * restriction rather than a road open all year; "2 - HIGH CLEARANCE VEHICLES"
+ * is a maintenance level whose number means nothing without the handbook; and
+ * a road called GILFORD is shouting.
+ */
+const mvum = card['Forest Service MVUM'].pairs;
+check('a shouted road name is said normally', mvum.Road, 'Gilford');
+check('"yearlong" is spelled out as open all year', mvum.Open, 'All year');
+check('a surface code becomes the surface', mvum.Surface, 'Dirt — native material, no surfacing');
+check('and a maintenance level says what it needs',
+  mvum['Road standard'], 'Level 2 — high clearance needed');
+check('the managing agency loses its abbreviation', mvum['Managed by'], 'Forest Service');
+
+// Trimmed to what decides whether you drive it. GTLF publishes about thirty
+// columns; showing eleven of them was a wall on a phone.
+const blm = card['BLM travel management'].pairs;
+check('the BLM card stays short enough to read', Object.keys(blm).length <= 7, true);
+check('and drops the paperwork rather than the answer',
+  Object.keys(blm).some((k) => /nepa|distribution|admin|authority|ownership/i.test(k)), false);
+check('while keeping what the limit actually is', Boolean(blm['The limit']), true);
+
 check('internal bookkeeping is not shown',
   Object.keys(card['BLM travel management'].pairs).some((k) => /object|global|shape/i.test(k)), false);
 check('nor are the service\'s own nulls',

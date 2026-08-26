@@ -1188,7 +1188,24 @@ html, body { height: 100%; overflow: hidden; }
 .identify-designation {
   margin: 2px 0 6px; font-size: .88rem; font-weight: 600; color: var(--ink);
 }
-.identify-body .popup-stats { border-top: 0; padding-top: 4px; }
+/*
+ * Striped, because these cards run long.
+ *
+ * A label and its value are two grid cells on the same row, and at seven rows
+ * of wrapping text it stops being obvious which value belongs to which label.
+ * Shading alternate rows ties each pair together across the gap; lines between
+ * every row would do the same job and add six more rules to a card that is
+ * already busy.
+ */
+.identify-body .popup-stats {
+  border-top: 0; padding-top: 0; gap: 0;
+  border-radius: var(--radius-sm); overflow: hidden;
+}
+.identify-body .popup-stats dt,
+.identify-body .popup-stats dd { padding: 7px 9px; align-self: stretch; }
+.identify-body .popup-stats dt:nth-of-type(odd),
+.identify-body .popup-stats dd:nth-of-type(odd) { background: var(--popup-stripe); }
+.identify-body .popup-stats dt { color: var(--ink-2); }
 .identify-body .source-note { margin-top: 10px; }
 
 /* Dropped-pin popup */

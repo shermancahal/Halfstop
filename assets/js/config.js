@@ -589,12 +589,49 @@ export const OVERLAYS = [
        * publishes.
        */
       vehicles: true,
+      /*
+       * `decode` turns the agency's own vocabulary into a sentence.
+       *
+       * These are codes written for the people who maintain the data, and read
+       * straight out they mislead: "yearlong" sounds like a year-long
+       * restriction rather than a road that is open all year, and "2 - HIGH
+       * CLEARANCE VEHICLES" is a maintenance level whose number means nothing
+       * to anybody who has not read the handbook. Anything not listed falls
+       * through to a generic tidy-up rather than being hidden.
+       */
       fields: [
         { name: 'name', label: 'Road' },
-        { name: 'seasonal', label: 'Seasonal' },
-        { name: 'surfacetype', label: 'Surface' },
-        { name: 'operationalmaintlevel', label: 'Maintained to' },
-        { name: 'jurisdiction', label: 'Jurisdiction' },
+        {
+          name: 'seasonal',
+          label: 'Open',
+          decode: {
+            yearlong: 'All year',
+            seasonal: 'Part of the year — see the dates per vehicle below',
+          },
+        },
+        {
+          name: 'surfacetype',
+          label: 'Surface',
+          decode: {
+            'nat - native material': 'Dirt — native material, no surfacing',
+            'imp - improved native material': 'Improved dirt',
+            'agg - crushed aggregate or gravel': 'Gravel',
+            'p - paved': 'Paved',
+            'pav - paved': 'Paved',
+          },
+        },
+        {
+          name: 'operationalmaintlevel',
+          label: 'Road standard',
+          decode: {
+            '1 - basic custodial care (closed)': 'Level 1 — not maintained for vehicles',
+            '2 - high clearance vehicles': 'Level 2 — high clearance needed',
+            '3 - suitable for passenger cars': 'Level 3 — passenger cars',
+            '4 - moderate degree of user comfort': 'Level 4 — maintained, comfortable',
+            '5 - high degree of user comfort': 'Level 5 — paved or fully maintained',
+          },
+        },
+        { name: 'jurisdiction', label: 'Managed by', decode: { 'fs - forest service': 'Forest Service' } },
       ],
     },
     tiles: ['https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_02/MapServer/export'
@@ -655,17 +692,50 @@ export const OVERLAYS = [
        * say. OHV_DSGNTN_LIM_EXPLAIN is the one worth surfacing; it is where a
        * "limited" designation stops being a word and says what the limit is.
        */
+      /*
+       * Cut to what decides whether you drive it.
+       *
+       * GTLF publishes about thirty columns and the first pass showed eleven,
+       * which is a wall on a phone. Gone: the administrative state (you can see
+       * where you are), the NEPA document number, the FLTP and external
+       * distribution flags, the designating authority and the route management
+       * objective — all real data, none of it an answer to "can I take this
+       * road". Route ownership went too: the card is already headed BLM.
+       */
       fields: [
         { name: 'ROUTE_PRMRY_NM', label: 'Route' },
-        { name: 'PLAN_ASSET_CLASS', label: 'Class' },
-        { name: 'PLAN_OHV_ROUTE_DSGNTN', label: 'OHV designation' },
-        { name: 'OHV_ROUTE_DSGNTN_LIM', label: 'Limited to' },
+        {
+          name: 'PLAN_ASSET_CLASS',
+          label: 'Type',
+          decode: {
+            'transportation system - road': 'Road',
+            'transportation system - trail': 'Trail',
+            'transportation system - primitive road': 'Primitive road',
+          },
+        },
+        {
+          name: 'PLAN_OHV_ROUTE_DSGNTN',
+          label: 'Off-highway use',
+          decode: {
+            open: 'Open',
+            limited: 'Limited — see below',
+            closed: 'Closed to off-highway vehicles',
+          },
+        },
         { name: 'OHV_DSGNTN_LIM_EXPLAIN', label: 'The limit' },
-        { name: 'PLAN_SEASON_RSTRCT_CODE', label: 'Seasonal' },
         { name: 'PLAN_ALLOW_MODE_TRNSPRT', label: 'Allowed' },
-        { name: 'PLAN_ACCESS_RSTRCT', label: 'Access' },
-        { name: 'OBSRVE_SRFCE_TYPE', label: 'Surface' },
-        { name: 'ROUTE_SPCL_DSGNTN_TYPE', label: 'Special designation' },
+        { name: 'PLAN_SEASON_RSTRCT_CODE', label: 'Season' },
+        {
+          name: 'OBSRVE_SRFCE_TYPE',
+          label: 'Surface',
+          decode: {
+            'nat - native material': 'Dirt — native material, no surfacing',
+            'imp - improved native material': 'Improved dirt',
+            'agg - crushed aggregate or gravel': 'Gravel',
+            'p - paved': 'Paved',
+            'pav - paved': 'Paved',
+          },
+        },
       ],
     },
     tiles: ['https://gis.blm.gov/arcgis/rest/services/transportation/'

@@ -4153,6 +4153,36 @@ function prettyField(name) {
   return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase();
 }
 
+/**
+ * An agency's own vocabulary, said the way a person would say it.
+ *
+ * A named `decode` first, because only the catalogue knows that "yearlong"
+ * means open all year rather than restricted all year. Then a generic
+ * tidy-up for everything else, so an unlisted value is still readable rather
+ * than hidden: strip the leading `NAT - ` style code, and take the shouting
+ * out of a name without mangling a reference number.
+ */
+function humaniseValue(raw, field) {
+  const text = String(raw ?? '').trim();
+  if (!text) return text;
+
+  const named = field?.decode?.[text.toLowerCase()];
+  if (named) return named;
+
+  // "NAT - NATIVE MATERIAL" is a code and its own expansion. Keep the words.
+  const expanded = /^[A-Z0-9]{1,6}\s+-\s+(.+)$/.exec(text);
+  const body = expanded ? expanded[1] : text;
+
+  /*
+   * Title case only for text that is plainly a shouted phrase — letters,
+   * spaces and the punctuation names carry. A reference like
+   * DOI-BLM-NV-L000-2008-0001-RMP-EIS is also all capitals and title-casing it
+   * would be vandalism, so it is left exactly as published.
+   */
+  if (!/^[A-Z][A-Z\s.'’-]*$/.test(body) || !/[A-Z]{2}/.test(body)) return body;
+  return body.toLowerCase().replace(/(^|[\s.'’-])([a-z])/g, (all, edge, letter) => edge + letter.toUpperCase());
+}
+
 /** Values ArcGIS uses for "nothing here", which are not worth a row. */
 const EMPTY_VALUES = new Set(['', 'null', 'Null', 'NULL', '<Null>', 'N/A', 'na', ' ']);
 
@@ -4198,7 +4228,7 @@ function attributeRows(result) {
     const wanted = [];
     for (const field of result.fields) {
       const hit = entries.find(([name]) => name.toLowerCase() === field.name.toLowerCase());
-      if (hit) wanted.push([field.label || prettyField(hit[0]), hit[1]]);
+      if (hit) wanted.push([field.label || prettyField(hit[0]), humaniseValue(hit[1], field)]);
     }
     if (result.vehicles) {
       const classes = vehicleClasses(result.attributes);
@@ -4224,7 +4254,7 @@ function attributeRows(result) {
   }
   // Otherwise everything readable, capped: a raw ArcGIS row can be forty
   // columns of internal bookkeeping and a card over a map cannot hold that.
-  return entries.slice(0, 10).map(([name, value]) => [prettyField(name), value]);
+  return entries.slice(0, 10).map(([name, value]) => [prettyField(name), humaniseValue(value)]);
 }
 
 /**
