@@ -1,33 +1,35 @@
 [
   {
+    "id": "tiles:streets-v8-tilejson",
+    "note": "The shields vanish when you zoom IN, which rules out a missing image - that would fail at every zoom. The vector source declares maxzoom 14, so past z14 GL reuses z14 tiles and stretches them. symbol-spacing is resolved at the tile's own zoom, so 260px at z14 becomes 1040px on screen at z16 and 4160px at z18 - far enough apart that a road can cross the whole viewport without one landing on it. This asks the tileset what its real maxzoom is, because declaring one it does not have would make GL request tiles that 404 and draw no roads at all.",
+    "expect": "data",
+    "find": "\"(?:maxzoom|minzoom)\":\\s*[0-9]+",
+    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8.json?secure&access_token={token}"
+  },
+  {
+    "id": "tiles:terrain-v2-tilejson",
+    "note": "The same question for the terrain tileset, which shares the helper that hard-codes 14 and has its own real limit.",
+    "expect": "data",
+    "find": "\"(?:maxzoom|minzoom)\":\\s*[0-9]+",
+    "url": "https://api.mapbox.com/v4/mapbox.mapbox-terrain-v2.json?secure&access_token={token}"
+  },
+  {
+    "id": "tiles:streets-v8-z16",
+    "note": "And a real tile at z16 over the Smokies, because a TileJSON saying 16 and a server serving 16 are different claims.",
+    "expect": "data",
+    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/16/17287/25403.vector.pbf?access_token={token}"
+  },
+  {
     "id": "road:mvum-02-export",
-    "note": "Forest roads take about thirty seconds because every tile is rendered on demand - and the current request draws every sublayer, including the status polygons and two symbology layers nobody sees. Asking MVUM_02 for roads and trails only is strictly less work for the service. Checking it draws before switching to it.",
+    "note": "Forest roads take about thirty seconds because every tile is rendered on demand, and the request draws every sublayer including status polygons nobody sees. Roads and trails only is strictly less work.",
     "at": [-83.5, 35.7, 12],
     "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_02/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=512,512&format=png32&transparent=true&layers=show:1,2&f=image"
   },
   {
-    "id": "road:mvum-01-roads-only",
-    "note": "The same idea against the service already shipped, in case MVUM_02 renders differently. Whichever is faster and still draws wins.",
-    "at": [-83.5, 35.7, 12],
-    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_01/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=512,512&format=png32&transparent=true&layers=show:1,2&f=image"
-  },
-  {
     "id": "land:padus-services",
-    "note": "The PAD-US query came back 400 Bad Request, which says the URL is wrong rather than the data missing - most likely the service name. Asking what that host actually publishes instead of guessing a second time.",
+    "note": "The PAD-US query came back 400, so the URL was wrong rather than the data missing. Asking the host what it publishes.",
     "expect": "data",
     "find": "\"name\":\\s*\"[^\"]{0,48}\"",
     "url": "https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services?f=pjson"
-  },
-  {
-    "id": "lp:lorenz-2025",
-    "note": "The atlas publishes 2016 through 2025; 2022 is confirmed drawing and shipped. If a newer year is there at the same zooms it is a one-line change to a fresher model.",
-    "at": [-86.013, 39.654, 5],
-    "url": "https://djlorenz.github.io/astronomy/image_tiles/tiles2025/tile_{z}_{x}_{y}.png"
-  },
-  {
-    "id": "lp:lorenz-2022-deep",
-    "note": "Where the atlas stops. It is shipped clamped to z8 on the assumption it runs out somewhere - worth knowing the real number rather than guessing conservatively.",
-    "at": [-86.013, 39.654, 8],
-    "url": "https://djlorenz.github.io/astronomy/image_tiles/tiles2022/tile_{z}_{x}_{y}.png"
   }
 ]
