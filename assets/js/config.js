@@ -467,6 +467,21 @@ export const OVERLAYS = [
     group: 'Routes',
     name: 'Roads & trails (USGS)',
     description: 'USGS transportation network, including forest routes.',
+    /*
+     * Worth saying out loud, because it cost four rounds of debugging.
+     *
+     * This is a finished picture from USGS, and USGS draws its own route
+     * markers into it. Over Byways Topo, which draws markers of its own, a
+     * numbered highway ends up with two shields in different styles a few
+     * hundred metres apart — which reads as the app rendering the same road
+     * twice, and was chased as exactly that through three wrong explanations
+     * before the real one turned up.
+     *
+     * Nothing here can suppress theirs; the shields are pixels by the time they
+     * arrive. So the note says it instead.
+     */
+    legendNote: 'USGS draws its own route markers into these tiles, so numbered '
+      + 'highways will carry two shields when Byways Topo is underneath.',
     tiles: ['https://carto.nationalmap.gov/arcgis/rest/services/transportation/MapServer/export'
       + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'],
     tileSize: 256,
