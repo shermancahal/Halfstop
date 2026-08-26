@@ -199,11 +199,32 @@ const width = (base, top) => [
 export function bywaysStyle(token) {
   if (!token) return null;
   const key = encodeURIComponent(token);
+  /*
+   * Each tileset's own depth, not one number for both.
+   *
+   * This said 14 for everything, and 14 is neither tileset's real limit —
+   * streets-v8 goes to 16 and terrain-v2 to 15, read from their TileJSON rather
+   * than assumed. Declaring less than a tileset has does not fail, it degrades
+   * silently: past the declared maxzoom GL stops fetching and stretches the last
+   * tile it has.
+   *
+   * For a fill or a line that is merely soft. For symbols it is worse, because
+   * `symbol-spacing` is resolved at the tile's own zoom and then scaled with the
+   * tile. 260px of spacing baked in at z14 is about a thousand on screen at z16
+   * and four thousand at z18 — far enough apart that a road can cross the whole
+   * viewport without a shield landing on it. That is what "the route numbers
+   * disappear when I zoom in" was.
+   *
+   * Overstating it would be the worse mistake in the other direction: GL would
+   * request tiles that 404 and no roads would draw at all. Hence the numbers
+   * come from the service, and there is a test below holding them there.
+   */
+  const DEPTH = { 'mapbox.mapbox-streets-v8': 16, 'mapbox.mapbox-terrain-v2': 15 };
   const vector = (tileset) => ({
     type: 'vector',
     tiles: [`https://api.mapbox.com/v4/${tileset}/{z}/{x}/{y}.vector.pbf?access_token=${key}`],
     minzoom: 0,
-    maxzoom: 14,
+    maxzoom: DEPTH[tileset] ?? 14,
   });
 
   return {
@@ -784,7 +805,10 @@ function shieldLayers(state = '') {
     minzoom: 6,
     layout: {
       'symbol-placement': 'line',
-      'symbol-spacing': ['interpolate', ['linear'], ['zoom'], 6, 180, 12, 260],
+      // Eased off at the top so the overzoom that still happens above the
+        // tileset's own maxzoom has somewhere to go: 220 at z16 is 880 on
+        // screen at z18, where 260 would have been over a thousand.
+        'symbol-spacing': ['interpolate', ['linear'], ['zoom'], 6, 170, 14, 220],
       'icon-image': shieldImageExpression(state, { length: ['length', text] }),
       'icon-size': 1,
       'icon-offset': [shiftPx, 0],
@@ -823,7 +847,10 @@ function shieldLayers(state = '') {
       minzoom: 6,
       layout: {
         'symbol-placement': 'line',
-        'symbol-spacing': ['interpolate', ['linear'], ['zoom'], 6, 180, 12, 260],
+        // Eased off at the top so the overzoom that still happens above the
+        // tileset's own maxzoom has somewhere to go: 220 at z16 is 880 on
+        // screen at z18, where 260 would have been over a thousand.
+        'symbol-spacing': ['interpolate', ['linear'], ['zoom'], 6, 170, 14, 220],
         // Images we generate and register ourselves — see lib/route-shields.js
         // for why this does not go through the Mapbox sprite.
         //

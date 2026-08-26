@@ -524,7 +524,9 @@ export const OVERLAYS = [
      * and naming one would describe half of what is drawn.
      */
     legendJSON: {
-      url: 'https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_01/MapServer/legend?f=pjson',
+      // The same service the tiles come from, so the key cannot describe a
+      // different rendering than the one on screen.
+      url: 'https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_02/MapServer/legend?f=pjson',
     },
     legendNote: 'The MVUM is the legal authority for what is open — always check '
       + 'the current year\'s map before relying on it.',
@@ -536,8 +538,21 @@ export const OVERLAYS = [
     // Two things help: 512px tiles, which cover the same screen in a quarter of
     // the requests, and a minzoom, since a national view of forest roads is
     // both illegible and the most expensive thing you can ask this service for.
-    tiles: ['https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_01/MapServer/export'
-      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=512,512&format=png32&transparent=true&f=image'],
+    /*
+     * Roads and trails only, from the newer service.
+     *
+     * The old request drew every sublayer this service has — two symbology
+     * layers, a status polygon set and several scale-banded copies — and then
+     * discarded most of it as transparent. That is thirty seconds of somebody
+     * else's CPU per view for pixels nobody sees, which is what "it took about
+     * thirty seconds to get eighty percent of the lines" was paying for.
+     *
+     * `layers=show:1,2` is Motor Vehicle Use Map: Roads and Trails, named by
+     * the service itself. Checked drawing before being switched to.
+     */
+    tiles: ['https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_02/MapServer/export'
+      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=512,512&format=png32'
+      + '&transparent=true&layers=show:1,2&f=image'],
     tileSize: 512,
     minzoom: 10,
     maxzoom: 16,

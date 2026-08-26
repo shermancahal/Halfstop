@@ -1104,3 +1104,37 @@ test('the number still fits its clear space at whatever scale', () => {
     }
   }
 });
+
+test('the vector sources declare each tileset own depth', () => {
+  /*
+   * Read from the tilesets' TileJSON, not chosen. Both were 14, which is
+   * neither one's real limit, and understating it degrades silently: past the
+   * declared maxzoom GL stops fetching and stretches the last tile it holds.
+   *
+   * For symbols that is not merely soft. `symbol-spacing` is resolved at the
+   * tile's own zoom and scaled with the tile, so 260px baked in at z14 is about
+   * a thousand pixels apart on screen at z16 — a road can cross the viewport
+   * without a shield landing on it, which is what "the route numbers disappear
+   * when I zoom in" turned out to be.
+   *
+   * Overstating it is the worse error: GL would request tiles that 404 and no
+   * roads would draw at all. So these numbers are pinned here, and changing one
+   * should mean somebody asked the service again.
+   */
+  const style = bywaysStyle('pk.test');
+  assert.equal(style.sources.composite.maxzoom, 16, 'mapbox-streets-v8 publishes z16');
+  assert.equal(style.sources.terrain.maxzoom, 15, 'mapbox-terrain-v2 publishes z15');
+});
+
+test('shield spacing leaves room for the overzoom above the tileset', () => {
+  // Above a source's maxzoom every remaining level doubles the effective
+  // spacing. The top of the ramp is what that doubling starts from, so it is
+  // held below the point where two levels of overzoom empties the screen.
+  const style = bywaysStyle('pk.test');
+  for (const id of ['road-shield', 'road-shield-first', 'road-shield-second']) {
+    const spacing = style.layers.find((layer) => layer.id === id).layout['symbol-spacing'];
+    const stops = spacing.slice(3);
+    const top = stops[stops.length - 1];
+    assert.ok(top <= 240, `${id} spacing tops out at ${top}, which quadruples badly past z16`);
+  }
+});
