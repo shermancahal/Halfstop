@@ -406,15 +406,27 @@ async function main() {
   versions.set('assets/js/build.js', digest(buildScript));
   staged.push({ name: 'build.json', data: encoderFor(`{"build":"${buildId}"}\n`) });
 
-  let stamped = 0;
+  /*
+   * Which hrefs were actually rewritten, not merely how many.
+   *
+   * Only the handful of files a page names directly get a `?v=` — the CSS and
+   * the entry scripts. Everything else is requested by the URL on disk: the
+   * ES modules viewer.js imports, the shield PNGs, data/catalog.json. The
+   * service worker has to precache each file under the URL that will really be
+   * asked for, and precaching all of them versioned meant every one of those
+   * was a miss offline. The module graph then failed to load and the app never
+   * started, which is exactly what CI caught and a local run did not.
+   */
+  const stampedHrefs = new Set();
   for (const page of html) {
     page.text = page.text.replace(/(src|href)="(assets\/[^"?#]+\.(?:js|css))"/g, (match, attr, href) => {
       const version = versions.get(href);
       if (!version) return match;
-      stamped += 1;
+      stampedHrefs.add(href);
       return `${attr}="${href}?v=${version}"`;
     });
   }
+  const stamped = stampedHrefs.size;
 
   for (const page of html) staged.push({ name: page.name, data: encoderFor(page.text) });
   staged.push(...assets);
@@ -433,10 +445,9 @@ async function main() {
     './',
     ...html.map((page) => `./${page.name}`),
     ...ROOT_FILES.filter((name) => name !== 'sw.js').map((name) => `./${name}`),
-    ...assets.map((asset) => {
-      const version = versions.get(asset.name);
-      return version ? `./${asset.name}?v=${version}` : `./${asset.name}`;
-    }),
+    ...assets.map((asset) => (stampedHrefs.has(asset.name)
+      ? `./${asset.name}?v=${versions.get(asset.name)}`
+      : `./${asset.name}`)),
   ];
 
   for (const name of ROOT_FILES) {

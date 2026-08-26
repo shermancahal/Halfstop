@@ -1517,24 +1517,72 @@ if (!external) {
   });
   check('a worker installs and activates', state, 'activated');
 
-  // Wait for the precache to finish before pulling the plug. Without this the
-  // check races the install and fails intermittently, which is worse than not
-  // having it: a flaky check gets re-run until it passes.
-  const cached = await offlinePage.evaluate(async () => {
-    for (let attempt = 0; attempt < 60; attempt += 1) {
-      const names = await caches.keys();
-      const name = names.find((key) => key.startsWith('abmap-'));
+  /*
+   * Wait for the precache to finish, and for ALL of it.
+   *
+   * The first version of this settled for "more than 100 of the 127", which
+   * meant it could go offline mid-install and blame the app for the missing
+   * files. Read the count out of the worker itself so the test cannot drift
+   * from what is actually being cached.
+   */
+  const expected = (await readFile(path.join(ROOT, 'dist', 'sw.js'), 'utf8'))
+    .match(/const PRECACHE = \[([\s\S]*?)\];/)[1]
+    .split(',').filter((entry) => entry.trim()).length;
+
+  const cached = await offlinePage.evaluate(async (want) => {
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      const name = (await caches.keys()).find((key) => key.startsWith('abmap-'));
       if (name) {
         const keys = await (await caches.open(name)).keys();
-        if (keys.length > 100) return keys.length;
+        if (keys.length >= want) return keys.length;
       }
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
-    return 0;
-  });
-  check('and precaches the site', cached > 100, true);
+    return -1;
+  }, expected);
+  check(`and precaches all ${expected} files`, cached, expected);
 
+  /*
+   * And that it cached them under the URLs the app will really ask for.
+   *
+   * Only the few files a page names directly carry a `?v=`; the ES modules
+   * viewer.js imports, the shield images and the catalogue are all fetched by
+   * their plain path. Precaching those versioned made every one a miss with no
+   * network — the module graph never loaded, the app never started, and the
+   * failure looked like a broken service worker rather than a wrong list.
+   */
+  const addressable = await offlinePage.evaluate(async () => {
+    const name = (await caches.keys()).find((key) => key.startsWith('abmap-'));
+    const keys = (await (await caches.open(name)).keys()).map((request) => new URL(request.url).pathname
+      + new URL(request.url).search);
+    const has = (suffix) => keys.some((key) => key.endsWith(suffix));
+    return {
+      module: has('/assets/js/lib/engine.js'),
+      catalogue: has('/data/catalog.json'),
+      shield: keys.some((key) => /\/assets\/shields\/[^?]+\.png$/.test(key)),
+      entryIsVersioned: keys.some((key) => /\/assets\/js\/viewer\.js\?v=/.test(key)),
+    };
+  });
+  check('the imported modules are cached by their plain path', addressable.module, true);
+  check('so is the catalogue', addressable.catalogue, true);
+  check('and the shield images', addressable.shield, true);
+  check('while the entry script keeps the ?v= the page asks for', addressable.entryIsVersioned, true);
+
+  /*
+   * Offline twice over: Playwright's emulation, and the real server shut down
+   * underneath it.
+   *
+   * The emulation alone is not enough. It did not cover requests made by the
+   * service worker in the local Playwright build, so a cache miss quietly
+   * succeeded against the live server and this whole section passed while the
+   * precache list was wrong — CI, on a different build, failed it correctly.
+   * Closing the server (and its keep-alive sockets) makes a miss a miss
+   * everywhere. Safe to do here because nothing runs after this.
+   */
   await offlineContext.setOffline(true);
+  hosted.server.closeAllConnections?.();
+  await new Promise((resolve) => hosted.server.close(resolve));
+
   try {
     await offlinePage.reload({ waitUntil: 'load' });
     check('the map page loads with the network down',
@@ -1566,7 +1614,8 @@ if (!external) {
 }
 
 await browser.close();
-hosted?.server.close();
+// Already closed by the offline section when it ran; close() twice is an error.
+if (hosted?.server.listening) hosted.server.close();
 
 if (consoleErrors.length) {
   console.error('\nConsole errors:');
