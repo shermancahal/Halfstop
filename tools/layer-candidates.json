@@ -28,13 +28,6 @@
     "url": "https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services?f=pjson"
   },
   {
-    "id": "land:blm-sma-identify-query",
-    "note": "The closer route to BLM polygons: the surface-management service the public lands layer already uses. If its sublayer answers a bbox query with geometry, hatching becomes a styling decision and PAD-US stops mattering.",
-    "expect": "data",
-    "find": "\"(?:ADMIN_AGENCY_CODE|ADMIN_UNIT_NAME|ADMIN_DEPT_CODE)\"\\s*:\\s*\"?[^,\"}]{0,24}\"?",
-    "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_Cached_without_PriUnk/MapServer/0/query?where=1%3D1&outFields=*&geometry=-111.6%2C38.4%2C-111.4%2C38.6&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&returnGeometry=false&resultRecordCount=3&f=geojson"
-  },
-  {
     "id": "roads:mvum-service",
     "note": "What the MVUM service says it holds. The raster we draw is layers=show:1,2, but a click has to name a sublayer to identify against, and the field a road's class lives in is whatever this says it is. Printing the sublayer list and their fields is the whole of what is needed to design the panel.",
     "expect": "data",
@@ -80,336 +73,357 @@
     "id": "live:ky-aerial",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://kyraster.ky.gov/arcgis/rest/services/ImageServices/Ky_KYAPED_Phase3_3IN_WGS84WM/ImageServer?f=pjson"
   },
   {
     "id": "live:ky-hillshade",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://kyraster.ky.gov/arcgis/rest/services/ElevationServices/Ky_DEM_KYAPED_5FT_MultiDirectionalHillshade/ImageServer?f=pjson"
   },
   {
     "id": "live:wv-aerial",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services.wvgis.wvu.edu/arcgis/rest/services/Imagery_BaseMaps_EarthCover/wv_imagery_WVGISTC_leaf_off_mosaic/MapServer?f=pjson"
   },
   {
     "id": "live:wv-hillshade",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services.wvgis.wvu.edu/arcgis/rest/services/Elevation/wv_hillshade_1m_mosaic/MapServer?f=pjson"
   },
   {
     "id": "live:tn-aerial",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://tnmap.tn.gov/arcgis/rest/services/BASEMAPS/IMAGERY_WEB_MERCATOR/MapServer?f=pjson"
   },
   {
     "id": "live:ky-byways",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Scenic_Byways_WGS84WM/MapServer?f=pjson"
   },
   {
     "id": "live:ky-trails",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Recreational_Trails_WGS84WM/MapServer?f=pjson"
   },
   {
     "id": "live:ky-forests",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_StateForests_WGS84WM/MapServer?f=pjson"
   },
   {
     "id": "live:ky-hunting",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Public_Hunting_Areas_WGS84WM/MapServer?f=pjson"
   },
   {
     "id": "live:mi-roads",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services3.arcgis.com/Jdnp1TjADvSDxMAX/arcgis/rest/services/DNR_ROADS/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:mi-campgrounds",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services3.arcgis.com/Jdnp1TjADvSDxMAX/ArcGIS/rest/services/dnrParksAndRecreation/FeatureServer/3?f=pjson"
   },
   {
     "id": "live:tn-wma",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://tnmap.tn.gov/arcgis/rest/services/ENVIRONMENTAL/TWRA/MapServer?f=pjson"
   },
   {
     "id": "live:tva-dispersed",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services.arcgis.com/w8auYAijfGK1Mydj/arcgis/rest/services/Dispersed_Recreation_Areas/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:pa-parks",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://www.gis.dcnr.pa.gov/agsprod/rest/services/Parks/State_Parks/MapServer?f=pjson"
   },
   {
     "id": "live:vt-routes",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://anrmaps.vermont.gov/arcgis/rest/services/map_services/MAP_ANR_ANRATLASFPR_WM_NOCACHE/MapServer?f=pjson"
   },
   {
     "id": "live:md-roads",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services.arcgis.com/njFNhDsUCentVYJW/arcgis/rest/services/State_Park_Forest_Recreation_Maintained_Roads/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:mt-parks",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services3.arcgis.com/Cdxz8r11hT0MGzg1/arcgis/rest/services/FWPLND_STATEPARKS/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:nj-trails",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://mapsdep.nj.gov/arcgis/rest/services/Applications/DEP_Trails/MapServer?f=pjson"
   },
   {
     "id": "live:or-parks",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://gis.prd.state.or.us/arcgis/rest/services/Land_Ownership/LO_STATE_PARK_STATUS/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:tx-wma",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services1.arcgis.com/1mtXwieMId59thmg/arcgis/rest/services/WMA_Boundaries_4PublicDistribution/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:wa-trails",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services5.arcgis.com/4LKAHwqnBooVDUlX/arcgis/rest/services/Trails/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:wi-closures",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services5.arcgis.com/Ul9AyFFeFTjf08DW/arcgis/rest/services/WI_Park_Closures_PUBLIC_VIEW/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:oh-lands",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://gis.ohiodnr.gov/arcgis/rest/services/OIT_Services/ODNR_ODNR_Lands_External/MapServer?f=pjson"
   },
   {
     "id": "live:ia-recreation",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://programs.iowadnr.gov/geospatial/rest/services/Recreation/Recreation/MapServer?f=pjson"
   },
   {
     "id": "live:fl-forests",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services3.arcgis.com/XYg2eF8UuxZVuVmF/arcgis/rest/services/Florida_State_Forests/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:ct-deep",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services1.arcgis.com/FjPcSmEFuDYlIdKC/arcgis/rest/services/Connecticut_DEEP_Property/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:ma-openspace",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://gis.eea.mass.gov/server/rest/services/Protected_and_Recreational_OpenSpace_Polygons/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:hi-trails",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://geodata.hawaii.gov/arcgis/rest/services/Terrestrial/MapServer?f=pjson"
   },
   {
     "id": "live:in-trails",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://gisdata.in.gov/server/rest/services/Hosted/Trails_AGOL_RO/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:de-parks",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services2.arcgis.com/JSw5FPLGACZknOZv/arcgis/rest/services/State_Park_Boundaries_Consolidated/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:co-cpw",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services5.arcgis.com/ttNGmDvKQA7oeDQ3/arcgis/rest/services/CPWAdminData/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:ut-parks",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services.arcgis.com/ZzrwjTRez6FJiOq4/arcgis/rest/services/Utah_State_Park_Management_Areas/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:va-trails",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services1.arcgis.com/PxUNqSbaWFvFgHnJ/arcgis/rest/services/SP_Trails/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:ok-recreation",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services6.arcgis.com/RBtoEUQ2lmN0K3GY/arcgis/rest/services/OklahomaRecreationalAreas/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:sc-parks",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services.arcgis.com/uj05BKeH0fZwqTNZ/arcgis/rest/services/SC_State_Parks/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:nd-forest",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services1.arcgis.com/GOcSXpzwBHyk2nog/arcgis/rest/services/NDGISHUB_State_Forest/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:wy-parks",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services6.arcgis.com/cWzdqIyxbijuhPLw/arcgis/rest/services/StateParkBoundaries/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:sd-parks",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services2.arcgis.com/1sM9tpOC8N7GGkbw/arcgis/rest/services/South_Dakota_State_Parks/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:ms-parks",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services3.arcgis.com/OYP7N6mAJJCyH6hd/arcgis/rest/services/Mississippi_State_Parks_and_WMAs/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:ar-parks",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services5.arcgis.com/bPacKTm9cauMXVfn/arcgis/rest/services/Arkansas_State_Parks/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:ne-parks",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services5.arcgis.com/IOshH1zLrIieqrNk/arcgis/rest/services/Park_Areas/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:me-bpl",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services1.arcgis.com/RbMX0mRVOFNTdLzd/arcgis/rest/services/BPL_Properties_Points_for_MaineFoliage/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:mi-orv",
     "note": "Health check for a shipped layer, on the index its service named.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services3.arcgis.com/Jdnp1TjADvSDxMAX/arcgis/rest/services/DNR_ORV_Scramble_Areas/FeatureServer/1?f=pjson"
   },
   {
     "id": "live:nc-trails",
     "note": "Health check for a shipped layer, on the index its service named.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services6.arcgis.com/nRIB86xC7kq6wavB/arcgis/rest/services/State_Trails/FeatureServer/1?f=pjson"
   },
   {
     "id": "live:ny-hunting",
     "note": "Health check for a shipped layer, on the index its service named.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services.arcgis.com/1xFZPtKn1wKC6POA/arcgis/rest/services/NY_State_Parks_Hunting_Areas_2_view/FeatureServer/1?f=pjson"
   },
   {
     "id": "live:id-routes",
     "note": "Health check for a shipped layer, on the index its service named.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services1.arcgis.com/CNPdEkvnGl65jCX8/arcgis/rest/services/Idaho_Recreation_Trails/FeatureServer/128?f=pjson"
   },
   {
     "id": "live:id-closures",
     "note": "Health check for a shipped layer, on the index its service named.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services1.arcgis.com/CNPdEkvnGl65jCX8/arcgis/rest/services/Idaho_Recreation_Trails/FeatureServer/127?f=pjson"
   },
   {
     "id": "live:id-restrictions",
     "note": "Health check for a shipped layer, on the index its service named.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services1.arcgis.com/CNPdEkvnGl65jCX8/arcgis/rest/services/Idaho_Recreation_Trails/FeatureServer/123?f=pjson"
+  },
+  {
+    "id": "land:lookup-blm",
+    "note": "The identify request exactly as assets/js/lib/lookup.js builds it - explicit JSON point geometry, esriGeometryPoint, f=json. The probe this replaces asked a cached tile service for a feature query using an envelope, which is not something the app has ever done, and reported a failure that was the probe's own. A health check that tests a path the product does not take is worse than no check: it produces alarms nobody can act on and confidence nobody earned.",
+    "expect": "data",
+    "find": "\"(?:attributes|ADMIN_UNIT_NAME|ADMIN_AGENCY_CODE|Own_Name|Loc_Nm|OWNERCLASSIFICATION|FORESTNAME)\"\\s*:\\s*\"?[^\",}]{0,50}\"?",
+    "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_LimitedScale/MapServer/0/query?geometry=%7B%22x%22%3A-111.5%2C%22y%22%3A38.5%2C%22spatialReference%22%3A%7B%22wkid%22%3A4326%7D%7D&geometryType=esriGeometryPoint&spatialRel=esriSpatialRelIntersects&where=1%3D1&outFields=*&returnGeometry=false&f=json"
+  },
+  {
+    "id": "land:lookup-padus",
+    "note": "The identify request exactly as assets/js/lib/lookup.js builds it - explicit JSON point geometry, esriGeometryPoint, f=json. The probe this replaces asked a cached tile service for a feature query using an envelope, which is not something the app has ever done, and reported a failure that was the probe's own. A health check that tests a path the product does not take is worse than no check: it produces alarms nobody can act on and confidence nobody earned.",
+    "expect": "data",
+    "find": "\"(?:attributes|ADMIN_UNIT_NAME|ADMIN_AGENCY_CODE|Own_Name|Loc_Nm|OWNERCLASSIFICATION|FORESTNAME)\"\\s*:\\s*\"?[^\",}]{0,50}\"?",
+    "url": "https://services.arcgis.com/v01gqwM5QqNysAAi/ArcGIS/rest/services/PADUS4_0Fee/FeatureServer/0/query?geometry=%7B%22x%22%3A-111.5%2C%22y%22%3A38.5%2C%22spatialReference%22%3A%7B%22wkid%22%3A4326%7D%7D&geometryType=esriGeometryPoint&spatialRel=esriSpatialRelIntersects&where=1%3D1&outFields=*&returnGeometry=false&f=json"
+  },
+  {
+    "id": "land:lookup-usfs",
+    "note": "The identify request exactly as assets/js/lib/lookup.js builds it - explicit JSON point geometry, esriGeometryPoint, f=json. The probe this replaces asked a cached tile service for a feature query using an envelope, which is not something the app has ever done, and reported a failure that was the probe's own. A health check that tests a path the product does not take is worse than no check: it produces alarms nobody can act on and confidence nobody earned.",
+    "expect": "data",
+    "find": "\"(?:attributes|ADMIN_UNIT_NAME|ADMIN_AGENCY_CODE|Own_Name|Loc_Nm|OWNERCLASSIFICATION|FORESTNAME)\"\\s*:\\s*\"?[^\",}]{0,50}\"?",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_BasicOwnership_01/MapServer/0/query?geometry=%7B%22x%22%3A-88.7%2C%22y%22%3A37.5%2C%22spatialReference%22%3A%7B%22wkid%22%3A4326%7D%7D&geometryType=esriGeometryPoint&spatialRel=esriSpatialRelIntersects&where=1%3D1&outFields=*&returnGeometry=false&f=json"
   }
 ]
