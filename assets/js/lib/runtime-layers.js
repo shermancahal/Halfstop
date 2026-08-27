@@ -29,6 +29,8 @@ export const IS_POLY = ['match', ['geometry-type'], ['Polygon', 'MultiPolygon'],
 export const IS_POINT = ['match', ['geometry-type'], ['Point', 'MultiPoint'], true, false];
 
 const BODY_COLOUR = ['match', ['get', 'body'], 'moon', '#3d6ea8', 'core', '#7b4fa8', '#d87708'];
+/* The same three, darkened until they hold up as text over the map. */
+const LABEL_COLOUR = ['match', ['get', 'body'], 'moon', '#274b75', 'core', '#57327d', '#8f5206'];
 const LINE_WIDTH = ['interpolate', ['linear'], ['zoom'], 8, 4.2, 14, 6];
 
 /** Sources every runtime layer needs, all of them initially empty. */
@@ -125,7 +127,10 @@ export function runtimeLayers({ labels = true } = {}) {
     filter: ['==', ['get', 'kind'], 'track'],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': '#7b4fa8',
+      // By body, not fixed violet: the eclipse panel draws the moon's path
+      // through the same layer, and a moon track in the core's colour would
+      // disagree with both the spoke pointing at it and the key beside it.
+      'line-color': BODY_COLOUR,
       'line-width': 1.6,
       'line-dasharray': [1.5, 2],
       'line-opacity': 0.6,
@@ -147,7 +152,7 @@ export function runtimeLayers({ labels = true } = {}) {
       'text-padding': 6,
     },
     paint: {
-      'text-color': '#57327d',
+      'text-color': LABEL_COLOUR,
       'text-halo-color': 'rgba(255,255,255,0.95)',
       'text-halo-width': 2,
     },
@@ -220,7 +225,7 @@ export function runtimeLayers({ labels = true } = {}) {
       'text-allow-overlap': false,
     },
     paint: {
-      'text-color': ['match', ['get', 'body'], 'moon', '#274b75', 'core', '#57327d', '#8f5206'],
+      'text-color': LABEL_COLOUR,
       'text-halo-color': 'rgba(255,255,255,0.95)',
       'text-halo-width': 2.2,
     },

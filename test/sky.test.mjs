@@ -31,6 +31,7 @@ import {
   nightQuality,
   milkyWayGround,
   milkyWayTrack,
+  moonTrack,
 } from '../assets/js/lib/sky.js';
 
 /* Places chosen for what they prove, not for sentiment. */
@@ -626,6 +627,41 @@ test('milky way: the track walks westward across the night', () => {
     assert.ok(point.when instanceof Date, 'every point carries its own time');
     assert.ok(Math.abs(point.position[1] - at[1]) < 0.6, 'and lands near the observer');
   }
+});
+
+test('moon: a track follows the moon, not the core', () => {
+  /*
+   * The eclipse panel draws this. If it quietly returned the galactic core's
+   * path — the two share a projection and a shape of return value — the
+   * picture would be plausible, wrong, and about the wrong object.
+   */
+  const at = [-84.28, 35.96];
+  const from = new Date(Date.UTC(2026, 6, 27, 3, 0, 0));
+  const to = new Date(Date.UTC(2026, 6, 27, 5, 0, 0));
+  const track = moonTrack(at, from, to, { maxKm: 40 });
+
+  assert.ok(track.length > 5, 'two hours at the five-minute default is two dozen points');
+  for (const point of track) {
+    const truth = moonPosition(point.when, at[1], at[0]);
+    assert.ok(Math.abs(point.azimuth - truth.azimuth) < 1e-6,
+      'every point is where the moon is at that moment');
+    assert.ok(point.altitude > 0, 'points below the horizon are not on the track');
+  }
+});
+
+test('moon: a track can start exactly where it is told to', () => {
+  // The Milky Way's track anchors samples to clean quarter-hours so the hour
+  // labels along it are whole hours. An eclipse begins at 23:07 and lasts
+  // ninety minutes; anchoring would throw away the first sample and start the
+  // drawing after the eclipse had begun.
+  const at = [-84.28, 35.96];
+  const from = new Date(Date.UTC(2026, 6, 27, 3, 7, 0));
+  const to = new Date(Date.UTC(2026, 6, 27, 4, 37, 0));
+  const anchored = moonTrack(at, from, to, { maxKm: 40 });
+  const exact = moonTrack(at, from, to, { maxKm: 40, anchor: false });
+
+  assert.equal(exact[0].when.valueOf(), from.valueOf(), 'unanchored starts on the moment given');
+  assert.ok(anchored[0].when.valueOf() > from.valueOf(), 'anchored rounds up to the clean step');
 });
 
 test('milky way: a track needs a real window, and says so quietly', () => {

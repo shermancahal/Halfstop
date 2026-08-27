@@ -43,7 +43,7 @@ import {
 import {
   sunTimes, sunPosition, moonTimes, moonPosition, moonIllumination,
   lightPhases, lightDirections, currentDirections, destinationPoint, milkyWayGround, milkyWayTrack,
-  milkyWayNight, bestMilkyWayNights, nightQuality, galacticCentre,
+  moonTrack, milkyWayNight, bestMilkyWayNights, nightQuality, galacticCentre,
 } from './lib/sky.js';
 import { activeAlerts, describeMotion, alertsToGeoJSON } from './lib/storms.js';
 import {
@@ -2351,7 +2351,7 @@ function skyPanels(position, date, phases) {
   else if (open === 'moon') moonPanel(body, date, lat, lon);
   else if (open === 'milkyway') milkyWayPanel(body, date, lat, lon);
   else if (open === 'aurora') auroraPanel(body, [lon, lat]);
-  else if (open === 'eclipse') eclipsePanel(body, date, lat, lon);
+  else if (open === 'eclipse') eclipsePanel(body, position, date);
   else if (open === 'lines') linesPanel(body, position, date);
 
   return open ? [row, body] : [row];
@@ -2370,7 +2370,8 @@ const longDate = (when) => when.toLocaleDateString(undefined, {
   weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
 });
 
-function eclipsePanel(body, date, lat, lon) {
+function eclipsePanel(body, position, date) {
+  const [lon, lat] = position;
   const eclipses = lunarEclipses(date, { count: 4 });
   if (!eclipses.length) {
     body.append(el('p', { class: 'hint', text: 'No lunar eclipse in the next dozen years, which cannot be right — please report this.' }));
@@ -2429,6 +2430,7 @@ function eclipsePanel(body, date, lat, lon) {
   })));
 
   body.append(el('p', { class: `eclipse-verdict is-${visible.state}`, text: visible.text }));
+  body.append(eclipseMapToggle(position, next, visible));
   body.append(el('p', { class: 'source-note', text: describeEclipse(next) }));
 
   if (later.length) {
@@ -2439,6 +2441,74 @@ function eclipsePanel(body, date, lat, lon) {
       el('span', { class: 'eclipse-later-kind', text: entry.kind }),
     ]))));
   }
+}
+
+/**
+ * Put the eclipse on the map, and a slider across it.
+ *
+ * The strip above says when; this says where to stand and which way to face,
+ * which is the half a table cannot answer — the moon will be 40° further west
+ * by the time it leaves the shadow, and whether that is over the ridge behind
+ * you is a question about this valley.
+ *
+ * It reuses the same drawing the "On the map" tab uses rather than adding a
+ * second one, so switching it on replaces the Milky Way lines instead of
+ * layering another six spokes over them. One sky on the map at a time.
+ */
+function eclipseMapToggle(position, eclipse, visible) {
+  const [lon, lat] = position;
+  const wrap = el('div', { class: 'eclipse-map' });
+
+  if (visible.state === 'no') {
+    wrap.append(el('p', {
+      class: 'hint', style: 'margin:0',
+      text: 'Nothing to draw here — the moon is below the horizon for the whole eclipse.',
+    }));
+    return wrap;
+  }
+
+  // The whole event, outer shadow to outer shadow: the partial phase is what
+  // you photograph, but the moon is already dimming before it and the slider
+  // should not stop short of what the strip above lists.
+  const window = eclipse.penumbral || eclipse.partial
+    || { from: new Date(eclipse.greatest.getTime() - 3600e3), to: new Date(eclipse.greatest.getTime() + 3600e3) };
+
+  /*
+   * Three marks, not five.
+   *
+   * The strip names every contact because it has a row per chip. The slider
+   * has one track a few hundred pixels wide, and five labels along it overlap
+   * into an unreadable smear — so it takes the outer bounds of the deepest
+   * phase and the moment of greatest eclipse, in the strip's own words.
+   */
+  const deep = eclipse.total || eclipse.partial;
+  const marks = [
+    deep ? { at: deep.from.valueOf(), label: eclipse.total ? 'total' : 'first bite' } : null,
+    { at: eclipse.greatest.valueOf(), label: 'greatest' },
+    deep ? { at: deep.to.valueOf(), label: eclipse.total ? 'total ends' : 'last bite' } : null,
+  ].filter(Boolean);
+
+  const active = state.lightLines?.key === lineKey(position, 'eclipse');
+  if (active) wrap.append(nightScrubber(position, eclipse.greatest));
+
+  const button = labelledButton(
+    active ? icons.eyeOff : icons.pin,
+    active ? 'Hide the eclipse' : 'Draw the eclipse on the map',
+    {
+      tone: active ? 'secondary' : 'primary',
+      onclick: () => toggleLightLines(
+        position,
+        currentDirections(eclipse.greatest, lat, lon).filter((entry) => entry.body === 'moon'),
+        eclipse.greatest,
+        { mode: 'eclipse', window, peak: eclipse.greatest, marks },
+      ),
+    },
+  );
+  button.classList.add('sky-lines-toggle');
+  button.dataset.toggle = 'eclipse-lines';
+  wrap.append(button);
+
+  return wrap;
 }
 
 /** Whether this place can see it, said as a sentence rather than a flag. */
@@ -2470,43 +2540,75 @@ function eclipseVisibility(eclipse, lat, lon) {
  * already in, so the picture is the arithmetic rather than an impression of
  * it: a grazing eclipse looks grazing and a deep one looks deep.
  */
+let eclipseClipId = 0;
+
+/**
+ * The moon's face, with the earth's shadow across it.
+ *
+ * The first version drew the two shadow circles with the moon as a dot inside
+ * them — a diagram of the geometry rather than a picture of the event, and at
+ * 28px an unreadable one. This draws what you would actually see: the lit disc,
+ * the curved edge of the umbra crossing it, and the shadowed part gone copper.
+ *
+ * The curve falls out for free by clipping the shadow circle to the moon disc,
+ * which is also why it is correct rather than stylised — the terminator during
+ * an eclipse IS an arc of the umbra, and that is the detail that tells a lunar
+ * eclipse apart from a crescent moon.
+ *
+ * Everything is scaled to moon radii, so the moon fills the frame at any size
+ * and the shadow is as big relative to it as it really is: about 2.7 times the
+ * moon's own radius, which is why totality lasts an hour.
+ */
 function eclipseDiagram(eclipse, { size = 78, at = null, plain = false } = {}) {
-  const scale = size / 3.0;
-  const centre = size / 2;
   const shape = shadowGeometry(eclipse);
+  const moonRadius = size * 0.34;
+  const perRadius = moonRadius / shape.moon;   // pixels per earth radius
+  const cx = size / 2;
+  const cy = size / 2;
 
   /*
-   * Where the moon is at this instant, along the chord it travels.
+   * How far the shadow's axis is from the moon's centre at this moment.
    *
-   * At any contact the distance from the shadow axis to the moon's centre is
-   * known — it is the contact distance itself — and gamma is the closest it
-   * ever comes. The along-track offset is the remaining leg of that right
-   * triangle, so the moon tracks across the shadow instead of bobbing towards
-   * the middle of it. Signed by whether the moment is before or after
-   * greatest, so the row reads left to right.
+   * At a contact that distance is the contact distance itself; between them
+   * the closest approach is gamma. The along-track leg is the remaining side
+   * of that right triangle, signed by whether the moment is before or after
+   * greatest so a row of these reads left to right.
    */
   let along = 0;
   if (at) {
-    const contact = (() => {
-      const ms = Math.abs(at.getTime() - eclipse.greatest.getTime()) / 60000;
-      if (eclipse.total && Math.abs(ms - eclipse.total.minutes / 2) < 0.5) return shape.umbra - shape.moon;
-      if (eclipse.partial && Math.abs(ms - eclipse.partial.minutes / 2) < 0.5) return shape.umbra + shape.moon;
-      if (eclipse.penumbral && Math.abs(ms - eclipse.penumbral.minutes / 2) < 0.5) return shape.penumbra + shape.moon;
-      return Math.abs(eclipse.gamma);
-    })();
+    const ms = Math.abs(at.getTime() - eclipse.greatest.getTime()) / 60000;
+    const near = (phase, radius) => (phase && Math.abs(ms - phase.minutes / 2) < 0.5 ? radius : null);
+    const contact = near(eclipse.total, shape.umbra - shape.moon)
+      ?? near(eclipse.partial, shape.umbra + shape.moon)
+      ?? near(eclipse.penumbral, shape.penumbra + shape.moon)
+      ?? Math.abs(eclipse.gamma);
     const leg = Math.sqrt(Math.max(0, contact * contact - eclipse.gamma * eclipse.gamma));
     along = at < eclipse.greatest ? -leg : leg;
   }
 
-  const cx = (centre + along * scale).toFixed(2);
-  const cy = (centre - eclipse.gamma * scale).toFixed(2);
+  /*
+   * The shadow moves and the moon stays put.
+   *
+   * The opposite of the physics — the moon is what travels — and the right way
+   * round for a picture of the moon, which is the thing being looked at. Left
+   * to right, because in the moon's own frame that is the way the shadow goes:
+   * the moon runs east into it, so the eastern limb is bitten first and the
+   * shadow finishes on the other side.
+   */
+  const shadowX = (cx + along * perRadius).toFixed(2);
+  const shadowY = (cy + eclipse.gamma * perRadius).toFixed(2);
+  const clip = `eclipse-clip-${eclipseClipId += 1}`;
 
   return el('div', {
     class: `eclipse-diagram${plain ? ' is-plain' : ''}`,
     html: `<svg viewBox="0 0 ${size} ${size}" role="img" aria-label="${eclipse.kind} lunar eclipse">
-      <circle cx="${centre}" cy="${centre}" r="${(shape.penumbra * scale).toFixed(2)}" class="eclipse-penumbra"/>
-      <circle cx="${centre}" cy="${centre}" r="${(shape.umbra * scale).toFixed(2)}" class="eclipse-umbra"/>
-      <circle cx="${cx}" cy="${cy}" r="${(shape.moon * scale).toFixed(2)}" class="eclipse-moon"/>
+      <defs><clipPath id="${clip}"><circle cx="${cx}" cy="${cy}" r="${moonRadius.toFixed(2)}"/></clipPath></defs>
+      <circle cx="${cx}" cy="${cy}" r="${moonRadius.toFixed(2)}" class="eclipse-face"/>
+      <g clip-path="url(#${clip})">
+        <circle cx="${shadowX}" cy="${shadowY}" r="${(shape.penumbra * perRadius).toFixed(2)}" class="eclipse-penumbra"/>
+        <circle cx="${shadowX}" cy="${shadowY}" r="${(shape.umbra * perRadius).toFixed(2)}" class="eclipse-umbra"/>
+      </g>
+      <circle cx="${cx}" cy="${cy}" r="${moonRadius.toFixed(2)}" class="eclipse-rim"/>
     </svg>`,
   });
 }
@@ -2826,10 +2928,20 @@ function bestNightsList(date, lat, lon, cover) {
  */
 function nightScrubber(position, date) {
   const [lon, lat] = position;
-  // Already computed when the lines went on. Sampling the whole night again
-  // here would be the second time for the same answer.
-  const night = state.lightLines?.night || milkyWayNight(date, lat, lon);
-  const span = night?.dark;
+
+  /*
+   * The window the slider covers, and what it is a window on.
+   *
+   * Normally the night's astronomical darkness, sampled once when the lines
+   * went on rather than on every drag. An eclipse brings its own window and
+   * its own subject: there is no point scrubbing eight hours of night to find
+   * ninety minutes of shadow, and reporting the galactic core's altitude while
+   * somebody drags across an eclipse would be a true number about the wrong
+   * object.
+   */
+  const eclipsing = state.lightLines?.mode === 'eclipse';
+  const night = state.lightLines?.night || (eclipsing ? null : milkyWayNight(date, lat, lon));
+  const span = state.lightLines?.window || night?.dark;
   if (!span) {
     return el('p', {
       class: 'hint', style: 'margin:0 0 8px',
@@ -2839,7 +2951,9 @@ function nightScrubber(position, date) {
 
   const from = span.from.valueOf();
   const to = span.to.valueOf();
-  const peak = night.windowPeak?.when?.valueOf() ?? (from + to) / 2;
+  const peak = state.lightLines?.window
+    ? (state.lightLines.peak?.valueOf() ?? (from + to) / 2)
+    : (night?.windowPeak?.when?.valueOf() ?? (from + to) / 2);
 
   /*
    * The moments worth knowing while dragging.
@@ -2851,17 +2965,20 @@ function nightScrubber(position, date) {
    * where it would claim something happens at dusk that does not.
    */
   const inWindow = (value) => Number.isFinite(value) && value >= from && value <= to;
-  const marks = [
-    night.windowPeak?.when ? { at: night.windowPeak.when.valueOf(), label: 'peak' } : null,
-    night.moonless?.from ? { at: night.moonless.from.valueOf(), label: 'moon down' } : null,
-    night.moonless?.to ? { at: night.moonless.to.valueOf(), label: 'moon up' } : null,
-  ].filter((mark) => mark && inWindow(mark.at)).sort((a, b) => a.at - b.at);
+  const marks = (state.lightLines?.marks || [
+    night?.windowPeak?.when ? { at: night.windowPeak.when.valueOf(), label: 'peak' } : null,
+    night?.moonless?.from ? { at: night.moonless.from.valueOf(), label: 'moon down' } : null,
+    night?.moonless?.to ? { at: night.moonless.to.valueOf(), label: 'moon up' } : null,
+  ]).filter((mark) => mark && inWindow(mark.at)).sort((a, b) => a.at - b.at);
 
   const readout = el('span', { class: 'scrub-time' });
   const show = (at) => {
     const when = new Date(at);
-    const core = galacticCentre(when, lat, lon);
-    readout.textContent = `${clockTime(when)} · core ${Math.round(core.altitude)}° at ${Math.round(core.azimuth)}°`;
+    const body = eclipsing ? moonPosition(when, lat, lon) : galacticCentre(when, lat, lon);
+    const name = eclipsing ? 'moon' : 'core';
+    readout.textContent = when && body.altitude > 0
+      ? `${clockTime(when)} · ${name} ${Math.round(body.altitude)}° at ${Math.round(body.azimuth)}°`
+      : `${clockTime(when)} · ${name} below the horizon`;
   };
 
   const now = Date.now();
@@ -2869,7 +2986,7 @@ function nightScrubber(position, date) {
     class: 'scrub-now', type: 'button',
     text: 'Now',
     title: now < from || now > to
-      ? 'Now is outside tonight\u2019s dark window — jumps to the nearest end'
+      ? `Now is outside ${eclipsing ? 'the eclipse' : 'tonight\u2019s dark window'} — jumps to the nearest end`
       : 'Back to the present',
     onclick: () => {
       const at = Math.min(Math.max(Date.now(), from), to);
@@ -2882,8 +2999,11 @@ function nightScrubber(position, date) {
   const slider = el('input', {
     type: 'range', class: 'scrub-range',
     min: String(from), max: String(to), value: String(Math.min(Math.max(peak, from), to)),
-    step: String(5 * 60 * 1000),
-    'aria-label': 'Time tonight',
+    // A minute across an eclipse, five across a night. Five-minute steps snap
+    // off the marks the slider carries: greatest eclipse at 4:14 landed on
+    // 4:16, two minutes from the tick labelled "greatest" right beneath it.
+    step: String((eclipsing ? 1 : 5) * 60 * 1000),
+    'aria-label': eclipsing ? 'Time through the eclipse' : 'Time tonight',
     oninput: (event) => {
       const at = Number(event.target.value);
       show(at);
@@ -2896,7 +3016,7 @@ function nightScrubber(position, date) {
 
   return el('div', { class: 'scrubber' }, [
     el('div', { class: 'scrub-head' }, [
-      el('span', { class: 'scrub-label', text: 'Tonight' }),
+      el('span', { class: 'scrub-label', text: eclipsing ? 'Eclipse' : 'Tonight' }),
       readout,
       nowButton,
     ]),
@@ -2985,7 +3105,7 @@ function linesPanel(body, position, date) {
     return;
   }
 
-  const active = state.lightLines?.key === position.join(',');
+  const active = state.lightLines?.key === lineKey(position, 'sky');
   if (active) body.append(nightScrubber(position, date));
   // Built the same way as every other action in the app — a mark and a short
   // label — rather than as a bare word on a slab of colour.
@@ -3051,8 +3171,19 @@ function skyCell(label, value, note) {
  * the sun sets at 291° is not the same as seeing that 291° runs straight down
  * the valley, or straight into the ridge behind you.
  */
-function toggleLightLines(position, directions, date = new Date()) {
-  if (state.lightLines?.key === position.join(',')) {
+function toggleLightLines(position, directions, date = new Date(), options = {}) {
+  const { mode = 'sky' } = options;
+  /*
+   * Keyed by mode as well as place, so the two drawings replace each other.
+   *
+   * Keyed by position alone, switching the eclipse on at a pin that already had
+   * the Milky Way lines would have read as "off" — one press to clear, another
+   * to draw — and pressing the eclipse button would have hidden something else.
+   * With the mode in the key, the same-mode press still toggles and a
+   * different-mode press swaps, which is the point: one sky on the map at a
+   * time is what stops it being cluttered.
+   */
+  if (state.lightLines?.key === lineKey(position, mode)) {
     state.lightLines = null;
     refreshLightLines();
     renderDetailsTab();
@@ -3068,11 +3199,19 @@ function toggleLightLines(position, directions, date = new Date()) {
    * is worked out when the lines go on and carried with them.
    */
   const [lon, lat] = position;
-  const night = milkyWayNight(date, lat, lon);
-  state.lightLines = { key: position.join(','), position, directions, date, night };
+  // Only the Milky Way needs the night sampled: an eclipse carries its own
+  // window, and sampling a night to draw ninety minutes of shadow would be
+  // seven hundred positions computed for nothing.
+  const night = mode === 'sky' ? milkyWayNight(date, lat, lon) : null;
+  state.lightLines = {
+    key: lineKey(position, mode), mode, position, directions, date, night, ...options,
+  };
   refreshLightLines();
   renderDetailsTab();
 }
+
+/** Which sky is drawn, and where — see the comment in `toggleLightLines`. */
+const lineKey = (position, mode = 'sky') => `${position.join(',')}|${mode}`;
 
 /**
  * Move the drawn sky to another moment of the same night.
@@ -3096,10 +3235,19 @@ function setSkyTime(when) {
    * Way now" spoke frozen at the moment the lines were switched on while the
    * band above it moved, which is worse than not drawing it.
    */
-  state.lightLines.directions = [
-    ...lightDirections(when, lat, lon),
-    ...currentDirections(when, lat, lon),
-  ];
+  /*
+   * An eclipse asks about one body, so it is given one.
+   *
+   * Rise and set bearings for the sun are not wrong during an eclipse, they
+   * are simply not what is being watched, and drawing four more spokes across
+   * the map is the clutter this mode exists to avoid.
+   */
+  state.lightLines.directions = state.lightLines.mode === 'eclipse'
+    ? currentDirections(when, lat, lon).filter((entry) => entry.body === 'moon')
+    : [
+      ...lightDirections(when, lat, lon),
+      ...currentDirections(when, lat, lon),
+    ];
   refreshLightLines();
 }
 
@@ -3118,6 +3266,11 @@ function refreshLightLines() {
   // 40km is long enough to cross the horizon you can actually see from a ridge
   // and short enough not to sweep across the whole map at trip-planning zooms.
   const REACH = 40;
+
+  if (lines.mode === 'eclipse') {
+    source.setData({ type: 'FeatureCollection', features: eclipseFeatures(lines, REACH) });
+    return;
+  }
 
   const sky = milkyWayGround(lines.position, lines.date || new Date(), { maxKm: REACH });
 
@@ -3205,6 +3358,75 @@ function refreshLightLines() {
   }
 
   source.setData({ type: 'FeatureCollection', features });
+}
+
+/**
+ * The eclipse on the ground: where to face, and where that heads.
+ *
+ * Deliberately three things and not eight. The Milky Way drawing answers "what
+ * will the frame contain", which takes an arc, a track and four rise/set
+ * bearings; an eclipse answers "which way do I point the camera, and where
+ * will it have moved by the end", which takes the moon's bearing now and its
+ * path across the eclipse. Same projection as the band — along the bearing,
+ * pulled in as it climbs — so the spoke lands on the track rather than running
+ * past it.
+ */
+function eclipseFeatures(lines, reach) {
+  const [lon, lat] = lines.position;
+  const when = lines.date || new Date();
+  const features = [];
+
+  const project = (position) => destinationPoint(
+    lines.position, position.azimuth, reach * (1 - Math.min(90, Math.max(0, position.altitude)) / 90),
+  );
+
+  const window = lines.window;
+  const track = window ? moonTrack(lines.position, window.from, window.to, { maxKm: reach, anchor: false }) : [];
+  if (track.length > 1) {
+    features.push({
+      type: 'Feature',
+      properties: { body: 'moon', kind: 'track' },
+      geometry: { type: 'LineString', coordinates: track.map((point) => point.position) },
+    });
+  }
+
+  /*
+   * The contacts, not every hour.
+   *
+   * An hour mark suits a track that runs all night. This one runs for the
+   * length of the eclipse, and the moments along it worth naming are the ones
+   * the strip above already names — first bite, greatest, last bite — so the
+   * map and the panel say the same words about the same instants.
+   */
+  for (const mark of lines.marks || []) {
+    const at = new Date(mark.at);
+    if (at < window.from || at > window.to) continue;
+    const position = moonPosition(at, lat, lon);
+    if (position.altitude <= 0) continue;
+    features.push({
+      type: 'Feature',
+      properties: { body: 'moon', kind: 'hour', label: `${mark.label} ${clockTime(at)}` },
+      geometry: { type: 'Point', coordinates: project(position) },
+    });
+  }
+
+  // Where it is at the scrubbed moment — the one line you can check by looking
+  // up. Below the horizon it is left undrawn rather than drawn at zero, where
+  // it would point along the ground at something you cannot see.
+  const now = moonPosition(when, lat, lon);
+  if (now.altitude > 0) {
+    features.push({
+      type: 'Feature',
+      properties: {
+        body: 'moon',
+        now: true,
+        label: `Moon ${Math.round(now.azimuth)}° · ${Math.round(now.altitude)}° up`,
+      },
+      geometry: { type: 'LineString', coordinates: [lines.position, project(now)] },
+    });
+  }
+
+  return features;
 }
 
 /* ---------------- offline regions ---------------- */

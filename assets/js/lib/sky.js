@@ -662,8 +662,33 @@ export function milkyWayGround([lon, lat], date, { maxKm = 40, minAltitude = 0, 
  *
  * @returns {{when: Date, altitude: number, azimuth: number, position: number[]}[]}
  */
-export function milkyWayTrack([lon, lat], from, to, {
-  maxKm = 40, stepMinutes = 15, minAltitude = 0,
+export function milkyWayTrack(origin, from, to, options = {}) {
+  return groundTrack(galacticCentre, origin, from, to, options);
+}
+
+/**
+ * The same, for the moon.
+ *
+ * Written as its own export rather than a flag because callers ask for one or
+ * the other and never for "a body": the eclipse panel wants the moon's path
+ * across the ninety minutes it is in shadow, and the Milky Way panel wants the
+ * core's across the night. A five-minute step by default, because an eclipse
+ * window is short enough that quarter-hours would draw four points.
+ */
+export function moonTrack(origin, from, to, options = {}) {
+  return groundTrack(moonPosition, origin, from, to, { stepMinutes: 5, ...options });
+}
+
+/**
+ * Sample one body's bearing over a span and project each sample to the ground.
+ *
+ * Shared by both tracks above because the projection is the part that has to
+ * agree: a track drawn with a different pull-in than the bearing that points
+ * at it would end somewhere the line does not, and the picture stops being
+ * readable as one thing.
+ */
+function groundTrack(bodyAt, [lon, lat], from, to, {
+  maxKm = 40, stepMinutes = 15, minAltitude = 0, anchor = true,
 } = {}) {
   const start = from?.valueOf?.();
   const end = to?.valueOf?.();
@@ -682,18 +707,18 @@ export function milkyWayTrack([lon, lat], from, to, {
    * every real time zone is a whole number of quarter-hours from UTC, so those
    * are clean local quarters too.
    */
-  const first = Math.ceil(start / step) * step;
+  const first = anchor ? Math.ceil(start / step) * step : start;
 
   for (let at = first; at <= end; at += step) {
     const when = new Date(at);
-    const core = galacticCentre(when, lat, lon);
-    if (core.altitude <= minAltitude) continue;
-    const height = Math.min(90, Math.max(0, core.altitude));
+    const position = bodyAt(when, lat, lon);
+    if (position.altitude <= minAltitude) continue;
+    const height = Math.min(90, Math.max(0, position.altitude));
     points.push({
       when,
-      altitude: core.altitude,
-      azimuth: core.azimuth,
-      position: destinationPoint([lon, lat], core.azimuth, maxKm * (1 - height / 90)),
+      altitude: position.altitude,
+      azimuth: position.azimuth,
+      position: destinationPoint([lon, lat], position.azimuth, maxKm * (1 - height / 90)),
     });
   }
   return points;

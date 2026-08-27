@@ -1912,13 +1912,19 @@ const eclipse = await page.evaluate(() => {
     verdict: panel.querySelector('.eclipse-verdict')?.textContent.trim() || '',
     stages: [...panel.querySelectorAll('.eclipse-chip-when')].map((n) => n.textContent.trim()),
     alts: [...panel.querySelectorAll('.eclipse-chip-alt')].map((n) => n.textContent.trim()),
-    // The moon's centre in each chip, so the sequence can be checked as a
+    // The shadow's centre in each chip, so the sequence can be checked as a
     // sequence rather than as five unrelated pictures.
-    moons: [...panel.querySelectorAll('.eclipse-chip .eclipse-moon')]
+    shadows: [...panel.querySelectorAll('.eclipse-chip .eclipse-umbra')]
       .map((n) => Number(n.getAttribute('cx'))),
-    circles: [...panel.querySelectorAll('.eclipse-now .eclipse-diagram circle')].map((n) => ({
-      r: Number(n.getAttribute('r')), cls: n.getAttribute('class'),
-    })),
+    // The clip path holds a copy of the moon disc; it is machinery rather than
+    // one of the drawn circles, and it has no class, which is how it is told
+    // apart here.
+    circles: [...panel.querySelectorAll('.eclipse-now .eclipse-diagram circle')]
+      .filter((n) => n.getAttribute('class'))
+      .map((n) => ({ r: Number(n.getAttribute('r')), cls: n.getAttribute('class') })),
+    // The curved terminator is the clip, not a drawn path: without it the
+    // shadow is a full circle sitting over the moon rather than across it.
+    clipped: !!panel.querySelector('.eclipse-now .eclipse-diagram g[clip-path]'),
   };
 });
 
@@ -1938,14 +1944,15 @@ check('and every stage says whether the moon is up at that moment',
 /*
  * The strip has to read as a sequence.
  *
- * Each chip draws the moon where it actually is at that moment — the offset
+ * Each chip draws the shadow where it actually is at that moment — the offset
  * along the chord — so the bite grows and shrinks across the row. If every
  * chip drew the same picture the strip would be decoration.
  */
-check('the moon moves left to right across the strip',
-  eclipse.moons.every((cx, i) => i === 0 || cx > eclipse.moons[i - 1]), true);
-check('and it is at its closest in the middle',
-  eclipse.moons.length >= 3 && Math.abs(eclipse.moons[Math.floor(eclipse.moons.length / 2)] - 14) < 1,
+check('the shadow crosses the face left to right across the strip',
+  eclipse.shadows.every((cx, i) => i === 0 || cx > eclipse.shadows[i - 1]), true);
+check('and it is centred on the moon in the middle',
+  eclipse.shadows.length >= 3
+    && Math.abs(eclipse.shadows[Math.floor(eclipse.shadows.length / 2)] - 14) < 1,
   true);
 
 /*
@@ -1954,13 +1961,96 @@ check('and it is at its closest in the middle',
  * The first version used Meeus's contact distances as the shadow radii; those
  * already contain a moon radius each, so both circles came out one moon too
  * big and a partial eclipse drew as a total one. It looked entirely plausible.
+ *
+ * The draw order is the picture: the lit face, then the two shadows clipped to
+ * it, then the rim over the top. Drawn in any other order the shadow is either
+ * buried under the face or spilled outside the disc.
  */
-const [penumbra, umbra, moon] = eclipse.circles;
-check('the diagram is drawn shadow, shadow, moon',
-  [penumbra.cls, umbra.cls, moon.cls],
-  ['eclipse-penumbra', 'eclipse-umbra', 'eclipse-moon']);
+const [face, penumbra, umbra, rim] = eclipse.circles;
+check('the diagram is drawn face, shadow, shadow, rim',
+  [face.cls, penumbra.cls, umbra.cls, rim.cls],
+  ['eclipse-face', 'eclipse-penumbra', 'eclipse-umbra', 'eclipse-rim']);
 check('the umbra sits inside the penumbra', umbra.r < penumbra.r, true);
-check('and the moon is smaller than the shadow it crosses', moon.r < umbra.r, true);
+check('and the moon is smaller than the shadow it crosses', face.r < umbra.r, true);
+check('the rim traces the face exactly', rim.r, face.r);
+check('and the shadows are clipped to the face', eclipse.clipped, true);
+
+/*
+ * The eclipse on the map, and the slider across it.
+ *
+ * Same drawing the "On the map" tab uses, deliberately: switching this on has
+ * to REPLACE the Milky Way lines rather than add six more spokes over them,
+ * because "it is cluttered with the drawing feature" is the reason this button
+ * exists at all.
+ */
+console.log('\nDrawing the eclipse on the map');
+
+/*
+ * Guarded, because which half of the planet sees the next eclipse is a fact
+ * about the calendar rather than about this code. Half the year the Smokies
+ * are on the wrong side of it, and a check that failed then would be reporting
+ * the date, not a bug — so an eclipse nobody here can see is checked for the
+ * one thing that is true of it: nothing is offered to draw.
+ */
+const eclipseToggle = page.locator('[data-toggle="eclipse-lines"]');
+if (/^Not from here/.test(eclipse.verdict)) {
+  check('an eclipse below the horizon here offers nothing to draw',
+    await eclipseToggle.count(), 0);
+} else {
+  check('the eclipse tab offers to draw it on the map', await eclipseToggle.count(), 1);
+
+  await eclipseToggle.first().click();
+  await page.waitForTimeout(500);
+
+  const drewEclipse = await page.evaluate(() => {
+    const panel = document.querySelector('.sky-panel');
+    const features = window.__map.getSource('light-directions')?._d?.features || [];
+    return {
+      label: panel.querySelector('[data-toggle="eclipse-lines"]')?.textContent.trim() || '',
+      scrubber: panel.querySelector('.scrub-label')?.textContent.trim() || '',
+      readout: panel.querySelector('.scrub-time')?.textContent.trim() || '',
+      marks: [...panel.querySelectorAll('.scrub-mark-label')].map((node) => node.textContent.trim()),
+      bodies: [...new Set(features.map((feature) => feature.properties.body))],
+      kinds: [...new Set(features.map((feature) => feature.properties.kind
+        || (feature.properties.now ? 'now' : 'bearing')))],
+    };
+  });
+
+  check('the button turns into its own off switch', /hide the eclipse/i.test(drewEclipse.label), true);
+  check('a slider appears, scaled to the eclipse rather than to the night',
+    drewEclipse.scrubber, 'Eclipse');
+  check('and it reports the moon, not the galactic core',
+    /moon/i.test(drewEclipse.readout), true);
+  check('greatest eclipse is marked along it', drewEclipse.marks.includes('greatest'), true);
+  check('and nothing is crowded onto it beyond the contacts',
+    drewEclipse.marks.length <= 3, true);
+  check('only the moon is drawn, so the map is not the Milky Way panel again',
+    drewEclipse.bodies, ['moon']);
+  // The track always; the contact marks and the "now" spoke only for the part
+  // of it the moon is actually above the horizon, which at a place that sees
+  // half an eclipse can be none of them.
+  check('as a path across the whole eclipse', drewEclipse.kinds.includes('track'), true);
+  check('and nothing on it that is not part of that picture',
+    drewEclipse.kinds.every((kind) => ['track', 'hour', 'now'].includes(kind)), true);
+
+  await page.locator('.sky-tab', { hasText: /On the map/ }).first().click();
+  await page.waitForTimeout(300);
+  check('the night-lines button reads as off, because the eclipse holds the map',
+    await page.locator('[data-toggle="sky-lines"]').first().innerText(),
+    'Draw the lines on the map');
+  await page.locator('[data-toggle="sky-lines"]').first().click();
+  await page.waitForTimeout(400);
+
+  const swapped = await page.evaluate(() => {
+    const features = window.__map.getSource('light-directions')?._d?.features || [];
+    return [...new Set(features.map((feature) => feature.properties.body))].sort();
+  });
+  check('and drawing the night lines replaces the eclipse rather than stacking on it',
+    swapped.includes('core'), true);
+
+  await page.locator('[data-toggle="sky-lines"]').first().click();
+  await page.waitForTimeout(300);
+}
 
 /*
  * Nothing may be wider than the screen, at any phone width.

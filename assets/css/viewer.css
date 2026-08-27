@@ -1178,13 +1178,27 @@ html, body { height: 100%; overflow: hidden; }
 }
 .eclipse-short { font-size: .82rem; color: var(--ink-on); opacity: .9; margin-top: 2px; }
 
-/* Drawn to scale in earth radii, so a grazing eclipse looks grazing. */
+/*
+ * The moon's face with the shadow across it, to scale in moon radii.
+ *
+ * The umbra is about 2.7 moon radii, which is why the terminator during an
+ * eclipse is a gentle arc rather than the sharp curve of a crescent — and that
+ * shallow curve is the thing that says "eclipse" rather than "phase".
+ */
 .eclipse-diagram { flex: none; width: 54px; height: 54px; }
 .eclipse-diagram svg { width: 100%; height: 100%; overflow: visible; }
-.eclipse-penumbra { fill: rgba(255, 255, 255, .13); }
-.eclipse-umbra { fill: rgba(0, 0, 0, .48); }
-.eclipse-moon { fill: #f0e7d6; }
-.eclipse-now.is-total .eclipse-moon { fill: #c4603a; }
+.eclipse-face { fill: #f2e8d4; }
+/* Penumbral shading is genuinely faint — most people cannot see it at all,
+   and a picture that shows it strongly promises something the sky will not. */
+.eclipse-penumbra { fill: rgba(40, 22, 14, .28); }
+/* The umbra is not black. The only light reaching the moon there is sunlight
+   bent through the whole thickness of the earth's atmosphere, which is why a
+   totally eclipsed moon is copper rather than invisible. */
+.eclipse-umbra { fill: #6d2c17; }
+.eclipse-now.is-total .eclipse-umbra { fill: #a8482a; }
+/* A thin warm rim, so the disc reads as lit rather than as a flat circle. */
+.eclipse-rim { fill: none; stroke: rgba(255, 214, 170, .5); stroke-width: 1; }
+.eclipse-chip .eclipse-rim { stroke-width: .7; }
 
 /* The stages, the way four days of weather are a strip. Each chip draws the
    moon where it actually is, so the bite grows and shrinks across the row. */
@@ -1207,9 +1221,7 @@ html, body { height: 100%; overflow: hidden; }
   color: var(--ink-3); text-align: center; line-height: 1.15;
   min-height: 2.3em; display: flex; align-items: center;
 }
-.eclipse-diagram.is-plain { width: 28px; height: 28px; }
-.eclipse-chip .eclipse-penumbra { fill: color-mix(in srgb, var(--ink-3) 24%, transparent); }
-.eclipse-chip .eclipse-umbra { fill: color-mix(in srgb, #241812 82%, transparent); }
+.eclipse-diagram.is-plain { width: 30px; height: 30px; }
 /* Never wrapped: "1:26 AM" breaking after the colon put the meridiem on its
    own line and made every chip a different height. */
 .eclipse-chip-time {
@@ -1225,6 +1237,18 @@ html, body { height: 100%; overflow: hidden; }
 .eclipse-verdict.is-yes { border-left-color: var(--pine); background: var(--pine-soft); color: var(--ink); }
 .eclipse-verdict.is-part { border-left-color: var(--warn); }
 .eclipse-verdict.is-no { border-left-color: var(--ink-3); }
+
+/*
+ * The map toggle and, once it is on, the slider across the eclipse.
+ *
+ * Grouped in a block of its own so the scrubber sits above its button rather
+ * than beside the verdict, and so the button keeps the full-width shape every
+ * other primary action in these panels has.
+ */
+.eclipse-map { display: grid; gap: 8px; margin: 0 0 4px; }
+/* The shared toggle rule carries its own bottom margin for the flow layout
+   of the lines panel; here the grid gap already spaces it. */
+.eclipse-map .sky-lines-toggle { margin-bottom: 0; }
 
 .eclipse-later-title {
   margin: 14px 0 6px; font-size: .64rem; font-weight: 600; letter-spacing: .08em;
