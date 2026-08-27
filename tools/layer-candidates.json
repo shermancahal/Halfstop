@@ -77,59 +77,73 @@
     "url": "https://gis.blm.gov/arcgis/rest/services/transportation/BLM_Natl_GTLF_Public_Display/MapServer/0?f=pjson"
   },
   {
-    "id": "wv:wvgis-root",
-    "note": "West Virginia state data, step one: what is on the server. The WVU GIS Technical Center runs the state's public services and MapWV draws from it. Printing the folder list and the top-level services is the whole of what is needed to name the imagery and lidar endpoints - guessing a service path and shipping it is how a switch ends up drawing nothing for months.",
+    "id": "wv:imagery-folder",
+    "note": "West Virginia round two. The root answered with folders, and Imagery_BaseMaps_EarthCover is where a state's orthoimagery lives. This asks that folder for its service names.",
     "expect": "data",
-    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]|\"name\"\\s*:\\s*\"[^\"]{0,64}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
-    "url": "https://services.wvgis.wvu.edu/arcgis/rest/services?f=pjson"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,72}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
+    "url": "https://services.wvgis.wvu.edu/arcgis/rest/services/Imagery_BaseMaps_EarthCover?f=pjson"
   },
   {
-    "id": "wv:mapwv-root",
-    "note": "West Virginia state data, step one: what is on the server. The other host MapWV is documented against, in case the WVU one has moved or is not the public face of it.",
+    "id": "wv:elevation-folder",
+    "note": "The same for West Virginia's Elevation folder, which is where a lidar hillshade would be published.",
     "expect": "data",
-    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]|\"name\"\\s*:\\s*\"[^\"]{0,64}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
-    "url": "https://mapwv.gov/arcgis/rest/services?f=pjson"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,72}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
+    "url": "https://services.wvgis.wvu.edu/arcgis/rest/services/Elevation?f=pjson"
   },
   {
-    "id": "oh:oit-root",
-    "note": "Ohio state data, step one: what is on the server. Ohio's OSIP orthoimagery and its statewide lidar are published by OGRIP through the state's IT hosting. Which hostname is current is exactly what cannot be confirmed from documentation, so both are asked.",
+    "id": "tn:basemaps-folder",
+    "note": "Tennessee round two. TNMap's root lists a BASEMAPS folder; the statewide aerial photography programme publishes there.",
     "expect": "data",
-    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]|\"name\"\\s*:\\s*\"[^\"]{0,64}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
-    "url": "https://gis1.oit.ohio.gov/arcgis/rest/services?f=pjson"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,72}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
+    "url": "https://tnmap.tn.gov/arcgis/rest/services/BASEMAPS?f=pjson"
   },
   {
-    "id": "oh:ogrip-root",
-    "note": "Ohio state data, step one: what is on the server. The other name the same services have appeared under.",
+    "id": "tn:elevation-folder",
+    "note": "The same for Tennessee's ELEVATION folder - the state flew statewide lidar, and a hillshade off it is the layer worth having.",
     "expect": "data",
-    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]|\"name\"\\s*:\\s*\"[^\"]{0,64}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
-    "url": "https://ogrip.oit.ohio.gov/arcgis/rest/services?f=pjson"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,72}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
+    "url": "https://tnmap.tn.gov/arcgis/rest/services/ELEVATION?f=pjson"
   },
   {
-    "id": "in:gisdata-root",
-    "note": "Indiana state data, step one: what is on the server. IndianaMap is the state's clearing house and publishes statewide orthoimagery and lidar derivatives. This asks its server what it holds rather than assuming a service name.",
+    "id": "in:hosted-folder",
+    "note": "Indiana round two. gisdata.in.gov answered but its root services are thematic rasters rather than imagery; Hosted is where the newer publications go.",
     "expect": "data",
-    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]|\"name\"\\s*:\\s*\"[^\"]{0,64}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
-    "url": "https://gisdata.in.gov/server/rest/services?f=pjson"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,72}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
+    "url": "https://gisdata.in.gov/server/rest/services/Hosted?f=pjson"
   },
   {
-    "id": "in:maps-indiana-root",
-    "note": "Indiana state data, step one: what is on the server. The university-hosted half of IndianaMap, which historically carried the imagery services.",
+    "id": "in:imagery-host",
+    "note": "The other half of IndianaMap: imagery is documented as living on its own host rather than in the clearing house. maps.indiana.edu did not resolve, so this asks the imagery hostname directly.",
     "expect": "data",
-    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]|\"name\"\\s*:\\s*\"[^\"]{0,64}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
-    "url": "https://maps.indiana.edu/arcgis/rest/services?f=pjson"
+    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]|\"name\"\\s*:\\s*\"[^\"]{0,72}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
+    "url": "https://imagery.indianamap.org/arcgis/rest/services?f=pjson"
   },
   {
-    "id": "tn:tnmap-root",
-    "note": "Tennessee state data, step one: what is on the server. Tennessee's statewide base mapping program publishes aerial imagery on a two-year cycle. TNMap is its public face; this asks what it actually serves.",
+    "id": "in:dnr-folder",
+    "note": "Indiana's DNR folder, in case the state's usable outdoor layers are there rather than under Hosted.",
     "expect": "data",
-    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]|\"name\"\\s*:\\s*\"[^\"]{0,64}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
-    "url": "https://tnmap.tn.gov/arcgis/rest/services?f=pjson"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,72}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
+    "url": "https://gisdata.in.gov/server/rest/services/DNR?f=pjson"
   },
   {
-    "id": "tn:tngis-root",
-    "note": "Tennessee state data, step one: what is on the server. The other hostname the same program has published under.",
+    "id": "oh:odot-root",
+    "note": "Ohio, second attempt. Both OGRIP hostnames are gone - one 404, one does not resolve - so this asks the Department of Transportation's server, which is the other public ArcGIS host the state runs.",
     "expect": "data",
-    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]|\"name\"\\s*:\\s*\"[^\"]{0,64}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
-    "url": "https://www.tngis.tn.gov/arcgis/rest/services?f=pjson"
+    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]|\"name\"\\s*:\\s*\"[^\"]{0,72}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
+    "url": "https://gis.dot.state.oh.us/arcgis/rest/services?f=pjson"
+  },
+  {
+    "id": "oh:geo-root",
+    "note": "And the geography-services hostname the state's imagery has also appeared under.",
+    "expect": "data",
+    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]|\"name\"\\s*:\\s*\"[^\"]{0,72}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
+    "url": "https://geo.oit.ohio.gov/arcgis/rest/services?f=pjson"
+  },
+  {
+    "id": "oh:ogrip-agol",
+    "note": "If Ohio publishes through ArcGIS Online rather than its own server, its organisation's service directory is where the imagery is. This asks whether that organisation id answers at all.",
+    "expect": "data",
+    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]|\"name\"\\s*:\\s*\"[^\"]{0,72}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
+    "url": "https://services.arcgis.com/Wxa9dEwHIRt3Y6FR/arcgis/rest/services?f=pjson"
   }
 ]

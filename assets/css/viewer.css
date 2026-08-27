@@ -690,6 +690,9 @@ html, body { height: 100%; overflow: hidden; }
      its own close button, so neither is needed while it is open. */
   .app.is-panel-open .map-quick-controls,
   .app.is-panel-open .panel-toggle { display: none; }
+  /* The panel covers the map at this width, so a search bar floating over it
+     is a control for something nobody can see. */
+  .app.is-panel-open .map-search { display: none; }
 
   .panel { width: min(92vw, 380px); box-shadow: var(--shadow-lg); }
 
