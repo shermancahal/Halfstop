@@ -88,6 +88,15 @@ const NOAA_ATTRIBUTION = 'Forecast data © <a href="https://www.weather.gov/">NO
  * Mercator on purpose so a web map can use them directly.
  */
 const KY_RASTER = 'https://kyraster.ky.gov/arcgis/rest/services';
+/* West Virginia's public services are run by the WVU GIS Technical Center,
+   which is what MapWV draws from. mapwv.gov itself answers 404 to the service
+   directory; this host answers with CORS open. */
+const WV_GIS = 'https://services.wvgis.wvu.edu/arcgis/rest/services';
+const WV_ATTRIBUTION = 'Imagery and elevation \u00a9 <a href="https://wvgis.wvu.edu/">WV GIS Technical Center</a>'
+  + ' / West Virginia University';
+/* Tennessee's statewide base mapping programme, through TNMap. */
+const TN_GIS = 'https://tnmap.tn.gov/arcgis/rest/services';
+const TN_ATTRIBUTION = 'Imagery \u00a9 <a href="https://www.tn.gov/finance/sts-gis.html">Tennessee STS GIS</a>';
 const KY_ATTRIBUTION = 'Imagery and elevation © <a href="https://kyfromabove.ky.gov/">KyFromAbove</a>'
   + ' / Commonwealth of Kentucky';
 
@@ -968,6 +977,83 @@ export const OVERLAYS = [
     enabled: false,
     attribution: KY_ATTRIBUTION,
   },
+  /*
+   * West Virginia's own data.
+   *
+   * Leaf-off rather than the state's NAIP mosaic, which also answers and is
+   * also good: NAIP is flown in summer, and summer over West Virginia is a
+   * green ceiling. The leaf-off mosaic shows the roadbed under the canopy,
+   * which is the entire reason to look at aerial photography over a forest.
+   *
+   * These are MapServers, so they export through `export` rather than the
+   * ImageServer's `exportImage` — the same trap the Kentucky block notes in
+   * reverse. Probed over Canaan Valley, because a West Virginia service is
+   * correctly blank in Tennessee and the default probe tile would call every
+   * one of them empty.
+   */
+  {
+    id: 'wv-aerial',
+    at: [-79.42, 39.06],
+    states: ['WV'],
+    name: 'Aerial, leaf-off',
+    description: 'Flown with the leaves down, so old grades, benches and roadbeds show '
+      + 'through what is a green ceiling in summer imagery.',
+    tiles: [`${WV_GIS}/Imagery_BaseMaps_EarthCover/wv_imagery_WVGISTC_leaf_off_mosaic/MapServer/export${ESRI_IMAGE}`],
+    tileSize: 256,
+    maxzoom: 18,
+    opacity: 1,
+    enabled: false,
+    attribution: WV_ATTRIBUTION,
+  },
+  {
+    id: 'wv-hillshade',
+    at: [-79.42, 39.06],
+    states: ['WV'],
+    name: 'Lidar hillshade (1 m)',
+    description: 'Terrain from one-metre lidar — ten times the detail of the national '
+      + 'relief, and enough to read an old grade as a shelf on a hillside.',
+    tiles: [`${WV_GIS}/Elevation/wv_hillshade_1m_mosaic/MapServer/export${ESRI_IMAGE}`],
+    tileSize: 256,
+    maxzoom: 17,
+    opacity: 0.7,
+    enabled: false,
+    attribution: WV_ATTRIBUTION,
+  },
+  /*
+   * Tennessee's own data, which is one layer rather than two.
+   *
+   * TNMap's basemap folder holds exactly two services and the other is the
+   * USGS topo the national basemap already draws. Its elevation folder holds
+   * flood water-surface elevations and no hillshade, so there is nothing there
+   * worth a switch — and a switch that draws the same map twice is a choice
+   * nobody can make correctly.
+   */
+  {
+    id: 'tn-aerial',
+    at: [-85.03, 35.95],
+    states: ['TN'],
+    name: 'Aerial',
+    description: 'The state\u2019s own base mapping imagery, flown on a rolling cycle and '
+      + 'sharper than the national mosaic over most of the plateau.',
+    tiles: [`${TN_GIS}/BASEMAPS/IMAGERY_WEB_MERCATOR/MapServer/export${ESRI_IMAGE}`],
+    tileSize: 256,
+    maxzoom: 18,
+    opacity: 1,
+    enabled: false,
+    attribution: TN_ATTRIBUTION,
+  },
+  /*
+   * Ohio and Indiana have no layer here, and that is the finding rather than an
+   * omission.
+   *
+   * Both of Ohio's OGRIP hostnames are gone — gis1.oit.ohio.gov answers 404 to
+   * its own service directory and ogrip.oit.ohio.gov does not resolve — as is
+   * the transport department's server. Indiana's clearing house answers, but
+   * what it publishes is county-scale odds and ends: bathymetry for two lakes,
+   * a handful of thematic rasters, no statewide imagery and no lidar
+   * derivative. Neither state gets a switch until one of them publishes
+   * something a switch could draw.
+   */
   /*
    * Kentucky's topo sheets were here, and are gone.
    *

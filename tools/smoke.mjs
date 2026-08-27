@@ -758,7 +758,8 @@ check('it repairs every time, however long the page has been open',
 console.log('\nA state layer is offered only inside its state');
 const scoped = await page.evaluate(async () => {
   const config = await import('./assets/js/config.js');
-  return config.OVERLAYS.filter((entry) => entry.states).map((entry) => entry.id);
+  return config.OVERLAYS.filter((entry) => entry.states)
+    .map((entry) => ({ id: entry.id, states: entry.states }));
 });
 check('the catalogue has some', scoped.length > 0, true);
 
@@ -767,10 +768,38 @@ await page.waitForTimeout(600);
 const offered = await page.evaluate((ids) => ids.filter((id) => {
   const rows = [...document.querySelectorAll('#overlay-list .layer-option-label')];
   return rows.some((node) => node.dataset.layer === id);
-}), scoped);
-check('and none of them is offered over Tennessee', offered, []);
+}), scoped.map((entry) => entry.id));
+/*
+ * Both halves, now that more than one state has data.
+ *
+ * The map sits over Tennessee, so Tennessee's own layers belong in the list
+ * and every other state's does not. Checked as "exactly the TN ones" rather
+ * than "none of them", because "none" passed for months by accident — it was
+ * true of a catalogue with one state in it however the scoping behaved.
+ */
+check('the state whose ground is on screen has its layers offered',
+  offered.sort(), scoped.filter((entry) => entry.states.includes('TN')).map((entry) => entry.id).sort());
+check('and no other state\u2019s are',
+  offered.some((id) => scoped.find((entry) => entry.id === id)?.states.some((code) => code !== 'TN')),
+  false);
 check('while the layers that apply everywhere still are',
   await page.locator('#overlay-list .layer-row').count() > 0, true);
+
+// One heading for all of them, with the state on each row: fifty headings of
+// two layers each is what the old grouping would have become.
+const stateRows = await page.evaluate(() => {
+  const heads = [...document.querySelectorAll('.layer-group-summary span:first-child')]
+    .map((node) => node.textContent.trim());
+  const named = [...document.querySelectorAll('#overlay-list .layer-option-label')]
+    .filter((node) => /\u2014/.test(node.textContent))
+    .map((node) => node.textContent.trim());
+  return { heads, named };
+});
+check('state data sits under one heading, not one per state',
+  stateRows.heads.includes('State data'), true);
+check('and no heading is a state name', stateRows.heads.includes('Tennessee'), false);
+check('while every state row says which state it is',
+  stateRows.named.length > 0 && stateRows.named.every((text) => text.endsWith('\u2014 Tennessee')), true);
 
 console.log('\nEvery basemap previews itself');
 await page.click('.panel-tab[data-tab="layers"]');

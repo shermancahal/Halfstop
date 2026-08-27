@@ -75,29 +75,5 @@
     "expect": "data",
     "find": "\"name\"\\s*:\\s*\"[A-Za-z][A-Za-z0-9_]{2,40}\"\\s*,\\s*\"type\"\\s*:\\s*\"esriFieldType[A-Za-z]+\"",
     "url": "https://gis.blm.gov/arcgis/rest/services/transportation/BLM_Natl_GTLF_Public_Display/MapServer/0?f=pjson"
-  },
-  {
-    "id": "wv:aerial-leaf-off",
-    "note": "West Virginia round three. The imagery folder lists wv_imagery_WVGISTC_leaf_off_mosaic, which is the one worth shipping: leaf-off photography shows the roadbed under the canopy, which is the whole reason to look at aerial over a forest. Probed over Canaan Valley rather than the default tile in Tennessee, where a West Virginia service is correctly blank.",
-    "expect": "image",
-    "url": "https://services.wvgis.wvu.edu/arcgis/rest/services/Imagery_BaseMaps_EarthCover/wv_imagery_WVGISTC_leaf_off_mosaic/MapServer/export?bbox=-8844333.5,4725969.7,-8837654.4,4734571.5&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
-  },
-  {
-    "id": "wv:aerial-naip-2024",
-    "note": "The fallback if the leaf-off mosaic is empty or gone: the state's 60cm NAIP 2024 mosaic, same folder, same host.",
-    "expect": "image",
-    "url": "https://services.wvgis.wvu.edu/arcgis/rest/services/Imagery_BaseMaps_EarthCover/wv_imagery_NAIP_2024_60cm/MapServer/export?bbox=-8844333.5,4725969.7,-8837654.4,4734571.5&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
-  },
-  {
-    "id": "wv:hillshade-1m",
-    "note": "West Virginia's one-metre lidar hillshade, from the Elevation folder. Ten times the detail of the national ten-metre relief, and the layer that shows an old grade as a shelf on a hillside.",
-    "expect": "image",
-    "url": "https://services.wvgis.wvu.edu/arcgis/rest/services/Elevation/wv_hillshade_1m_mosaic/MapServer/export?bbox=-8844333.5,4725969.7,-8837654.4,4734571.5&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
-  },
-  {
-    "id": "tn:imagery",
-    "note": "Tennessee round three. Its BASEMAPS folder holds exactly two services and only one of them is not the USGS topo: IMAGERY_WEB_MERCATOR, the statewide aerial programme. Probed over the Cumberland Plateau.",
-    "expect": "image",
-    "url": "https://tnmap.tn.gov/arcgis/rest/services/BASEMAPS/IMAGERY_WEB_MERCATOR/MapServer/export?bbox=-9468835.9,4289619.1,-9462156.7,4297869.8&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
   }
 ]
