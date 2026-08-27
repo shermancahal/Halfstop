@@ -1238,17 +1238,6 @@ html, body { height: 100%; overflow: hidden; }
 .eclipse-verdict.is-part { border-left-color: var(--warn); }
 .eclipse-verdict.is-no { border-left-color: var(--ink-3); }
 
-/*
- * The map toggle and, once it is on, the slider across the eclipse.
- *
- * Grouped in a block of its own so the scrubber sits above its button rather
- * than beside the verdict, and so the button keeps the full-width shape every
- * other primary action in these panels has.
- */
-.eclipse-map { display: grid; gap: 8px; margin: 0 0 4px; }
-/* The shared toggle rule carries its own bottom margin for the flow layout
-   of the lines panel; here the grid gap already spaces it. */
-.eclipse-map .sky-lines-toggle { margin-bottom: 0; }
 
 .eclipse-later-title {
   margin: 14px 0 6px; font-size: .64rem; font-weight: 600; letter-spacing: .08em;
@@ -1580,6 +1569,44 @@ html, body { height: 100%; overflow: hidden; }
 .moon-meta { font-size: .74rem; color: #b9c0d2; font-variant-numeric: tabular-nums; }
 
 .sky-lines-toggle { width: 100%; margin-bottom: 11px; }
+
+/*
+ * The map toggle and, once it is on, the slider and the numbers under it.
+ *
+ * A block of its own in every sky tab, so the control sits below whatever that
+ * tab is about rather than in the middle of it, and so the button keeps the
+ * full-width shape every other primary action in these panels has. The grid
+ * gap spaces it, so the shared toggle rule's own bottom margin is dropped.
+ */
+.sky-map { display: grid; gap: 8px; margin: 12px 0 2px; }
+.sky-map .sky-lines-toggle { margin-bottom: 0; }
+.sky-map .scrubber { margin-bottom: 0; }
+
+/*
+ * What the lines that carry no label are.
+ *
+ * Every bearing is labelled along itself; the band and the night track are
+ * not, because a label repeated along a sampled curve is an unreadable mess.
+ * The first thing anyone asks about the drawing is what that pale violet line
+ * is, so it is answered here, with swatches drawn the way the map draws them.
+ */
+.line-key { display: grid; gap: 7px; margin: 10px 0 0; }
+.line-key-row { display: flex; align-items: flex-start; gap: 9px; }
+.line-key-swatch { flex: none; width: 26px; height: 12px; margin-top: 2px; border-radius: 2px; }
+.line-key-swatch.is-band {
+  background: linear-gradient(to bottom, transparent 22%, #7b4fa8 22%, #7b4fa8 78%, transparent 78%);
+  opacity: .8;
+}
+/* Drawn as the dashes the map draws, so the key and the line are the same
+   thing rather than two descriptions of it. */
+.line-key-swatch.is-track {
+  background: repeating-linear-gradient(to right,
+    #7b4fa8 0 4px, transparent 4px 9px) center / 100% 2px no-repeat;
+  opacity: .75;
+}
+.line-key-text { display: grid; gap: 1px; min-width: 0; }
+.line-key-name { font-size: .78rem; font-weight: 600; color: var(--ink-2); }
+.line-key-note { font-size: .72rem; line-height: 1.4; color: var(--ink-3); }
 
 /* Grows the tree rather than paging it: you drag things around in here, and a
    page boundary you can drag across is worse than a long list. */
@@ -1979,6 +2006,17 @@ html, body { height: 100%; overflow: hidden; }
    track is relative so a percentage lands where the slider thumb would. */
 .scrub-marks { position: relative; list-style: none; margin: 2px 0 0; padding: 0; height: 22px; }
 .scrub-mark { position: absolute; top: 0; transform: translateX(-50%); text-align: center; }
+/*
+ * A mark at either end keeps its tick where it belongs and moves its label in.
+ *
+ * The night's peak is often the first minute of astronomical dark, which put
+ * "peak" centred on 0% — half of it off the left edge of the panel. The tick
+ * has to stay on the moment it names; only the words move.
+ */
+.scrub-mark.at-start { transform: none; text-align: left; }
+.scrub-mark.at-start .scrub-mark-tick { margin-left: 0; }
+.scrub-mark.at-end { transform: translateX(-100%); text-align: right; }
+.scrub-mark.at-end .scrub-mark-tick { margin-right: 0; }
 .scrub-mark-tick {
   display: block; width: 1px; height: 4px; margin: 0 auto 1px;
   background: #7b4fa8; opacity: .7;

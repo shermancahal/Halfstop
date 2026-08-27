@@ -1236,7 +1236,7 @@ await page.locator('.detail-block').filter({ hasText: 'Photography' }).first()
   .evaluate((node) => { node.open = true; });
 await page.waitForTimeout(300);
 // The map-drawing controls live behind their own sub-tab inside Photography.
-await page.locator('.sky-tab', { hasText: /On the map/ }).first().click();
+await page.locator('.sky-tab', { hasText: /Everything/ }).first().click();
 await page.waitForTimeout(300);
 await page.locator('[data-toggle="sky-lines"]').first().click();
 await page.waitForTimeout(500);
@@ -1978,7 +1978,7 @@ check('and the shadows are clipped to the face', eclipse.clipped, true);
 /*
  * The eclipse on the map, and the slider across it.
  *
- * Same drawing the "On the map" tab uses, deliberately: switching this on has
+ * Same drawing the "Everything" tab uses, deliberately: switching this on has
  * to REPLACE the Milky Way lines rather than add six more spokes over them,
  * because "it is cluttered with the drawing feature" is the reason this button
  * exists at all.
@@ -2033,11 +2033,11 @@ if (/^Not from here/.test(eclipse.verdict)) {
   check('and nothing on it that is not part of that picture',
     drewEclipse.kinds.every((kind) => ['track', 'hour', 'now'].includes(kind)), true);
 
-  await page.locator('.sky-tab', { hasText: /On the map/ }).first().click();
+  await page.locator('.sky-tab', { hasText: /Everything/ }).first().click();
   await page.waitForTimeout(300);
   check('the night-lines button reads as off, because the eclipse holds the map',
     await page.locator('[data-toggle="sky-lines"]').first().innerText(),
-    'Draw the lines on the map');
+    'Draw everything on the map');
   await page.locator('[data-toggle="sky-lines"]').first().click();
   await page.waitForTimeout(400);
 
@@ -2051,6 +2051,111 @@ if (/^Not from here/.test(eclipse.verdict)) {
   await page.locator('[data-toggle="sky-lines"]').first().click();
   await page.waitForTimeout(300);
 }
+
+/*
+ * Every sky tab draws its own subject.
+ *
+ * One drawing with everything on it is the aggregate, and on a phone over a
+ * valley it is unreadable. Each tab now puts its own body on the map with a
+ * slider scaled to that body's window — the sun's day, the moon's rise to set
+ * — and switching one on has to switch the last one off.
+ */
+console.log('\nEach sky tab puts its own subject on the map');
+
+const drawOne = async (tab, toggle) => {
+  await page.locator('.sky-tab', { hasText: tab }).first().click();
+  await page.waitForTimeout(300);
+  if (!await page.locator(`[data-toggle="${toggle}"]`).count()) return null;
+  await page.locator(`[data-toggle="${toggle}"]`).first().click();
+  await page.waitForTimeout(500);
+  return page.evaluate(() => {
+    const panel = document.querySelector('.sky-panel');
+    const features = window.__map.getSource('light-directions')?._d?.features || [];
+    return {
+      scrubber: panel.querySelector('.scrub-label')?.textContent.trim() || '',
+      readout: panel.querySelector('.scrub-time')?.textContent.trim() || '',
+      marks: [...panel.querySelectorAll('.scrub-mark-label')].map((node) => node.textContent.trim()),
+      rows: [...panel.querySelectorAll('.sky-rows .core-row-label')].map((node) => node.textContent.trim()),
+      bodies: [...new Set(features.map((feature) => feature.properties.body))].sort(),
+      kinds: [...new Set(features.map((feature) => feature.properties.kind || 'bearing'))].sort(),
+    };
+  });
+};
+
+const sun = await drawOne(/Light/, 'sun-lines');
+check('the Light tab draws the sun and only the sun', sun.bodies, ['sun']);
+check('with its rise and set bearings and its path across the day',
+  sun.kinds, ['bearing', 'hour', 'track']);
+check('and a slider scaled to the day rather than the night', sun.scrubber, 'Today');
+check('reporting the sun', /sun/i.test(sun.readout), true);
+check('with noon marked along it', sun.marks.includes('noon'), true);
+check('and the bearings listed under it', sun.rows.length > 0, true);
+
+const moon = await drawOne(/Moon/, 'moon-lines');
+check('the Moon tab replaces it with the moon', moon.bodies, ['moon']);
+check('scaled to the stretch the moon is up', moon.scrubber, 'Moon up');
+check('reporting the moon', /moon/i.test(moon.readout), true);
+
+const core = await drawOne(/Milky Way/, 'core-lines');
+check('the Milky Way tab draws the band alone', core.bodies, ['core']);
+check('the band and its night track among them',
+  core.kinds.includes('arc') && core.kinds.includes('track'), true);
+check('scaled to the night', core.scrubber, 'Tonight');
+
+/*
+ * The two lines that carry no label of their own.
+ *
+ * "What is the light purple line?" is the question the drawing kept prompting,
+ * because the band and the track are curves and a label repeated along a
+ * sampled curve is a mess. So they are named beside the toggle instead.
+ */
+const key = await page.evaluate(() => [...document.querySelectorAll('.line-key-row')]
+  .map((row) => ({
+    swatch: row.querySelector('.line-key-swatch')?.className || '',
+    name: row.querySelector('.line-key-name')?.textContent.trim() || '',
+  })));
+check('the unlabelled curves are named in a key', key.length, 2);
+check('the band first, then where the core goes',
+  key.map((row) => row.swatch.replace('line-key-swatch ', '')), ['is-band', 'is-track']);
+check('and each is named in words', key.every((row) => row.name.length > 5), true);
+
+/*
+ * "Moon now" is only true while the slider sits on the present.
+ *
+ * Dragged to two in the morning it is the moon at two in the morning, and a
+ * line labelled "now" is then saying something false about a bearing you are
+ * standing under.
+ */
+await page.locator('.sky-tab', { hasText: /Everything/ }).first().click();
+await page.waitForTimeout(300);
+await page.locator('[data-toggle="sky-lines"]').first().click();
+await page.waitForTimeout(500);
+
+const scrubbedNames = await (async () => {
+  const range = page.locator('.scrub-range').first();
+  const { min, max } = await range.evaluate((node) => ({ min: node.min, max: node.max }));
+  await range.evaluate((node, value) => {
+    node.value = value;
+    node.dispatchEvent(new Event('input', { bubbles: true }));
+  }, String(Number(min) + (Number(max) - Number(min)) * 0.2));
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  return page.evaluate(() => {
+    const features = window.__map.getSource('light-directions')?._d?.features || [];
+    return {
+      map: features.filter((feature) => feature.properties.now).map((feature) => feature.properties.label),
+      rows: [...document.querySelectorAll('.sky-rows .core-row-label')].map((node) => node.textContent.trim()),
+    };
+  });
+})();
+check('a line drawn for another moment is not labelled "now"',
+  scrubbedNames.map.some((label) => /now/i.test(label)), false);
+check('it is labelled with the moment it is drawn for',
+  scrubbedNames.map.every((label) => /\d:\d\d/.test(label)), true);
+check('and the rows under the slider say the same',
+  scrubbedNames.rows.some((row) => /now/i.test(row)), false);
+
+await page.locator('[data-toggle="sky-lines"]').first().click();
+await page.waitForTimeout(300);
 
 /*
  * Nothing may be wider than the screen, at any phone width.

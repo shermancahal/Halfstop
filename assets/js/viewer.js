@@ -43,7 +43,7 @@ import {
 import {
   sunTimes, sunPosition, moonTimes, moonPosition, moonIllumination,
   lightPhases, lightDirections, currentDirections, destinationPoint, milkyWayGround, milkyWayTrack,
-  moonTrack, milkyWayNight, bestMilkyWayNights, nightQuality, galacticCentre,
+  moonTrack, sunTrack, milkyWayNight, bestMilkyWayNights, nightQuality, galacticCentre,
 } from './lib/sky.js';
 import { activeAlerts, describeMotion, alertsToGeoJSON } from './lib/storms.js';
 import {
@@ -2315,13 +2315,14 @@ function skyPanels(position, date, phases) {
   const open = state.skyPanel;
 
   /*
-   * An icon on each, because the row is now five wide.
+   * An icon on each, because the row is now six wide.
    *
-   * Four text labels fitted a 320px panel; five wrap, and a wrapped tab strip
+   * Four text labels fitted a 320px panel; six wrap, and a wrapped tab strip
    * reads as two rows of unrelated buttons. The glyph carries the recognition
    * and lets the words shrink — and each is the shape that thing is drawn as
    * everywhere else: a sun for the light phases, a moon, the band for the
-   * Milky Way, an arch for the aurora, a pin for what goes on the map.
+   * Milky Way, an arch for the aurora, a shadowed disc for an eclipse, a pin
+   * for the one that puts all of them on the map at once.
    */
   const tabs = [
     { id: 'twilight', label: 'Light', icon: icons.sun },
@@ -2329,7 +2330,10 @@ function skyPanels(position, date, phases) {
     { id: 'milkyway', label: 'Milky Way', icon: icons.galaxy },
     { id: 'aurora', label: 'Aurora', icon: icons.aurora },
     { id: 'eclipse', label: 'Eclipse', icon: icons.eclipse },
-    { id: 'lines', label: 'On the map', icon: icons.pin },
+    // Not "On the map" any more: every tab here draws on the map now, so that
+    // name had stopped telling them apart. This is the one that draws all of
+    // them at once.
+    { id: 'lines', label: 'Everything', icon: icons.pin },
   ];
 
   const row = el('div', { class: 'sky-tabs' }, tabs.map((tab) => el('button', {
@@ -2347,9 +2351,9 @@ function skyPanels(position, date, phases) {
   })));
 
   const body = el('div', { class: 'sky-panel' });
-  if (open === 'twilight') twilightPanel(body, phases, date, lat, lon);
-  else if (open === 'moon') moonPanel(body, date, lat, lon);
-  else if (open === 'milkyway') milkyWayPanel(body, date, lat, lon);
+  if (open === 'twilight') twilightPanel(body, position, phases, date);
+  else if (open === 'moon') moonPanel(body, position, date);
+  else if (open === 'milkyway') milkyWayPanel(body, position, date);
   else if (open === 'aurora') auroraPanel(body, [lon, lat]);
   else if (open === 'eclipse') eclipsePanel(body, position, date);
   else if (open === 'lines') linesPanel(body, position, date);
@@ -2451,27 +2455,17 @@ function eclipsePanel(body, position, date) {
  * by the time it leaves the shadow, and whether that is over the ridge behind
  * you is a question about this valley.
  *
- * It reuses the same drawing the "On the map" tab uses rather than adding a
- * second one, so switching it on replaces the Milky Way lines instead of
- * layering another six spokes over them. One sky on the map at a time.
+ * It is the same control the other four sky tabs carry, given the eclipse's
+ * own window instead of a night's, so switching it on replaces whatever was
+ * drawn rather than layering another six spokes over it.
  */
 function eclipseMapToggle(position, eclipse, visible) {
-  const [lon, lat] = position;
-  const wrap = el('div', { class: 'eclipse-map' });
-
   if (visible.state === 'no') {
-    wrap.append(el('p', {
-      class: 'hint', style: 'margin:0',
+    return el('p', {
+      class: 'hint', style: 'margin:0 0 10px',
       text: 'Nothing to draw here — the moon is below the horizon for the whole eclipse.',
-    }));
-    return wrap;
+    });
   }
-
-  // The whole event, outer shadow to outer shadow: the partial phase is what
-  // you photograph, but the moon is already dimming before it and the slider
-  // should not stop short of what the strip above lists.
-  const window = eclipse.penumbral || eclipse.partial
-    || { from: new Date(eclipse.greatest.getTime() - 3600e3), to: new Date(eclipse.greatest.getTime() + 3600e3) };
 
   /*
    * Three marks, not five.
@@ -2488,27 +2482,23 @@ function eclipseMapToggle(position, eclipse, visible) {
     deep ? { at: deep.to.valueOf(), label: eclipse.total ? 'total ends' : 'last bite' } : null,
   ].filter(Boolean);
 
-  const active = state.lightLines?.key === lineKey(position, 'eclipse');
-  if (active) wrap.append(nightScrubber(position, eclipse.greatest));
-
-  const button = labelledButton(
-    active ? icons.eyeOff : icons.pin,
-    active ? 'Hide the eclipse' : 'Draw the eclipse on the map',
-    {
-      tone: active ? 'secondary' : 'primary',
-      onclick: () => toggleLightLines(
-        position,
-        currentDirections(eclipse.greatest, lat, lon).filter((entry) => entry.body === 'moon'),
-        eclipse.greatest,
-        { mode: 'eclipse', window, peak: eclipse.greatest, marks },
-      ),
+  return mapToggle(position, eclipse.greatest, 'eclipse', {
+    on: 'Draw the eclipse on the map',
+    off: 'Hide the eclipse',
+    span: {
+      label: 'Eclipse',
+      // The whole event, outer shadow to outer shadow: the partial phase is
+      // what you photograph, but the moon is already dimming before it and the
+      // slider should not stop short of what the strip above lists.
+      window: eclipse.penumbral || eclipse.partial || {
+        from: new Date(eclipse.greatest.valueOf() - 3600e3),
+        to: new Date(eclipse.greatest.valueOf() + 3600e3),
+      },
+      peak: eclipse.greatest,
+      marks,
+      empty: '',
     },
-  );
-  button.classList.add('sky-lines-toggle');
-  button.dataset.toggle = 'eclipse-lines';
-  wrap.append(button);
-
-  return wrap;
+  });
 }
 
 /** Whether this place can see it, said as a sentence rather than a flag. */
@@ -2613,7 +2603,8 @@ function eclipseDiagram(eclipse, { size = 78, at = null, plain = false } = {}) {
   });
 }
 
-function twilightPanel(body, phases, date, lat, lon) {
+function twilightPanel(body, position, phases, date) {
+  const [lon, lat] = position;
   const now = sunPosition(date, lat, lon);
 
   body.append(el('div', { class: 'sky-phases' }, phases.map((phase) => el('div', { class: 'sky-phase' }, [
@@ -2628,9 +2619,15 @@ function twilightPanel(body, phases, date, lat, lon) {
     text: `Sun now ${now.altitude > 0 ? `${Math.round(now.altitude)}° up` : `${Math.round(-now.altitude)}° below the horizon`}, `
       + `bearing ${Math.round(now.azimuth)}°.`,
   }));
+
+  body.append(mapToggle(position, date, 'sun', {
+    on: 'Draw the sun on the map',
+    off: 'Hide the sun',
+  }));
 }
 
-function moonPanel(body, date, lat, lon) {
+function moonPanel(body, position, date) {
+  const [lon, lat] = position;
   const moon = moonTimes(date, lat, lon);
   const illumination = moonIllumination(date);
   const moonNow = moonPosition(date, lat, lon);
@@ -2671,6 +2668,11 @@ function moonPanel(body, date, lat, lon) {
       ? `Brighter each night — full in about ${ahead(0.5)} days.`
       : `Darker each night — new moon in about ${ahead(0)} days.`,
   }));
+
+  body.append(mapToggle(position, date, 'moon', {
+    on: 'Draw the moon on the map',
+    off: 'Hide the moon',
+  }));
 }
 
 /**
@@ -2681,7 +2683,8 @@ function moonPanel(body, date, lat, lon) {
  * a panel that quietly listed no times above that would read as broken rather
  * than as astronomy.
  */
-function milkyWayPanel(body, date, lat, lon) {
+function milkyWayPanel(body, position, date) {
+  const [lon, lat] = position;
   const night = milkyWayNight(date, lat, lon);
 
   if (!night.possible) {
@@ -2713,6 +2716,14 @@ function milkyWayPanel(body, date, lat, lon) {
   });
 
   body.append(shootingWindow(night));
+
+  // High in the panel rather than under the month-ahead table: this is the
+  // action, and everything below it is the reasoning. At the bottom of a panel
+  // this long it would be found by accident or not at all.
+  body.append(mapToggle(position, date, 'core', {
+    on: 'Draw the Milky Way on the map',
+    off: 'Hide the Milky Way',
+  }));
 
   const moonPercent = Math.round(night.moon.fraction * 100);
   const transitDiffers = night.windowPeak
@@ -2914,71 +2925,270 @@ function bestNightsList(date, lat, lon, cover) {
   return wrap;
 }
 
+/* ---------------- putting a sky on the map ---------------- */
+
 /**
- * A slider across one night, for watching the band move.
+ * Each drawing knows its own span of time, and what to call it.
+ *
+ * A slider is only useful if its ends mean something. The Milky Way's are dusk
+ * and dawn, the sun's are first and last light, the moon's are its own rise and
+ * set, and an eclipse brings its own — so rather than one clock over all of
+ * time with a date picker beside it, each drawing states the window it is about
+ * and the moments along it worth a tick.
+ *
+ * @returns {{window: {from: Date, to: Date}|null, peak: Date|null,
+ *            marks: {at: number, label: string}[], label: string, empty: string}}
+ */
+function skySpan(mode, position, date) {
+  const [lon, lat] = position;
+  const mark = (when, label) => (when ? { at: when.valueOf(), label } : null);
+
+  if (mode === 'sun') {
+    const sun = sunTimes(date, lat, lon);
+    // First light to last, not sunrise to sunset: the two hours either side of
+    // the sun being up are the ones the panel above is entirely about.
+    const from = sun.civilDawn || sun.sunrise;
+    const to = sun.civilDusk || sun.sunset;
+    return {
+      label: 'Today',
+      window: from && to ? { from, to } : null,
+      peak: sun.solarNoon,
+      marks: [mark(sun.sunrise, 'sunrise'), mark(sun.solarNoon, 'noon'), mark(sun.sunset, 'sunset')].filter(Boolean),
+      empty: sun.polar === 'day'
+        ? 'The sun does not set here today, so there is no sunrise or sunset to point at.'
+        : 'The sun does not rise here today.',
+    };
+  }
+
+  if (mode === 'moon') {
+    const span = moonUpWindow(date, lat, lon);
+    return {
+      label: 'Moon up',
+      window: span,
+      peak: span ? moonTransit(span, lat, lon) : null,
+      marks: span ? [
+        mark(span.from, 'moonrise'), mark(moonTransit(span, lat, lon), 'highest'), mark(span.to, 'moonset'),
+      ].filter(Boolean) : [],
+      empty: 'The moon does not come up here today, so there is nothing to point at.',
+    };
+  }
+
+  // The core and the everything-at-once drawing share the night: the band is
+  // only worth pointing at between astronomical dusk and dawn, and that window
+  // is what `milkyWayNight` computes.
+  const night = milkyWayNight(date, lat, lon);
+  return {
+    label: 'Tonight',
+    window: night?.dark || null,
+    peak: night?.windowPeak?.when || null,
+    night,
+    marks: [
+      mark(night?.windowPeak?.when, 'peak'),
+      mark(night?.moonless?.from, 'moon down'),
+      mark(night?.moonless?.to, 'moon up'),
+    ].filter(Boolean),
+    empty: 'No astronomical darkness tonight, so there is no window to scrub through.',
+  };
+}
+
+/**
+ * The stretch the moon is above the horizon, which is rarely one calendar day.
+ *
+ * `moonTimes` answers within a single local day, and the moon keeps its own
+ * timetable — it can rise at eleven at night and set at three the following
+ * afternoon. Taking rise and set from one day's answer gives a window that runs
+ * backwards about half the month, which as a slider means no window at all.
+ */
+function moonUpWindow(date, lat, lon) {
+  const DAY = 86400000;
+  const today = moonTimes(date, lat, lon);
+  if (today.alwaysDown) return null;
+  if (today.alwaysUp) {
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    return { from: start, to: new Date(start.valueOf() + DAY) };
+  }
+
+  if (today.rise && today.set && today.set > today.rise) return { from: today.rise, to: today.set };
+
+  if (today.rise) {
+    // Up across midnight: it sets tomorrow.
+    const tomorrow = moonTimes(new Date(date.valueOf() + DAY), lat, lon);
+    const to = tomorrow.set && tomorrow.set > today.rise ? tomorrow.set : new Date(today.rise.valueOf() + DAY / 2);
+    return { from: today.rise, to };
+  }
+
+  if (today.set) {
+    // Already up when the day began: it rose yesterday.
+    const yesterday = moonTimes(new Date(date.valueOf() - DAY), lat, lon);
+    const from = yesterday.rise && yesterday.rise < today.set
+      ? yesterday.rise : new Date(today.set.valueOf() - DAY / 2);
+    return { from, to: today.set };
+  }
+
+  return null;
+}
+
+/** When the moon is highest across a window it is up for, sampled every ten minutes. */
+function moonTransit(window, lat, lon) {
+  const step = 10 * 60000;
+  let best = null;
+  for (let at = window.from.valueOf(); at <= window.to.valueOf(); at += step) {
+    const altitude = moonPosition(new Date(at), lat, lon).altitude;
+    if (!best || altitude > best.altitude) best = { at, altitude };
+  }
+  return best ? new Date(best.at) : null;
+}
+
+/**
+ * Which bearings a drawing is about.
+ *
+ * The point of splitting one drawing into five is that each answers one
+ * question. A sun drawing that also carried moonrise, moonset and the band
+ * would be the aggregate again, and the map would be as crowded as it was
+ * before — so each mode takes only its own body's lines, and only the
+ * everything drawing takes them all.
+ */
+function directionsForMode(mode, position, when) {
+  const [lon, lat] = position;
+  const all = [...lightDirections(when, lat, lon), ...currentDirections(when, lat, lon)];
+  if (mode === 'sky') return all;
+  // An eclipse takes the moon's bearing and nothing else. Moonrise and moonset
+  // are about the moon too, but the whole point of the eclipse drawing is that
+  // it is one line: which way to face.
+  if (mode === 'eclipse') return all.filter((entry) => entry.body === 'moon' && entry.now);
+  return all.filter((entry) => entry.body === mode);
+}
+
+/** The body each drawing is about, which is what the readout names. */
+const modeBody = (mode) => (mode === 'eclipse' ? 'moon' : mode === 'sky' ? 'core' : mode);
+
+/**
+ * The button that puts one sky on the map, and the slider that moves it.
+ *
+ * Shared by all five panels rather than written per panel, because they differ
+ * only in which window they cover and which lines they draw — and because
+ * switching one on has to switch the others off. One sky on the map at a time
+ * is what keeps it readable: five of these drawn at once is the clutter the
+ * separate buttons exist to avoid.
+ */
+function mapToggle(position, date, mode, { on, off, span = null }) {
+  const wrap = el('div', { class: 'sky-map' });
+  const active = state.lightLines?.key === lineKey(position, mode);
+  // Computed only when it is needed: the night one samples seven hundred sun
+  // and moon positions, and the drawing already carries its window once it is
+  // on, so asking again on every re-render would pay that for nothing.
+  const shapeOf = () => span || skySpan(mode, position, date);
+
+  if (active) {
+    wrap.append(nightScrubber(position));
+  } else if (!shapeOf().window) {
+    wrap.append(el('p', { class: 'hint', style: 'margin:0', text: shapeOf().empty }));
+    return wrap;
+  }
+
+  const button = labelledButton(active ? icons.eyeOff : icons.pin, active ? off : on, {
+    tone: active ? 'secondary' : 'primary',
+    onclick: () => {
+      const shape = shapeOf();
+      const at = shape.peak || date;
+      toggleLightLines(position, directionsForMode(mode, position, at), at, {
+        mode,
+        body: modeBody(mode),
+        window: shape.window,
+        peak: shape.peak,
+        marks: shape.marks,
+        scrubLabel: shape.label,
+        night: shape.night || null,
+      });
+    },
+  });
+  button.classList.add('sky-lines-toggle');
+  button.dataset.toggle = `${mode}-lines`;
+  wrap.append(button);
+
+  /*
+   * The numbers behind the lines, but only once they are drawn.
+   *
+   * Bearings listed beside a map that is not showing them are trivia; listed
+   * beside a slider that moves them they are the readout for it, and they
+   * change as it moves. `refreshLineRows` swaps them in place for that reason.
+   */
+  if (active) {
+    const at = state.lightLines.date || date;
+    wrap.append(directionRows(directionsForMode(mode, position, at), at));
+    if (mode === 'sky' || mode === 'core') wrap.append(lineKeyBlock());
+  }
+
+  return wrap;
+}
+
+/**
+ * A slider across whatever window the drawing is about.
  *
  * Deliberately not a clock. A clock is an open-ended control over all of time,
  * needs a date picker beside it, and answers a question nobody asked; what a
  * photographer wants is "where will this be at two in the morning", and the
- * range that matters is a single night. `milkyWayNight` already computes that
- * window — astronomical dark, end to end — so the control has real ends and a
- * real default rather than arbitrary ones.
+ * range that matters is one night, one day, or one eclipse. `skySpan` computes
+ * exactly that per drawing, so the control has real ends and a real default
+ * rather than arbitrary ones.
  *
- * It starts at the peak, because that is the answer if you only look once.
+ * It starts at the peak — solar noon, the moon's highest, greatest eclipse,
+ * the best hour of the night — because that is the answer if you only look
+ * once.
  */
-function nightScrubber(position, date) {
+function nightScrubber(position) {
   const [lon, lat] = position;
 
   /*
    * The window the slider covers, and what it is a window on.
    *
-   * Normally the night's astronomical darkness, sampled once when the lines
-   * went on rather than on every drag. An eclipse brings its own window and
-   * its own subject: there is no point scrubbing eight hours of night to find
-   * ninety minutes of shadow, and reporting the galactic core's altitude while
-   * somebody drags across an eclipse would be a true number about the wrong
-   * object.
+   * Both are carried by the drawing rather than assumed here, because they are
+   * different for each of the five: the night for the band, first to last light
+   * for the sun, moonrise to moonset for the moon, and the eclipse itself for
+   * an eclipse. Reporting the galactic core's altitude while somebody drags
+   * across an eclipse would be a true number about the wrong object, and
+   * scrubbing eight hours of night to find ninety minutes of shadow is not a
+   * control anyone wants.
    */
-  const eclipsing = state.lightLines?.mode === 'eclipse';
-  const night = state.lightLines?.night || (eclipsing ? null : milkyWayNight(date, lat, lon));
-  const span = state.lightLines?.window || night?.dark;
+  const lines = state.lightLines;
+  const span = lines?.window || lines?.night?.dark;
   if (!span) {
     return el('p', {
       class: 'hint', style: 'margin:0 0 8px',
-      text: 'No astronomical darkness tonight, so there is no window to scrub through.',
+      text: 'There is no window to scrub through here today.',
     });
   }
 
+  const body = lines?.body || 'core';
+  const eclipsing = lines?.mode === 'eclipse';
+  const positionOf = body === 'sun' ? sunPosition : body === 'moon' ? moonPosition : galacticCentre;
+
   const from = span.from.valueOf();
   const to = span.to.valueOf();
-  const peak = state.lightLines?.window
-    ? (state.lightLines.peak?.valueOf() ?? (from + to) / 2)
-    : (night?.windowPeak?.when?.valueOf() ?? (from + to) / 2);
+  const peak = lines?.peak?.valueOf() ?? lines?.night?.windowPeak?.when?.valueOf() ?? (from + to) / 2;
 
   /*
    * The moments worth knowing while dragging.
    *
    * A slider with two ends and nothing between them makes you scrub blind to
-   * find the answer. These are the four things that decide a night: when the
-   * core is highest in the dark, and when the moon leaves or arrives to ruin
-   * it. Anything outside the window is dropped rather than clamped to an end,
-   * where it would claim something happens at dusk that does not.
+   * find the answer. Each drawing names its own — sunrise, noon and sunset for
+   * the sun; when the core is highest and when the moon leaves or arrives to
+   * ruin it for the band; the contacts for an eclipse. Anything outside the
+   * window is dropped rather than clamped to an end, where it would claim
+   * something happens at dusk that does not.
    */
   const inWindow = (value) => Number.isFinite(value) && value >= from && value <= to;
-  const marks = (state.lightLines?.marks || [
-    night?.windowPeak?.when ? { at: night.windowPeak.when.valueOf(), label: 'peak' } : null,
-    night?.moonless?.from ? { at: night.moonless.from.valueOf(), label: 'moon down' } : null,
-    night?.moonless?.to ? { at: night.moonless.to.valueOf(), label: 'moon up' } : null,
-  ]).filter((mark) => mark && inWindow(mark.at)).sort((a, b) => a.at - b.at);
+  const marks = (lines?.marks || [])
+    .filter((mark) => mark && inWindow(mark.at)).sort((a, b) => a.at - b.at);
 
   const readout = el('span', { class: 'scrub-time' });
   const show = (at) => {
     const when = new Date(at);
-    const body = eclipsing ? moonPosition(when, lat, lon) : galacticCentre(when, lat, lon);
-    const name = eclipsing ? 'moon' : 'core';
-    readout.textContent = when && body.altitude > 0
-      ? `${clockTime(when)} · ${name} ${Math.round(body.altitude)}° at ${Math.round(body.azimuth)}°`
-      : `${clockTime(when)} · ${name} below the horizon`;
+    const where = positionOf(when, lat, lon);
+    readout.textContent = where.altitude > 0
+      ? `${clockTime(when)} · ${body} ${Math.round(where.altitude)}° at ${Math.round(where.azimuth)}°`
+      : `${clockTime(when)} · ${body} below the horizon`;
   };
 
   const now = Date.now();
@@ -2986,7 +3196,7 @@ function nightScrubber(position, date) {
     class: 'scrub-now', type: 'button',
     text: 'Now',
     title: now < from || now > to
-      ? `Now is outside ${eclipsing ? 'the eclipse' : 'tonight\u2019s dark window'} — jumps to the nearest end`
+      ? `Now is outside the window this slider covers \u2014 jumps to the nearest end`
       : 'Back to the present',
     onclick: () => {
       const at = Math.min(Math.max(Date.now(), from), to);
@@ -3003,7 +3213,7 @@ function nightScrubber(position, date) {
     // off the marks the slider carries: greatest eclipse at 4:14 landed on
     // 4:16, two minutes from the tick labelled "greatest" right beneath it.
     step: String((eclipsing ? 1 : 5) * 60 * 1000),
-    'aria-label': eclipsing ? 'Time through the eclipse' : 'Time tonight',
+    'aria-label': `Time across ${lines?.scrubLabel || 'tonight'}`,
     oninput: (event) => {
       const at = Number(event.target.value);
       show(at);
@@ -3016,7 +3226,7 @@ function nightScrubber(position, date) {
 
   return el('div', { class: 'scrubber' }, [
     el('div', { class: 'scrub-head' }, [
-      el('span', { class: 'scrub-label', text: eclipsing ? 'Eclipse' : 'Tonight' }),
+      el('span', { class: 'scrub-label', text: lines?.scrubLabel || 'Tonight' }),
       readout,
       nowButton,
     ]),
@@ -3025,15 +3235,19 @@ function nightScrubber(position, date) {
       el('span', { text: clockTime(span.from) }),
       el('span', { text: clockTime(span.to) }),
     ]),
-    marks.length ? el('ul', { class: 'scrub-marks' }, marks.map((mark) => el('li', {
-      class: 'scrub-mark',
-      // Positioned along the track so the label sits under the moment it names.
-      style: `left:${(((mark.at - from) / (to - from)) * 100).toFixed(1)}%`,
-      title: `${mark.label} · ${clockTime(new Date(mark.at))}`,
-    }, [
-      el('span', { class: 'scrub-mark-tick' }),
-      el('span', { class: 'scrub-mark-label', text: mark.label }),
-    ]))) : null,
+    marks.length ? el('ul', { class: 'scrub-marks' }, marks.map((mark) => {
+      const along = ((mark.at - from) / (to - from)) * 100;
+      return el('li', {
+        // Positioned along the track so the label sits under the moment it
+        // names, and pulled inside the panel at either end — see the CSS.
+        class: `scrub-mark${along < 8 ? ' at-start' : along > 92 ? ' at-end' : ''}`,
+        style: `left:${along.toFixed(1)}%`,
+        title: `${mark.label} · ${clockTime(new Date(mark.at))}`,
+      }, [
+        el('span', { class: 'scrub-mark-tick' }),
+        el('span', { class: 'scrub-mark-label', text: mark.label }),
+      ]);
+    })) : null,
   ]);
 }
 
@@ -3093,45 +3307,50 @@ function auroraPanel(body, position) {
   }));
 }
 
-/** Draw bearings on the map: where things rise, set, and are right now. */
+/**
+ * Everything at once: sun, moon and band on one map.
+ *
+ * The four tabs before it each draw their own subject, which is the readable
+ * way to use this — one question, a handful of lines. This one is for the
+ * comparison those cannot make: whether the sun sets into the same notch the
+ * core rises out of, and where the moon will be when it does. It is crowded on
+ * purpose, and it is one press away from not being.
+ */
 function linesPanel(body, position, date) {
   const [lon, lat] = position;
-  const directions = lightDirections(date, lat, lon);
-  const current = currentDirections(date, lat, lon);
-  const all = [...directions, ...current];
+  const active = state.lightLines?.key === lineKey(position, 'sky');
+  const when = active ? (state.lightLines.date || date) : date;
+  const all = directionsForMode('sky', position, when);
 
   if (!all.length) {
     body.append(el('p', { class: 'hint', style: 'margin:0', text: 'Nothing is above the horizon to point at.' }));
     return;
   }
 
-  const active = state.lightLines?.key === lineKey(position, 'sky');
-  if (active) body.append(nightScrubber(position, date));
-  // Built the same way as every other action in the app — a mark and a short
-  // label — rather than as a bare word on a slab of colour.
-  const linesButton = labelledButton(
-    active ? icons.eyeOff : icons.pin,
-    active ? 'Hide the lines' : 'Draw the lines on the map',
-    {
-      tone: active ? 'secondary' : 'primary',
-      // The date matters: the band is drawn for a moment, and the scrubber
-      // moves that moment. Without it here the stored moment was `undefined`,
-      // which threw inside the handler — where a throw does not reach the
-      // caller, so the button simply did nothing and said nothing.
-      onclick: () => toggleLightLines(position, all, date),
-    },
-  );
-  // `sky-lines-toggle` is a layout class and the storm panel uses it too, so it
-  // identifies nothing. This does — and a test that clicked the wrong one of
-  // the two reported the whole feature as missing.
-  linesButton.classList.add('sky-lines-toggle');
-  linesButton.dataset.toggle = 'sky-lines';
-  body.append(linesButton);
+  body.append(mapToggle(position, date, 'sky', {
+    on: 'Draw everything on the map',
+    off: 'Hide the lines',
+  }));
 
-  body.append(el('div', { class: 'core-rows' }, all.map((entry) => el('div', { class: 'core-row' }, [
+  // Listed even before anything is drawn, because this tab is the summary: the
+  // four before it each answer one question, and this one exists to hold the
+  // answers side by side.
+  if (!active) body.append(directionRows(all, when));
+}
+
+/**
+ * The bearings as a list, named for the moment they are drawn for.
+ *
+ * "Moon now" is only true while the slider sits on the present. Dragged to two
+ * in the morning it is the moon at two in the morning, and a row that still
+ * says "now" is telling you something false about a line you are standing
+ * under — so away from the present these are named by their time instead.
+ */
+function directionRows(entries, when) {
+  return el('div', { class: 'core-rows sky-rows' }, entries.map((entry) => el('div', { class: 'core-row' }, [
     el('span', { class: 'core-row-label' }, [
       el('span', { class: `dir-dot is-${entry.body}${entry.now ? ' is-now' : ''}` }),
-      el('span', { text: entry.name }),
+      el('span', { text: directionName(entry, when) }),
     ]),
     el('span', {
       class: 'core-row-value',
@@ -3139,7 +3358,65 @@ function linesPanel(body, position, date) {
         ? `${Math.round(entry.azimuth)}° · ${Math.round(entry.altitude)}° up`
         : `${Math.round(entry.azimuth)}° · ${clockTime(entry.at)}`,
     }),
-  ]))));
+  ])));
+}
+
+/**
+ * A drawn line's label: what it is, which way, and how high.
+ *
+ * Built here rather than at each call site because the "now" half of it is the
+ * part that goes wrong — see `directionName`.
+ */
+const nowLabel = (name, where, when) => [
+  directionName({ name, now: true }, when),
+  `${Math.round(where.azimuth)}°`,
+  `${Math.round(where.altitude)}° up`,
+].join(' · ');
+
+/** "Moon now" while the slider is on the present, "Moon 2:14 AM" once it is not. */
+function directionName(entry, when) {
+  if (!entry.now) return entry.name;
+  const at = when || new Date();
+  // A minute of slack: the slider steps by the minute, and a label flickering
+  // between two spellings of the same instant is worse than either.
+  if (Math.abs(at.valueOf() - Date.now()) < 60000) return entry.name;
+  return `${entry.name.replace(/ now$/i, '')} ${clockTime(at)}`;
+}
+
+/**
+ * What the unlabelled lines are.
+ *
+ * Every bearing carries its own label along it; the band and the night track
+ * do not, because a label repeated along a sampled curve is a dotted mess. So
+ * they are named here instead — the first thing anyone asks about that pale
+ * violet line is what it is.
+ */
+function lineKeyBlock() {
+  const rows = [
+    ['band', 'The band right now', 'A wide violet curve — the Milky Way itself, not a bearing to it.'],
+    ['track', 'Where the core goes', 'Dashed and thin: its path from dusk to dawn, with the hours marked.'],
+  ];
+  return el('div', { class: 'line-key' }, rows.map(([kind, name, note]) => el('div', { class: 'line-key-row' }, [
+    el('span', { class: `line-key-swatch is-${kind}` }),
+    el('span', { class: 'line-key-text' }, [
+      el('span', { class: 'line-key-name', text: name }),
+      el('span', { class: 'line-key-note', text: note }),
+    ]),
+  ])));
+}
+
+/**
+ * Re-label the bearing rows without rebuilding the panel around them.
+ *
+ * The slider lives in the same panel, so re-rendering the whole details tab on
+ * every drag would tear the handle out from under the finger holding it. Only
+ * the rows change as the moment moves, so only the rows are replaced.
+ */
+function refreshLineRows() {
+  const rows = document.querySelector('.sky-rows');
+  if (!rows || !state.lightLines) return;
+  const { position, date, mode } = state.lightLines;
+  rows.replaceWith(directionRows(directionsForMode(mode || 'sky', position, date || new Date()), date));
 }
 
 const capitalise = (text = '') => text.charAt(0).toUpperCase() + text.slice(1);
@@ -3242,13 +3519,11 @@ function setSkyTime(when) {
    * are simply not what is being watched, and drawing four more spokes across
    * the map is the clutter this mode exists to avoid.
    */
-  state.lightLines.directions = state.lightLines.mode === 'eclipse'
-    ? currentDirections(when, lat, lon).filter((entry) => entry.body === 'moon')
-    : [
-      ...lightDirections(when, lat, lon),
-      ...currentDirections(when, lat, lon),
-    ];
+  state.lightLines.directions = directionsForMode(
+    state.lightLines.mode || 'sky', state.lightLines.position, when,
+  );
   refreshLightLines();
+  refreshLineRows();
 }
 
 function refreshLightLines() {
@@ -3267,8 +3542,16 @@ function refreshLightLines() {
   // and short enough not to sweep across the whole map at trip-planning zooms.
   const REACH = 40;
 
-  if (lines.mode === 'eclipse') {
-    source.setData({ type: 'FeatureCollection', features: eclipseFeatures(lines, REACH) });
+  /*
+   * One body, or all of them.
+   *
+   * The sun, moon and eclipse drawings are the same picture of different
+   * objects — rise and set bearings, a path across the window, where it is at
+   * the scrubbed moment — so they share one builder. The band needs its own,
+   * because it is the one thing here that is not a bearing from the observer.
+   */
+  if (lines.mode === 'sun' || lines.mode === 'moon' || lines.mode === 'eclipse') {
+    source.setData({ type: 'FeatureCollection', features: bodyFeatures(lines, REACH) });
     return;
   }
 
@@ -3287,12 +3570,15 @@ function refreshLightLines() {
     ? lines.directions.filter((direction) => direction.id !== 'core-now')
     : lines.directions;
 
+  const at = lines.date || new Date();
   const features = drawn.map((direction) => ({
     type: 'Feature',
     properties: {
       body: direction.body,
       now: !!direction.now,
-      label: `${direction.name} ${Math.round(direction.azimuth)}°`,
+      label: direction.now
+        ? nowLabel(direction.name, direction, at)
+        : `${direction.name} ${Math.round(direction.azimuth)}°`,
     },
     geometry: {
       type: 'LineString',
@@ -3314,7 +3600,7 @@ function refreshLightLines() {
       properties: {
         body: 'core',
         now: true,
-        label: `Milky Way ${Math.round(sky.core.azimuth)}° · ${Math.round(sky.core.altitude)}° up`,
+        label: nowLabel('Milky Way now', sky.core, at),
       },
       geometry: { type: 'LineString', coordinates: [lines.position, sky.core.position] },
     });
@@ -3361,66 +3647,108 @@ function refreshLightLines() {
 }
 
 /**
- * The eclipse on the ground: where to face, and where that heads.
+ * One body on the ground: where to face, and where that heads.
  *
- * Deliberately three things and not eight. The Milky Way drawing answers "what
- * will the frame contain", which takes an arc, a track and four rise/set
- * bearings; an eclipse answers "which way do I point the camera, and where
- * will it have moved by the end", which takes the moon's bearing now and its
- * path across the eclipse. Same projection as the band — along the bearing,
- * pulled in as it climbs — so the spoke lands on the track rather than running
- * past it.
+ * Deliberately a handful of lines and not eight. The everything drawing
+ * answers "how does the whole sky sit over this valley", which takes an arc, a
+ * track and six bearings; this answers "which way do I point the camera, and
+ * where will it have moved by then", which takes rise and set, a path, and one
+ * line for the moment on the slider.
+ *
+ * The path and the spoke use the same projection — along the bearing, pulled
+ * in as the body climbs — so the spoke lands on the path rather than running
+ * past it, and the two read as one picture.
  */
-function eclipseFeatures(lines, reach) {
+function bodyFeatures(lines, reach) {
   const [lon, lat] = lines.position;
+  const body = lines.body === 'sun' ? 'sun' : 'moon';
+  const eclipse = lines.mode === 'eclipse';
+  const positionAt = body === 'sun' ? sunPosition : moonPosition;
+  const trackOf = body === 'sun' ? sunTrack : moonTrack;
   const when = lines.date || new Date();
   const features = [];
 
-  const project = (position) => destinationPoint(
-    lines.position, position.azimuth, reach * (1 - Math.min(90, Math.max(0, position.altitude)) / 90),
+  const project = (where) => destinationPoint(
+    lines.position, where.azimuth, reach * (1 - Math.min(90, Math.max(0, where.altitude)) / 90),
   );
 
+  // Rise and set: fixed for the day, and the reason to stand here rather than
+  // fifty metres along the ridge. Drawn at full reach, as bearings not paths.
+  for (const direction of lines.directions.filter((entry) => !entry.now)) {
+    features.push({
+      type: 'Feature',
+      properties: {
+        body: direction.body,
+        now: false,
+        label: `${direction.name} ${Math.round(direction.azimuth)}°`,
+      },
+      geometry: {
+        type: 'LineString',
+        coordinates: [lines.position, destinationPoint(lines.position, direction.azimuth, reach)],
+      },
+    });
+  }
+
   const window = lines.window;
-  const track = window ? moonTrack(lines.position, window.from, window.to, { maxKm: reach, anchor: false }) : [];
+  const track = window
+    ? trackOf(lines.position, window.from, window.to, {
+      maxKm: reach,
+      // Five-minute steps across an eclipse, starting on the instant it does:
+      // a quarter-hour anchored to the clock would drop the first sample and
+      // begin the drawing after the eclipse had begun.
+      ...(eclipse ? { stepMinutes: 5, anchor: false } : { stepMinutes: 15 }),
+    })
+    : [];
+
   if (track.length > 1) {
     features.push({
       type: 'Feature',
-      properties: { body: 'moon', kind: 'track' },
+      properties: { body, kind: 'track' },
       geometry: { type: 'LineString', coordinates: track.map((point) => point.position) },
     });
   }
 
   /*
-   * The contacts, not every hour.
+   * What to name along the path.
    *
-   * An hour mark suits a track that runs all night. This one runs for the
-   * length of the eclipse, and the moments along it worth naming are the ones
-   * the strip above already names — first bite, greatest, last bite — so the
-   * map and the panel say the same words about the same instants.
+   * Hours for a day or a night: a curve says where and not when, and the hour
+   * is what you plan around. For an eclipse the moments worth naming are the
+   * contacts the strip above already names, in the same words, so the map and
+   * the panel agree.
    */
-  for (const mark of lines.marks || []) {
-    const at = new Date(mark.at);
-    if (at < window.from || at > window.to) continue;
-    const position = moonPosition(at, lat, lon);
-    if (position.altitude <= 0) continue;
-    features.push({
-      type: 'Feature',
-      properties: { body: 'moon', kind: 'hour', label: `${mark.label} ${clockTime(at)}` },
-      geometry: { type: 'Point', coordinates: project(position) },
-    });
+  if (eclipse) {
+    for (const mark of lines.marks || []) {
+      const at = new Date(mark.at);
+      if (!window || at < window.from || at > window.to) continue;
+      const where = positionAt(at, lat, lon);
+      if (where.altitude <= 0) continue;
+      features.push({
+        type: 'Feature',
+        properties: { body, kind: 'hour', label: `${mark.label} ${clockTime(at)}` },
+        geometry: { type: 'Point', coordinates: project(where) },
+      });
+    }
+  } else {
+    for (const point of track.filter((sample) => sample.when.getMinutes() === 0)) {
+      features.push({
+        type: 'Feature',
+        properties: { body, kind: 'hour', label: clockTime(point.when) },
+        geometry: { type: 'Point', coordinates: point.position },
+      });
+    }
   }
 
   // Where it is at the scrubbed moment — the one line you can check by looking
   // up. Below the horizon it is left undrawn rather than drawn at zero, where
   // it would point along the ground at something you cannot see.
-  const now = moonPosition(when, lat, lon);
+  const now = positionAt(when, lat, lon);
   if (now.altitude > 0) {
     features.push({
       type: 'Feature',
       properties: {
-        body: 'moon',
+        body,
         now: true,
-        label: `Moon ${Math.round(now.azimuth)}° · ${Math.round(now.altitude)}° up`,
+        label: nowLabel(`${capitalise(body)} now`, now, when),
       },
       geometry: { type: 'LineString', coordinates: [lines.position, project(now)] },
     });

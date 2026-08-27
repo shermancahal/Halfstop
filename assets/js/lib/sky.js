@@ -667,6 +667,18 @@ export function milkyWayTrack(origin, from, to, options = {}) {
 }
 
 /**
+ * The same, for the sun.
+ *
+ * A quarter-hour step by default: the sun crosses the sky at fifteen degrees an
+ * hour, so quarter-hours are about four degrees apart — fine enough for the
+ * curve to read as a curve, coarse enough that a whole day is a hundred points
+ * rather than a thousand.
+ */
+export function sunTrack(origin, from, to, options = {}) {
+  return groundTrack(sunPosition, origin, from, to, options);
+}
+
+/**
  * The same, for the moon.
  *
  * Written as its own export rather than a flag because callers ask for one or
