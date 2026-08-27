@@ -77,31 +77,87 @@
     "url": "https://gis.blm.gov/arcgis/rest/services/transportation/BLM_Natl_GTLF_Public_Display/MapServer/0?f=pjson"
   },
   {
-    "id": "shield:mi-state-route",
-    "note": "The question the whole change turns on. M-22 through Leland: if a Michigan state route arrives with a shape value it gets Michigan's own diamond, and sending the unknowns to a circle is safe. If it arrives as `default` like the county road two miles away did, then the two are indistinguishable and a circle default would strip the M off every state route in the state.",
+    "id": "rec:agol-ohv",
+    "note": "What any public agency publishes for off-highway vehicle use. The one category this app has no layer for and the one an overlander asks first: where am I allowed to drive.",
     "expect": "data",
-    "find": "\"ref\"\\s*:\\s*\"[^\"]{1,12}\"[^}]{0,200}?\"shield\"\\s*:\\s*\"[a-z-]+\"|\"shield_image\"\\s*:\\s*\"[a-z0-9-]+\"",
-    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-85.76,45.02.json?radius=1500&limit=50&dedupe=false&layers=road&access_token={token}"
+    "find": "\"title\"\\s*:\\s*\"[^\"]{0,80}\"|\"owner\"\\s*:\\s*\"[^\"]{0,40}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=40&sortField=numViews&sortOrder=desc&q=OHV%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
   },
   {
-    "id": "shield:mi-state-route-2",
-    "note": "M-72 near Traverse City, because one road is not a rule and a single sample that happened to be tagged well would be the worst possible evidence.",
+    "id": "rec:agol-motorized",
+    "note": "The other vocabulary for the same thing. Agencies split about evenly between calling it OHV and calling it motorized, and a search for one misses the other entirely.",
     "expect": "data",
-    "find": "\"ref\"\\s*:\\s*\"[^\"]{1,12}\"[^}]{0,200}?\"shield\"\\s*:\\s*\"[a-z-]+\"|\"shield_image\"\\s*:\\s*\"[a-z0-9-]+\"",
-    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-85.62,44.76.json?radius=1500&limit=50&dedupe=false&layers=road&access_token={token}"
+    "find": "\"title\"\\s*:\\s*\"[^\"]{0,80}\"|\"owner\"\\s*:\\s*\"[^\"]{0,40}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=40&sortField=numViews&sortOrder=desc&q=%22motorized%20trail%22%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
   },
   {
-    "id": "shield:mi-county-nearby",
-    "note": "A Leelanau county road again, at a second point, to confirm the county side of the pair really is `default` rather than that one road being untagged.",
+    "id": "rec:agol-state-parks",
+    "note": "State park boundaries and what is inside them - campsites, trailheads, facilities. Every state has parks; what differs is whether the amenities are published as data or only as a PDF.",
     "expect": "data",
-    "find": "\"ref\"\\s*:\\s*\"[^\"]{1,12}\"[^}]{0,200}?\"shield\"\\s*:\\s*\"[a-z-]+\"|\"shield_image\"\\s*:\\s*\"[a-z0-9-]+\"",
-    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-85.72,44.99.json?radius=1500&limit=50&dedupe=false&layers=road&access_token={token}"
+    "find": "\"title\"\\s*:\\s*\"[^\"]{0,80}\"|\"owner\"\\s*:\\s*\"[^\"]{0,40}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=40&sortField=numViews&sortOrder=desc&q=%22state%20park%22%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
   },
   {
-    "id": "shield:tn-state-route",
-    "note": "And Tennessee, whose SR 61 started all of this - so the fallback change can be checked against a state whose routes are known to arrive with a shape.",
+    "id": "rec:agol-dispersed-camping",
+    "note": "Dispersed camping and where it is allowed, which is the question that decides where you sleep and is almost never on a basemap.",
     "expect": "data",
-    "find": "\"ref\"\\s*:\\s*\"[^\"]{1,12}\"[^}]{0,200}?\"shield\"\\s*:\\s*\"[a-z-]+\"|\"shield_image\"\\s*:\\s*\"[a-z0-9-]+\"",
-    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-84.15,36.1.json?radius=1500&limit=50&dedupe=false&layers=road&access_token={token}"
+    "find": "\"title\"\\s*:\\s*\"[^\"]{0,80}\"|\"owner\"\\s*:\\s*\"[^\"]{0,40}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=40&sortField=numViews&sortOrder=desc&q=%28dispersed%20camping%20OR%20%22camping%20areas%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+  },
+  {
+    "id": "rec:agol-trailheads",
+    "note": "Trailheads and recreation sites published by states rather than by the federal agencies this app already carries.",
+    "expect": "data",
+    "find": "\"title\"\\s*:\\s*\"[^\"]{0,80}\"|\"owner\"\\s*:\\s*\"[^\"]{0,40}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=40&sortField=numViews&sortOrder=desc&q=trailheads%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+  },
+  {
+    "id": "rec:agol-state-forest-roads",
+    "note": "State forest and state land road systems - the state-level equivalent of the MVUM this app already draws for the Forest Service.",
+    "expect": "data",
+    "find": "\"title\"\\s*:\\s*\"[^\"]{0,80}\"|\"owner\"\\s*:\\s*\"[^\"]{0,40}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=40&sortField=numViews&sortOrder=desc&q=%28%22forest%20roads%22%20OR%20%22state%20forest%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+  },
+  {
+    "id": "rec:ky-root",
+    "note": "Kentucky's own server, which this app already draws imagery and hillshade from. What else is on it has never been asked.",
+    "expect": "data",
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,80}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer|FeatureServer)\"|\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]",
+    "url": "https://kyraster.ky.gov/arcgis/rest/services?f=pjson"
+  },
+  {
+    "id": "rec:ky-vector",
+    "note": "And Kentucky's vector server, which is a different host from the raster one and is where boundaries and recreation would live if they exist.",
+    "expect": "data",
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,80}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer|FeatureServer)\"|\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]",
+    "url": "https://kygisserver.ky.gov/arcgis/rest/services?f=pjson"
+  },
+  {
+    "id": "rec:wv-society",
+    "note": "West Virginia's Society folder - the ISO category that holds parks and recreation.",
+    "expect": "data",
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,80}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer|FeatureServer)\"|\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]",
+    "url": "https://services.wvgis.wvu.edu/arcgis/rest/services/Society?f=pjson"
+  },
+  {
+    "id": "rec:wv-structure",
+    "note": "And its Structure folder, where public facilities are catalogued.",
+    "expect": "data",
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,80}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer|FeatureServer)\"|\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]",
+    "url": "https://services.wvgis.wvu.edu/arcgis/rest/services/Structure?f=pjson"
+  },
+  {
+    "id": "rec:tn-community",
+    "note": "Tennessee's COMMUNITY folder, the likeliest home for parks and recreation.",
+    "expect": "data",
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,80}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer|FeatureServer)\"|\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]",
+    "url": "https://tnmap.tn.gov/arcgis/rest/services/COMMUNITY?f=pjson"
+  },
+  {
+    "id": "rec:tn-environmental",
+    "note": "And its ENVIRONMENTAL folder, where public land and natural areas would sit.",
+    "expect": "data",
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,80}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer|FeatureServer)\"|\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]",
+    "url": "https://tnmap.tn.gov/arcgis/rest/services/ENVIRONMENTAL?f=pjson"
   }
 ]
