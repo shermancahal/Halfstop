@@ -25,7 +25,9 @@ import {
 } from './lib/geo.js';
 import { el, escapeHTML, createToaster, downloadText, initTheme, formatDate } from './lib/ui.js';
 import { icons } from './lib/icons.js';
-import { FolderStore, FOLDER_COLORS } from './lib/folders.js';
+import {
+  FolderStore, FOLDER_COLORS, readTrip, tripStanding, localDay,
+} from './lib/folders.js';
 import {
   PIN_ICONS, DEFAULT_PIN_ICON, pinIconGroups, pinIconSVG, pinImageId, registerPinImages, rasterizePinIcon,
 } from './lib/pin-icons.js';
@@ -635,6 +637,7 @@ function cacheDom() {
   dom.folderList = document.getElementById('folder-list');
   dom.folderTotals = document.getElementById('folder-totals');
   dom.newFolder = document.getElementById('new-folder');
+  dom.newTrip = document.getElementById('new-trip');
   dom.importIntoFolder = document.getElementById('import-into-folder');
   dom.dropTarget = document.getElementById('drop-target');
   dom.importAsk = document.getElementById('import-ask');
@@ -1912,6 +1915,25 @@ function trackQueryOverlays() {
  * round trip each.
  */
 function exposeWaypointInspector() {
+  /*
+   * What every trip folder thinks it is.
+   *
+   * "The trip did not stand down" has three distinct causes — the window is
+   * not actually over, the app already stood it down once, or the folder was
+   * switched back on by hand — and they look identical from the outside.
+   */
+  globalThis.abmapTrips = () => state.folders.list()
+    .filter((folder) => folder.trip)
+    .map((folder) => ({
+      name: folder.name,
+      from: folder.trip.from,
+      to: folder.trip.to,
+      retired: folder.trip.retired,
+      visible: folder.visible,
+      standing: tripStanding(folder.trip)?.state || null,
+      items: folder.items.length,
+    }));
+
   globalThis.abmapWaypointStatus = () => {
     const folders = state.folders.list();
     const saved = folders.reduce((sum, folder) => sum + folder.items.length, 0);
@@ -7156,11 +7178,126 @@ function wireFolders() {
       field?.select?.();
     });
   });
+  /*
+   * A trip is a folder with dates on it.
+   *
+   * Not a separate kind of thing, because everything a trip needs — a name, a
+   * colour, pins, visibility, export, sync — a folder already does, and a
+   * second implementation of all of it for the sake of two dates would be two
+   * of everything to keep in step.
+   *
+   * Defaulted to a long weekend from today rather than left blank: a trip with
+   * no dates is a folder, and the point of the button is the dates.
+   */
+  dom.newTrip?.addEventListener('click', () => {
+    const from = localDay();
+    const to = localDay(new Date(Date.now() + 2 * 86400000));
+    const folder = state.folders.create('Trip', { trip: { from, to } });
+    openTab('folders');
+    requestAnimationFrame(() => {
+      const field = dom.folderList.querySelector(`[data-folder="${folder.id}"] .folder-name`);
+      field?.focus();
+      field?.select?.();
+    });
+  });
   dom.importIntoFolder?.addEventListener('click', () => toggleImportPicker());
+}
+
+/*
+ * A trip whose last day has passed stands itself down, once.
+ *
+ * "Temporary pins for a duration" cannot mean deleting them: the trip is over
+ * exactly when you get home with photographs to match to the places, and an
+ * app that had tidied them away by then would have destroyed the record. So
+ * the pins come off the map and stay in the folder, and the bar on the folder
+ * offers to clear them when you have finished with them.
+ *
+ * Once, because a trip you deliberately switch back on must not be switched
+ * off again by the next render.
+ */
+function retireFinishedTrips() {
+  for (const folder of state.folders.list()) {
+    if (!folder.trip || folder.trip.retired) continue;
+    if (tripStanding(folder.trip)?.state !== 'over') continue;
+    state.folders.setTrip(folder.id, { ...folder.trip, retired: true });
+    if (folder.visible) state.folders.update(folder.id, { visible: false });
+  }
+}
+
+/**
+ * The date strip on a trip folder: when it is, and where that stands today.
+ *
+ * The standing is the part worth a line of its own. "12–16 Sep" is a fact you
+ * have to do arithmetic on; "on now, home Sunday" is the answer, and it is
+ * what decides whether this folder is the one you are working in.
+ */
+function tripBar(folder) {
+  const trip = folder.trip;
+  const standing = tripStanding(trip);
+  if (!standing) return null;
+
+  const day = (value) => new Date(`${value}T12:00:00`).toLocaleDateString(undefined, {
+    month: 'short', day: 'numeric',
+  });
+
+  const words = standing.state === 'ahead'
+    ? (standing.days === 1 ? 'tomorrow' : `in ${standing.days} days`)
+    : standing.state === 'on'
+      ? (standing.days === 0 ? 'last day' : `on now · ${standing.days} day${standing.days === 1 ? '' : 's'} left`)
+      : (standing.days === 1 ? 'ended yesterday' : `ended ${standing.days} days ago`);
+
+  const dates = el('div', { class: 'trip-dates' }, [
+    el('input', {
+      type: 'date', class: 'trip-date', value: trip.from, 'aria-label': `${folder.name} starts`,
+      onchange: (event) => state.folders.setTrip(folder.id, { ...trip, from: event.target.value, retired: false }),
+    }),
+    el('span', { class: 'trip-dash', text: '–' }),
+    el('input', {
+      type: 'date', class: 'trip-date', value: trip.to, 'aria-label': `${folder.name} ends`,
+      // Editing the end date un-retires it: moving a trip forward is exactly
+      // how somebody says "it is not over".
+      onchange: (event) => state.folders.setTrip(folder.id, { ...trip, to: event.target.value, retired: false }),
+    }),
+  ]);
+
+  const actions = el('div', { class: 'trip-actions' });
+  if (standing.state === 'over') {
+    actions.append(labelledButton(icons.trash, 'Clear the pins', {
+      tone: 'ghost',
+      title: `Remove every pin in ${folder.name}, keeping the folder`,
+      onclick: () => {
+        const count = folder.items.length;
+        if (!count) return;
+        // eslint-disable-next-line no-alert
+        if (!window.confirm(`Remove ${count} pin${count === 1 ? '' : 's'} from “${folder.name}”? This cannot be undone.`)) return;
+        for (const item of [...folder.items]) state.folders.removeItem(folder.id, item.id);
+        toast(`Cleared ${count} pin${count === 1 ? '' : 's'} from “${folder.name}”.`);
+      },
+    }));
+    actions.append(labelledButton(icons.folder, 'Keep them', {
+      tone: 'ghost',
+      title: 'Make this an ordinary folder and stop calling it a trip',
+      onclick: () => {
+        state.folders.setTrip(folder.id, null);
+        toast(`“${folder.name}” is an ordinary folder now.`);
+      },
+    }));
+  }
+
+  return el('div', { class: `trip-bar is-${standing.state}` }, [
+    el('div', { class: 'trip-line' }, [
+      el('span', { class: 'trip-mark', html: icons.calendar }),
+      el('span', { class: 'trip-when', text: `${day(trip.from)} – ${day(trip.to)}` }),
+      el('span', { class: 'trip-standing', text: words }),
+    ]),
+    dates,
+    actions.childNodes.length ? actions : null,
+  ]);
 }
 
 function renderFoldersTab() {
   if (!dom.folderList) return;
+  retireFinishedTrips();
   const folders = state.folders.list();
   const totals = state.folders.totals();
   dom.folderTotals.textContent = totals.folders
@@ -7280,9 +7417,16 @@ function renderFolder(folder) {
     }),
   ]);
 
+  const trip = tripBar(folder);
+
   const body = el('div', { class: 'folder-body' });
   if (!folder.items.length) {
-    body.append(el('p', { class: 'folder-empty', text: 'Empty — drag items here, or import from a loaded map.' }));
+    body.append(el('p', {
+      class: 'folder-empty',
+      text: folder.trip
+        ? 'Nothing planned yet — drop pins for the places you mean to stop.'
+        : 'Empty — drag items here, or import from a loaded map.',
+    }));
   } else {
     /*
      * Reveal a folder's contents in chunks rather than all at once.
@@ -7325,7 +7469,9 @@ function renderFolder(folder) {
     state.folders.moveItem(itemId, folderId, folder.id);
   });
 
-  node.append(head, body);
+  node.append(head);
+  if (trip) node.append(trip);
+  node.append(body);
   return node;
 }
 

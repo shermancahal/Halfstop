@@ -759,6 +759,48 @@ html, body { height: 100%; overflow: hidden; }
   .panel-brand { display: flex; }
 }
 
+/*
+ * A phone in portrait: the panel is the whole screen.
+ *
+ * At 92vw it left an eight-per-cent sliver of map down one side — too narrow
+ * to read anything off, wide enough to catch a thumb and dismiss the panel by
+ * accident, and it cost every list in the panel that much width. The panel is
+ * already an overlay at this size with its own close button, so there is
+ * nothing the sliver was doing.
+ */
+@media (max-width: 560px) {
+  .panel { width: 100%; }
+}
+
+/*
+ * A phone in landscape: 390 pixels of height, and 60 of them were header.
+ *
+ * The panel cannot be full width here — that is the whole screen and the map
+ * with it — so it stays a column, and everything vertical gets thinner:
+ * a shorter header, tighter tab bars, less padding per row. Keyed to the
+ * height rather than the orientation, because a short window on a laptop has
+ * exactly the same problem and no orientation at all.
+ */
+@media (max-height: 500px) and (min-width: 480px) {
+  .app { grid-template-rows: calc(var(--short-header) + var(--safe-top)) 1fr; }
+  .site-header { height: calc(var(--short-header) + var(--safe-top)); }
+  .site-header .wrap { padding: 0 10px; }
+  .brand-parent { display: none; }
+  .site-header .icon-button { width: 28px; height: 28px; }
+  .site-header .icon-button svg { width: 15px; height: 15px; }
+
+  .panel { width: min(46vw, 330px); }
+  .panel-tab { padding: 7px 2px 6px; font-size: .72rem; }
+  .panel-scroll { padding-top: 8px; }
+  .panel-section { margin-bottom: 12px; }
+  .layer-row .layer-option { padding: 7px 9px; }
+
+  /* The map keeps its controls off the bottom edge, where a landscape phone
+     puts the home indicator across them. */
+  .map-quick-controls { bottom: calc(8px + var(--safe-bottom)); }
+  .map-search { top: 8px; }
+}
+
 /* Destination picker beside the drop zone */
 .drop-target-label {
   display: block; margin: 12px 0 5px;
@@ -770,6 +812,43 @@ html, body { height: 100%; overflow: hidden; }
   background: var(--surface); border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm); padding: 8px 9px;
 }
+
+/*
+ * A trip's dates, under its folder name.
+ *
+ * Three things in order of how often they are read: when it is in words you do
+ * not have to do arithmetic on, the dates themselves, and — once it is over —
+ * what to do about the pins. The left edge carries the standing as colour, so
+ * a glance down a list of folders says which one is live.
+ */
+.trip-bar {
+  display: grid; gap: 7px;
+  margin: 0 0 2px; padding: 8px 12px 10px 13px;
+  border-left: 3px solid var(--line-strong);
+  background: var(--paper-2);
+}
+.trip-bar.is-on { border-left-color: var(--pine); background: var(--pine-soft); }
+.trip-bar.is-ahead { border-left-color: var(--clay); }
+.trip-bar.is-over { border-left-color: var(--ink-3); opacity: .9; }
+
+.trip-line { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.trip-mark { flex: none; display: inline-flex; color: var(--ink-3); }
+.trip-mark svg { width: 14px; height: 14px; }
+.trip-when { font-size: .78rem; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+.trip-standing {
+  margin-left: auto; font-size: .7rem; letter-spacing: .03em;
+  color: var(--ink-3); text-align: right;
+}
+.trip-bar.is-on .trip-standing { color: var(--pine); font-weight: 600; }
+
+.trip-dates { display: flex; align-items: center; gap: 6px; }
+.trip-date {
+  flex: 1; min-width: 0; font: inherit; font-size: .76rem; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm); padding: 5px 7px;
+}
+.trip-dash { color: var(--ink-3); font-size: .78rem; }
+.trip-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* Saved pin notes, under the row */
 .folder-item-desc {
@@ -1449,7 +1528,12 @@ html, body { height: 100%; overflow: hidden; }
      five overlay groups, which is the same as not being there — and the whole
      point of it is being findable without looking for it. */
   position: sticky; bottom: 0; z-index: 2;
-  margin: 14px -14px -14px; padding: 7px 14px;
+  /* Flush with the panel, not fourteen pixels outside it. `.panel-scroll` has
+     no horizontal padding to cancel, so the negative margins this used to
+     carry hung the stamp over both edges — invisible while the panel was
+     narrower than the screen, and off the right of a phone the moment the
+     panel filled the width. */
+  margin: 14px 0 0; padding: 7px 14px;
   border-top: 1px solid var(--line);
   background: var(--surface);
   font-size: .68rem; letter-spacing: .03em; color: var(--ink-3);

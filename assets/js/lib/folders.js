@@ -87,6 +87,65 @@ function fingerprint(feature) {
   return `${name}|${where}`;
 }
 
+/* ---------------- trips ---------------- */
+
+/**
+ * A trip window, or null.
+ *
+ * Stored as two ISO dates rather than timestamps: a trip runs from a day to a
+ * day, not from an instant to an instant, and a timestamp would shift the
+ * dates by a day for anyone who planned a trip in one time zone and drove it
+ * in another. Bad input becomes null rather than a folder that renders as
+ * "Invalid Date – Invalid Date" and cannot be repaired from the UI.
+ */
+export function readTrip(trip) {
+  if (!trip || typeof trip !== 'object') return null;
+  const from = readDay(trip.from);
+  const to = readDay(trip.to) || from;
+  if (!from) return null;
+  // Backwards is a typo, not an intention.
+  const window = to < from ? { from: to, to: from } : { from, to };
+  // Whether the app has already stood this trip down after its last day. Kept
+  // so it happens once: a trip you deliberately switched back on must not be
+  // switched off again on the next render.
+  window.retired = trip.retired === true;
+  return window;
+}
+
+const readDay = (value) => {
+  const text = String(value ?? '').slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) && !Number.isNaN(Date.parse(text)) ? text : '';
+};
+
+/**
+ * Where a trip stands relative to a day: ahead, on, or over.
+ *
+ * Compared as calendar days, not as instants. "Ends today" has to stay "on"
+ * until the day is out — a trip that reads as finished while you are still on
+ * it is worse than useless, because the folder it names is the one holding the
+ * pins you are driving to.
+ */
+export function tripStanding(trip, today = new Date()) {
+  if (!trip) return null;
+  const day = typeof today === 'string' ? today.slice(0, 10) : localDay(today);
+  if (day < trip.from) {
+    return { state: 'ahead', days: dayGap(day, trip.from) };
+  }
+  if (day > trip.to) {
+    return { state: 'over', days: dayGap(trip.to, day) };
+  }
+  return { state: 'on', days: dayGap(day, trip.to) };
+}
+
+/** Today where the user is, as YYYY-MM-DD — not the UTC day, which can differ. */
+export function localDay(date = new Date()) {
+  const pad = (value) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+const dayGap = (from, to) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000);
+
+
 export class FolderStore {
   constructor({ storage = safeStorage(), key = STORAGE_KEY } = {}) {
     this.storage = storage;
@@ -122,6 +181,7 @@ export class FolderStore {
           created: folder.created || null,
           updatedAt: folder.updatedAt || 0,
           deleted: folder.deleted === true,
+          trip: readTrip(folder.trip),
           items: (Array.isArray(folder.items) ? folder.items : [])
             .filter((item) => item?.feature?.geometry)
             .map((item) => ({ id: item.id || makeId('i'), feature: item.feature })),
@@ -183,6 +243,7 @@ export class FolderStore {
       created: folder.created || null,
       updatedAt: folder.updatedAt || 0,
       deleted: folder.deleted === true,
+      trip: readTrip(folder.trip),
       items: (Array.isArray(folder.items) ? folder.items : [])
         .filter((item) => item?.feature?.geometry)
         .map((item) => ({ id: item.id || makeId('i'), feature: item.feature })),
@@ -201,7 +262,7 @@ export class FolderStore {
     return this.folders.find((folder) => folder.id === id) || null;
   }
 
-  create(name = 'New folder', { color = null, visible = true } = {}) {
+  create(name = 'New folder', { color = null, visible = true, trip = null } = {}) {
     const folder = {
       id: makeId('f'),
       name: clampName(name, `Folder ${this.folders.length + 1}`),
@@ -211,6 +272,7 @@ export class FolderStore {
       created: Date.now(),
       updatedAt: Date.now(),
       deleted: false,
+      trip: readTrip(trip),
       items: [],
     };
     this.folders.push(folder);
@@ -223,6 +285,22 @@ export class FolderStore {
     const wanted = clampName(name, 'Unfiled');
     const existing = this.folders.find((folder) => folder.name.toLowerCase() === wanted.toLowerCase());
     return existing || this.create(wanted);
+  }
+
+  /**
+   * Give a folder a trip window, or take it away.
+   *
+   * A trip is a folder with dates on it rather than a separate kind of thing,
+   * because everything a trip needs — a name, a colour, pins, visibility,
+   * export, sync — a folder already does. Anything else would be a second
+   * implementation of all of it for the sake of two dates.
+   */
+  setTrip(id, trip) {
+    const folder = this.get(id);
+    if (!folder) return null;
+    folder.trip = readTrip(trip);
+    this.emit(id);
+    return folder;
   }
 
   rename(id, name) {

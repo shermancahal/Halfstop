@@ -6,7 +6,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { FolderStore, fingerprint, packFeature } from '../assets/js/lib/folders.js';
+import {
+  FolderStore, fingerprint, packFeature, readTrip, tripStanding, localDay,
+} from '../assets/js/lib/folders.js';
 import { toGPX } from '../assets/js/lib/gpx-write.js';
 import { parseGPX } from '../assets/js/lib/gpx.js';
 import { parseMapFile } from '../assets/js/lib/parse.js';
@@ -306,4 +308,84 @@ test('editItem reports a miss rather than throwing', () => {
   const folder = store.create('Trip');
   assert.equal(store.editItem(folder.id, 'nope', { name: 'x' }), false);
   assert.equal(store.editItem('nope', 'nope', { name: 'x' }), false);
+});
+
+/* ------------------------------------------------------------------ trips */
+
+test('trips: a window is two days, in order, or nothing at all', () => {
+  assert.deepEqual(readTrip({ from: '2026-09-12', to: '2026-09-16' }),
+    { from: '2026-09-12', to: '2026-09-16', retired: false });
+
+  // Backwards is a typo, not an intention.
+  assert.deepEqual(readTrip({ from: '2026-09-16', to: '2026-09-12' }),
+    { from: '2026-09-12', to: '2026-09-16', retired: false });
+
+  // A day trip: one date, and the end defaults to it rather than to nothing.
+  assert.deepEqual(readTrip({ from: '2026-09-12' }),
+    { from: '2026-09-12', to: '2026-09-12', retired: false });
+
+  /*
+   * Rubbish becomes null, not a broken window.
+   *
+   * A folder carrying { from: 'soon' } would render as "Invalid Date" and
+   * there is no control in the app that could repair it — the date fields
+   * cannot hold it to show it back to you.
+   */
+  for (const bad of [null, undefined, {}, { from: '' }, { from: 'soon' }, { from: '2026-13-45' }, 'nope']) {
+    assert.equal(readTrip(bad), null, `${JSON.stringify(bad)} should not become a trip`);
+  }
+});
+
+test('trips: where a trip stands is measured in days, not instants', () => {
+  const trip = readTrip({ from: '2026-09-12', to: '2026-09-16' });
+
+  assert.deepEqual(tripStanding(trip, '2026-09-09'), { state: 'ahead', days: 3 });
+  assert.deepEqual(tripStanding(trip, '2026-09-12'), { state: 'on', days: 4 });
+  assert.deepEqual(tripStanding(trip, '2026-09-14'), { state: 'on', days: 2 });
+
+  /*
+   * The last day is still "on".
+   *
+   * A trip that reads as finished while you are driving it is worse than
+   * useless: the folder it names is the one holding the pins you are heading
+   * for, and the app stands a finished trip down.
+   */
+  assert.deepEqual(tripStanding(trip, '2026-09-16'), { state: 'on', days: 0 });
+  assert.deepEqual(tripStanding(trip, '2026-09-17'), { state: 'over', days: 1 });
+  assert.equal(tripStanding(null, '2026-09-17'), null);
+});
+
+test('trips: today is the local day, not the UTC one', () => {
+  // Half the planet is on a different date from UTC at any given moment, and a
+  // trip that starts "tomorrow" for someone in Sydney is a trip the app would
+  // call "on" if it read the UTC day.
+  const nearMidnight = new Date(2026, 8, 12, 23, 30);
+  assert.equal(localDay(nearMidnight), '2026-09-12');
+  const earlyMorning = new Date(2026, 8, 12, 0, 30);
+  assert.equal(localDay(earlyMorning), '2026-09-12');
+});
+
+test('trips: a folder keeps its window across a save and load', () => {
+  const storage = memoryStorage();
+  const first = new FolderStore({ storage });
+  const trip = first.create('Smokies', { trip: { from: '2026-09-12', to: '2026-09-16' } });
+  assert.equal(trip.trip.from, '2026-09-12');
+
+  const second = new FolderStore({ storage });
+  assert.deepEqual(second.get(trip.id).trip, { from: '2026-09-12', to: '2026-09-16', retired: false });
+
+  // And a folder that is not a trip stays not a trip.
+  const plain = first.create('Saved places');
+  assert.equal(new FolderStore({ storage }).get(plain.id).trip, null);
+});
+
+test('trips: the window survives the sync merge', () => {
+  // `replaceAll` rebuilds every folder from a plain object, so a field it does
+  // not copy is a field that vanishes the first time two devices meet.
+  const store = new FolderStore({ storage: memoryStorage() });
+  store.replaceAll([{
+    id: 'f1', name: 'Smokies', items: [],
+    trip: { from: '2026-09-12', to: '2026-09-16' },
+  }]);
+  assert.deepEqual(store.get('f1').trip, { from: '2026-09-12', to: '2026-09-16', retired: false });
 });

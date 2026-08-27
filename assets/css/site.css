@@ -37,6 +37,10 @@
 
   --wrap: 1140px;
   --header-h: 60px;
+  /* What the header shrinks to when the window is shorter than it is wide —
+     a landscape phone has 390 pixels of height and cannot spare sixty of
+     them for a bar with four icons on it. */
+  --short-header: 44px;
 
   /*
    * Display cutouts. Zero in every browser tab, non-zero only when the page is

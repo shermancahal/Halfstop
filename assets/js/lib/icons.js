@@ -31,6 +31,7 @@ export const icons = {
   file: svg('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z"/><path d="M14 2v6h6"/>'),
   // The same folder the panel's tab and the map's quick button already draw,
   // so "save into a folder" carries the mark of the place it saves into.
+  calendar: svg('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4"/><path d="M16 3v4"/><path d="M3 10h18"/>'),
   folder: svg('<path d="M3 7a2 2 0 0 1 2-2h3.6a2 2 0 0 1 1.4.6L11.4 7H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>'),
 
   /* Details-panel section marks. A panel of eight stacked headings reads as one

@@ -2295,6 +2295,108 @@ await page.locator('.sky-tab', { hasText: /^Draw$/ }).first().click();
 await page.waitForTimeout(300);
 
 /*
+ * A trip is a folder with dates on it.
+ *
+ * "Temporary pins for a duration" cannot mean deleting them: a trip is over
+ * exactly when you get home with photographs to match to the places, and an
+ * app that had tidied the pins away by then would have destroyed the record.
+ * So a finished trip comes off the map and stays in the folder.
+ */
+console.log('\nA trip is a folder with dates on it');
+await page.click('.panel-tab[data-tab="folders"]');
+await page.waitForTimeout(300);
+await page.click('#new-trip');
+await page.waitForTimeout(500);
+
+const trip = await page.evaluate(() => {
+  const bar = document.querySelector('.trip-bar');
+  return {
+    present: !!bar,
+    standing: bar?.className || '',
+    words: bar?.querySelector('.trip-standing')?.textContent.trim() || '',
+    dates: [...(bar?.querySelectorAll('.trip-date') || [])].map((node) => node.value),
+    actions: [...(bar?.querySelectorAll('.trip-actions button') || [])].length,
+  };
+});
+check('a new trip carries a date strip', trip.present, true);
+check('starting today and running a long weekend, not blank',
+  trip.dates.length === 2 && trip.dates[0] < trip.dates[1], true);
+check('and it is on now, because it starts today', /is-on/.test(trip.standing), true);
+check('said in words rather than as arithmetic to do', /on now|last day/.test(trip.words), true);
+check('with nothing to clean up yet', trip.actions, 0);
+
+/*
+ * Wound forward past its end, the same trip stands itself down — once.
+ * A trip you deliberately switch back on must not be switched off again by
+ * the next render, which is what the retired flag is for.
+ */
+const day = (offset) => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
+// Wound back through the date fields rather than through the store, because
+// the fields are how anyone actually moves a trip — and `readTrip` reorders a
+// backwards window, so the start has to move first or the trip stays on.
+const setDate = async (which, value) => {
+  await page.locator('.trip-date').nth(which).fill(value);
+  await page.locator('.trip-date').nth(which).dispatchEvent('change');
+  await page.waitForTimeout(400);
+};
+await setDate(0, day(-9));
+await setDate(1, day(-2));
+
+/*
+ * Waited for rather than slept through.
+ *
+ * Standing a trip down is three store writes and three re-renders of a panel
+ * that by this point in the suite holds a couple of thousand rows, and a fixed
+ * pause long enough for that is either flaky or slow. This reports the same
+ * failure either way — the condition never arrives — without guessing at how
+ * long the render takes on the machine it is running on.
+ */
+await page.waitForFunction(
+  () => document.querySelector('.trip-bar')?.closest('.folder')
+    ?.querySelector('.folder-eye')?.classList.contains('is-hidden') === true,
+  null,
+  { timeout: 10000 },
+).catch(() => {});
+
+const ended = await page.evaluate(() => {
+  const bar = document.querySelector('.trip-bar');
+  // The trip's own folder, not whichever one is first in the list — the suite
+  // has several by this point and they are not in creation order.
+  const eye = bar?.closest('.folder')?.querySelector('.folder-eye');
+  return {
+    standing: bar?.className || '',
+    words: bar?.querySelector('.trip-standing')?.textContent.trim() || '',
+    actions: [...(bar?.querySelectorAll('.trip-actions button') || [])].map((node) => node.textContent.trim()),
+    hidden: eye?.classList.contains('is-hidden') ?? null,
+  };
+});
+
+check('a finished trip says so', /ended/.test(ended.words), true);
+check('and is marked as over', /is-over/.test(ended.standing), true);
+check('its pins come off the map', ended.hidden, true);
+check('and it offers what to do about them',
+  ended.actions.some((label) => /clear/i.test(label))
+    && ended.actions.some((label) => /keep/i.test(label)), true);
+
+/*
+ * Switched back on by hand, it stays on.
+ *
+ * Standing a finished trip down is a one-off, not a rule the render enforces
+ * every pass — otherwise the eye on a finished trip would be a button that
+ * does nothing, which is the worst kind.
+ */
+await page.locator('.folder:has(.trip-bar) .folder-eye').first().click();
+await page.waitForTimeout(400);
+await page.click('.panel-tab[data-tab="layers"]');
+await page.waitForTimeout(200);
+await page.click('.panel-tab[data-tab="folders"]');
+await page.waitForTimeout(400);
+check('switching it back on sticks, rather than being undone on the next render',
+  await page.locator('.folder:has(.trip-bar) .folder-eye').first()
+    .evaluate((node) => node.classList.contains('is-hidden')),
+  false);
+
+/*
  * Typing a place and going there.
  *
  * The map could answer "what is this" about somewhere you had already found,
@@ -2378,8 +2480,20 @@ await page.waitForTimeout(200);
  * did not, and why this is checked at several widths rather than one.
  */
 console.log('\nNothing is wider than the screen it is on');
-for (const width of [402, 430, 440, 480, 768]) {
-  await page.setViewportSize({ width, height: 900 });
+/*
+ * Landscape is in the list because it fails differently.
+ *
+ * A phone on its side is 844 wide and 390 tall — wider than the breakpoint the
+ * phone rules key off, so it gets the desktop layout in a window with 390
+ * pixels of height, sixty of which were header. Nothing overflowed sideways;
+ * everything was squeezed vertically instead.
+ */
+for (const { width, height } of [
+  { width: 402, height: 900 }, { width: 430, height: 900 }, { width: 440, height: 900 },
+  { width: 480, height: 900 }, { width: 768, height: 900 },
+  { width: 844, height: 390 }, { width: 926, height: 428 },
+]) {
+  await page.setViewportSize({ width, height });
   await page.waitForTimeout(250);
   const fits = await page.evaluate((w) => {
     const doc = document.documentElement;
@@ -2389,10 +2503,22 @@ for (const width of [402, 430, 440, 480, 768]) {
       .filter((node) => !node.closest('.mapboxgl-popup, .maplibregl-popup'))
       .map((node) => (typeof node.className === 'string' && node.className
         ? `.${node.className.split(' ')[0]}` : node.tagName));
-    return { scrolls: doc.scrollWidth > doc.clientWidth, over: [...new Set(over)].slice(0, 4) };
+    /*
+     * The panel is allowed to be the whole screen on a phone in portrait —
+     * it is an overlay with a close button — but only when it is open. With
+     * it shut, the map is what the app is, at every size.
+     */
+    const surface = document.querySelector('.map-surface')?.getBoundingClientRect();
+    return {
+      scrolls: doc.scrollWidth > doc.clientWidth,
+      over: [...new Set(over)].slice(0, 4),
+      mapShare: surface ? (surface.width * surface.height) / (w * window.innerHeight) : 0,
+    };
   }, width);
-  check(`at ${width}px the page does not scroll sideways`, fits.scrolls, false);
-  check(`and nothing hangs off the right at ${width}px`, fits.over, []);
+  check(`at ${width}\u00d7${height} the page does not scroll sideways`, fits.scrolls, false);
+  check(`and nothing hangs off the right at ${width}\u00d7${height}`, fits.over, []);
+  check(`and the map is still most of the screen at ${width}\u00d7${height}`,
+    fits.mapShare > 0.5, true);
 }
 await page.setViewportSize({ width: 1280, height: 900 });
 await page.waitForTimeout(250);
