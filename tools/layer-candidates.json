@@ -21,13 +21,6 @@
     "url": "https://services.swpc.noaa.gov/products/alerts.json"
   },
   {
-    "id": "land:padus-service-types",
-    "note": "Three attempts at PAD-US, three 400s, and the last said Invalid URL for the service root rather than the query - so the path shape is wrong, not the parameters. This prints each service beside its type instead of assuming FeatureServer a fourth time.",
-    "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"PADUS3_0[^\"]{0,32}\"\\s*,\\s*\"type\"\\s*:\\s*\"[A-Za-z]+\"",
-    "url": "https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services?f=pjson"
-  },
-  {
     "id": "roads:mvum-service",
     "note": "What the MVUM service says it holds. The raster we draw is layers=show:1,2, but a click has to name a sublayer to identify against, and the field a road's class lives in is whatever this says it is. Printing the sublayer list and their fields is the whole of what is needed to design the panel.",
     "expect": "data",
@@ -442,30 +435,16 @@
   },
   {
     "id": "land:blm-1",
-    "note": "Layer 0 is a group called IDENTIFY and refuses every query, which is a group layer behaving normally. The sublayer that carries ADMIN_UNIT_NAME is one of these. Three probes cost one CI run; guessing has been wrong six times today.",
+    "note": "The identify request as lookup.js builds it, against the layer that now ships. Layer 0 is a group called IDENTIFY and refuses everything; 2 and 3 refuse too. Only 1 answers, and it answers with the fields the panel reads.",
     "expect": "data",
     "find": "\"(?:ADMIN_UNIT_NAME|ADMIN_AGENCY_CODE|ADMIN_DEPT_CODE|attributes)\"\\s*:\\s*\"?[^\",}]{0,50}\"?",
     "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_LimitedScale/MapServer/1/query?geometry=%7B%22x%22%3A-111.5%2C%22y%22%3A38.5%2C%22spatialReference%22%3A%7B%22wkid%22%3A4326%7D%7D&geometryType=esriGeometryPoint&spatialRel=esriSpatialRelIntersects&where=1%3D1&outFields=*&returnGeometry=false&f=json"
   },
   {
-    "id": "land:blm-2",
-    "note": "Layer 0 is a group called IDENTIFY and refuses every query, which is a group layer behaving normally. The sublayer that carries ADMIN_UNIT_NAME is one of these. Three probes cost one CI run; guessing has been wrong six times today.",
+    "id": "land:federal-lands",
+    "note": "A candidate to replace the PAD-US entry that was removed for being dead. Esri's Living Atlas federal lands layer, asked with the identify request exactly as lookup.js builds it. It ships only if it answers here first - which is the discipline that was missing when PAD-US was wired.",
     "expect": "data",
-    "find": "\"(?:ADMIN_UNIT_NAME|ADMIN_AGENCY_CODE|ADMIN_DEPT_CODE|attributes)\"\\s*:\\s*\"?[^\",}]{0,50}\"?",
-    "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_LimitedScale/MapServer/2/query?geometry=%7B%22x%22%3A-111.5%2C%22y%22%3A38.5%2C%22spatialReference%22%3A%7B%22wkid%22%3A4326%7D%7D&geometryType=esriGeometryPoint&spatialRel=esriSpatialRelIntersects&where=1%3D1&outFields=*&returnGeometry=false&f=json"
-  },
-  {
-    "id": "land:blm-3",
-    "note": "Layer 0 is a group called IDENTIFY and refuses every query, which is a group layer behaving normally. The sublayer that carries ADMIN_UNIT_NAME is one of these. Three probes cost one CI run; guessing has been wrong six times today.",
-    "expect": "data",
-    "find": "\"(?:ADMIN_UNIT_NAME|ADMIN_AGENCY_CODE|ADMIN_DEPT_CODE|attributes)\"\\s*:\\s*\"?[^\",}]{0,50}\"?",
-    "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_LimitedScale/MapServer/3/query?geometry=%7B%22x%22%3A-111.5%2C%22y%22%3A38.5%2C%22spatialReference%22%3A%7B%22wkid%22%3A4326%7D%7D&geometryType=esriGeometryPoint&spatialRel=esriSpatialRelIntersects&where=1%3D1&outFields=*&returnGeometry=false&f=json"
-  },
-  {
-    "id": "land:padus-find",
-    "note": "Where PAD-US actually lives now. The last search filtered on an owner field that holds a username, not the organisation id, so it matched nothing and said total zero - which reads exactly like an absence and is not one.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,120}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=12&sortField=numViews&sortOrder=desc&q=%28PADUS%20OR%20%22PAD-US%22%29%20AND%20type%3A%22Feature%20Service%22"
+    "find": "\"(?:attributes|ADMIN_UNIT_NAME|AGBUR|FEATURE1|NAME1)\"\\s*:\\s*\"?[^\",}]{0,50}\"?",
+    "url": "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/USA_Federal_Lands/FeatureServer/0/query?geometry=%7B%22x%22%3A-111.5%2C%22y%22%3A38.5%2C%22spatialReference%22%3A%7B%22wkid%22%3A4326%7D%7D&geometryType=esriGeometryPoint&spatialRel=esriSpatialRelIntersects&where=1%3D1&outFields=*&returnGeometry=false&f=json"
   }
 ]

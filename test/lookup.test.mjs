@@ -128,22 +128,28 @@ test('land: a service that could not be asked is reported as such', () => withFe
 ));
 
 test('land: one broken service does not mask another answering correctly', () => {
-  // What was actually seen in the field: two services misconfigured, the third
-  // working and finding nothing. The verdict should come from the one that
-  // worked.
+  /*
+   * What was actually seen in the field: a misconfigured service ahead of a
+   * working one that finds nothing. The verdict has to come from the one that
+   * worked, not from the one that broke first.
+   *
+   * The first call fails and every later one answers, rather than a fixed
+   * count of failures, because this test should not need editing when a dead
+   * service is removed from the list - which is exactly what happened to the
+   * PAD-US entry, and it took this test down with it.
+   */
   let call = 0;
   return withFetch(
     () => {
       call += 1;
       if (call === 1) return { error: { message: 'Invalid or missing input parameters.' } };
-      if (call === 2) return { error: { message: 'Invalid URL' } };
       return { features: [] };
     },
     async () => {
       const result = await landManager(POINT);
       assert.equal(result.empty, true, 'the working service decides the verdict');
       assert.match(result.reason, /most likely private/);
-      assert.equal(result.unreachable.length, 2, 'the broken ones are still recorded');
+      assert.equal(result.unreachable.length, 1, 'the broken one is still recorded');
     },
   );
 });

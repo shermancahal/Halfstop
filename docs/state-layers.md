@@ -302,3 +302,27 @@ BLM's layer 0 is named IDENTIFY and refuses every query form tried, which
 is how a group layer behaves; a probe now asks for the sublayer list.
 PAD-US moved and listing its organisation returned four hundred kilobytes
 of unrelated services, so that is a targeted search now.
+
+## The identify feature, fixed
+
+The land lookup behind "what is there" was querying layer 0 of BLM's
+surface-management service. Layer 0 is a group called IDENTIFY, and a
+group layer answers every query with a 200 carrying "Invalid or missing
+input parameters" - a response indistinguishable from a malformed
+request, which is how it was read for a long time, including once by me
+in this session when I declared the feature healthy.
+
+Layer 1 is the Surface Management Agency itself. Probed with the exact
+request `lookup.js` builds, layers 0, 2 and 3 all refuse and layer 1
+answers with `ADMIN_DEPT_CODE: USDA`, `ADMIN_AGENCY_CODE: USFS`. It now
+points at 1.
+
+PAD-US was removed rather than repaired. `PADUS4_0Fee` answers "Invalid
+URL", the service has moved at least twice, and a search of its
+publisher's organisation returns several hundred kilobytes of unrelated
+layers without it. A fallback that never answers costs a round trip on
+every click and tells the reader nothing. Esri's federal lands layer is
+being probed as a replacement and ships only if it answers first.
+
+So the chain is two services where it was three, and two of them work
+where one did.

@@ -1982,13 +1982,27 @@ export const LAND_LOOKUPS = [
   // To repair one: open the service root in a browser (drop the /query and the
   // parameters). A working layer shows its name and field list; a dead one
   // shows that same "Invalid URL". Then correct the entry below.
+  //
+  // PAD-US used to sit between these two and was removed rather than repaired.
+  // PADUS4_0Fee answers "Invalid URL", the service has moved at least twice,
+  // and a search of the publisher's organisation returns several hundred
+  // kilobytes of unrelated layers without it. A fallback that never answers
+  // costs a round trip on every click and tells the reader nothing.
   {
+    /*
+     * Layer 1, not 0.
+     *
+     * Layer 0 of this service is a group called IDENTIFY, and a group layer
+     * answers every query with a 200 carrying "Invalid or missing input
+     * parameters" - which is indistinguishable from a malformed request, and
+     * was read as one for a long time. Layer 1 is the Surface Management
+     * Agency itself and returns ADMIN_DEPT_CODE, ADMIN_AGENCY_CODE and
+     * ADMIN_UNIT_NAME, which is what the panel below reads.
+     *
+     * Confirmed by probing 1, 2 and 3 with this exact request: only 1 answers.
+     */
     name: 'BLM surface management',
-    url: 'https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_LimitedScale/MapServer/0',
-  },
-  {
-    name: 'PAD-US',
-    url: 'https://services.arcgis.com/v01gqwM5QqNysAAi/ArcGIS/rest/services/PADUS4_0Fee/FeatureServer/0',
+    url: 'https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_LimitedScale/MapServer/1',
   },
   {
     name: 'USFS administrative forests',
