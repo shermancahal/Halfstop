@@ -1193,9 +1193,18 @@ const tabs = await page.evaluate(() => ({
   withIcons: document.querySelectorAll('.sky-tab .sky-tab-icon svg').length,
   labels: [...document.querySelectorAll('.sky-tab-text')].map((node) => node.textContent),
 }));
-check('there are five sky tabs', tabs.count, 5);
-check('and every one of them has an icon', tabs.withIcons, 5);
+/*
+ * Counted against itself rather than against a number.
+ *
+ * This said "five", and adding a sixth tab broke it — which is a change to be
+ * noticed, not a failure. What actually matters is that every tab has a mark:
+ * a strip of six is a wall of small capitals otherwise, which is why the icons
+ * were added in the first place.
+ */
+check('every sky tab has an icon', tabs.withIcons, tabs.count);
+check('and a label to go with it', tabs.labels.length, tabs.count);
 check('including Aurora', tabs.labels.includes('Aurora'), true);
+check('and Eclipse', tabs.labels.includes('Eclipse'), true);
 
 // Three across then two, rather than the three rows a two-column grid gave.
 const tabRows = await page.evaluate(() => {
@@ -1870,6 +1879,64 @@ const blmKey = await page.evaluate(() => {
 check('the BLM routes row is there', blmKey.found, true);
 check('and its key is filled from the service', blmKey.rows, ['Open to all vehicles', 'Open seasonally']);
 check('each class drawn with the swatch the service published', blmKey.swatches, 2);
+
+/*
+ * The eclipse tab.
+ *
+ * The times are the same for the whole planet — a lunar eclipse is the moon
+ * crossing one shadow — so the only thing this place decides is whether the
+ * moon is above the horizon for it, which is what turns a date in a table into
+ * a reason to drive somewhere.
+ */
+console.log('\nThe next eclipse, and whether this spot will see it');
+await page.click('.panel-tab[data-tab="waypoints"]');
+await page.waitForTimeout(300);
+await page.locator('.waypoint-card').first().click();
+await page.waitForTimeout(700);
+await openGroup('Photography');
+await page.waitForTimeout(300);
+
+const eclipseTab = page.locator('.sky-tab', { hasText: 'Eclipse' });
+check('there is an eclipse tab under Photography', await eclipseTab.count(), 1);
+await eclipseTab.click();
+await page.waitForTimeout(600);
+
+const eclipse = await page.evaluate(() => {
+  const panel = document.querySelector('.sky-panel');
+  return {
+    kind: panel.querySelector('.eclipse-kind')?.textContent.trim() || '',
+    when: panel.querySelector('.eclipse-when')?.textContent.trim() || '',
+    verdict: panel.querySelector('.eclipse-verdict')?.textContent.trim() || '',
+    stages: [...panel.querySelectorAll('.eclipse-stages dt')].map((n) => n.textContent.trim()),
+    circles: [...panel.querySelectorAll('.eclipse-diagram circle')].map((n) => ({
+      r: Number(n.getAttribute('r')), cy: Number(n.getAttribute('cy')),
+      cls: n.getAttribute('class'),
+    })),
+  };
+});
+
+check('it names the kind of eclipse', /lunar eclipse$/.test(eclipse.kind), true);
+check('and dates it', eclipse.when.length > 8, true);
+check('the verdict says whether the moon is up for it here',
+  /visible|below the horizon|edges of it/i.test(eclipse.verdict), true);
+check('greatest eclipse is always one of the stages',
+  eclipse.stages.includes('Greatest'), true);
+check('and every stage carries whether the moon is up at that moment',
+  await page.locator('.eclipse-stages .eclipse-up').count() >= eclipse.stages.length, true);
+
+/*
+ * The picture has to agree with the physics, and it did not.
+ *
+ * The first version used Meeus's contact distances as the shadow radii; those
+ * already contain a moon radius each, so both circles came out one moon too
+ * big and a partial eclipse drew as a total one. It looked entirely plausible.
+ */
+const [penumbra, umbra, moon] = eclipse.circles;
+check('the diagram is drawn shadow, shadow, moon',
+  [penumbra.cls, umbra.cls, moon.cls],
+  ['eclipse-penumbra', 'eclipse-umbra', 'eclipse-moon']);
+check('the umbra sits inside the penumbra', umbra.r < penumbra.r, true);
+check('and the moon is smaller than the shadow it crosses', moon.r < umbra.r, true);
 
 /*
  * Nothing may be wider than the screen, at any phone width.

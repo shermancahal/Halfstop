@@ -56,6 +56,7 @@ import {
 } from './lib/lookup.js';
 import { registerNPSImages, npsIconSVG } from './lib/nps-icons.js';
 import { kpNow, auroraChance, describeKp } from './lib/aurora.js';
+import { lunarEclipses, describeEclipse, shadowGeometry } from './lib/eclipse.js';
 import { describeSync } from './lib/sync.js';
 import { registerServiceWorker, applyServiceWorkerUpdate } from './lib/pwa.js';
 import {
@@ -2327,6 +2328,7 @@ function skyPanels(position, date, phases) {
     { id: 'moon', label: `Moon ${Math.round(moonIllumination(date).fraction * 100)}%`, icon: icons.moon },
     { id: 'milkyway', label: 'Milky Way', icon: icons.galaxy },
     { id: 'aurora', label: 'Aurora', icon: icons.aurora },
+    { id: 'eclipse', label: 'Eclipse', icon: icons.eclipse },
     { id: 'lines', label: 'On the map', icon: icons.pin },
   ];
 
@@ -2349,9 +2351,153 @@ function skyPanels(position, date, phases) {
   else if (open === 'moon') moonPanel(body, date, lat, lon);
   else if (open === 'milkyway') milkyWayPanel(body, date, lat, lon);
   else if (open === 'aurora') auroraPanel(body, [lon, lat]);
+  else if (open === 'eclipse') eclipsePanel(body, date, lat, lon);
   else if (open === 'lines') linesPanel(body, position, date);
 
   return open ? [row, body] : [row];
+}
+
+/**
+ * The next few lunar eclipses, and whether this spot will see them.
+ *
+ * The times are the same everywhere — a lunar eclipse is the moon crossing one
+ * shadow, so the whole planet watching it is watching the same instant. What
+ * differs from place to place is only whether the moon is above the horizon,
+ * which is the line that turns a date in a table into a reason to drive
+ * somewhere.
+ */
+const longDate = (when) => when.toLocaleDateString(undefined, {
+  weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+});
+
+function eclipsePanel(body, date, lat, lon) {
+  const eclipses = lunarEclipses(date, { count: 4 });
+  if (!eclipses.length) {
+    body.append(el('p', { class: 'hint', text: 'No lunar eclipse in the next dozen years, which cannot be right — please report this.' }));
+    return;
+  }
+
+  const [next, ...later] = eclipses;
+  const visible = eclipseVisibility(next, lat, lon);
+
+  body.append(el('div', { class: `eclipse-hero is-${next.kind}` }, [
+    eclipseDiagram(next),
+    el('div', { class: 'eclipse-hero-text' }, [
+      el('p', { class: 'eclipse-kind', text: `${next.kind} lunar eclipse` }),
+      el('p', { class: 'eclipse-when', text: longDate(next.greatest) }),
+      el('p', { class: 'eclipse-peak', text: `Greatest at ${clockTime(next.greatest)}` }),
+    ]),
+  ]));
+
+  /*
+   * The visibility line first, because it is the one that decides anything.
+   * A total eclipse below the horizon is a fact about the sky and not about
+   * tonight.
+   */
+  body.append(el('p', {
+    class: `eclipse-verdict is-${visible.state}`,
+    text: visible.text,
+  }));
+
+  const stages = [
+    ['Enters the outer shadow', next.penumbral?.from],
+    ['First bite', next.partial?.from],
+    ['Totality begins', next.total?.from],
+    ['Greatest', next.greatest],
+    ['Totality ends', next.total?.to],
+    ['Last bite', next.partial?.to],
+    ['Leaves the outer shadow', next.penumbral?.to],
+  ].filter(([, when]) => when);
+
+  body.append(el('dl', { class: 'popup-stats eclipse-stages' }, stages.flatMap(([label, when]) => {
+    const moon = moonPosition(when, lat, lon);
+    return [
+      el('dt', { text: label }),
+      el('dd', {}, [
+        el('span', { text: clockTime(when) }),
+        // Marked per stage, not just overall: an eclipse can begin below the
+        // horizon and finish well up, and the half you can see is the half
+        // worth setting an alarm for.
+        el('span', {
+          class: `eclipse-up is-${moon.altitude > 0 ? 'yes' : 'no'}`,
+          text: moon.altitude > 0 ? `moon ${Math.round(moon.altitude)}° up` : 'below horizon',
+        }),
+      ]),
+    ];
+  })));
+
+  body.append(el('p', { class: 'source-note', text: describeEclipse(next) }));
+
+  if (later.length) {
+    body.append(el('p', { class: 'eclipse-later-title', text: 'After that' }));
+    body.append(el('ul', { class: 'eclipse-later' }, later.map((entry) => el('li', {}, [
+      el('span', { class: `eclipse-dot is-${entry.kind}` }),
+      el('span', { class: 'eclipse-later-when', text: longDate(entry.greatest) }),
+      el('span', { class: 'eclipse-later-kind', text: entry.kind }),
+    ]))));
+  }
+}
+
+/** Whether this place can see it, said as a sentence rather than a flag. */
+function eclipseVisibility(eclipse, lat, lon) {
+  const stages = [eclipse.penumbral?.from, eclipse.partial?.from, eclipse.greatest,
+    eclipse.partial?.to, eclipse.penumbral?.to].filter(Boolean);
+  const up = stages.filter((when) => moonPosition(when, lat, lon).altitude > 0);
+
+  if (!up.length) {
+    return { state: 'no', text: 'Not from here — the moon is below the horizon for all of it.' };
+  }
+  if (up.length === stages.length) {
+    const peak = Math.round(moonPosition(eclipse.greatest, lat, lon).altitude);
+    return { state: 'yes', text: `Visible from here, start to finish, with the moon ${peak}° up at greatest.` };
+  }
+  const peak = moonPosition(eclipse.greatest, lat, lon).altitude;
+  return {
+    state: 'part',
+    text: peak > 0
+      ? 'Partly visible from here — the moon rises or sets during the eclipse, but it is up for the deepest part.'
+      : 'Only the edges of it from here — the moon is below the horizon at greatest eclipse.',
+  };
+}
+
+/**
+ * The moon against the shadow, drawn to scale.
+ *
+ * Distances are in earth radii, which is what gamma and the shadow radii are
+ * already in, so the picture is the arithmetic rather than an impression of
+ * it: a grazing eclipse looks grazing and a deep one looks deep.
+ */
+function eclipseDiagram(eclipse) {
+  const SIZE = 78;
+  const scale = SIZE / 3.0;
+  const centre = SIZE / 2;
+
+  /*
+   * The shadow radii are NOT 1.0128 - u and 1.5573 + u.
+   *
+   * Those are the distances from the axis to the moon's CENTRE at first
+   * contact, so each already carries a moon radius inside it — which is why
+   * Meeus divides by 0.5450, a moon diameter, to get magnitude. Drawing them
+   * as the shadows made both circles one moon too big, and this partial
+   * eclipse came out looking total: the moon sat comfortably inside an umbra
+   * it actually pokes out of.
+   */
+  const shape = shadowGeometry(eclipse);
+  const moonRadius = shape.moon * scale;
+  const umbra = shape.umbra * scale;
+  const penumbra = shape.penumbra * scale;
+  // Signed here, unlike the geometry, so the moon is drawn on the side of the
+  // axis it actually passes.
+  const offset = eclipse.gamma * scale;
+
+  return el('div', {
+    class: 'eclipse-diagram',
+    html: `<svg viewBox="0 0 ${SIZE} ${SIZE}" role="img" aria-label="${eclipse.kind} lunar eclipse">
+      <circle cx="${centre}" cy="${centre}" r="${penumbra}" class="eclipse-penumbra"/>
+      <circle cx="${centre}" cy="${centre}" r="${umbra}" class="eclipse-umbra"/>
+      <circle cx="${centre}" cy="${(centre - offset).toFixed(2)}" r="${moonRadius.toFixed(2)}" class="eclipse-moon"/>
+    </svg>`,
+  });
 }
 
 function twilightPanel(body, phases, date, lat, lon) {

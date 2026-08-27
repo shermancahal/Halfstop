@@ -42,6 +42,9 @@ export const icons = {
   /* An arch over a horizon — the aurora as it is drawn on every forecast page,
      and distinct enough from `cloud` at 16px not to be mistaken for weather. */
   aurora: svg('<path d="M4 20a8 8 0 0 1 16 0"/><path d="M7.5 20a4.5 4.5 0 0 1 9 0"/><path d="M2 20h20"/>'),
+  // A disc with a bite out of it and a corona beyond — the shape an eclipse
+  // makes, rather than a second moon glyph that would read as the moon tab.
+  eclipse: svg('<circle cx="12" cy="12" r="5.5"/><path d="M15.5 7.6a5.5 5.5 0 0 0 0 8.8" fill="currentColor" stroke="none"/><path d="M12 2.5v2"/><path d="M12 19.5v2"/><path d="M2.5 12h2"/><path d="M19.5 12h2"/>'),
   /* The band, for the Milky Way: a diagonal sweep with stars either side. */
   galaxy: svg('<path d="M4 19C7 13 12 8 20 5"/><path d="M6.5 5.5h.01"/><path d="M10 8.5h.01"/><path d="M16.5 15h.01"/><path d="M19.5 11h.01"/>'),
   crosshair: svg('<circle cx="12" cy="12" r="8"/><path d="M12 2v3"/><path d="M12 19v3"/><path d="M2 12h3"/><path d="M19 12h3"/><circle cx="12" cy="12" r="1.6"/>'),
