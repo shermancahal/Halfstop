@@ -441,17 +441,31 @@
     "url": "https://anrmaps.vermont.gov/arcgis/rest/services/map_services/MAP_ANR_ANRATLASFPR_WM_NOCACHE/MapServer/2?f=pjson"
   },
   {
-    "id": "land:blm-sublayer",
-    "note": "BLM layer 0 is named IDENTIFY and rejects every query form tried - explicit point geometry, shorthand, with and without inSR. A group layer would do exactly that. This asks for every sublayer with its type, to find the one that holds Surface Management Agency and can actually be queried.",
+    "id": "land:blm-1",
+    "note": "Layer 0 is a group called IDENTIFY and refuses every query, which is a group layer behaving normally. The sublayer that carries ADMIN_UNIT_NAME is one of these. Three probes cost one CI run; guessing has been wrong six times today.",
     "expect": "data",
-    "find": "\"(?:title|url|name|type)\"\\s*:\\s*\"[^\"]{0,90}\"",
-    "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_LimitedScale/MapServer/layers?f=pjson"
+    "find": "\"(?:ADMIN_UNIT_NAME|ADMIN_AGENCY_CODE|ADMIN_DEPT_CODE|attributes)\"\\s*:\\s*\"?[^\",}]{0,50}\"?",
+    "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_LimitedScale/MapServer/1/query?geometry=%7B%22x%22%3A-111.5%2C%22y%22%3A38.5%2C%22spatialReference%22%3A%7B%22wkid%22%3A4326%7D%7D&geometryType=esriGeometryPoint&spatialRel=esriSpatialRelIntersects&where=1%3D1&outFields=*&returnGeometry=false&f=json"
+  },
+  {
+    "id": "land:blm-2",
+    "note": "Layer 0 is a group called IDENTIFY and refuses every query, which is a group layer behaving normally. The sublayer that carries ADMIN_UNIT_NAME is one of these. Three probes cost one CI run; guessing has been wrong six times today.",
+    "expect": "data",
+    "find": "\"(?:ADMIN_UNIT_NAME|ADMIN_AGENCY_CODE|ADMIN_DEPT_CODE|attributes)\"\\s*:\\s*\"?[^\",}]{0,50}\"?",
+    "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_LimitedScale/MapServer/2/query?geometry=%7B%22x%22%3A-111.5%2C%22y%22%3A38.5%2C%22spatialReference%22%3A%7B%22wkid%22%3A4326%7D%7D&geometryType=esriGeometryPoint&spatialRel=esriSpatialRelIntersects&where=1%3D1&outFields=*&returnGeometry=false&f=json"
+  },
+  {
+    "id": "land:blm-3",
+    "note": "Layer 0 is a group called IDENTIFY and refuses every query, which is a group layer behaving normally. The sublayer that carries ADMIN_UNIT_NAME is one of these. Three probes cost one CI run; guessing has been wrong six times today.",
+    "expect": "data",
+    "find": "\"(?:ADMIN_UNIT_NAME|ADMIN_AGENCY_CODE|ADMIN_DEPT_CODE|attributes)\"\\s*:\\s*\"?[^\",}]{0,50}\"?",
+    "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_LimitedScale/MapServer/3/query?geometry=%7B%22x%22%3A-111.5%2C%22y%22%3A38.5%2C%22spatialReference%22%3A%7B%22wkid%22%3A4326%7D%7D&geometryType=esriGeometryPoint&spatialRel=esriSpatialRelIntersects&where=1%3D1&outFields=*&returnGeometry=false&f=json"
   },
   {
     "id": "land:padus-find",
-    "note": "Where PAD-US went. The configured PADUS4_0Fee answers Invalid URL, and listing the whole organisation returned four hundred kilobytes of unrelated services in alphabetical order, which answered nothing.",
+    "note": "Where PAD-US actually lives now. The last search filtered on an owner field that holds a username, not the organisation id, so it matched nothing and said total zero - which reads exactly like an absence and is not one.",
     "expect": "data",
-    "find": "\"(?:title|url|name|type)\"\\s*:\\s*\"[^\"]{0,90}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=10&q=PADUS%20AND%20owner%3Av01gqwM5QqNysAAi%20AND%20type%3A%22Feature%20Service%22"
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,120}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=12&sortField=numViews&sortOrder=desc&q=%28PADUS%20OR%20%22PAD-US%22%29%20AND%20type%3A%22Feature%20Service%22"
   }
 ]
