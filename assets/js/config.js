@@ -1205,6 +1205,38 @@ export const OVERLAYS = [
   },
   {
     /*
+     * Removed once and restored, for the same reason Virginia was.
+     *
+     * Reported as drawing polygons and dots where it promises a trail
+     * inventory. I removed it and argued the polygons were genuine because the
+     * report predated the unfiltered circle layer - then was told it had dots
+     * too, which dates it after and makes the dots ours. The argument was
+     * built to defend a deletion I had already made.
+     *
+     * Whether the polygons are Indiana's own corridors is still open and the
+     * probe has never reported this service's geometry. It draws correctly now
+     * and can be judged on that.
+     */
+    legend: [{ color: '#6D4C41', label: 'Route: Trails inventory' }],
+    id: 'in-trails',
+    at: [-86.2, 39.2],
+    states: ['IN'],
+    name: 'Trails inventory',
+    description: "Indiana's open trails inventory.",
+    query: {
+      url: 'https://gisdata.in.gov/server/rest/services/Hosted/Trails_AGOL_RO/FeatureServer/0/query'
+        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
+        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
+        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
+      minzoom: 7,
+      color: '#6D4C41',
+    },
+    opacity: 0.55,
+    enabled: false,
+    attribution: 'Trails © <a href="https://www.in.gov/dnr/">Indiana DNR</a>',
+  },
+  {
+    /*
      * Removed once and restored.
      *
      * It was deleted for drawing polygons and dots where it promises trails,
