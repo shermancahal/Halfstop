@@ -258,7 +258,7 @@ looked at the layer on a map. Nobody has done that yet.
 | Texas | Wildlife management areas | polygon | exists only |  |
 | Utah | State park management areas | polygon | exists only |  |
 | Vermont | ANR travel routes | raster | index confirmed | Correct: show:10 is *Roads (ANR Travel Routes)*. |
-| Virginia | State park trails | line | exists only |  |
+
 | Washington | State park trails | line | exists only |  |
 | West Virginia | Aerial, leaf-off | raster | exists only |  |
 | West Virginia | Lidar hillshade (1 m) | raster | exists only |  |
@@ -326,3 +326,28 @@ being probed as a replacement and ships only if it answers first.
 
 So the chain is two services where it was three, and two of them work
 where one did.
+
+## Removed after looking at the map
+
+Indiana's trail inventory and Virginia's state park trails both draw
+polygons and scattered dots where they promise trails. Neither is useful
+on its own and both are gone. Virginia's service reports its geometry as
+polyline, which is what made it look sound here; on the map it is not.
+
+That is the second and third layer removed for a reason no probe could
+have produced. The probes can now say a service is alive, what shape its
+records are and which sublayer is drawn. None of that distinguishes a
+trail network from a scatter of corridor polygons, and nothing except
+looking will.
+
+## Keys
+
+Every queried state layer now carries a one-line key naming its colour
+and whether it draws a route, an area or a site - taken from the geometry
+the service reports rather than from the layer's title, which has been
+wrong often enough.
+
+The agency-drawn raster layers cannot have one: they arrive as finished
+pictures in somebody else's palette, so they carry a note saying so and
+pointing at tap-to-identify instead. Imagery and hillshade get neither,
+being pictures of the ground rather than thematic layers.

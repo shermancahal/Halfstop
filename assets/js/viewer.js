@@ -5483,10 +5483,22 @@ function basemapFeatures(position, tolerance) {
   let found = [];
   try {
     const point = state.map.project(position);
-    found = state.map.queryRenderedFeatures([
-      [point.x - tolerance, point.y - tolerance],
-      [point.x + tolerance, point.y + tolerance],
+    /*
+     * Twice, tight then wide.
+     *
+     * A finger is worth eighteen to thirty pixels of tolerance, and a box that
+     * size over a trailhead returns the bridge, both trails, the preserve, the
+     * forest around it and the county - a card nobody reads, and the reason
+     * this was reported. Asking at four pixels first answers what was actually
+     * under the fingertip; the wide box is the fallback for a tap that lands
+     * on nothing, where returning something nearby is better than nothing.
+     */
+    const box = (radius) => state.map.queryRenderedFeatures([
+      [point.x - radius, point.y - radius],
+      [point.x + radius, point.y + radius],
     ]) || [];
+    const precise = box(Math.min(4, tolerance));
+    found = precise.some((feature) => describeMapFeature(feature)) ? precise : box(tolerance);
   } catch {
     // Raster basemaps have nothing to query and some engines throw rather than
     // return nothing. Either way the answer is the same: no vector features.
@@ -5502,15 +5514,41 @@ function basemapFeatures(position, tolerance) {
     if (seen.has(key)) continue;
     seen.add(key);
     groups.push(described);
-    // Six is a card, twelve is a list nobody reads. Rendered order puts the
-    // labels and the roads first, which is the order they are wanted in.
-    if (groups.length >= 6) break;
+    // Four is a card. Six was the previous answer and still filled a phone
+    // screen with a bridge, two trails, a preserve and a forest.
+    if (groups.length >= 4) break;
   }
   return groups;
 }
 
 /* What each of the basemap's own source layers is called in words, and which
    of its columns carries the specific kind. */
+/**
+ * What a Mapbox landuse class can honestly be called.
+ *
+ * Anything not listed falls through unchanged, because most classes - `wood`,
+ * `wetland`, `airport` - already say what they mean.
+ */
+const LAND_CLASS_LABELS = {
+  national_park: 'Park or protected area',
+  park: 'Park',
+  nature_reserve: 'Nature reserve',
+  protected_area: 'Protected area',
+  forest: 'Forest',
+  wood: 'Woodland',
+  grass: 'Grassland',
+  scrub: 'Scrub',
+  agriculture: 'Farmland',
+  cemetery: 'Cemetery',
+  glacier: 'Glacier',
+  rock: 'Rock',
+  sand: 'Sand',
+  snow: 'Snow',
+  pitch: 'Sports pitch',
+  school: 'School grounds',
+  hospital: 'Hospital grounds',
+};
+
 const MAP_FEATURE_KINDS = {
   water: { source: 'Water', field: 'class' },
   waterway: { source: 'Water', field: 'class' },
@@ -5546,7 +5584,21 @@ function describeMapFeature(feature) {
     if (value === undefined || value === null || value === '') return;
     rows.push([label, words(humaniseValue(value))]);
   };
-  add('Kind', specific);
+  /*
+   * Mapbox's class, translated - not passed through as a designation.
+   *
+   * `landuse.class` is a *rendering* category. Mapbox files national parks,
+   * state parks, state forests, national forests and nature preserves all
+   * under `national_park`, so printing it verbatim told a reader that Conkles
+   * Hollow State Nature Preserve - an Ohio DNR preserve - is a national park
+   * unit. It is not, and the basemap never claimed it was; we misread a
+   * styling bucket as a fact about jurisdiction.
+   *
+   * The honest label names the bucket. Which agency actually holds it is a
+   * question the state layers and the land lookup can answer and the basemap
+   * cannot.
+   */
+  add('Kind', LAND_CLASS_LABELS[specific] ?? specific);
   if (feature.sourceLayer === 'road') {
     add('Route', properties.ref);
     add('Surface', properties.surface);

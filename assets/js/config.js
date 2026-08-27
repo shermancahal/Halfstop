@@ -1186,6 +1186,7 @@ export const OVERLAYS = [
    * the health check waved it through. Asking the service for its own layer
    * list took one probe and would have taken one probe the first time.
    */
+    legend: [{ color: '#B45309', label: 'Area: ORV scramble areas' }],
     id: 'mi-orv',
     states: ['MI'],
     name: 'ORV scramble areas',
@@ -1203,6 +1204,7 @@ export const OVERLAYS = [
     attribution: 'Recreation data © <a href="https://www.michigan.gov/dnr">Michigan DNR</a>',
   },
   {
+    legend: [{ color: '#6D4C41', label: 'Route: State trails' }],
     id: 'nc-trails',
     states: ['NC'],
     name: 'State trails',
@@ -1220,6 +1222,7 @@ export const OVERLAYS = [
     attribution: 'Trails © <a href="https://www.ncparks.gov/">North Carolina State Parks</a>',
   },
   {
+    legend: [{ color: '#2E7D32', label: 'Area: State park hunting areas' }],
     id: 'ny-hunting',
     states: ['NY'],
     name: 'State park hunting areas',
@@ -1237,6 +1240,7 @@ export const OVERLAYS = [
     attribution: 'Hunting areas © <a href="https://parks.ny.gov/">New York State Parks</a>',
   },
   {
+    legend: [{ color: '#6D4C41', label: 'Route: Recreation routes' }],
     id: 'id-routes',
     states: ['ID'],
     name: 'Recreation routes',
@@ -1263,6 +1267,7 @@ export const OVERLAYS = [
    * was nearly deleted for having no layer zero. A route you may legally drive
    * and an order that shut it last week are two different facts.
    */
+    legend: [{ color: '#C62828', label: 'Route: Emergency route closures' }],
     id: 'id-closures',
     states: ['ID'],
     name: 'Emergency route closures',
@@ -1280,6 +1285,7 @@ export const OVERLAYS = [
     attribution: 'Routes and closures © <a href="https://parksandrecreation.idaho.gov/">Idaho Parks and Recreation</a>',
   },
   {
+    legend: [{ color: '#EF6C00', label: 'Area: Area restrictions' }],
     id: 'id-restrictions',
     states: ['ID'],
     name: 'Area restrictions',
@@ -1308,6 +1314,7 @@ export const OVERLAYS = [
    * publishes.
    */
     id: 'vt-camping',
+    legendNote: 'The agency draws this layer itself, so the colours are theirs and there is no key to read out of it. Tap a feature to see what it is.',
     at: [-72.8, 44.2],
     states: ['VT'],
     name: 'Primitive camping areas',
@@ -1323,6 +1330,7 @@ export const OVERLAYS = [
   },
   {
     id: 'vt-trails',
+    legendNote: 'The agency draws this layer itself, so the colours are theirs and there is no key to read out of it. Tap a feature to see what it is.',
     at: [-72.8, 44.2],
     states: ['VT'],
     name: 'Trails',
@@ -1338,6 +1346,7 @@ export const OVERLAYS = [
   },
   {
     id: 'vt-recreation',
+    legendNote: 'The agency draws this layer itself, so the colours are theirs and there is no key to read out of it. Tap a feature to see what it is.',
     at: [-72.7, 44.4],
     states: ['VT'],
     name: 'Recreation sites',
@@ -1353,6 +1362,7 @@ export const OVERLAYS = [
   },
   {
     id: 'ky-byways',
+    legendNote: 'The agency draws this layer itself, so the colours are theirs and there is no key to read out of it. Tap a feature to see what it is.',
     // Probed inside the state. Ten of these reported blank on the first run
     // because the default probe tile sits in Tennessee, where a Kentucky or
     // Hawaii layer is correctly empty - a trap ky-aerial already carries a
@@ -1371,6 +1381,7 @@ export const OVERLAYS = [
   },
   {
     id: 'ky-trails',
+    legendNote: 'The agency draws this layer itself, so the colours are theirs and there is no key to read out of it. Tap a feature to see what it is.',
     at: [-83.2, 36.9],
     states: ['KY'],
     name: 'Recreational trails',
@@ -1385,6 +1396,7 @@ export const OVERLAYS = [
   },
   {
     id: 'ky-forests',
+    legendNote: 'The agency draws this layer itself, so the colours are theirs and there is no key to read out of it. Tap a feature to see what it is.',
     at: [-84.0, 37.2],
     states: ['KY'],
     name: 'State forests',
@@ -1399,6 +1411,7 @@ export const OVERLAYS = [
   },
   {
     id: 'ky-hunting',
+    legendNote: 'The agency draws this layer itself, so the colours are theirs and there is no key to read out of it. Tap a feature to see what it is.',
     at: [-84.5, 37.5],
     states: ['KY'],
     name: 'Public hunting areas',
@@ -1412,6 +1425,7 @@ export const OVERLAYS = [
     attribution: 'Recreation data \u00a9 <a href=\"https://technology.ky.gov/gis/\">Kentucky Division of Geographic Information</a>',
   },
   {
+    legend: [{ color: '#6D4C41', label: 'Route: Forest roads' }],
     id: 'mi-roads',
     states: ['MI'],
     name: 'Forest roads',
@@ -1429,6 +1443,7 @@ export const OVERLAYS = [
     attribution: 'Recreation data \u00a9 <a href=\"https://www.michigan.gov/dnr\">Michigan DNR</a>',
   },
   {
+    legend: [{ color: '#2E7D32', label: 'Site: State forest campgrounds' }],
     id: 'mi-campgrounds',
     states: ['MI'],
     name: 'State forest campgrounds',
@@ -1447,6 +1462,7 @@ export const OVERLAYS = [
   },
   {
     id: 'tn-wma',
+    legendNote: 'The agency draws this layer itself, so the colours are theirs and there is no key to read out of it. Tap a feature to see what it is.',
     at: [-85.0, 35.6],
     states: ['TN'],
     name: 'Wildlife management areas',
@@ -1461,6 +1477,7 @@ export const OVERLAYS = [
     attribution: 'Wildlife management areas \u00a9 <a href=\"https://www.tn.gov/twra\">Tennessee Wildlife Resources Agency</a>',
   },
   {
+    legend: [{ color: '#2E7D32', label: 'Area: TVA dispersed recreation' }],
     id: 'tva-dispersed',
     states: ['TN'],
     name: 'TVA dispersed recreation',
@@ -1479,6 +1496,7 @@ export const OVERLAYS = [
   },
   {
     id: 'pa-parks',
+    legendNote: 'The agency draws this layer itself, so the colours are theirs and there is no key to read out of it. Tap a feature to see what it is.',
     at: [-77.8, 41.2],
     states: ['PA'],
     name: 'State parks & amenities',
@@ -1494,6 +1512,7 @@ export const OVERLAYS = [
   },
   {
     id: 'vt-routes',
+    legendNote: 'The agency draws this layer itself, so the colours are theirs and there is no key to read out of it. Tap a feature to see what it is.',
     at: [-72.8, 44.2],
     states: ['VT'],
     name: 'ANR travel routes',
@@ -1508,6 +1527,7 @@ export const OVERLAYS = [
     attribution: 'Travel routes \u00a9 <a href=\"https://anr.vermont.gov/\">Vermont Agency of Natural Resources</a>',
   },
   {
+    legend: [{ color: '#6D4C41', label: 'Route: Park & forest maintained roads' }],
     id: 'md-roads',
     states: ['MD'],
     name: 'Park & forest maintained roads',
@@ -1525,6 +1545,7 @@ export const OVERLAYS = [
     attribution: 'Roads \u00a9 <a href=\"https://dnr.maryland.gov/\">Maryland DNR</a>',
   },
   {
+    legend: [{ color: '#2E7D32', label: 'Area: State parks' }],
     id: 'mt-parks',
     states: ['MT'],
     name: 'State parks',
@@ -1543,6 +1564,7 @@ export const OVERLAYS = [
   },
   {
     id: 'nj-trails',
+    legendNote: 'The agency draws this layer itself, so the colours are theirs and there is no key to read out of it. Tap a feature to see what it is.',
     at: [-74.5, 40.9],
     states: ['NJ'],
     name: 'State park trails',
@@ -1557,6 +1579,7 @@ export const OVERLAYS = [
     attribution: 'Trails \u00a9 <a href=\"https://dep.nj.gov/\">New Jersey DEP</a>',
   },
   {
+    legend: [{ color: '#2E7D32', label: 'Site: State parks & status' }],
     id: 'or-parks',
     states: ['OR'],
     name: 'State parks & status',
@@ -1574,6 +1597,7 @@ export const OVERLAYS = [
     attribution: 'Parks \u00a9 <a href=\"https://stateparks.oregon.gov/\">Oregon Parks and Recreation</a>',
   },
   {
+    legend: [{ color: '#2E7D32', label: 'Area: Wildlife management areas' }],
     id: 'tx-wma',
     states: ['TX'],
     name: 'Wildlife management areas',
@@ -1591,6 +1615,7 @@ export const OVERLAYS = [
     attribution: 'Wildlife management areas \u00a9 <a href=\"https://tpwd.texas.gov/\">Texas Parks and Wildlife</a>',
   },
   {
+    legend: [{ color: '#6D4C41', label: 'Route: State park trails' }],
     id: 'wa-trails',
     states: ['WA'],
     name: 'State park trails',
@@ -1608,6 +1633,7 @@ export const OVERLAYS = [
     attribution: 'Trails \u00a9 <a href=\"https://parks.wa.gov/\">Washington State Parks</a>',
   },
   {
+    legend: [{ color: '#C62828', label: 'Site: State parks' }],
     id: 'wi-closures',
     states: ['WI'],
     name: 'State parks',
@@ -1626,6 +1652,7 @@ export const OVERLAYS = [
   },
   {
     id: 'oh-lands',
+    legendNote: 'The agency draws this layer itself, so the colours are theirs and there is no key to read out of it. Tap a feature to see what it is.',
     at: [-82.5, 39.5],
     states: ['OH'],
     name: 'ODNR lands',
@@ -1640,6 +1667,7 @@ export const OVERLAYS = [
   },
   {
     id: 'ia-recreation',
+    legendNote: 'The agency draws this layer itself, so the colours are theirs and there is no key to read out of it. Tap a feature to see what it is.',
     at: [-93.6, 42.0],
     states: ['IA'],
     name: 'Recreation lands',
@@ -1654,6 +1682,7 @@ export const OVERLAYS = [
     attribution: 'Recreation \u00a9 <a href=\"https://www.iowadnr.gov/\">Iowa DNR</a>',
   },
   {
+    legend: [{ color: '#2E7D32', label: 'Area: State forests' }],
     id: 'fl-forests',
     states: ['FL'],
     name: 'State forests',
@@ -1671,6 +1700,7 @@ export const OVERLAYS = [
     attribution: 'State forests \u00a9 <a href=\"https://www.fdacs.gov/Divisions-Offices/Florida-Forest-Service\">Florida Forest Service</a>',
   },
   {
+    legend: [{ color: '#2E7D32', label: 'Area: DEEP property' }],
     id: 'ct-deep',
     states: ['CT'],
     name: 'DEEP property',
@@ -1688,6 +1718,7 @@ export const OVERLAYS = [
     attribution: 'DEEP property \u00a9 <a href=\"https://portal.ct.gov/deep\">Connecticut DEEP</a>',
   },
   {
+    legend: [{ color: '#2E7D32', label: 'Area: Protected & recreational open space' }],
     id: 'ma-openspace',
     states: ['MA'],
     name: 'Protected & recreational open space',
@@ -1706,6 +1737,7 @@ export const OVERLAYS = [
   },
   {
     id: 'hi-trails',
+    legendNote: 'The agency draws this layer itself, so the colours are theirs and there is no key to read out of it. Tap a feature to see what it is.',
     at: [-155.5, 19.6],
     states: ['HI'],
     name: 'Na Ala Hele trails',
@@ -1720,23 +1752,7 @@ export const OVERLAYS = [
     attribution: 'Trails \u00a9 <a href=\"https://hawaiitrails.hawaii.gov/\">Na Ala Hele</a>, Hawaii DLNR',
   },
   {
-    id: 'in-trails',
-    states: ['IN'],
-    name: 'Trails inventory',
-    description: 'Indiana\'s open trails inventory.',
-    query: {
-      url: 'https://gisdata.in.gov/server/rest/services/Hosted/Trails_AGOL_RO/FeatureServer/0/query'
-        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
-        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
-        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
-      minzoom: 7,
-      color: '#6D4C41',
-    },
-    opacity: 0.55,
-    enabled: false,
-    attribution: 'Trails \u00a9 <a href=\"https://www.in.gov/dnr/\">Indiana DNR</a>',
-  },
-  {
+    legend: [{ color: '#2E7D32', label: 'Area: State park boundaries' }],
     id: 'de-parks',
     states: ['DE'],
     name: 'State park boundaries',
@@ -1754,6 +1770,7 @@ export const OVERLAYS = [
     attribution: 'Parks \u00a9 <a href=\"https://dnrec.delaware.gov/\">Delaware DNREC</a>',
   },
   {
+    legend: [{ color: '#2E7D32', label: 'Site: CPW facilities' }],
     id: 'co-cpw',
     states: ['CO'],
     name: 'CPW facilities',
@@ -1771,6 +1788,7 @@ export const OVERLAYS = [
     attribution: 'Administered land \u00a9 <a href=\"https://cpw.state.co.us/\">Colorado Parks and Wildlife</a>',
   },
   {
+    legend: [{ color: '#2E7D32', label: 'Area: State park management areas' }],
     id: 'ut-parks',
     states: ['UT'],
     name: 'State park management areas',
@@ -1788,23 +1806,7 @@ export const OVERLAYS = [
     attribution: 'Parks \u00a9 <a href=\"https://stateparks.utah.gov/\">Utah State Parks</a>',
   },
   {
-    id: 'va-trails',
-    states: ['VA'],
-    name: 'State park trails',
-    description: 'Virginia State Parks trails.',
-    query: {
-      url: 'https://services1.arcgis.com/PxUNqSbaWFvFgHnJ/arcgis/rest/services/SP_Trails/FeatureServer/0/query'
-        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
-        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
-        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
-      minzoom: 7,
-      color: '#6D4C41',
-    },
-    opacity: 0.55,
-    enabled: false,
-    attribution: 'Trails \u00a9 <a href=\"https://www.dcr.virginia.gov/state-parks/\">Virginia State Parks</a>',
-  },
-  {
+    legend: [{ color: '#2E7D32', label: 'Area: Wildlife management areas' }],
     id: 'ok-recreation',
     states: ['OK'],
     name: 'Wildlife management areas',
@@ -1822,6 +1824,7 @@ export const OVERLAYS = [
     attribution: 'Recreation \u00a9 <a href=\"https://www.travelok.com/state-parks\">Oklahoma Tourism and Recreation</a>',
   },
   {
+    legend: [{ color: '#2E7D32', label: 'Area: State parks' }],
     id: 'sc-parks',
     states: ['SC'],
     name: 'State parks',
@@ -1839,6 +1842,7 @@ export const OVERLAYS = [
     attribution: 'Parks \u00a9 <a href=\"https://southcarolinaparks.com/\">South Carolina State Parks</a>',
   },
   {
+    legend: [{ color: '#2E7D32', label: 'Area: State forest' }],
     id: 'nd-forest',
     states: ['ND'],
     name: 'State forest',
@@ -1856,6 +1860,7 @@ export const OVERLAYS = [
     attribution: 'State forest \u00a9 <a href=\"https://www.gis.nd.gov/\">North Dakota GIS Hub</a>',
   },
   {
+    legend: [{ color: '#2E7D32', label: 'Area: State park boundaries' }],
     id: 'wy-parks',
     states: ['WY'],
     name: 'State park boundaries',
@@ -1873,6 +1878,7 @@ export const OVERLAYS = [
     attribution: 'Parks \u00a9 <a href=\"https://wyoparks.wyo.gov/\">Wyoming State Parks</a>',
   },
   {
+    legend: [{ color: '#2E7D32', label: 'Site: State parks' }],
     id: 'sd-parks',
     states: ['SD'],
     name: 'State parks',
@@ -1890,6 +1896,7 @@ export const OVERLAYS = [
     attribution: 'Parks \u00a9 <a href=\"https://gfp.sd.gov/\">South Dakota Game, Fish and Parks</a>',
   },
   {
+    legend: [{ color: '#2E7D32', label: 'Area: State parks & WMAs' }],
     id: 'ms-parks',
     states: ['MS'],
     name: 'State parks & WMAs',
@@ -1907,6 +1914,7 @@ export const OVERLAYS = [
     attribution: 'Parks and WMAs \u00a9 <a href=\"https://www.mdwfp.com/\">Mississippi Wildlife, Fisheries and Parks</a>',
   },
   {
+    legend: [{ color: '#2E7D32', label: 'Area: State parks' }],
     id: 'ar-parks',
     states: ['AR'],
     name: 'State parks',
@@ -1924,6 +1932,7 @@ export const OVERLAYS = [
     attribution: 'Parks \u00a9 <a href=\"https://www.arkansasstateparks.com/\">Arkansas State Parks</a>',
   },
   {
+    legend: [{ color: '#2E7D32', label: 'Area: Park areas' }],
     id: 'ne-parks',
     states: ['NE'],
     name: 'Park areas',
@@ -1941,6 +1950,7 @@ export const OVERLAYS = [
     attribution: 'Parks \u00a9 <a href=\"https://outdoornebraska.gov/\">Nebraska Game and Parks</a>',
   },
   {
+    legend: [{ color: '#2E7D32', label: 'Site: Bureau of Parks & Lands sites' }],
     id: 'me-bpl',
     states: ['ME'],
     name: 'Bureau of Parks & Lands sites',
