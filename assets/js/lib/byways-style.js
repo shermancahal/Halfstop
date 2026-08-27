@@ -766,7 +766,15 @@ const SHIELD_ORDER = ['match', ['get', 'class'],
 
 /** Every shield layer's id, and how far off centre its number sits. */
 export const SHIELD_LAYERS = [
-  { id: 'road-shield', shift: 0, length: null },
+  /*
+   * The plain shield measures the number it carries, like the halves below.
+   *
+   * It used to pass null and fall back to the tile's `reflen`, which is the
+   * length of the raw ref — and the raw ref carries the system, so a stripped
+   * "SR 61" would have gone on asking for a four-wide sign to hold two digits
+   * every time the map crossed a state line.
+   */
+  { id: 'road-shield', shift: 0, length: ['length', REF] },
   { id: 'road-shield-first', shift: -(shieldDisplayWidth(2) / 2 + 1), length: ['length', FIRST_REF] },
   { id: 'road-shield-second', shift: shieldDisplayWidth(2) / 2 + 1, length: ['length', SECOND_REF] },
 ];
@@ -787,7 +795,7 @@ export function shieldLayerUpdates(state = '') {
       // Sized from the number it is actually carrying, exactly as the layer
       // was built — half of a concurrency is as wide as its own half.
       'icon-image': shieldImageExpression(state, { length }),
-      'text-size': shieldTextSizeExpression(state),
+      'text-size': shieldTextSizeExpression(state, 2, length),
       'text-offset': shieldTextOffsetExpression(state, 2, shift),
     },
     paint: { 'text-color': shieldTextColour(state) },
@@ -844,7 +852,7 @@ function shieldLayers(state = '') {
       'icon-rotation-alignment': 'viewport',
       'text-field': text,
       'text-font': FONT_BOLD,
-      'text-size': shieldTextSizeExpression(state),
+      'text-size': shieldTextSizeExpression(state, 2, ['length', text]),
       'text-offset': shieldTextOffsetExpression(state, 2, shiftPx),
       'text-rotation-alignment': 'viewport',
       'text-anchor': 'center',
@@ -908,7 +916,10 @@ function shieldLayers(state = '') {
         'text-font': FONT_BOLD,
         // Sized and placed per shield: a third of the blanks carry the state's
         // name across the top, and a number centred in the image lands on it.
-        'text-size': shieldTextSizeExpression(state),
+        // Sized from the number, not from a default of two characters: "21/2"
+        // in a circle built for "21" is the West Virginia secondary route that
+        // ran outside its own shield.
+        'text-size': shieldTextSizeExpression(state, 2, ['length', REF]),
         'text-offset': shieldTextOffsetExpression(state),
         'text-rotation-alignment': 'viewport',
         'text-anchor': 'center',

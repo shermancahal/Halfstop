@@ -689,9 +689,21 @@ function drawnState(design) {
 
 export function shieldTextSize(design, length) {
   const box = boxFor(design, length);
-  // A drawn marker with the state's name on it has less room than one without,
-  // and the same amount whatever the number is.
-  if (!box) return drawnState(design)?.name ? NOMINAL_TEXT * 0.82 : NOMINAL_TEXT;
+  /*
+   * A drawn marker, which until now was the same size whatever the number was.
+   *
+   * "and the same amount whatever the number is" was true of the *name* across
+   * the top, not of the number under it: four characters at two-character size
+   * run outside a drawn circle exactly as they do outside a blank one. It
+   * narrows on the same terms as the measured branch below, from the same
+   * nominal size at two characters.
+   */
+  if (!box) {
+    const room = drawnState(design)?.name ? NOMINAL_TEXT * 0.82 : NOMINAL_TEXT;
+    // Never larger than it was: two characters keep the size they have always
+    // had, and only the numbers that did not fit are made to fit.
+    return Math.max(MIN_TEXT, room * Math.min(1, 2.35 / Math.max(2, length)));
+  }
   // Two digits across the box width, and most of its height. The box is
   // measured in the blank's own pixels, so it converts by the ratio the blank
   // is registered at — not by a literal 2, which is what it was when that
@@ -724,14 +736,34 @@ export function shieldTextOffset(design, length) {
  * The nationals are drawn rather than loaded from a blank, so their numbers sit
  * where those drawings put them — the interstate's below its red crown.
  */
-export function shieldTextSizeExpression(state = '', length = 2) {
+export function shieldTextSizeExpression(state = '', length = 2, refLength = null) {
+  /*
+   * Sized from the number the road actually carries, when the caller can say.
+   *
+   * Every layer used to pass the default of two, so a four or five character
+   * number was drawn at two-character size and ran outside the blank — which
+   * is exactly what a West Virginia secondary route looks like: "21/2" is four
+   * characters in a circle sized for "21". `shieldTextSize` already shrinks
+   * with length; nothing was ever telling it the length.
+   *
+   * A `case` per width rather than one size for all, because the widths are
+   * measured per blank and a two-digit number should not be shrunk to fit the
+   * worst case that might land on the same design.
+   */
+  const sized = (design) => {
+    const at = (chars) => (design === LOCAL ? shieldTextSize(stateDesign(state), chars) : NOMINAL_TEXT);
+    if (!refLength) return at(length);
+    return ['case',
+      ['>=', refLength, 5], at(5),
+      ['>=', refLength, 4], at(4),
+      ['>=', refLength, 3], at(3),
+      at(2)];
+  };
+
   return [
     'match', ['get', 'shield'],
-    ...SHIELD_MATCH.flatMap((arm) => [
-      arm.values,
-      arm.design === LOCAL ? shieldTextSize(stateDesign(state), length) : NOMINAL_TEXT,
-    ]),
-    shieldTextSize(stateDesign(state), length),
+    ...SHIELD_MATCH.flatMap((arm) => [arm.values, sized(arm.design)]),
+    sized(LOCAL),
   ];
 }
 

@@ -147,6 +147,27 @@ if (!String(blank).endsWith('-2')) {
   all.push(['shields', { message: `"SR 61" asked for ${blank}, expected a two-character blank` }]);
 }
 
+/*
+ * A long number is drawn small enough to stay inside its blank.
+ *
+ * Every shield layer used to ask for two-character text whatever the number
+ * was, so "21/2" — a West Virginia secondary route — was drawn at the size of
+ * "21" and ran outside the circle. `shieldTextSize` had always shrunk with
+ * length; nothing was telling it the length.
+ */
+const shieldSize = layerBy('road-shield').layout['text-size'];
+const sizeOf = (ref) => evaluate(shieldSize, { properties: { ref, shield: 'circle-white', class: 'secondary' } }, 'number');
+const sizes = ['61', '250', '21/2', '250/88'].map(sizeOf);
+for (let i = 1; i < sizes.length; i += 1) {
+  if (!(sizes[i] <= sizes[i - 1])) {
+    all.push(['shields', { message: `a longer number was drawn larger: ${JSON.stringify(sizes)}` }]);
+    break;
+  }
+}
+if (!(sizes[3] < sizes[0])) {
+  all.push(['shields', { message: `"250/88" is drawn at ${sizes[3]} and "61" at ${sizes[0]} — the long one must be smaller` }]);
+}
+
 // The combined shield must stand down where the pair takes over, or the road
 // carries three markers.
 const filters = {
