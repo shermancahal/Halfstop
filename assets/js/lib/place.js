@@ -237,6 +237,83 @@ export async function reverseGeocode([lon, lat]) {
   }
 }
 
+/**
+ * Places matching a typed query, nearest first.
+ *
+ * Forward geocoding, which is the other half of the same service — so it
+ * carries the same conditions: a token, a connection, and nothing at all when
+ * either is missing. Offline the box says so rather than sitting empty, which
+ * is why this returns a reason and not just a list.
+ *
+ * `proximity` is what makes it useful on a map rather than a search engine:
+ * "Elk Creek" matches a dozen places in the west, and the one you mean is the
+ * one you are looking at. No `types`, because v5 rejects a limit above one
+ * alongside more than a single type — see the comment in `reverseGeocode`, it
+ * is the same trap and it fails just as silently.
+ *
+ * @returns {Promise<{ok: boolean, reason: string, results: Array}>}
+ */
+export async function searchPlaces(query, { near = null, limit = 6, signal = null } = {}) {
+  const text = String(query || '').trim();
+  if (!text) return { ok: true, reason: '', results: [] };
+  if (!MAPBOX_TOKEN) return { ok: false, reason: 'Search needs a Mapbox token.', results: [] };
+
+  const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(text)}.json`
+    + `?access_token=${encodeURIComponent(MAPBOX_TOKEN)}`
+    + `&limit=${limit}&country=us&autocomplete=true`
+    + (near ? `&proximity=${near[0].toFixed(3)},${near[1].toFixed(3)}` : '');
+
+  try {
+    const response = await fetch(url, signal ? { signal } : undefined);
+    if (!response.ok) {
+      return { ok: false, reason: `The geocoder answered ${response.status}.`, results: [] };
+    }
+    return { ok: true, reason: '', results: parseSearch(await response.json()) };
+  } catch (error) {
+    if (error?.name === 'AbortError') throw error;
+    return { ok: false, reason: 'No answer — you may be offline.', results: [] };
+  }
+}
+
+/**
+ * Search results, flattened to what a list needs.
+ *
+ * Split from the request for the same reason `parsePlace` is: this half can be
+ * tested without a network, and it is the half that decides what the list
+ * says.
+ */
+export function parseSearch(data) {
+  return (data?.features || []).map((feature) => {
+    const types = feature.place_type || [];
+    const context = (feature.context || [])
+      .filter((entry) => /^(place|region|district)\./.test(String(entry.id || '')))
+      .map((entry) => entry.text);
+
+    return {
+      id: feature.id || feature.place_name,
+      name: feature.text || feature.place_name || '',
+      // Everything after the first comma of the full name is where it is; the
+      // context array says the same thing more reliably when it is present.
+      context: context.join(', ') || (feature.place_name || '').split(',').slice(1).join(',').trim(),
+      kind: PLACE_KINDS[types[0]] || (feature.properties?.category || '').split(',')[0] || 'Place',
+      center: feature.center || feature.geometry?.coordinates || null,
+      bbox: feature.bbox || null,
+    };
+  }).filter((entry) => Array.isArray(entry.center) && entry.center.length === 2);
+}
+
+/* What the geocoder's own type names are called in a list a person reads. */
+const PLACE_KINDS = {
+  poi: 'Place',
+  place: 'Town',
+  locality: 'Locality',
+  neighborhood: 'Neighbourhood',
+  address: 'Address',
+  postcode: 'Postcode',
+  region: 'State',
+  district: 'County',
+};
+
 /** Said once rather than on every pan, which would be a wall of identical lines. */
 const warned = new Set();
 function warnOnce(message) {

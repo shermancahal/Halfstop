@@ -199,6 +199,59 @@ html, body { height: 100%; overflow: hidden; }
 
 .panel-toggle { position: absolute; top: 12px; left: 12px; z-index: 25; background: var(--surface); box-shadow: var(--shadow-md); border: 1px solid var(--line); }
 
+/*
+ * Search, on the map.
+ *
+ * Left of the zoom controls and right of the panel toggle, which is the only
+ * horizontal room there is on a phone. It grows to fill what is left rather
+ * than taking a fixed width, because at 402pt a fixed one either overlaps the
+ * tools or wastes half the bar.
+ */
+.map-search {
+  position: absolute; z-index: 24; top: 12px; left: 60px;
+  width: min(360px, calc(100% - 132px));
+}
+.map-search-mark {
+  position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+  width: 16px; height: 16px; color: var(--ink-3); pointer-events: none;
+}
+.map-search input {
+  width: 100%; height: 38px; padding: 0 12px 0 34px;
+  border: 1px solid var(--line); border-radius: 999px;
+  background: var(--surface); color: var(--ink);
+  font: inherit; font-size: .88rem; box-shadow: var(--shadow-md);
+}
+.map-search input:focus-visible { outline: 2px solid var(--rust); outline-offset: 1px; }
+/* The browser's own clear affordance, which otherwise sits under the rounded
+   edge on WebKit and is unreachable. */
+.map-search input::-webkit-search-cancel-button { margin-right: 2px; }
+
+.map-search-results {
+  margin-top: 6px; overflow: hidden;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow-lg);
+  max-height: min(52vh, 340px); overflow-y: auto;
+}
+.map-search-result {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  padding: 9px 12px; border: 0; border-top: 1px solid var(--line);
+  background: none; color: var(--ink); font: inherit;
+}
+.map-search-result:first-child { border-top: 0; }
+.map-search-result:hover, .map-search-result:focus-visible { background: var(--paper-2); }
+.map-search-name { display: block; font-size: .88rem; font-weight: 600; }
+.map-search-where { display: block; font-size: .75rem; color: var(--ink-3); margin-top: 1px; }
+.map-search-kind {
+  float: right; font-size: .62rem; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--ink-3); margin-left: 8px;
+}
+.map-search-note { padding: 10px 12px; font-size: .8rem; color: var(--ink-3); }
+
+@media (min-width: 821px) {
+  /* The panel toggle is gone at this width, so the bar starts at the edge. */
+  .map-search { left: 12px; width: min(360px, calc(100% - 84px)); }
+}
+
 /* ---------- GL library overrides ---------- */
 
 .maplibregl-ctrl-group, .mapboxgl-ctrl-group { border-radius: var(--radius) !important; box-shadow: var(--shadow-md) !important; }

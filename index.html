@@ -199,6 +199,17 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
       </button>
 
+      <!--
+        Search sits on the map rather than in a menu: it is a way of getting
+        somewhere, and everything else that moves the map is out here too.
+      -->
+      <div class="map-search" id="map-search">
+        <label class="visually-hidden" for="place-search">Search for a place</label>
+        <svg class="map-search-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.4-3.4"/></svg>
+        <input type="search" id="place-search" placeholder="Search towns, parks, campgrounds…" autocomplete="off" enterkeyhint="search">
+        <div class="map-search-results" id="place-results" role="listbox" hidden></div>
+      </div>
+
       <div class="map-quick-controls">
         <button class="map-quick-button" id="quick-layers" type="button" title="Map layers" aria-label="Map layers">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>

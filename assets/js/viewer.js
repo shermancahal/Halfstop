@@ -38,7 +38,7 @@ import { shieldLayerUpdates, PALETTE } from './lib/byways-style.js';
 import { previewFor, swatchSVG } from './lib/preview.js';
 import { Account, isConfigured as accountsAvailable } from './lib/account.js';
 import {
-  formatDD, formatDMS, formatDDM, toUTM, distanceBearing, compassPoint, reverseGeocode,
+  formatDD, formatDMS, formatDDM, toUTM, distanceBearing, compassPoint, reverseGeocode, searchPlaces,
 } from './lib/place.js';
 import {
   sunTimes, sunPosition, moonTimes, moonPosition, moonIllumination,
@@ -644,6 +644,8 @@ function cacheDom() {
   dom.offline = document.getElementById('offline-panel');
   dom.offlineCount = document.getElementById('offline-count');
   dom.buildStamp = document.getElementById('build-stamp');
+  dom.placeSearch = document.getElementById('place-search');
+  dom.placeResults = document.getElementById('place-results');
   dom.quickLayers = document.getElementById('quick-layers');
   dom.quickFolders = document.getElementById('quick-folders');
 }
@@ -706,7 +708,119 @@ function wirePanel() {
   });
   document.getElementById('share-button')?.addEventListener('click', shareView);
   wireOfflineMenu();
+  wirePlaceSearch();
   document.getElementById('fit-button')?.addEventListener('click', fitAll);
+}
+
+/**
+ * Type a place, go there.
+ *
+ * The map could already answer "what is this" for somewhere you had found; it
+ * had no answer at all for "take me to Hazard" short of pinching across three
+ * states. Forward geocoding, biased to where the map is looking, because "Elk
+ * Creek" matches a dozen places out west and the one you mean is the one on
+ * the screen.
+ *
+ * Requests are debounced and the previous one is aborted rather than left to
+ * land later: typing "camp" fires four searches and the third answering after
+ * the fourth would show results for a query nobody is looking at any more.
+ */
+function wirePlaceSearch() {
+  const input = dom.placeSearch;
+  const results = dom.placeResults;
+  if (!input || !results) return;
+
+  let timer = 0;
+  let inFlight = null;
+
+  const close = () => { results.hidden = true; results.replaceChildren(); };
+
+  const note = (text) => {
+    results.replaceChildren(el('p', { class: 'map-search-note', text }));
+    results.hidden = false;
+  };
+
+  const run = async (query) => {
+    inFlight?.abort();
+    const controller = new AbortController();
+    inFlight = controller;
+
+    const centre = state.map?.getCenter?.();
+    let answer;
+    try {
+      answer = await searchPlaces(query, {
+        near: centre ? [centre.lng, centre.lat] : null,
+        signal: controller.signal,
+      });
+    } catch {
+      return;   // aborted; a newer query is already running
+    }
+    if (controller !== inFlight) return;
+
+    if (!answer.ok) { note(answer.reason); return; }
+    if (!answer.results.length) { note(`Nothing found for “${query}”.`); return; }
+
+    results.replaceChildren(...answer.results.map((place) => el('button', {
+      class: 'map-search-result', type: 'button', role: 'option',
+      onclick: () => { close(); input.blur(); goToPlace(place); },
+    }, [
+      el('span', { class: 'map-search-kind', text: place.kind }),
+      el('span', { class: 'map-search-name', text: place.name }),
+      place.context ? el('span', { class: 'map-search-where', text: place.context }) : null,
+    ])));
+    results.hidden = false;
+  };
+
+  input.addEventListener('input', () => {
+    const query = input.value.trim();
+    clearTimeout(timer);
+    if (query.length < 2) { inFlight?.abort(); close(); return; }
+    // Long enough that a typed word is one request rather than five, short
+    // enough that the list feels like it is keeping up.
+    timer = window.setTimeout(() => run(query), 320);
+  });
+
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') { close(); input.blur(); }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      clearTimeout(timer);
+      const first = results.querySelector('.map-search-result');
+      if (first) first.click();
+      else if (input.value.trim().length >= 2) run(input.value.trim());
+    }
+  });
+
+  // Clicking the map, or anywhere else, puts the list away. Without this it
+  // hangs over the map until the next keystroke.
+  document.addEventListener('pointerdown', (event) => {
+    if (!results.hidden && !event.target.closest('.map-search')) close();
+  });
+}
+
+/**
+ * Fly to a search result and say what it is.
+ *
+ * Marked and named rather than silently centred: the map after a jump looks
+ * like any other patch of ground, and "did it find the right Elk Creek" is the
+ * first thing anybody wants to know. It reuses the identify card, because the
+ * answer to "what is at this spot" should not look different depending on how
+ * you got there.
+ */
+function goToPlace(place) {
+  if (place.bbox && place.bbox.length === 4) {
+    fitTo([place.bbox[0], place.bbox[1], place.bbox[2], place.bbox[3]]);
+  } else {
+    state.map.flyTo({ center: place.center, zoom: Math.max(state.map.getZoom() || 0, 12), duration: 900 });
+  }
+
+  setProbeMark(place.center);
+  showIdentifyResults(place.center, [{
+    source: place.kind,
+    designation: place.name,
+    attributes: null,
+    rows: place.context ? [['Where', place.context]] : [],
+  }]);
 }
 
 const isNarrow = () => window.matchMedia('(max-width: 820px)').matches;

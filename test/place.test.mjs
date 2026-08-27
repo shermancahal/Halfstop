@@ -22,7 +22,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parsePlace } from '../assets/js/lib/place.js';
+import { parsePlace, parseSearch } from '../assets/js/lib/place.js';
 
 /**
  * Texas, as the API actually returns it with no `types` and no `limit`.
@@ -106,4 +106,58 @@ test('a locality stands in for a place where there is no place', () => {
   });
   assert.equal(place.place, 'Hardyville');
   assert.equal(place.regionCode, 'KY');
+});
+
+/* ------------------------------------------------------------------ search */
+
+test('search: a result carries where it is, not just what it is called', () => {
+  /*
+   * "Elkmont" is a campground, a town and a ghost town within four miles of
+   * each other. A list of three identical words is not a choice, so the row
+   * has to say which is which and where each one is.
+   */
+  const [poi, town] = parseSearch({
+    features: [
+      {
+        id: 'poi.1', text: 'Elkmont Campground', place_name: 'Elkmont Campground, Gatlinburg, Tennessee',
+        place_type: ['poi'], center: [-83.58, 35.65],
+        properties: { category: 'campground, park' },
+        context: [{ id: 'place.9', text: 'Gatlinburg' }, { id: 'region.9', text: 'Tennessee' }],
+      },
+      {
+        id: 'place.2', text: 'Elkmont', place_name: 'Elkmont, Tennessee', place_type: ['place'],
+        center: [-83.58, 35.66], bbox: [-83.62, 35.62, -83.54, 35.7],
+        context: [{ id: 'region.9', text: 'Tennessee' }],
+      },
+    ],
+  });
+
+  assert.equal(poi.name, 'Elkmont Campground');
+  assert.equal(poi.context, 'Gatlinburg, Tennessee', 'the hierarchy comes from context, in order');
+  assert.equal(poi.kind, 'Place');
+  assert.deepEqual(poi.center, [-83.58, 35.65]);
+  assert.equal(poi.bbox, null, 'a point has no extent to fit to');
+
+  assert.equal(town.kind, 'Town', 'a place_type of "place" is a town, not a "place"');
+  assert.deepEqual(town.bbox, [-83.62, 35.62, -83.54, 35.7], 'a town does, so the map can frame it');
+});
+
+test('search: a feature with nowhere to go is dropped', () => {
+  // The list flies the map to `center`. A row that cannot answer where it is
+  // would be a search result that does nothing when tapped, which is worse
+  // than one fewer result.
+  const results = parseSearch({
+    features: [
+      { id: 'a', text: 'Nowhere', place_type: ['place'] },
+      { id: 'b', text: 'Somewhere', place_type: ['place'], geometry: { coordinates: [-84, 36] } },
+    ],
+  });
+  assert.equal(results.length, 1);
+  assert.equal(results[0].name, 'Somewhere');
+  assert.deepEqual(results[0].center, [-84, 36], 'geometry.coordinates when there is no center');
+});
+
+test('search: nothing to search for is not an error', () => {
+  assert.deepEqual(parseSearch(null), []);
+  assert.deepEqual(parseSearch({}), []);
 });

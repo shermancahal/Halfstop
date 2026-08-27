@@ -121,8 +121,17 @@ loaded(){return this._ready}isStyleLoaded(){return this._ready}
 // Mounts the control, as the real one does: calls onAdd and appends what it
 // hands back. A no-op here meant the app's own two map tools were never in the
 // DOM under test, so nothing could check them.
-addControl(c){if(c&&typeof c.onAdd==='function'){const n=c.onAdd(this);
-if(n&&n.nodeType===1)(document.getElementById('map')||document.body).appendChild(n)}return this}getCanvas(){return{style:{}}}getContainer(){return document.getElementById('map')}
+// Into a corner container, the way GL does it. Appended straight onto #map
+// they piled up at its top-left corner under everything else that lives
+// there, and a click on a map tool was intercepted by whatever overlay was
+// on top — a collision the real layout does not have.
+addControl(c,p){if(c&&typeof c.onAdd==='function'){const n=c.onAdd(this);
+if(n&&n.nodeType===1){const pos=p||'top-right';const id='ctrl-'+pos;
+let box=document.getElementById(id);
+if(!box){box=document.createElement('div');box.id=id;box.className='mapboxgl-ctrl-'+pos;
+box.style.cssText='position:absolute;z-index:30;'+(pos.includes('top')?'top:8px;':'bottom:8px;')+(pos.includes('right')?'right:8px;':'left:8px;');
+(document.getElementById('map')||document.body).appendChild(box)}
+box.appendChild(n)}}return this}getCanvas(){return{style:{}}}getContainer(){return document.getElementById('map')}
 // Throws before the style is up, as GL does. A stub that accepts an image at
 // any time cannot catch a registrar called too early — which is exactly how a
 // whole state's markers went missing with an empty catch block over the top.
@@ -261,6 +270,35 @@ await page.route('**/*', async (route) => {
   const url = route.request().url();
   if (route.request().resourceType() === 'image' && !url.startsWith(new URL(URL_UNDER_TEST).origin)) {
     return route.fulfill({ status: 200, contentType: 'image/png', body: PIXEL });
+  }
+  /*
+   * The geocoder, answering a search the way Mapbox v5 does.
+   *
+   * Two features with the hierarchy in `context` rather than as siblings,
+   * which is the shape open country returns and the one the parser has to get
+   * right — a fixture that only carried sibling features would pass for
+   * somewhere with a street address and nowhere with a campground.
+   */
+  // A forward search only: the same endpoint does reverse geocoding, and its
+  // path is a coordinate pair — digits, commas and dots, never a letter.
+  if (/api\.mapbox\.com\/geocoding\/v5\/mapbox\.places\/[^/]*[A-Za-z%][^/]*\.json/.test(url)) {
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ features: [
+        {
+          id: 'poi.1', text: 'Elkmont Campground', place_name: 'Elkmont Campground, Gatlinburg, Tennessee',
+          place_type: ['poi'], center: [-83.58, 35.65],
+          properties: { category: 'campground, park' },
+          context: [{ id: 'place.9', text: 'Gatlinburg' }, { id: 'region.9', text: 'Tennessee', short_code: 'US-TN' }],
+        },
+        {
+          id: 'place.2', text: 'Elkmont', place_name: 'Elkmont, Tennessee',
+          place_type: ['place'], center: [-83.58, 35.66], bbox: [-83.62, 35.62, -83.54, 35.7],
+          context: [{ id: 'region.9', text: 'Tennessee', short_code: 'US-TN' }],
+        },
+      ] }),
+    });
   }
   /*
    * The weather colour scales, as GeoServer really answers them.
@@ -2199,6 +2237,45 @@ check('and the rows under the slider say the same',
 
 await page.locator('.sky-tab', { hasText: /^Draw$/ }).first().click();
 await page.waitForTimeout(300);
+
+/*
+ * Typing a place and going there.
+ *
+ * The map could answer "what is this" about somewhere you had already found,
+ * and had no answer at all for "take me to Elkmont" short of pinching across
+ * three states.
+ */
+console.log('\nSearching for a place');
+await page.fill('#place-search', 'elkmont');
+await page.waitForTimeout(900);
+
+const searchList = await page.evaluate(() => [...document.querySelectorAll('.map-search-result')].map((row) => ({
+  name: row.querySelector('.map-search-name')?.textContent.trim(),
+  where: row.querySelector('.map-search-where')?.textContent.trim() || '',
+  kind: row.querySelector('.map-search-kind')?.textContent.trim(),
+})));
+check('the box offers what it found', searchList.length, 2);
+check('each result says what it is called', searchList[0].name, 'Elkmont Campground');
+check('and where that is, so three Elkmonts are three choices', searchList[0].where, 'Gatlinburg, Tennessee');
+check('and which kind of thing it is', searchList.map((row) => row.kind), ['Place', 'Town']);
+
+await page.locator('.map-search-result').first().click();
+await page.waitForTimeout(500);
+
+const landed = await page.evaluate(() => ({
+  card: document.querySelector('.identify-card .identify-designation')?.textContent.trim() || '',
+  source: document.querySelector('.identify-card .identify-source')?.textContent.trim() || '',
+  marked: window.__map.getSource('scratch-cursor')?._d?.geometry?.coordinates || null,
+  list: document.getElementById('place-results')?.hidden,
+}));
+check('choosing one names it on the map rather than landing silently', landed.card, 'Elkmont Campground');
+check('in the same card a tap on the map would open', landed.source, 'Place');
+check('with the spot marked', landed.marked, [-83.58, 35.65]);
+check('and the list put away', landed.list, true);
+
+await page.evaluate(() => { document.querySelector('.identify-card .popup-bar button:last-child')?.click(); });
+await page.fill('#place-search', '');
+await page.waitForTimeout(200);
 
 /*
  * Nothing may be wider than the screen, at any phone width.
