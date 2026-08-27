@@ -4730,6 +4730,8 @@ function addQueryOverlay(overlay, opacity) {
       id: fill,
       type: 'fill',
       source: fill,
+      // Only what a fill can draw. See the note on the circle layer below.
+      filter: ['==', ['geometry-type'], 'Polygon'],
       paint: { 'fill-color': colour, 'fill-opacity': amount },
     }, firstDataLayerId());
   }
@@ -4739,17 +4741,32 @@ function addQueryOverlay(overlay, opacity) {
       id: line,
       type: 'line',
       source: fill,
+      // A line draws a road and the edge of an area; over a point it is noise.
+      filter: ['!=', ['geometry-type'], 'Point'],
       paint: { 'line-color': colour, 'line-width': 1.4, 'line-opacity': amount },
     }, firstDataLayerId());
   }
 
-  // Point geometry, which the fill and the line above cannot draw at all.
+  /*
+   * Point geometry, and only point geometry.
+   *
+   * This layer was added without a filter, on the reasoning that a circle
+   * never draws over lines and polygons. That reasoning was wrong: the circle
+   * bucket walks every vertex of whatever it is given, so this put a dot on
+   * every bend of every road in Maryland and every corner of every boundary -
+   * reported from the map twice before the cause was found, because the three
+   * layers share one source and nothing in the config says which of them a
+   * given service will actually light up.
+   *
+   * All three are filtered now, so each draws only what it can draw.
+   */
   if (!state.map.getLayer(dot)) {
     const [, amount] = opacityPaint('line', opacity);
     state.map.addLayer({
       id: dot,
       type: 'circle',
       source: fill,
+      filter: ['==', ['geometry-type'], 'Point'],
       paint: {
         'circle-color': colour,
         'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 2.5, 12, 5, 16, 7],

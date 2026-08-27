@@ -1204,6 +1204,33 @@ export const OVERLAYS = [
     attribution: 'Recreation data © <a href="https://www.michigan.gov/dnr">Michigan DNR</a>',
   },
   {
+    /*
+     * Removed once and restored.
+     *
+     * It was deleted for drawing polygons and dots where it promises trails,
+     * on a report from the map - but the dots were ours, from an unfiltered
+     * circle layer putting a point on every vertex, and the service reports
+     * polyline. Deleting somebody's data for a fault in our own renderer is
+     * the wrong way round, so it comes back to be looked at again.
+     */
+    legend: [{ color: '#6D4C41', label: 'Route: State park trails' }],
+    id: 'va-trails',
+    states: ['VA'],
+    name: 'State park trails',
+    description: 'Virginia State Parks trails.',
+    query: {
+      url: 'https://services1.arcgis.com/PxUNqSbaWFvFgHnJ/arcgis/rest/services/SP_Trails/FeatureServer/0/query'
+        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
+        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
+        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
+      minzoom: 7,
+      color: '#6D4C41',
+    },
+    opacity: 0.55,
+    enabled: false,
+    attribution: 'Trails © <a href="https://www.dcr.virginia.gov/state-parks/">Virginia State Parks</a>',
+  },
+  {
     legend: [{ color: '#6D4C41', label: 'Route: State trails' }],
     id: 'nc-trails',
     states: ['NC'],

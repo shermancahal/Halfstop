@@ -1084,6 +1084,24 @@ check('the fill layer is added', fire.fill, true);
 check('and the outline with it', fire.line, true);
 check('and the perimeters reach the source', fire.features, 1);
 
+/*
+ * Each of the three shares one source, so each has to say what it can draw.
+ *
+ * The dot layer went in without a filter, on the reasoning that a circle never
+ * renders over lines and polygons. It does - the circle bucket walks every
+ * vertex - so Maryland's roads came back as a dot on every bend, reported from
+ * the map twice before the cause was found. Nothing in the config says which
+ * geometry a given service will return, so the filters are the only guard.
+ */
+const shapes = await page.evaluate(() => {
+  const map = window.__map;
+  const at = (id) => JSON.stringify(map.getLayer(id)?.filter ?? null);
+  return { fill: at('overlay-wildfire'), line: at('overlay-wildfire--1'), dot: at('overlay-wildfire--2') };
+});
+check('the fill draws polygons only', shapes.fill, '["==",["geometry-type"],"Polygon"]');
+check('the outline draws anything but a point', shapes.line, '["!=",["geometry-type"],"Point"]');
+check('and the dot draws points only', shapes.dot, '["==",["geometry-type"],"Point"]');
+
 // The slider is one control over two kinds of layer now. `raster-opacity` on a
 // fill layer is not a dimmer, it is a spec error, so what it sets has to follow
 // the layer type.
