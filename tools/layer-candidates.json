@@ -77,241 +77,87 @@
     "url": "https://gis.blm.gov/arcgis/rest/services/transportation/BLM_Natl_GTLF_Public_Display/MapServer/0?f=pjson"
   },
   {
-    "id": "st:nevada",
-    "note": "Does Nevada publish recreation data, and under whose name. Asked by publisher - natural resources, state parks, fish and wildlife, forestry - because searching by topic returns national trail layers and municipal GIS instead.",
+    "id": "st3:alabama",
+    "note": "Third pass for alabama, asked at the front door instead of through a search index. Two keyword passes found nothing here, and in every case so far where that happened the state turned out to publish plenty - the address was wrong, not the state. A 404 from a named host is a real answer; a search that returns shakemaps is not.",
     "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Nevada%20Department%20of%20Natural%20Resources%22%20OR%20%22Nevada%20State%20Parks%22%20OR%20%22Nevada%20Department%20of%20Conservation%22%20OR%20%22Nevada%20Fish%20and%20Wildlife%22%20OR%20%22Nevada%20Forest%20Service%22%20OR%20%22Nevada%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
+    "url": "https://services.arcgis.com/hOpd7wfnKm16p9D9/arcgis/rest/services?f=pjson"
   },
   {
-    "id": "st:newhampshire",
-    "note": "Does New Hampshire publish recreation data, and under whose name. Asked by publisher - natural resources, state parks, fish and wildlife, forestry - because searching by topic returns national trail layers and municipal GIS instead.",
+    "id": "st3:california",
+    "note": "Third pass for california, asked at the front door instead of through a search index. Two keyword passes found nothing here, and in every case so far where that happened the state turned out to publish plenty - the address was wrong, not the state. A 404 from a named host is a real answer; a search that returns shakemaps is not.",
     "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22New%20Hampshire%20Department%20of%20Natural%20Resources%22%20OR%20%22New%20Hampshire%20State%20Parks%22%20OR%20%22New%20Hampshire%20Department%20of%20Conservation%22%20OR%20%22New%20Hampshire%20Fish%20and%20Wildlife%22%20OR%20%22New%20Hampshire%20Forest%20Service%22%20OR%20%22New%20Hampshire%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
+    "url": "https://gis.conservation.ca.gov/server/rest/services?f=pjson"
   },
   {
-    "id": "st:newjersey",
-    "note": "Does New Jersey publish recreation data, and under whose name. Asked by publisher - natural resources, state parks, fish and wildlife, forestry - because searching by topic returns national trail layers and municipal GIS instead.",
+    "id": "st3:missouri",
+    "note": "Third pass for missouri, asked at the front door instead of through a search index. Two keyword passes found nothing here, and in every case so far where that happened the state turned out to publish plenty - the address was wrong, not the state. A 404 from a named host is a real answer; a search that returns shakemaps is not.",
     "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22New%20Jersey%20Department%20of%20Natural%20Resources%22%20OR%20%22New%20Jersey%20State%20Parks%22%20OR%20%22New%20Jersey%20Department%20of%20Conservation%22%20OR%20%22New%20Jersey%20Fish%20and%20Wildlife%22%20OR%20%22New%20Jersey%20Forest%20Service%22%20OR%20%22New%20Jersey%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
+    "url": "https://gisblue.mdc.mo.gov/arcgis/rest/services?f=pjson"
   },
   {
-    "id": "st:newmexico",
-    "note": "Does New Mexico publish recreation data, and under whose name. Asked by publisher - natural resources, state parks, fish and wildlife, forestry - because searching by topic returns national trail layers and municipal GIS instead.",
+    "id": "st3:nebraska",
+    "note": "Third pass for nebraska, asked at the front door instead of through a search index. Two keyword passes found nothing here, and in every case so far where that happened the state turned out to publish plenty - the address was wrong, not the state. A 404 from a named host is a real answer; a search that returns shakemaps is not.",
     "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22New%20Mexico%20Department%20of%20Natural%20Resources%22%20OR%20%22New%20Mexico%20State%20Parks%22%20OR%20%22New%20Mexico%20Department%20of%20Conservation%22%20OR%20%22New%20Mexico%20Fish%20and%20Wildlife%22%20OR%20%22New%20Mexico%20Forest%20Service%22%20OR%20%22New%20Mexico%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
+    "url": "https://gis.ne.gov/Enterprise/rest/services?f=pjson"
   },
   {
-    "id": "st:newyork",
-    "note": "Does New York publish recreation data, and under whose name. Asked by publisher - natural resources, state parks, fish and wildlife, forestry - because searching by topic returns national trail layers and municipal GIS instead.",
+    "id": "st3:southcarolina",
+    "note": "Third pass for southcarolina, asked at the front door instead of through a search index. Two keyword passes found nothing here, and in every case so far where that happened the state turned out to publish plenty - the address was wrong, not the state. A 404 from a named host is a real answer; a search that returns shakemaps is not.",
     "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22New%20York%20Department%20of%20Natural%20Resources%22%20OR%20%22New%20York%20State%20Parks%22%20OR%20%22New%20York%20Department%20of%20Conservation%22%20OR%20%22New%20York%20Fish%20and%20Wildlife%22%20OR%20%22New%20York%20Forest%20Service%22%20OR%20%22New%20York%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
+    "url": "https://arcweb.dnr.sc.gov/server/rest/services?f=pjson"
   },
   {
-    "id": "st:northcarolina",
-    "note": "Does North Carolina publish recreation data, and under whose name. Asked by publisher - natural resources, state parks, fish and wildlife, forestry - because searching by topic returns national trail layers and municipal GIS instead.",
+    "id": "st3:nevada",
+    "note": "Third pass for nevada, asked at the front door instead of through a search index. Two keyword passes found nothing here, and in every case so far where that happened the state turned out to publish plenty - the address was wrong, not the state. A 404 from a named host is a real answer; a search that returns shakemaps is not.",
     "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22North%20Carolina%20Department%20of%20Natural%20Resources%22%20OR%20%22North%20Carolina%20State%20Parks%22%20OR%20%22North%20Carolina%20Department%20of%20Conservation%22%20OR%20%22North%20Carolina%20Fish%20and%20Wildlife%22%20OR%20%22North%20Carolina%20Forest%20Service%22%20OR%20%22North%20Carolina%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
+    "url": "https://arcgis.shpo.nv.gov/arcgis/rest/services?f=pjson"
   },
   {
-    "id": "st:northdakota",
-    "note": "Does North Dakota publish recreation data, and under whose name. Asked by publisher - natural resources, state parks, fish and wildlife, forestry - because searching by topic returns national trail layers and municipal GIS instead.",
+    "id": "st3:georgia",
+    "note": "Third pass for georgia, asked at the front door instead of through a search index. Two keyword passes found nothing here, and in every case so far where that happened the state turned out to publish plenty - the address was wrong, not the state. A 404 from a named host is a real answer; a search that returns shakemaps is not.",
     "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22North%20Dakota%20Department%20of%20Natural%20Resources%22%20OR%20%22North%20Dakota%20State%20Parks%22%20OR%20%22North%20Dakota%20Department%20of%20Conservation%22%20OR%20%22North%20Dakota%20Fish%20and%20Wildlife%22%20OR%20%22North%20Dakota%20Forest%20Service%22%20OR%20%22North%20Dakota%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
+    "url": "https://gisportal.gadnr.org/arcgis/rest/services?f=pjson"
   },
   {
-    "id": "st:ohio",
-    "note": "Does Ohio publish recreation data, and under whose name. Asked by publisher - natural resources, state parks, fish and wildlife, forestry - because searching by topic returns national trail layers and municipal GIS instead.",
+    "id": "st3:louisiana",
+    "note": "Third pass for louisiana, asked at the front door instead of through a search index. Two keyword passes found nothing here, and in every case so far where that happened the state turned out to publish plenty - the address was wrong, not the state. A 404 from a named host is a real answer; a search that returns shakemaps is not.",
     "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Ohio%20Department%20of%20Natural%20Resources%22%20OR%20%22Ohio%20State%20Parks%22%20OR%20%22Ohio%20Department%20of%20Conservation%22%20OR%20%22Ohio%20Fish%20and%20Wildlife%22%20OR%20%22Ohio%20Forest%20Service%22%20OR%20%22Ohio%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
+    "url": "https://maps.dotd.la.gov/topo/rest/services?f=pjson"
   },
   {
-    "id": "st:oklahoma",
-    "note": "Does Oklahoma publish recreation data, and under whose name. Asked by publisher - natural resources, state parks, fish and wildlife, forestry - because searching by topic returns national trail layers and municipal GIS instead.",
+    "id": "st3:kansas",
+    "note": "Third pass for kansas, asked at the front door instead of through a search index. Two keyword passes found nothing here, and in every case so far where that happened the state turned out to publish plenty - the address was wrong, not the state. A 404 from a named host is a real answer; a search that returns shakemaps is not.",
     "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Oklahoma%20Department%20of%20Natural%20Resources%22%20OR%20%22Oklahoma%20State%20Parks%22%20OR%20%22Oklahoma%20Department%20of%20Conservation%22%20OR%20%22Oklahoma%20Fish%20and%20Wildlife%22%20OR%20%22Oklahoma%20Forest%20Service%22%20OR%20%22Oklahoma%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
+    "url": "https://services.arcgis.com/djZgF6YJCuO8rbmH/arcgis/rest/services?f=pjson"
   },
   {
-    "id": "st:oregon",
-    "note": "Does Oregon publish recreation data, and under whose name. Asked by publisher - natural resources, state parks, fish and wildlife, forestry - because searching by topic returns national trail layers and municipal GIS instead.",
+    "id": "st3:newhampshire",
+    "note": "Third pass for newhampshire, asked at the front door instead of through a search index. Two keyword passes found nothing here, and in every case so far where that happened the state turned out to publish plenty - the address was wrong, not the state. A 404 from a named host is a real answer; a search that returns shakemaps is not.",
     "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Oregon%20Department%20of%20Natural%20Resources%22%20OR%20%22Oregon%20State%20Parks%22%20OR%20%22Oregon%20Department%20of%20Conservation%22%20OR%20%22Oregon%20Fish%20and%20Wildlife%22%20OR%20%22Oregon%20Forest%20Service%22%20OR%20%22Oregon%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
+    "url": "https://nhgeodata.unh.edu/nhgeodata/rest/services?f=pjson"
   },
   {
-    "id": "st:pennsylvania",
-    "note": "Does Pennsylvania publish recreation data, and under whose name. Asked by publisher - natural resources, state parks, fish and wildlife, forestry - because searching by topic returns national trail layers and municipal GIS instead.",
+    "id": "st3:rhodeisland",
+    "note": "Third pass for rhodeisland, asked at the front door instead of through a search index. Two keyword passes found nothing here, and in every case so far where that happened the state turned out to publish plenty - the address was wrong, not the state. A 404 from a named host is a real answer; a search that returns shakemaps is not.",
     "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Pennsylvania%20Department%20of%20Natural%20Resources%22%20OR%20%22Pennsylvania%20State%20Parks%22%20OR%20%22Pennsylvania%20Department%20of%20Conservation%22%20OR%20%22Pennsylvania%20Fish%20and%20Wildlife%22%20OR%20%22Pennsylvania%20Forest%20Service%22%20OR%20%22Pennsylvania%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
+    "url": "https://services2.arcgis.com/S8zZg9pg23JUEexQ/arcgis/rest/services?f=pjson"
   },
   {
-    "id": "st:rhodeisland",
-    "note": "Does Rhode Island publish recreation data, and under whose name. Asked by publisher - natural resources, state parks, fish and wildlife, forestry - because searching by topic returns national trail layers and municipal GIS instead.",
+    "id": "st3:alaska",
+    "note": "Third pass for alaska, asked at the front door instead of through a search index. Two keyword passes found nothing here, and in every case so far where that happened the state turned out to publish plenty - the address was wrong, not the state. A 404 from a named host is a real answer; a search that returns shakemaps is not.",
     "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Rhode%20Island%20Department%20of%20Natural%20Resources%22%20OR%20%22Rhode%20Island%20State%20Parks%22%20OR%20%22Rhode%20Island%20Department%20of%20Conservation%22%20OR%20%22Rhode%20Island%20Fish%20and%20Wildlife%22%20OR%20%22Rhode%20Island%20Forest%20Service%22%20OR%20%22Rhode%20Island%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "st:southcarolina",
-    "note": "Does South Carolina publish recreation data, and under whose name. Asked by publisher - natural resources, state parks, fish and wildlife, forestry - because searching by topic returns national trail layers and municipal GIS instead.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22South%20Carolina%20Department%20of%20Natural%20Resources%22%20OR%20%22South%20Carolina%20State%20Parks%22%20OR%20%22South%20Carolina%20Department%20of%20Conservation%22%20OR%20%22South%20Carolina%20Fish%20and%20Wildlife%22%20OR%20%22South%20Carolina%20Forest%20Service%22%20OR%20%22South%20Carolina%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "st:southdakota",
-    "note": "Does South Dakota publish recreation data, and under whose name. Asked by publisher - natural resources, state parks, fish and wildlife, forestry - because searching by topic returns national trail layers and municipal GIS instead.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22South%20Dakota%20Department%20of%20Natural%20Resources%22%20OR%20%22South%20Dakota%20State%20Parks%22%20OR%20%22South%20Dakota%20Department%20of%20Conservation%22%20OR%20%22South%20Dakota%20Fish%20and%20Wildlife%22%20OR%20%22South%20Dakota%20Forest%20Service%22%20OR%20%22South%20Dakota%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "st:texas",
-    "note": "Does Texas publish recreation data, and under whose name. Asked by publisher - natural resources, state parks, fish and wildlife, forestry - because searching by topic returns national trail layers and municipal GIS instead.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Texas%20Department%20of%20Natural%20Resources%22%20OR%20%22Texas%20State%20Parks%22%20OR%20%22Texas%20Department%20of%20Conservation%22%20OR%20%22Texas%20Fish%20and%20Wildlife%22%20OR%20%22Texas%20Forest%20Service%22%20OR%20%22Texas%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "st:utah",
-    "note": "Does Utah publish recreation data, and under whose name. Asked by publisher - natural resources, state parks, fish and wildlife, forestry - because searching by topic returns national trail layers and municipal GIS instead.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Utah%20Department%20of%20Natural%20Resources%22%20OR%20%22Utah%20State%20Parks%22%20OR%20%22Utah%20Department%20of%20Conservation%22%20OR%20%22Utah%20Fish%20and%20Wildlife%22%20OR%20%22Utah%20Forest%20Service%22%20OR%20%22Utah%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "st:vermont",
-    "note": "Does Vermont publish recreation data, and under whose name. Asked by publisher - natural resources, state parks, fish and wildlife, forestry - because searching by topic returns national trail layers and municipal GIS instead.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Vermont%20Department%20of%20Natural%20Resources%22%20OR%20%22Vermont%20State%20Parks%22%20OR%20%22Vermont%20Department%20of%20Conservation%22%20OR%20%22Vermont%20Fish%20and%20Wildlife%22%20OR%20%22Vermont%20Forest%20Service%22%20OR%20%22Vermont%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "st:virginia",
-    "note": "Does Virginia publish recreation data, and under whose name. Asked by publisher - natural resources, state parks, fish and wildlife, forestry - because searching by topic returns national trail layers and municipal GIS instead.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Virginia%20Department%20of%20Natural%20Resources%22%20OR%20%22Virginia%20State%20Parks%22%20OR%20%22Virginia%20Department%20of%20Conservation%22%20OR%20%22Virginia%20Fish%20and%20Wildlife%22%20OR%20%22Virginia%20Forest%20Service%22%20OR%20%22Virginia%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "st:washington",
-    "note": "Does Washington publish recreation data, and under whose name. Asked by publisher - natural resources, state parks, fish and wildlife, forestry - because searching by topic returns national trail layers and municipal GIS instead.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Washington%20Department%20of%20Natural%20Resources%22%20OR%20%22Washington%20State%20Parks%22%20OR%20%22Washington%20Department%20of%20Conservation%22%20OR%20%22Washington%20Fish%20and%20Wildlife%22%20OR%20%22Washington%20Forest%20Service%22%20OR%20%22Washington%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "st:wisconsin",
-    "note": "Does Wisconsin publish recreation data, and under whose name. Asked by publisher - natural resources, state parks, fish and wildlife, forestry - because searching by topic returns national trail layers and municipal GIS instead.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Wisconsin%20Department%20of%20Natural%20Resources%22%20OR%20%22Wisconsin%20State%20Parks%22%20OR%20%22Wisconsin%20Department%20of%20Conservation%22%20OR%20%22Wisconsin%20Fish%20and%20Wildlife%22%20OR%20%22Wisconsin%20Forest%20Service%22%20OR%20%22Wisconsin%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "st:wyoming",
-    "note": "Does Wyoming publish recreation data, and under whose name. Asked by publisher - natural resources, state parks, fish and wildlife, forestry - because searching by topic returns national trail layers and municipal GIS instead.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Wyoming%20Department%20of%20Natural%20Resources%22%20OR%20%22Wyoming%20State%20Parks%22%20OR%20%22Wyoming%20Department%20of%20Conservation%22%20OR%20%22Wyoming%20Fish%20and%20Wildlife%22%20OR%20%22Wyoming%20Forest%20Service%22%20OR%20%22Wyoming%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "st:alabama",
-    "note": "Asked again for Alabama, by publisher rather than by topic. The first pass searched for the words recreation and trails and came back with Lewis and Clark route layers and earthquake shakemaps; every clean hit it did find came from a state agency's own org. So this asks for the agency.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Alabama%20Department%20of%20Natural%20Resources%22%20OR%20%22Alabama%20State%20Parks%22%20OR%20%22Alabama%20Department%20of%20Conservation%22%20OR%20%22Alabama%20Fish%20and%20Wildlife%22%20OR%20%22Alabama%20Forest%20Service%22%20OR%20%22Alabama%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "st:alaska",
-    "note": "Asked again for Alaska, by publisher rather than by topic. The first pass searched for the words recreation and trails and came back with Lewis and Clark route layers and earthquake shakemaps; every clean hit it did find came from a state agency's own org. So this asks for the agency.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Alaska%20Department%20of%20Natural%20Resources%22%20OR%20%22Alaska%20State%20Parks%22%20OR%20%22Alaska%20Department%20of%20Conservation%22%20OR%20%22Alaska%20Fish%20and%20Wildlife%22%20OR%20%22Alaska%20Forest%20Service%22%20OR%20%22Alaska%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "st:arkansas",
-    "note": "Asked again for Arkansas, by publisher rather than by topic. The first pass searched for the words recreation and trails and came back with Lewis and Clark route layers and earthquake shakemaps; every clean hit it did find came from a state agency's own org. So this asks for the agency.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Arkansas%20Department%20of%20Natural%20Resources%22%20OR%20%22Arkansas%20State%20Parks%22%20OR%20%22Arkansas%20Department%20of%20Conservation%22%20OR%20%22Arkansas%20Fish%20and%20Wildlife%22%20OR%20%22Arkansas%20Forest%20Service%22%20OR%20%22Arkansas%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "st:california",
-    "note": "Asked again for California, by publisher rather than by topic. The first pass searched for the words recreation and trails and came back with Lewis and Clark route layers and earthquake shakemaps; every clean hit it did find came from a state agency's own org. So this asks for the agency.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22California%20Department%20of%20Natural%20Resources%22%20OR%20%22California%20State%20Parks%22%20OR%20%22California%20Department%20of%20Conservation%22%20OR%20%22California%20Fish%20and%20Wildlife%22%20OR%20%22California%20Forest%20Service%22%20OR%20%22California%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "st:delaware",
-    "note": "Asked again for Delaware, by publisher rather than by topic. The first pass searched for the words recreation and trails and came back with Lewis and Clark route layers and earthquake shakemaps; every clean hit it did find came from a state agency's own org. So this asks for the agency.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Delaware%20Department%20of%20Natural%20Resources%22%20OR%20%22Delaware%20State%20Parks%22%20OR%20%22Delaware%20Department%20of%20Conservation%22%20OR%20%22Delaware%20Fish%20and%20Wildlife%22%20OR%20%22Delaware%20Forest%20Service%22%20OR%20%22Delaware%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "st:georgia",
-    "note": "Asked again for Georgia, by publisher rather than by topic. The first pass searched for the words recreation and trails and came back with Lewis and Clark route layers and earthquake shakemaps; every clean hit it did find came from a state agency's own org. So this asks for the agency.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Georgia%20Department%20of%20Natural%20Resources%22%20OR%20%22Georgia%20State%20Parks%22%20OR%20%22Georgia%20Department%20of%20Conservation%22%20OR%20%22Georgia%20Fish%20and%20Wildlife%22%20OR%20%22Georgia%20Forest%20Service%22%20OR%20%22Georgia%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "st:kansas",
-    "note": "Asked again for Kansas, by publisher rather than by topic. The first pass searched for the words recreation and trails and came back with Lewis and Clark route layers and earthquake shakemaps; every clean hit it did find came from a state agency's own org. So this asks for the agency.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Kansas%20Department%20of%20Natural%20Resources%22%20OR%20%22Kansas%20State%20Parks%22%20OR%20%22Kansas%20Department%20of%20Conservation%22%20OR%20%22Kansas%20Fish%20and%20Wildlife%22%20OR%20%22Kansas%20Forest%20Service%22%20OR%20%22Kansas%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "st:louisiana",
-    "note": "Asked again for Louisiana, by publisher rather than by topic. The first pass searched for the words recreation and trails and came back with Lewis and Clark route layers and earthquake shakemaps; every clean hit it did find came from a state agency's own org. So this asks for the agency.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Louisiana%20Department%20of%20Natural%20Resources%22%20OR%20%22Louisiana%20State%20Parks%22%20OR%20%22Louisiana%20Department%20of%20Conservation%22%20OR%20%22Louisiana%20Fish%20and%20Wildlife%22%20OR%20%22Louisiana%20Forest%20Service%22%20OR%20%22Louisiana%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "st:maine",
-    "note": "Asked again for Maine, by publisher rather than by topic. The first pass searched for the words recreation and trails and came back with Lewis and Clark route layers and earthquake shakemaps; every clean hit it did find came from a state agency's own org. So this asks for the agency.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Maine%20Department%20of%20Natural%20Resources%22%20OR%20%22Maine%20State%20Parks%22%20OR%20%22Maine%20Department%20of%20Conservation%22%20OR%20%22Maine%20Fish%20and%20Wildlife%22%20OR%20%22Maine%20Forest%20Service%22%20OR%20%22Maine%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "st:minnesota",
-    "note": "Asked again for Minnesota, by publisher rather than by topic. The first pass searched for the words recreation and trails and came back with Lewis and Clark route layers and earthquake shakemaps; every clean hit it did find came from a state agency's own org. So this asks for the agency.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Minnesota%20Department%20of%20Natural%20Resources%22%20OR%20%22Minnesota%20State%20Parks%22%20OR%20%22Minnesota%20Department%20of%20Conservation%22%20OR%20%22Minnesota%20Fish%20and%20Wildlife%22%20OR%20%22Minnesota%20Forest%20Service%22%20OR%20%22Minnesota%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "st:mississippi",
-    "note": "Asked again for Mississippi, by publisher rather than by topic. The first pass searched for the words recreation and trails and came back with Lewis and Clark route layers and earthquake shakemaps; every clean hit it did find came from a state agency's own org. So this asks for the agency.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Mississippi%20Department%20of%20Natural%20Resources%22%20OR%20%22Mississippi%20State%20Parks%22%20OR%20%22Mississippi%20Department%20of%20Conservation%22%20OR%20%22Mississippi%20Fish%20and%20Wildlife%22%20OR%20%22Mississippi%20Forest%20Service%22%20OR%20%22Mississippi%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "st:missouri",
-    "note": "Asked again for Missouri, by publisher rather than by topic. The first pass searched for the words recreation and trails and came back with Lewis and Clark route layers and earthquake shakemaps; every clean hit it did find came from a state agency's own org. So this asks for the agency.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Missouri%20Department%20of%20Natural%20Resources%22%20OR%20%22Missouri%20State%20Parks%22%20OR%20%22Missouri%20Department%20of%20Conservation%22%20OR%20%22Missouri%20Fish%20and%20Wildlife%22%20OR%20%22Missouri%20Forest%20Service%22%20OR%20%22Missouri%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "st:nebraska",
-    "note": "Asked again for Nebraska, by publisher rather than by topic. The first pass searched for the words recreation and trails and came back with Lewis and Clark route layers and earthquake shakemaps; every clean hit it did find came from a state agency's own org. So this asks for the agency.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%28%22Nebraska%20Department%20of%20Natural%20Resources%22%20OR%20%22Nebraska%20State%20Parks%22%20OR%20%22Nebraska%20Department%20of%20Conservation%22%20OR%20%22Nebraska%20Fish%20and%20Wildlife%22%20OR%20%22Nebraska%20Forest%20Service%22%20OR%20%22Nebraska%20Parks%20and%20Wildlife%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
+    "url": "https://arcgis.dnr.alaska.gov/arcgis/rest/services?f=pjson"
   }
 ]

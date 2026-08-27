@@ -37,7 +37,6 @@ sweep says where land is, not what may be done on it.
 | KY `ThematicServices` | NLCD land cover, 1985-2024, nothing else |
 | WV GIS `Society`, `Structure` | fire hydrants, SHPO records, building footprints |
 | TN `COMMUNITY` | schools, polling places, libraries, tax boundaries |
-| Ohio state services | both hostnames dead - 404 and unresolvable |
 | Fire closures, nationally | USFS Region 6 keeps a real one; everyone else spins up a throwaway service per fire, which nothing can be built on |
 
 ## Known flaky
@@ -50,28 +49,69 @@ build time rather than fetching it live.
 
 ## Found, not yet schema-probed
 
-A first pass over the states, by publisher. These answered with a state
-agency's own host or organisation, which is the only signal that has
-correlated with the data being real. None of them are wired.
+Two passes over all fifty states. These answered with a state agency's
+own host or organisation, which is the only signal that has correlated
+with the data being real. None of them are wired.
 
 | State | What it published | Where |
 |---|---|---|
-| Montana | State Parks polygons, Parks Activities, FWP Lands sites and points | MT FWP org |
+| Michigan | Forest roads with surface, condition and closure reason; state forest campgrounds; ORV scramble areas | MI DNR orgs |
+| Kentucky | Scenic byways, recreational trails by use, state forests, public hunting areas | `kygisserver.ky.gov` |
+| Pennsylvania | State park boundaries and **State Park Amenities** | `gis.dcnr.pa.gov` |
+| Vermont | **Roads (ANR Travel Routes)**, Wildlife Management Units | `anrmaps.vermont.gov` |
+| Maryland | State Park, Forest, Recreation **Maintained Roads** | MD DNR org |
+| Montana | State Parks polygons, **Parks Activities**, FWP Lands sites and points | MT FWP org |
+| New Jersey | Parks and Forests Trail System, State Park Points of Interest, generalised trails | `mapsdep.nj.gov` |
+| Oregon | State Parks, **State Park Status**, State Parks Hunting Areas | `gis.prd.state.or.us` |
+| Texas | State Parks Public Areas, **WMA Boundaries for Public Distribution**, Public Hunting Regions | TPWD org |
+| Washington | Park Boundaries, Trails, Winter Rec Motorized Trails, ADA Information Points | WA State Parks org |
+| Wisconsin | State parks and **Park Closures** | WI DNR org |
+| Ohio | ODNR Lands, DNR/Federal Lands navigation basemap | `gis.ohiodnr.gov` |
 | Iowa | State Parks, Recreation Lands - an entire Recreation folder | `programs.iowadnr.gov` |
 | Florida | FFS Recreation Points, Recreation Trails, State Forests | FL Forest Service org |
 | Connecticut | DEEP Property, DEEP Property Access Locations | CT DEEP org |
-| Maryland | State Park, Forest, Recreation Maintained Roads | MD DNR org |
 | Massachusetts | Protected and Recreational OpenSpace, MassWildlifeLands | `gis.eea.mass.gov` |
 | Hawaii | Na Ala Hele Trails, Reserves, DOFAW Managed Lands | `geodata.hawaii.gov` |
 | Indiana | DNR Recreation Sites, Trails Inventory | `gisdata.in.gov` |
+| Delaware | DNREC Facilities and Planning, consolidated State Park boundaries | `enterprise.firstmap.delaware.gov` |
 | Colorado | CPW admin and species data, state basemap | `gis.colorado.gov`, CPW org |
+| Utah | State Park Management Areas, snowmobile routes and trailheads | Utah DNR org |
+| North Carolina | State Trails, State Parks Points | NC org |
+| Virginia | State Park trails and districts | VA org |
+| Oklahoma | Recreational Areas, State Parks | OK orgs |
+| South Carolina | State Parks; `arcweb.dnr.sc.gov` is live | SC orgs |
 | Idaho | Idaho Recreation Trails | Idaho org |
 | Illinois | Trails, Trails Public, Overlooks | organisation unverified |
+| New Mexico | State Parks | NM org |
+| North Dakota | State Forest | NDGISHUB |
+| Wyoming | State Park Boundaries | WY org |
+| South Dakota | State Parks, Campground and Recreation Areas | org looks personal, needs checking |
+| Mississippi | **State Parks and WMAs** in one layer | MS org |
+| Arkansas | State Parks, State Park Recreation Points | AR orgs |
+| Minnesota | State Parks | MN org |
+| Nebraska | Park Areas and Locations; `gis.ne.gov` is live | NE orgs |
+| Maine | Bureau of Parks and Lands property points | Maine Forest Service org |
 
-Indiana appears here having been recorded as a refusal earlier in this
-file. That was wrong: the earlier probe asked a different server. The
-state publishes DNR recreation sites and a trails inventory on
-`gisdata.in.gov`.
+Still unresolved after two passes: Alabama, Alaska, California, Georgia,
+Kansas, Louisiana, Missouri, Nevada, New Hampshire, Rhode Island.
+
+New Hampshire and Rhode Island returned literally nothing - `total: 0` -
+which means the agency names in the query do not match theirs, not that
+they publish nothing. Missouri's `gisblue.mdc.mo.gov` and California's
+conservation server are both live and neither surfaced anything
+recreational, which is a query problem rather than an answer. These ten
+need a third pass by hostname.
+
+Two states appear here having been recorded as refusals earlier in this
+file. Both were wrong, and for the same reason - the probe asked the
+wrong server. Indiana publishes DNR recreation sites and a trails
+inventory on `gisdata.in.gov`. Ohio publishes ODNR Lands on
+`gis.ohiodnr.gov`; the hostnames recorded as dead were simply not
+Ohio's.
+
+The pattern is worth naming: every wrong answer in this file so far has
+come from asking the wrong address, and none from a state that genuinely
+had nothing.
 
 ## A caution about absence
 
