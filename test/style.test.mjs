@@ -561,10 +561,31 @@ test('byways: route shields build their image name from the feature', () => {
 
   const image = JSON.stringify(shield.layout['icon-image']);
   assert.ok(image.includes('shield'), 'the image name should come from the shield field');
-  assert.ok(image.includes('reflen'), 'and from how long the number is');
   assert.ok(image.includes('coalesce'), 'an unknown design should fall back, not vanish');
 
-  assert.deepEqual(shield.layout['text-field'], ['get', 'ref'], 'the shield shows the route number');
+  /*
+   * Sized from the number that gets drawn, not from the tile's `reflen`.
+   *
+   * `reflen` is the length of the raw ref, and the raw ref carries the system
+   * — "SR 61" is five characters holding two digits. Sizing the blank from it
+   * puts a small number adrift in a wide sign.
+   */
+  assert.ok(!image.includes('reflen'), 'the blank is sized from the number, not the raw ref');
+  assert.ok(image.includes('length'), 'which means measuring what is drawn');
+
+  /*
+   * And what is drawn is a number.
+   *
+   * The shape around it is what says which system issued it, so the prefix in
+   * the ref is redundant at best — "SR 61" inside a state-route blank is a
+   * sign that exists nowhere. Asserted as "not the raw ref" rather than by
+   * matching the expression, which is checked properly by evaluating it in
+   * tools/validate-style.mjs against the refs the tiles really produce.
+   */
+  const text = JSON.stringify(shield.layout['text-field']);
+  assert.notDeepEqual(shield.layout['text-field'], ['get', 'ref'],
+    'the raw ref carries the system prefix and the shield must not');
+  assert.ok(text.includes('ref'), 'the number still comes from the ref');
   assert.ok(shield.filter.flat(3).includes('ref'), 'only roads with a number get a shield');
 });
 
