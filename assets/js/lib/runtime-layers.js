@@ -179,6 +179,33 @@ export function runtimeLayers({ labels = true } = {}) {
     },
   },
   {
+    /*
+     * One label on the band, at its middle.
+     *
+     * The bearings each carry their own name along themselves; the band did
+     * not, because a label repeated along a sampled curve is a dotted mess —
+     * which left a wide violet line across the map that nothing on screen
+     * explained. `symbol-placement: line-center` puts exactly one on it.
+     */
+    id: 'light-arc-label',
+    type: 'symbol',
+    source: LIGHT_SOURCE,
+    filter: ['==', ['get', 'kind'], 'arc'],
+    layout: {
+      'symbol-placement': 'line-center',
+      'text-field': 'The Milky Way band',
+      'text-size': 12,
+      'text-offset': [0, -0.9],
+      'text-letter-spacing': 0.04,
+      'text-allow-overlap': false,
+    },
+    paint: {
+      'text-color': '#57327d',
+      'text-halo-color': 'rgba(255,255,255,0.95)',
+      'text-halo-width': 2.2,
+    },
+  },
+  {
     id: 'light-line',
     type: 'line',
     source: LIGHT_SOURCE,

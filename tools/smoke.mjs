@@ -152,7 +152,11 @@ setStyle(s,o){this._ready=false;
     setTimeout(()=>{this._ready=true;this.fire('styledata');this.fire('idle')},30)},0)}
 getStyle(){return{layers:[...this._l.values()]}}getBounds(){return new Bounds(-85,35,-83,37)}
 getZoom(){return 12}getCenter(){return{lng:-84.28,lat:35.96}}fitBounds(){}flyTo(){}easeTo(){}jumpTo(){}
-project(){return{x:0,y:0}}unproject(){return{lng:0,lat:0}}queryRenderedFeatures(){return[]}resize(){}remove(){}}
+project(){return{x:100,y:100}}unproject(){return{lng:0,lat:0}}
+// Answers with whatever the test has staged, the way a vector basemap answers
+// with whatever is drawn under the tap. A stub that always returns nothing
+// cannot tell "we asked and there was nothing" from "we never asked".
+queryRenderedFeatures(){return window.__rendered||[]}resize(){}remove(){}}
 window.maplibregl={Map:M,NavigationControl:class{},ScaleControl:class{},GeolocateControl:class{},
 FullscreenControl:class{},Popup,LngLatBounds:Bounds,
 Marker:class{setLngLat(){return this}addTo(){return this}remove(){return this}}};
@@ -1235,11 +1239,16 @@ await page.waitForTimeout(800);
 await page.locator('.detail-block').filter({ hasText: 'Photography' }).first()
   .evaluate((node) => { node.open = true; });
 await page.waitForTimeout(300);
-// The map-drawing controls live behind their own sub-tab inside Photography.
-await page.locator('.sky-tab', { hasText: /Everything/ }).first().click();
-await page.waitForTimeout(300);
-await page.locator('[data-toggle="sky-lines"]').first().click();
-await page.waitForTimeout(500);
+// The aggregate drawing lives behind its own sub-tab inside Photography, and
+// the tab IS the switch — opening it draws, which is the whole reason it is
+// called Draw rather than carrying a button that says so.
+await page.locator('.sky-tab', { hasText: /^Draw$/ }).first().click();
+await page.waitForTimeout(700);
+check('opening the Draw tab draws, with no second press',
+  await page.evaluate(() => (window.__map.getSource('light-directions')?._d?.features || []).length > 0),
+  true);
+check('and it carries no button that would be the same press again',
+  await page.locator('[data-toggle="sky-lines"]').count(), 0);
 
 const arcOf = () => page.evaluate(() => {
   const features = window.__map.getSource('light-directions')?._d?.features || [];
@@ -1710,6 +1719,24 @@ check('the inspector is on from the start, and says so',
 check('and it is the first of the two, above the pin',
   await tools.nth(0).getAttribute('aria-pressed'), 'true');
 
+/*
+ * A lake and a forest road under the same tap, from the basemap's own tiles.
+ *
+ * Staged rather than mocked over the network on purpose: these come out of
+ * vector tiles already drawn on the screen, so the feature has to work with
+ * the radio off, and there is no request to intercept.
+ */
+await page.evaluate(() => {
+  window.__rendered = [
+    { sourceLayer: 'water', properties: { name: 'Fish Lake', class: 'lake' } },
+    { sourceLayer: 'water', properties: { name: 'Fish Lake', class: 'lake' } },
+    { sourceLayer: 'road', properties: { class: 'track', surface: 'unpaved', ref: 'FR 640' } },
+    { sourceLayer: 'landuse', properties: { name: 'Fishlake National Forest', class: 'national_park' } },
+    { sourceLayer: 'contour', properties: { ele: 2600 } },
+    { sourceLayer: 'landuse', properties: { class: 'grass' } },
+  ];
+});
+
 await page.evaluate(() => window.__map.fire('click', {
   lngLat: { lng: -111.5, lat: 38.5 }, point: { x: 400, y: 400 },
   originalEvent: { pointerType: 'touch', width: 40, height: 40 },
@@ -1733,11 +1760,31 @@ const card = await page.evaluate(() => {
     rows[source] = { designation: group.querySelector('.identify-designation')?.textContent.trim(),
       pairs: Object.fromEntries(pairs) };
   }
+  // Keyed by source for the checks below, but the raw list too: a duplicate
+  // group would collapse into one key and a check on the keys could not see it.
+  rows.__sources = [...node.querySelectorAll('.identify-source')].map((n) => n.textContent.trim());
   return rows;
 });
 
-check('both agencies answer into one card',
-  Object.keys(card || {}).sort(), ['BLM travel management', 'Forest Service MVUM']);
+check('both agencies answer into one card, and the basemap with them',
+  card.__sources.slice().sort(),
+  ['BLM travel management', 'Forest Service MVUM', 'Land', 'Road', 'Water']);
+check('the lake is named from the tile it is drawn from', card.Water.designation, 'Fish Lake');
+check('and it is listed once, however many times it was drawn',
+  card.__sources.filter((source) => source === 'Water').length, 1);
+check('a nameless road still answers, because its surface is the answer',
+  card.Road.pairs.Surface, 'Unpaved');
+check('and its class is spelled as a word', card.Road.designation, 'Track');
+check('the forest around it is named too', card.Land.designation, 'Fishlake National Forest');
+
+// The mark stays under the card: "on this spot" with nothing marking the spot
+// is a riddle, and a tap that finds nothing then looks like a tap that never
+// happened.
+check('the tapped spot is marked on the map',
+  await page.evaluate(() => {
+    const data = window.__map.getSource('scratch-cursor')?._d;
+    return data?.geometry?.type === 'Point';
+  }), true);
 check('BLM\'s designation comes from the sublayer name, where it lives',
   card['BLM travel management'].designation, 'Roads Managed for Limited Public Motorized Use');
 check('and the limit is spelled out rather than left as the word "Limited"',
@@ -2033,23 +2080,21 @@ if (/^Not from here/.test(eclipse.verdict)) {
   check('and nothing on it that is not part of that picture',
     drewEclipse.kinds.every((kind) => ['track', 'hour', 'now'].includes(kind)), true);
 
-  await page.locator('.sky-tab', { hasText: /Everything/ }).first().click();
-  await page.waitForTimeout(300);
-  check('the night-lines button reads as off, because the eclipse holds the map',
-    await page.locator('[data-toggle="sky-lines"]').first().innerText(),
-    'Draw everything on the map');
-  await page.locator('[data-toggle="sky-lines"]').first().click();
-  await page.waitForTimeout(400);
+  await page.locator('.sky-tab', { hasText: /^Draw$/ }).first().click();
+  await page.waitForTimeout(700);
 
   const swapped = await page.evaluate(() => {
     const features = window.__map.getSource('light-directions')?._d?.features || [];
     return [...new Set(features.map((feature) => feature.properties.body))].sort();
   });
-  check('and drawing the night lines replaces the eclipse rather than stacking on it',
+  check('and opening Draw replaces the eclipse rather than stacking on it',
     swapped.includes('core'), true);
 
-  await page.locator('[data-toggle="sky-lines"]').first().click();
-  await page.waitForTimeout(300);
+  await page.locator('.sky-tab', { hasText: /^Draw$/ }).first().click();
+  await page.waitForTimeout(400);
+  check('closing it takes the lines off again',
+    await page.evaluate(() => (window.__map.getSource('light-directions')?._d?.features || []).length),
+    0);
 }
 
 /*
@@ -2114,9 +2159,9 @@ const key = await page.evaluate(() => [...document.querySelectorAll('.line-key-r
     swatch: row.querySelector('.line-key-swatch')?.className || '',
     name: row.querySelector('.line-key-name')?.textContent.trim() || '',
   })));
-check('the unlabelled curves are named in a key', key.length, 2);
-check('the band first, then where the core goes',
-  key.map((row) => row.swatch.replace('line-key-swatch ', '')), ['is-band', 'is-track']);
+check('the violet lines are named in a key', key.length, 3);
+check('the band, the hour ring, then the bearing to the core',
+  key.map((row) => row.swatch.replace('line-key-swatch ', '')), ['is-band', 'is-track', 'is-spoke']);
 check('and each is named in words', key.every((row) => row.name.length > 5), true);
 
 /*
@@ -2126,10 +2171,8 @@ check('and each is named in words', key.every((row) => row.name.length > 5), tru
  * line labelled "now" is then saying something false about a bearing you are
  * standing under.
  */
-await page.locator('.sky-tab', { hasText: /Everything/ }).first().click();
-await page.waitForTimeout(300);
-await page.locator('[data-toggle="sky-lines"]').first().click();
-await page.waitForTimeout(500);
+await page.locator('.sky-tab', { hasText: /^Draw$/ }).first().click();
+await page.waitForTimeout(700);
 
 const scrubbedNames = await (async () => {
   const range = page.locator('.scrub-range').first();
@@ -2154,7 +2197,7 @@ check('it is labelled with the moment it is drawn for',
 check('and the rows under the slider say the same',
   scrubbedNames.rows.some((row) => /now/i.test(row)), false);
 
-await page.locator('[data-toggle="sky-lines"]').first().click();
+await page.locator('.sky-tab', { hasText: /^Draw$/ }).first().click();
 await page.waitForTimeout(300);
 
 /*

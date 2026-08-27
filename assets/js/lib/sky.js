@@ -466,7 +466,9 @@ export function currentDirections(date, lat, lon) {
   return [
     { id: 'sun-now', name: 'Sun now', body: 'sun', now: true, at: date, ...sun },
     { id: 'moon-now', name: 'Moon now', body: 'moon', now: true, at: date, ...moon },
-    { id: 'core-now', name: 'Milky Way now', body: 'core', now: true, at: date, ...core },
+    // "Milky Way" alone named the band; this is the bearing to its brightest
+    // part, which is a different line on the map and a different answer.
+    { id: 'core-now', name: 'Milky Way core now', body: 'core', now: true, at: date, ...core },
   ]
     .filter((entry) => entry.altitude > 0)
     .map((entry) => ({
@@ -700,7 +702,7 @@ export function moonTrack(origin, from, to, options = {}) {
  * readable as one thing.
  */
 function groundTrack(bodyAt, [lon, lat], from, to, {
-  maxKm = 40, stepMinutes = 15, minAltitude = 0, anchor = true,
+  maxKm = 40, stepMinutes = 15, minAltitude = 0, anchor = true, fixedKm = null,
 } = {}) {
   const start = from?.valueOf?.();
   const end = to?.valueOf?.();
@@ -726,11 +728,20 @@ function groundTrack(bodyAt, [lon, lat], from, to, {
     const position = bodyAt(when, lat, lon);
     if (position.altitude <= minAltitude) continue;
     const height = Math.min(90, Math.max(0, position.altitude));
+    /*
+     * Two projections, and the caller picks.
+     *
+     * Pulled in as the body climbs, distance from the pin means altitude and
+     * the path curves. At a fixed radius it is a ring around the pin and
+     * distance means nothing at all — which is the readable one for "where
+     * will this be at two in the morning", because every hour along it sits
+     * the same distance out and the labels do not pile up near the middle.
+     */
     points.push({
       when,
       altitude: position.altitude,
       azimuth: position.azimuth,
-      position: destinationPoint([lon, lat], position.azimuth, maxKm * (1 - height / 90)),
+      position: destinationPoint([lon, lat], position.azimuth, fixedKm ?? maxKm * (1 - height / 90)),
     });
   }
   return points;

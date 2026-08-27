@@ -1604,6 +1604,9 @@ html, body { height: 100%; overflow: hidden; }
     #7b4fa8 0 4px, transparent 4px 9px) center / 100% 2px no-repeat;
   opacity: .75;
 }
+.line-key-swatch.is-spoke {
+  background: linear-gradient(to bottom, transparent 30%, #7b4fa8 30%, #7b4fa8 70%, transparent 70%);
+}
 .line-key-text { display: grid; gap: 1px; min-width: 0; }
 .line-key-name { font-size: .78rem; font-weight: 600; color: var(--ink-2); }
 .line-key-note { font-size: .72rem; line-height: 1.4; color: var(--ink-3); }

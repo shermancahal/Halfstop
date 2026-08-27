@@ -232,6 +232,9 @@ const state = {
   dropPopup: null,
   /** [lon, lat] of a place being described that is not a saved pin. */
   scratchPoint: null,
+  // Where the last "what is here" tap landed, so the map keeps a mark on the
+  // spot the card is talking about.
+  probeMark: null,
 };
 
 const dom = {};
@@ -2330,10 +2333,15 @@ function skyPanels(position, date, phases) {
     { id: 'milkyway', label: 'Milky Way', icon: icons.galaxy },
     { id: 'aurora', label: 'Aurora', icon: icons.aurora },
     { id: 'eclipse', label: 'Eclipse', icon: icons.eclipse },
-    // Not "On the map" any more: every tab here draws on the map now, so that
-    // name had stopped telling them apart. This is the one that draws all of
-    // them at once.
-    { id: 'lines', label: 'Everything', icon: icons.pin },
+    /*
+     * The one tab that is a switch rather than a page.
+     *
+     * It used to be "On the map", which stopped telling the tabs apart once
+     * every one of them drew on the map. And it used to open a panel with a
+     * button in it that did the obvious thing — two presses to reach the only
+     * thing the tab is for. Opening it draws; closing it stops.
+     */
+    { id: 'lines', label: 'Draw', icon: icons.pin, draws: 'sky' },
   ];
 
   const row = el('div', { class: 'sky-tabs' }, tabs.map((tab) => el('button', {
@@ -2344,8 +2352,21 @@ function skyPanels(position, date, phases) {
     // are still readable to a screen reader and still findable by their words.
     html: `<span class="sky-tab-icon">${tab.icon}</span><span class="sky-tab-text">${tab.label}</span>`,
     onclick: () => {
-      state.skyPanel = open === tab.id ? '' : tab.id;
+      const opening = open !== tab.id;
+      state.skyPanel = opening ? tab.id : '';
       rememberSkyPanel();
+      /*
+       * A tab that draws does it on the way in and undoes it on the way out —
+       * including when the way out is another tab, which owns the map next.
+       *
+       * `toggleLightLines` is a toggle, so it is only called when it would
+       * change something: called on a re-render it would switch the drawing
+       * back off under a panel still saying it is on.
+       */
+      if (tab.draws) setSkyDrawing(position, date, tab.draws, opening);
+      else if (tabs.find((entry) => entry.id === open)?.draws) {
+        setSkyDrawing(position, date, 'sky', false);
+      }
       renderDetailsTab();
     },
   })));
@@ -3060,6 +3081,34 @@ function directionsForMode(mode, position, when) {
   return all.filter((entry) => entry.body === mode);
 }
 
+/**
+ * Put one drawing on the map, or take it off, without toggling blindly.
+ *
+ * `toggleLightLines` flips, which is right under a button whose label says
+ * which way it will flip. A tab that draws while it is open needs the other
+ * verb — set it on, set it off — or a re-render of the open tab switches off
+ * the drawing the tab is still claiming to show.
+ */
+function setSkyDrawing(position, date, mode, on) {
+  const drawn = state.lightLines?.key === lineKey(position, mode);
+  if (on === drawn) return;
+
+  if (!on) { toggleLightLines(position, [], date, { mode }); return; }
+
+  const shape = skySpan(mode, position, date);
+  if (!shape.window) return;
+  const at = shape.peak || date;
+  toggleLightLines(position, directionsForMode(mode, position, at), at, {
+    mode,
+    body: modeBody(mode),
+    window: shape.window,
+    peak: shape.peak,
+    marks: shape.marks,
+    scrubLabel: shape.label,
+    night: shape.night || null,
+  });
+}
+
 /** The body each drawing is about, which is what the readout names. */
 const modeBody = (mode) => (mode === 'eclipse' ? 'moon' : mode === 'sky' ? 'core' : mode);
 
@@ -3090,6 +3139,7 @@ function mapToggle(position, date, mode, { on, off, span = null }) {
   const button = labelledButton(active ? icons.eyeOff : icons.pin, active ? off : on, {
     tone: active ? 'secondary' : 'primary',
     onclick: () => {
+      if (active) { toggleLightLines(position, [], date, { mode }); return; }
       const shape = shapeOf();
       const at = shape.peak || date;
       toggleLightLines(position, directionsForMode(mode, position, at), at, {
@@ -3327,15 +3377,16 @@ function linesPanel(body, position, date) {
     return;
   }
 
-  body.append(mapToggle(position, date, 'sky', {
-    on: 'Draw everything on the map',
-    off: 'Hide the lines',
-  }));
-
-  // Listed even before anything is drawn, because this tab is the summary: the
-  // four before it each answer one question, and this one exists to hold the
-  // answers side by side.
-  if (!active) body.append(directionRows(all, when));
+  /*
+   * No button, because the tab is the button.
+   *
+   * Everything below is the readout for a drawing that is already on the map:
+   * the slider that moves it, the bearings it drew, and the key to the two
+   * curves that carry no label of their own.
+   */
+  if (active) body.append(nightScrubber(position));
+  body.append(directionRows(all, when));
+  body.append(lineKeyBlock());
 }
 
 /**
@@ -3393,8 +3444,9 @@ function directionName(entry, when) {
  */
 function lineKeyBlock() {
   const rows = [
-    ['band', 'The band right now', 'A wide violet curve — the Milky Way itself, not a bearing to it.'],
-    ['track', 'Where the core goes', 'Dashed and thin: its path from dusk to dawn, with the hours marked.'],
+    ['band', 'The Milky Way band', 'The wide violet curve, labelled on the map — the band itself, not a bearing to it.'],
+    ['track', 'The hour ring', 'Dashed, around the pin: every bearing the core passes through tonight, with the hours on it.'],
+    ['spoke', 'Milky Way core', 'The solid violet line — which way to face right now, or at whatever time the slider is on.'],
   ];
   return el('div', { class: 'line-key' }, rows.map(([kind, name, note]) => el('div', { class: 'line-key-row' }, [
     el('span', { class: `line-key-swatch is-${kind}` }),
@@ -3600,39 +3652,30 @@ function refreshLightLines() {
       properties: {
         body: 'core',
         now: true,
-        label: nowLabel('Milky Way now', sky.core, at),
+        label: nowLabel('Milky Way core now', sky.core, at),
       },
       geometry: { type: 'LineString', coordinates: [lines.position, sky.core.position] },
     });
   }
 
   /*
-   * The core's path across the night, under everything else.
+   * Where the core goes across the night, as a ring around the pin.
    *
    * The band is one instant; this is the shape of the whole night, which is
    * what you plan around — the core will have moved thirty degrees west by the
-   * time you have walked in. Hour marks along it because a curve alone says
-   * where and not when.
+   * time you have walked in. Drawn at a fixed distance so it reads as a sweep
+   * of bearings rather than as a squiggle, with the hours marked, because a
+   * curve alone says where and not when.
    */
-  const window = lines.night?.dark;
+  const window = lines.window || lines.night?.dark;
   if (window) {
-    const track = milkyWayTrack(lines.position, window.from, window.to, { maxKm: REACH });
-    if (track.length > 1) {
-      features.push({
-        type: 'Feature',
-        properties: { body: 'core', kind: 'track' },
-        geometry: { type: 'LineString', coordinates: track.map((point) => point.position) },
-      });
-
-      const onTheHour = track.filter((point) => point.when.getMinutes() === 0);
-      for (const point of onTheHour) {
-        features.push({
-          type: 'Feature',
-          properties: { body: 'core', kind: 'hour', label: clockTime(point.when) },
-          geometry: { type: 'Point', coordinates: point.position },
-        });
-      }
-    }
+    features.push(...ringFeatures(
+      milkyWayTrack(lines.position, window.from, window.to, {
+        maxKm: REACH, fixedKm: ringRadius(REACH), stepMinutes: 10,
+      }),
+      'core',
+      { highest: lines.peak || lines.night?.windowPeak?.when || null },
+    ));
   }
 
   if (sky.line.length > 1) {
@@ -3644,6 +3687,59 @@ function refreshLightLines() {
   }
 
   source.setData({ type: 'FeatureCollection', features });
+}
+
+/**
+ * How far out the hour ring is drawn.
+ *
+ * Inside the 40km reach of the bearings, so the spokes cross it rather than
+ * stopping at it, and far enough from the pin that a dozen hour labels around
+ * it are not on top of each other.
+ */
+const ringRadius = (reach) => reach * 0.62;
+
+/**
+ * A body's sweep of bearings as a ring, with the hours named along it.
+ *
+ * The question this answers is "which way, and when" — where the core will be
+ * at two in the morning, whether the sun will still be behind the ridge at
+ * five. A ring answers both at once: the arc is every bearing it passes
+ * through, and the labels put a clock on it.
+ *
+ * The pulled-in projection was tried first and is what prompted "what is the
+ * light purple line" — at a distance that shrinks as the body climbs, the path
+ * is a curve nobody can read a bearing off, and the hour labels crowd into the
+ * middle exactly when the body is highest and most worth shooting.
+ */
+function ringFeatures(track, body, { highest = null } = {}) {
+  if (track.length < 2) return [];
+
+  const features = [{
+    type: 'Feature',
+    properties: { body, kind: 'track' },
+    geometry: { type: 'LineString', coordinates: track.map((point) => point.position) },
+  }];
+
+  for (const point of track.filter((sample) => sample.when.getMinutes() === 0)) {
+    features.push({
+      type: 'Feature',
+      properties: { body, kind: 'hour', label: clockTime(point.when) },
+      geometry: { type: 'Point', coordinates: point.position },
+    });
+  }
+
+  // The moment the whole panel is recommending, named on the ring rather than
+  // left for the reader to find among the hours.
+  if (highest) {
+    const at = track.reduce((best, point) => (Math.abs(point.when - highest) < Math.abs(best.when - highest) ? point : best));
+    features.push({
+      type: 'Feature',
+      properties: { body, kind: 'hour', label: `highest ${clockTime(highest)}` },
+      geometry: { type: 'Point', coordinates: at.position },
+    });
+  }
+
+  return features;
 }
 
 /**
@@ -3690,33 +3786,35 @@ function bodyFeatures(lines, reach) {
   }
 
   const window = lines.window;
+  const ring = ringRadius(reach);
   const track = window
     ? trackOf(lines.position, window.from, window.to, {
       maxKm: reach,
+      fixedKm: ring,
       // Five-minute steps across an eclipse, starting on the instant it does:
       // a quarter-hour anchored to the clock would drop the first sample and
       // begin the drawing after the eclipse had begun.
-      ...(eclipse ? { stepMinutes: 5, anchor: false } : { stepMinutes: 15 }),
+      ...(eclipse ? { stepMinutes: 5, anchor: false } : { stepMinutes: 10 }),
     })
     : [];
 
-  if (track.length > 1) {
-    features.push({
-      type: 'Feature',
-      properties: { body, kind: 'track' },
-      geometry: { type: 'LineString', coordinates: track.map((point) => point.position) },
-    });
-  }
-
   /*
-   * What to name along the path.
+   * What to name along the ring.
    *
-   * Hours for a day or a night: a curve says where and not when, and the hour
+   * Hours for a day or a night: an arc says where and not when, and the hour
    * is what you plan around. For an eclipse the moments worth naming are the
    * contacts the strip above already names, in the same words, so the map and
-   * the panel agree.
+   * the panel agree — and the hours in between would be noise across ninety
+   * minutes.
    */
   if (eclipse) {
+    if (track.length > 1) {
+      features.push({
+        type: 'Feature',
+        properties: { body, kind: 'track' },
+        geometry: { type: 'LineString', coordinates: track.map((point) => point.position) },
+      });
+    }
     for (const mark of lines.marks || []) {
       const at = new Date(mark.at);
       if (!window || at < window.from || at > window.to) continue;
@@ -3725,17 +3823,11 @@ function bodyFeatures(lines, reach) {
       features.push({
         type: 'Feature',
         properties: { body, kind: 'hour', label: `${mark.label} ${clockTime(at)}` },
-        geometry: { type: 'Point', coordinates: project(where) },
+        geometry: { type: 'Point', coordinates: destinationPoint(lines.position, where.azimuth, ring) },
       });
     }
   } else {
-    for (const point of track.filter((sample) => sample.when.getMinutes() === 0)) {
-      features.push({
-        type: 'Feature',
-        properties: { body, kind: 'hour', label: clockTime(point.when) },
-        geometry: { type: 'Point', coordinates: point.position },
-      });
-    }
+    features.push(...ringFeatures(track, body, { highest: lines.peak || null }));
   }
 
   // Where it is at the scrubbed moment — the one line you can check by looking
@@ -4923,6 +5015,11 @@ function vehicleClasses(attributes) {
 }
 
 function attributeRows(result) {
+  // The basemap's own features come with their rows already chosen: there is
+  // no service schema to order them by, and a vector tile's columns are not
+  // the agency columns the rest of this function is built around.
+  if (result.rows) return result.rows;
+
   const entries = Object.entries(result.attributes)
     .filter(([name, value]) => {
       if (/^(objectid|shape|globalid|fid)/i.test(name)) return false;
@@ -5017,22 +5114,133 @@ function showIdentifyResults(position, groups, { pending = false } = {}) {
       tone: 'ghost',
       onclick: () => { popup.remove(); showPointDetails(position); },
     }),
-    labelledButton(icons.close, 'Close', { tone: 'ghost', onclick: () => popup.remove() }),
+    labelledButton(icons.close, 'Close', {
+      tone: 'ghost',
+      // The mark goes with the card. Left behind it is a dot on the map with
+      // nothing on screen saying what it is.
+      onclick: () => { popup.remove(); setProbeMark(null); },
+    }),
   ]));
 
   popup.setDOMContent(content).addTo(state.map);
   return { popup, body };
 }
 
+/**
+ * What the basemap itself knows about a point.
+ *
+ * The agency layers answer "is this road open"; this answers the question that
+ * comes first and far more often — what is that lake called, what is this
+ * road, whose park am I standing in. It is already drawn on the screen, so it
+ * costs a query against tiles that are in memory and no network at all, which
+ * also means it still answers with the radio off.
+ *
+ * Only what is actually rendered comes back, which is the right rule: if you
+ * cannot see it you did not tap it.
+ */
+function basemapFeatures(position, tolerance) {
+  if (typeof state.map?.queryRenderedFeatures !== 'function') return [];
+
+  let found = [];
+  try {
+    const point = state.map.project(position);
+    found = state.map.queryRenderedFeatures([
+      [point.x - tolerance, point.y - tolerance],
+      [point.x + tolerance, point.y + tolerance],
+    ]) || [];
+  } catch {
+    // Raster basemaps have nothing to query and some engines throw rather than
+    // return nothing. Either way the answer is the same: no vector features.
+    return [];
+  }
+
+  const seen = new Set();
+  const groups = [];
+  for (const feature of found) {
+    const described = describeMapFeature(feature);
+    if (!described) continue;
+    const key = `${described.source}:${described.designation}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    groups.push(described);
+    // Six is a card, twelve is a list nobody reads. Rendered order puts the
+    // labels and the roads first, which is the order they are wanted in.
+    if (groups.length >= 6) break;
+  }
+  return groups;
+}
+
+/* What each of the basemap's own source layers is called in words, and which
+   of its columns carries the specific kind. */
+const MAP_FEATURE_KINDS = {
+  water: { source: 'Water', field: 'class' },
+  waterway: { source: 'Water', field: 'class' },
+  road: { source: 'Road', field: 'class' },
+  landuse: { source: 'Land', field: 'class' },
+  landuse_overlay: { source: 'Land', field: 'class' },
+  natural_label: { source: 'Landform', field: 'class' },
+  place_label: { source: 'Place', field: 'type' },
+  structure: { source: 'Structure', field: 'class' },
+  building: { source: 'Building', field: 'type' },
+  poi_label: { source: 'Point of interest', field: 'category_en' },
+  airport_label: { source: 'Airport', field: 'class' },
+};
+
+/** One rendered basemap feature as an identify group, or null if it says nothing. */
+function describeMapFeature(feature) {
+  const kind = MAP_FEATURE_KINDS[feature.sourceLayer];
+  if (!kind) return null;
+
+  const properties = feature.properties || {};
+  const name = properties.name_en || properties.name || '';
+  const specific = properties[kind.field] || '';
+  // A nameless patch of "grass" is not an answer to "what is here". A nameless
+  // road is, because its surface and class are the answer.
+  if (!name && feature.sourceLayer !== 'road') return null;
+
+  /* Vector-tile columns are lower_snake_case — `national_park`, `street_limited`
+     — which `humaniseValue` leaves alone because an agency code in that shape
+     usually means something. Here it is just a word with a join in it. */
+  const words = (value) => String(value).replace(/_/g, ' ').replace(/^./, (first) => first.toUpperCase());
+  const rows = [];
+  const add = (label, value) => {
+    if (value === undefined || value === null || value === '') return;
+    rows.push([label, words(humaniseValue(value))]);
+  };
+  add('Kind', specific);
+  if (feature.sourceLayer === 'road') {
+    add('Route', properties.ref);
+    add('Surface', properties.surface);
+    add('Structure', properties.structure === 'none' ? '' : properties.structure);
+  }
+  if (feature.sourceLayer === 'natural_label' || feature.sourceLayer === 'place_label') {
+    add('Elevation', properties.elevation_ft ? `${properties.elevation_ft} ft` : '');
+  }
+
+  return {
+    source: kind.source,
+    designation: name || (specific ? words(humaniseValue(specific)) : '') || kind.source,
+    attributes: null,
+    rows,
+  };
+}
+
 /** Run every visible identifiable layer against one point, and show the answer. */
 async function probePoint(position, tolerance) {
   const layers = identifiableOverlays();
+
+  // The marker goes down first and stays until the card is dismissed. Without
+  // it a tap that lands on nothing leaves no trace of where it landed, and a
+  // card about "this spot" with nothing marking the spot is a riddle.
+  setProbeMark(position);
+
+  const onTheMap = basemapFeatures(position, tolerance);
   if (!layers.length) {
-    toast('Switch on a road or land layer first — there is nothing to ask.', { tone: 'info' });
+    showIdentifyResults(position, onTheMap);
     return;
   }
 
-  showIdentifyResults(position, [], { pending: true });
+  showIdentifyResults(position, onTheMap, { pending: true });
 
   const bounds = state.map.getBounds();
   const extent = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
@@ -5053,7 +5261,7 @@ async function probePoint(position, tolerance) {
     groups.push(...answer.value);
   }
 
-  showIdentifyResults(position, groups);
+  showIdentifyResults(position, [...groups, ...onTheMap]);
 }
 
 /** Arm the next tap to ask what is under it, rather than drop a pin. */
@@ -5071,6 +5279,7 @@ function armProbe(button) {
 function showPointDetails(position) {
   state.selectedPin = null;
   state.scratchPoint = position;
+  setProbeMark(position);
   renderDetailsTab();
   openTab('details');
 }
@@ -5078,7 +5287,9 @@ function showPointDetails(position) {
 /** Remember which saved pin the Details tab should describe, and show it. */
 function selectPin(folderId, itemId, { open = true } = {}) {
   state.selectedPin = folderId && itemId ? { folderId, itemId } : null;
-  if (state.selectedPin) state.scratchPoint = null;
+  // A saved pin draws itself; the scratch mark beside it would be a second dot
+  // on the same spot.
+  if (state.selectedPin) { state.scratchPoint = null; setProbeMark(null); }
   renderDetailsTab();
   if (open) openTab('details');
 }
@@ -5593,6 +5804,20 @@ function setHighlight(geojson) {
   source?.setData(geojson || { type: 'FeatureCollection', features: [] });
 }
 
+/**
+ * Mark where the last tap landed, and keep it there.
+ *
+ * The identify card says "on this spot" and the map said nothing about which
+ * spot — so a tap that found nothing looked like a tap that had not happened,
+ * and a card left open while the map was panned pointed at a place that had
+ * moved off screen. It also matters to the sky drawings: a bearing to the moon
+ * is only a bearing from somewhere.
+ */
+function setProbeMark(position) {
+  state.probeMark = position || null;
+  setCursor(state.probeMark);
+}
+
 function setCursor(position) {
   const source = state.map.getSource('scratch-cursor');
   source?.setData(position
@@ -5891,6 +6116,7 @@ function renderPointDetails(position) {
           };
           saveFeatureToFolder(feature, target.id, null);
           state.scratchPoint = null;
+          setProbeMark(null);
           toast(`Saved to “${target.name}”.`);
           openTab('folders');
         },
@@ -5898,7 +6124,12 @@ function renderPointDetails(position) {
       labelledButton(icons.close, 'Clear', {
         tone: 'ghost',
         title: 'Forget this dropped pin',
-        onclick: () => { state.scratchPoint = null; state.dropPopup?.remove(); renderDetailsTab(); },
+        onclick: () => {
+          state.scratchPoint = null;
+          setProbeMark(null);
+          state.dropPopup?.remove();
+          renderDetailsTab();
+        },
       }),
     ]),
   ]));
@@ -7803,7 +8034,10 @@ function renderProfile(profile) {
   const onLeave = () => {
     cursor.setAttribute('opacity', '0');
     readout.replaceChildren();
-    setCursor(null);
+    // Back to the tapped point rather than to nothing: the profile borrows the
+    // same cursor, and clearing it here would rub out a mark it did not put
+    // down.
+    setCursor(state.probeMark);
   };
 
   svg.addEventListener('pointermove', onMove);
