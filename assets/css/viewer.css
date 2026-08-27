@@ -221,7 +221,7 @@ html, body { height: 100%; overflow: hidden; }
   background: var(--surface); color: var(--ink);
   font: inherit; font-size: .88rem; box-shadow: var(--shadow-md);
 }
-.map-search input:focus-visible { outline: 2px solid var(--rust); outline-offset: 1px; }
+.map-search input:focus-visible { outline: 2px solid var(--clay); outline-offset: 1px; }
 /* The browser's own clear affordance, which otherwise sits under the rounded
    edge on WebKit and is unreachable. */
 .map-search input::-webkit-search-cancel-button { margin-right: 2px; }
@@ -238,6 +238,10 @@ html, body { height: 100%; overflow: hidden; }
   background: none; color: var(--ink); font: inherit;
 }
 .map-search-result:first-child { border-top: 0; }
+/* Your own places, marked as such: a saved waypoint and a town of the same
+   name are different answers and the list has to say which is which. */
+.map-search-result.is-mine { border-left: 3px solid var(--clay); }
+.map-search-result.is-mine .map-search-kind { color: var(--clay); }
 .map-search-result:hover, .map-search-result:focus-visible { background: var(--paper-2); }
 .map-search-name { display: block; font-size: .88rem; font-weight: 600; }
 .map-search-where { display: block; font-size: .75rem; color: var(--ink-3); margin-top: 1px; }

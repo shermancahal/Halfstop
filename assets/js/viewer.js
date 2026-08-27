@@ -529,6 +529,7 @@ async function main() {
   keepAppLayersAlive();
   trackShieldState();
   trackQueryOverlays();
+  trackSkyScale();
   // A Mapbox vector style starts without our overlays; the raster path bakes
   // them into the initial style. The exception is a queried overlay, which
   // cannot be baked into either — it has no tiles, only an answer that depends
@@ -740,6 +741,54 @@ function wirePlaceSearch() {
     results.hidden = false;
   };
 
+  /*
+   * Your own places first, and without waiting for anyone.
+   *
+   * A saved waypoint is the thing most often being looked for — you named it,
+   * you know it is there — and it is in memory, so it can answer in the time
+   * it takes to type. The geocoder's results land underneath a moment later.
+   * Tracks and routes are searched too: a folder full of them is exactly where
+   * "where was that forest road" gets answered.
+   */
+  const savedMatches = (query) => {
+    const needle = query.toLowerCase();
+    const found = [];
+
+    for (const folder of state.folders.list()) {
+      if (folder.name.toLowerCase().includes(needle)) {
+        const centre = folderCentre(folder);
+        if (centre) {
+          found.push({
+            kind: 'Folder',
+            name: folder.name,
+            context: `${folder.items.length} saved`,
+            center: centre.center,
+            bbox: centre.bbox,
+          });
+        }
+      }
+
+      for (const item of folder.items) {
+        const properties = item.feature.properties || {};
+        const haystack = `${properties.name || ''} ${properties.description || ''}`.toLowerCase();
+        if (!haystack.includes(needle)) continue;
+        const centre = featureCentre(item.feature);
+        if (!centre) continue;
+        found.push({
+          kind: properties.kind === 'waypoint' ? 'Waypoint' : 'Track',
+          name: properties.name || 'Unnamed',
+          context: folder.name,
+          center: centre.center,
+          bbox: centre.bbox,
+          saved: { folderId: folder.id, itemId: item.id },
+        });
+      }
+    }
+
+    // Ten of your own would fill the list and push the geocoder off it.
+    return found.slice(0, 5);
+  };
+
   const run = async (query) => {
     inFlight?.abort();
     const controller = new AbortController();
@@ -757,11 +806,21 @@ function wirePlaceSearch() {
     }
     if (controller !== inFlight) return;
 
-    if (!answer.ok) { note(answer.reason); return; }
-    if (!answer.results.length) { note(`Nothing found for “${query}”.`); return; }
+    const mine = savedMatches(query);
+    if (!answer.ok && !mine.length) { note(answer.reason); return; }
+    if (!answer.results.length && !mine.length) { note(`Nothing found for “${query}”.`); return; }
 
-    results.replaceChildren(...answer.results.map((place) => el('button', {
-      class: 'map-search-result', type: 'button', role: 'option',
+    show([...mine, ...answer.results]);
+    // Said under the results rather than instead of them: your own places
+    // still answered, and the reason the rest did not is worth one line.
+    if (!answer.ok) results.append(el('p', { class: 'map-search-note', text: answer.reason }));
+  };
+
+  const show = (places) => {
+    results.replaceChildren(...places.map((place) => el('button', {
+      class: `map-search-result${place.saved || place.kind === 'Folder' ? ' is-mine' : ''}`,
+      type: 'button',
+      role: 'option',
       onclick: () => { close(); input.blur(); goToPlace(place); },
     }, [
       el('span', { class: 'map-search-kind', text: place.kind }),
@@ -775,6 +834,11 @@ function wirePlaceSearch() {
     const query = input.value.trim();
     clearTimeout(timer);
     if (query.length < 2) { inFlight?.abort(); close(); return; }
+    // Straight away, from memory. Holding your own waypoints back for a third
+    // of a second so they can arrive alongside a network answer is a delay
+    // paid for nothing.
+    const mine = savedMatches(query);
+    if (mine.length) show(mine);
     // Long enough that a typed word is one request rather than five, short
     // enough that the list feels like it is keeping up.
     timer = window.setTimeout(() => run(query), 320);
@@ -799,6 +863,39 @@ function wirePlaceSearch() {
 }
 
 /**
+ * Where one saved feature is, as a point and an extent.
+ *
+ * A waypoint is a point and has no extent worth fitting to; a track is a line
+ * whose extent is the whole answer. Returning both lets one search row handle
+ * either without the caller knowing which it got.
+ */
+function featureCentre(feature) {
+  const bounds = geojsonBounds(feature);
+  if (!boundsAreValid(bounds)) return null;
+
+  if (feature.geometry?.type === 'Point') {
+    return { center: feature.geometry.coordinates, bbox: null };
+  }
+  return {
+    center: [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2],
+    bbox: bounds,
+  };
+}
+
+/** The same for a whole folder, which is the extent of everything in it. */
+function folderCentre(folder) {
+  const bounds = geojsonBounds({
+    type: 'FeatureCollection',
+    features: folder.items.map((item) => item.feature),
+  });
+  if (!boundsAreValid(bounds)) return null;
+  return {
+    center: [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2],
+    bbox: bounds,
+  };
+}
+
+/**
  * Fly to a search result and say what it is.
  *
  * Marked and named rather than silently centred: the map after a jump looks
@@ -808,6 +905,20 @@ function wirePlaceSearch() {
  * you got there.
  */
 function goToPlace(place) {
+  /*
+   * A saved waypoint has a home already.
+   *
+   * Opening the identify card on top of it would describe the ground under a
+   * pin the app knows everything about — its folder, its notes, its photos —
+   * so a saved result hands off to the panel that holds those instead.
+   */
+  if (place.saved) {
+    if (place.bbox) fitTo(place.bbox);
+    else state.map.flyTo({ center: place.center, zoom: Math.max(state.map.getZoom() || 0, 14), duration: 900 });
+    selectPin(place.saved.folderId, place.saved.itemId);
+    return;
+  }
+
   if (place.bbox && place.bbox.length === 4) {
     fitTo([place.bbox[0], place.bbox[1], place.bbox[2], place.bbox[3]]);
   } else {
@@ -1757,6 +1868,31 @@ async function refreshShieldState() {
  * somebody else's server, and a pan across three states should be one request
  * at the end of it rather than forty on the way.
  */
+/**
+ * Redraw the sky when the view changes scale.
+ *
+ * The drawing is sized to what is on screen, so zooming out without redrawing
+ * leaves a ring a centimetre across in the middle of a state, and zooming in
+ * leaves it off the edge. Only when the size has actually moved by a fifth,
+ * because a pan at one zoom draws the identical picture in the same place and
+ * recomputing a hundred sun and moon positions for it is work for nothing.
+ */
+function trackSkyScale() {
+  let drawnAt = 0;
+  let timer = null;
+
+  state.map.on('moveend', () => {
+    if (!state.lightLines) return;
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      const reach = skyReach();
+      if (drawnAt && Math.abs(reach - drawnAt) / drawnAt < 0.2) return;
+      drawnAt = reach;
+      refreshLightLines();
+    }, 200);
+  });
+}
+
 function trackQueryOverlays() {
   let timer = null;
   state.map.on('moveend', () => {
@@ -3709,9 +3845,7 @@ function refreshLightLines() {
     return;
   }
 
-  // 40km is long enough to cross the horizon you can actually see from a ridge
-  // and short enough not to sweep across the whole map at trip-planning zooms.
-  const REACH = 40;
+  const REACH = skyReach();
 
   /*
    * One body, or all of them.
@@ -3809,9 +3943,38 @@ function refreshLightLines() {
 }
 
 /**
+ * How far the whole drawing reaches, sized to what is on screen.
+ *
+ * This was a fixed 40km, chosen for trip-planning zooms — and at any zoom
+ * closer than that the ring was drawn twenty-five kilometres off the edge of
+ * the screen while the spokes, which run the full reach, crossed it. So the
+ * drawing looked like bearings and nothing else, and the ring looked broken
+ * when it was merely somewhere else.
+ *
+ * Sized to the view instead: a little under half the shorter side, so the ring
+ * always sits inside the frame with room for its labels, and the spokes always
+ * run past it and off the edge. The clamp keeps it sane at both ends — a
+ * continent-wide view does not need a five-hundred-kilometre spoke, and a view
+ * of one field still gets a ring big enough to read.
+ */
+function skyReach() {
+  const bounds = state.map?.getBounds?.();
+  if (!bounds) return 40;
+
+  const north = bounds.getNorth();
+  const south = bounds.getSouth();
+  const middle = (north + south) / 2;
+  const tall = (north - south) * 111.32;
+  const wide = (bounds.getEast() - bounds.getWest()) * 111.32 * Math.cos(middle * Math.PI / 180);
+  const across = Math.min(Math.abs(tall), Math.abs(wide));
+
+  return Math.min(60, Math.max(0.4, across * 0.42));
+}
+
+/**
  * How far out the hour ring is drawn.
  *
- * Inside the 40km reach of the bearings, so the spokes cross it rather than
+ * Inside the reach of the bearings, so the spokes cross it rather than
  * stopping at it, and far enough from the pin that a dozen hour labels around
  * it are not on top of each other.
  */

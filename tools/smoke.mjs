@@ -1364,6 +1364,33 @@ const track = await page.evaluate(() => {
   };
 });
 check('the core track is drawn across the night', track.present, true);
+/*
+ * And inside the frame.
+ *
+ * The reach was a fixed 40km chosen for trip-planning zooms, so at any zoom
+ * closer than that the ring was drawn twenty-five kilometres off the edge of
+ * the screen while the spokes, which run the full reach, crossed it — the
+ * drawing looked like bearings and nothing else. The ring is only a ring if
+ * you can see it.
+ */
+const ringFits = await page.evaluate(() => {
+  const features = window.__map.getSource('light-directions')?._d?.features || [];
+  const line = features.find((feature) => feature.properties.kind === 'track');
+  const bounds = window.__map.getBounds();
+  const inside = (point) => point[0] >= bounds.getWest() && point[0] <= bounds.getEast()
+    && point[1] >= bounds.getSouth() && point[1] <= bounds.getNorth();
+  const centre = window.__map.getCenter();
+  const away = (point) => Math.hypot(point[0] - centre.lng, point[1] - centre.lat);
+  const tall = bounds.getNorth() - bounds.getSouth();
+  return {
+    ring: (line?.geometry.coordinates || []).every(inside),
+    // Not collapsed onto the pin either: a ring drawn at a hundred metres in a
+    // view of a whole state is as unreadable as one drawn off the edge.
+    reach: Math.min(...(line?.geometry.coordinates || [[0, 0]]).map(away)) / tall,
+  };
+});
+check('the whole ring is inside the view, at this zoom', ringFits.ring, true);
+check('and far enough out to read a bearing off', ringFits.reach > 0.05, true);
 check('sampled finely enough to read as a curve', track.points > 8, true);
 check('with the hours marked along it', track.hours > 0, true);
 check('and every hour mark carries its time', track.labelled, true);
@@ -2287,6 +2314,39 @@ check('the box offers what it found', searchList.length, 2);
 check('each result says what it is called', searchList[0].name, 'Elkmont Campground');
 check('and where that is, so three Elkmonts are three choices', searchList[0].where, 'Gatlinburg, Tennessee');
 check('and which kind of thing it is', searchList.map((row) => row.kind), ['Place', 'Town']);
+
+/*
+ * Your own places, before the geocoder's.
+ *
+ * A saved waypoint is the thing most often being looked for — you named it,
+ * you know it is there — and it is in memory, so it can answer in the time it
+ * takes to type rather than in a network round trip.
+ */
+await page.fill('#place-search', 'creamery');
+await page.waitForTimeout(900);
+const mine = await page.evaluate(() => [...document.querySelectorAll('.map-search-result')].map((row) => ({
+  name: row.querySelector('.map-search-name')?.textContent.trim(),
+  where: row.querySelector('.map-search-where')?.textContent.trim() || '',
+  kind: row.querySelector('.map-search-kind')?.textContent.trim(),
+  mine: row.classList.contains('is-mine'),
+})));
+// The suite imports the fixture more than once, so names carry a de-duplicating
+// suffix by this point. Matching on the stem is the check; the suffix is the
+// import machinery's business.
+check('a saved waypoint is found by name', /^Creamery Falls/.test(mine[0]?.name || ''), true);
+check('named as a waypoint rather than a place', mine[0]?.kind, 'Waypoint');
+check('with the folder it is in', mine[0]?.where.length > 0, true);
+check('and marked as yours, so it is not confused with a town of that name',
+  mine[0]?.mine, true);
+check('the geocoder\u2019s answers are still under it', mine.length > 1, true);
+
+await page.locator('.map-search-result').first().click();
+await page.waitForTimeout(600);
+check('choosing it opens the waypoint rather than a card about the ground under it',
+  (await page.locator('#tab-details').innerText()).includes('Creamery Falls'), true);
+
+await page.fill('#place-search', 'elkmont');
+await page.waitForTimeout(900);
 
 await page.locator('.map-search-result').first().click();
 await page.waitForTimeout(500);
