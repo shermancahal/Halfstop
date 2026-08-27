@@ -2341,6 +2341,16 @@ check('with nothing to clean up yet', trip.actions, 0);
  * built.
  */
 /*
+ * Clear the staged basemap features first.
+ *
+ * The identify section leaves a lake and a forest road staged in the map stub,
+ * and the click handler reads `queryRenderedFeatures` to decide whether a
+ * saved pin owns the click. Left there, every click below lands on somebody
+ * else's fixture and no pin is ever dropped.
+ */
+await page.evaluate(() => { window.__rendered = []; });
+
+/*
  * Tapping asks what is under the finger by default; the pin is the other mode.
  * Switched off only if it is on — an earlier section may have left it either
  * way, and a blind toggle would arm the wrong one and probe instead of pin.
