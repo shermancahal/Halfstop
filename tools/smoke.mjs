@@ -125,11 +125,16 @@ loaded(){return this._ready}isStyleLoaded(){return this._ready}
 // they piled up at its top-left corner under everything else that lives
 // there, and a click on a map tool was intercepted by whatever overlay was
 // on top — a collision the real layout does not have.
+//
+// Low z-index, also the way GL does it: its control groups sit inside the map
+// and the side panel covers them. At 30 they floated over the panel and
+// intercepted clicks on the panel's own close button, which is the mirror of
+// the bug this container was added to fix.
 addControl(c,p){if(c&&typeof c.onAdd==='function'){const n=c.onAdd(this);
 if(n&&n.nodeType===1){const pos=p||'top-right';const id='ctrl-'+pos;
 let box=document.getElementById(id);
 if(!box){box=document.createElement('div');box.id=id;box.className='mapboxgl-ctrl-'+pos;
-box.style.cssText='position:absolute;z-index:30;'+(pos.includes('top')?'top:8px;':'bottom:8px;')+(pos.includes('right')?'right:8px;':'left:8px;');
+box.style.cssText='position:absolute;z-index:2;'+(pos.includes('top')?'top:8px;':'bottom:8px;')+(pos.includes('right')?'right:8px;':'left:8px;');
 (document.getElementById('map')||document.body).appendChild(box)}
 box.appendChild(n)}}return this}getCanvas(){return{style:{}}}getContainer(){return document.getElementById('map')}
 // Throws before the style is up, as GL does. A stub that accepts an image at
