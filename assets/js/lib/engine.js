@@ -138,13 +138,26 @@ export async function loadEngine() {
 export function overlayParts(overlay) {
   const base = { tileSize: overlay.tileSize, maxzoom: overlay.maxzoom, attribution: overlay.attribution };
 
-  // A queried overlay is two layers over one source: a fill and the outline
-  // that makes a pale fill findable. Both are listed here so that everything
-  // which tears an overlay down by its parts still finds all of it.
+  /*
+   * A queried overlay is three layers over one source: a fill, the outline
+   * that makes a pale fill findable, and a dot.
+   *
+   * The dot is here because a fill and a line render nothing at all over point
+   * geometry, and several services answer with points where their titles
+   * promise areas - Colorado's is facilities, Maine's is park sites, Michigan's
+   * campgrounds are campgrounds. Those layers switched on and drew nothing, and
+   * nothing anywhere said why. A circle layer costs nothing over lines and
+   * polygons, which never render as circles, so it is added unconditionally
+   * rather than from a flag somebody has to remember to set.
+   *
+   * All three are listed so everything that tears an overlay down by its parts
+   * still finds all of it.
+   */
   if (overlay.query) {
     return [
       { ...base, query: overlay.query, role: 'fill', layerId: `${OVERLAY_LAYER_PREFIX}${overlay.id}` },
       { ...base, query: overlay.query, role: 'line', layerId: `${OVERLAY_LAYER_PREFIX}${overlay.id}--1` },
+      { ...base, query: overlay.query, role: 'dot', layerId: `${OVERLAY_LAYER_PREFIX}${overlay.id}--2` },
     ];
   }
 

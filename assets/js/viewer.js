@@ -4712,7 +4712,7 @@ async function refreshPointOverlay(overlay, source, empty) {
 const lastPointFetch = new Map();
 
 function addQueryOverlay(overlay, opacity) {
-  const [fill, line] = overlayLayerIds(overlay);
+  const [fill, line, dot] = overlayLayerIds(overlay);
   const colour = overlay.query.color || '#D84315';
 
   if (overlay.query.points) { addPointOverlay(overlay, fill); return; }
@@ -4740,6 +4740,24 @@ function addQueryOverlay(overlay, opacity) {
       type: 'line',
       source: fill,
       paint: { 'line-color': colour, 'line-width': 1.4, 'line-opacity': amount },
+    }, firstDataLayerId());
+  }
+
+  // Point geometry, which the fill and the line above cannot draw at all.
+  if (!state.map.getLayer(dot)) {
+    const [, amount] = opacityPaint('line', opacity);
+    state.map.addLayer({
+      id: dot,
+      type: 'circle',
+      source: fill,
+      paint: {
+        'circle-color': colour,
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 2.5, 12, 5, 16, 7],
+        'circle-opacity': amount,
+        'circle-stroke-color': '#ffffff',
+        'circle-stroke-width': 1,
+        'circle-stroke-opacity': amount * 0.8,
+      },
     }, firstDataLayerId());
   }
 

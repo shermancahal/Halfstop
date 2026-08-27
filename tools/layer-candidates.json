@@ -406,24 +406,38 @@
     "url": "https://services1.arcgis.com/CNPdEkvnGl65jCX8/arcgis/rest/services/Idaho_Recreation_Trails/FeatureServer/123?f=pjson"
   },
   {
-    "id": "land:lookup-blm",
-    "note": "The identify request exactly as assets/js/lib/lookup.js builds it - explicit JSON point geometry, esriGeometryPoint, f=json. The probe this replaces asked a cached tile service for a feature query using an envelope, which is not something the app has ever done, and reported a failure that was the probe's own. A health check that tests a path the product does not take is worse than no check: it produces alarms nobody can act on and confidence nobody earned.",
-    "expect": "data",
-    "find": "\"(?:attributes|ADMIN_UNIT_NAME|ADMIN_AGENCY_CODE|Own_Name|Loc_Nm|OWNERCLASSIFICATION|FORESTNAME)\"\\s*:\\s*\"?[^\",}]{0,50}\"?",
-    "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_LimitedScale/MapServer/0/query?geometry=%7B%22x%22%3A-111.5%2C%22y%22%3A38.5%2C%22spatialReference%22%3A%7B%22wkid%22%3A4326%7D%7D&geometryType=esriGeometryPoint&spatialRel=esriSpatialRelIntersects&where=1%3D1&outFields=*&returnGeometry=false&f=json"
-  },
-  {
-    "id": "land:lookup-padus",
-    "note": "The identify request exactly as assets/js/lib/lookup.js builds it - explicit JSON point geometry, esriGeometryPoint, f=json. The probe this replaces asked a cached tile service for a feature query using an envelope, which is not something the app has ever done, and reported a failure that was the probe's own. A health check that tests a path the product does not take is worse than no check: it produces alarms nobody can act on and confidence nobody earned.",
-    "expect": "data",
-    "find": "\"(?:attributes|ADMIN_UNIT_NAME|ADMIN_AGENCY_CODE|Own_Name|Loc_Nm|OWNERCLASSIFICATION|FORESTNAME)\"\\s*:\\s*\"?[^\",}]{0,50}\"?",
-    "url": "https://services.arcgis.com/v01gqwM5QqNysAAi/ArcGIS/rest/services/PADUS4_0Fee/FeatureServer/0/query?geometry=%7B%22x%22%3A-111.5%2C%22y%22%3A38.5%2C%22spatialReference%22%3A%7B%22wkid%22%3A4326%7D%7D&geometryType=esriGeometryPoint&spatialRel=esriSpatialRelIntersects&where=1%3D1&outFields=*&returnGeometry=false&f=json"
-  },
-  {
     "id": "land:lookup-usfs",
     "note": "The identify request exactly as assets/js/lib/lookup.js builds it - explicit JSON point geometry, esriGeometryPoint, f=json. The probe this replaces asked a cached tile service for a feature query using an envelope, which is not something the app has ever done, and reported a failure that was the probe's own. A health check that tests a path the product does not take is worse than no check: it produces alarms nobody can act on and confidence nobody earned.",
     "expect": "data",
     "find": "\"(?:attributes|ADMIN_UNIT_NAME|ADMIN_AGENCY_CODE|Own_Name|Loc_Nm|OWNERCLASSIFICATION|FORESTNAME)\"\\s*:\\s*\"?[^\",}]{0,50}\"?",
     "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_BasicOwnership_01/MapServer/0/query?geometry=%7B%22x%22%3A-88.7%2C%22y%22%3A37.5%2C%22spatialReference%22%3A%7B%22wkid%22%3A4326%7D%7D&geometryType=esriGeometryPoint&spatialRel=esriSpatialRelIntersects&where=1%3D1&outFields=*&returnGeometry=false&f=json"
+  },
+  {
+    "id": "land:blm-a",
+    "note": "BLM as the app asks, plus an explicit inSR. The identify feature falls through its services in order, so a broken first entry costs a round trip on every click before the working one answers.",
+    "expect": "data",
+    "find": "\"(?:attributes|ADMIN_UNIT_NAME|ADMIN_AGENCY_CODE|Own_Name|Loc_Nm|Mang_Name)\"\\s*:\\s*\"?[^\",}]{0,50}\"?",
+    "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_LimitedScale/MapServer/0/query?geometry=%7B%22x%22%3A-111.5%2C%22y%22%3A38.5%2C%22spatialReference%22%3A%7B%22wkid%22%3A4326%7D%7D&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&where=1%3D1&outFields=*&returnGeometry=false&f=json"
+  },
+  {
+    "id": "land:blm-b",
+    "note": "BLM with the x,y shorthand the comment says it rejected - worth re-testing, services change. The identify feature falls through its services in order, so a broken first entry costs a round trip on every click before the working one answers.",
+    "expect": "data",
+    "find": "\"(?:attributes|ADMIN_UNIT_NAME|ADMIN_AGENCY_CODE|Own_Name|Loc_Nm|Mang_Name)\"\\s*:\\s*\"?[^\",}]{0,50}\"?",
+    "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_LimitedScale/MapServer/0/query?geometry=-111.5%2C38.5&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&where=1%3D1&outFields=*&returnGeometry=false&f=json"
+  },
+  {
+    "id": "land:blm-layers",
+    "note": "What BLM_Natl_SMA_LimitedScale actually publishes - layer 0 may not be the one. The identify feature falls through its services in order, so a broken first entry costs a round trip on every click before the working one answers.",
+    "expect": "data",
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
+    "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_LimitedScale/MapServer?f=pjson"
+  },
+  {
+    "id": "land:padus-list",
+    "note": "Which PAD-US services exist. The configured PADUS4_0Fee answers Invalid URL, and this has now moved at least twice. The identify feature falls through its services in order, so a broken first entry costs a round trip on every click before the working one answers.",
+    "expect": "data",
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
+    "url": "https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services?f=pjson"
   }
 ]

@@ -160,7 +160,7 @@ test('style: overlays are drawn above the basemap, in configuration order', () =
   );
 });
 
-test('style: a queried overlay is two layers over one source, and no tiles', () => {
+test('style: a queried overlay is three layers over one source, and no tiles', () => {
   const queried = {
     id: 'test-queried',
     name: 'Queried',
@@ -170,13 +170,21 @@ test('style: a queried overlay is two layers over one source, and no tiles', () 
   };
 
   const parts = overlayParts(queried);
-  assert.equal(parts.length, 2, 'a fill and the outline that makes it findable');
+  /*
+   * Three, not two. The third is a dot, and it exists because a fill and a
+   * line draw literally nothing over point geometry - which is what a good
+   * many services answer with regardless of what their titles promise. Six
+   * shipped layers were invisible for exactly this reason and said nothing
+   * about it, so the dot is unconditional rather than opt-in.
+   */
+  assert.equal(parts.length, 3, 'a fill, the outline that makes it findable, and a dot');
   assert.equal(parts[0].layerId, 'overlay-test-queried');
   assert.equal(parts[1].layerId, 'overlay-test-queried--1');
+  assert.equal(parts[2].layerId, 'overlay-test-queried--2');
   assert.ok(parts.every((part) => !part.tiles), 'there are no tiles to fetch');
 
-  // Tearing the overlay down by its id has to find both halves, or the outline
-  // is left behind on the map with nothing under it.
+  // Tearing the overlay down by its id has to find every part, or a layer is
+  // left behind on the map with nothing under it.
   assert.ok(parts.every((part) => overlayIdFromLayer(part.layerId) === queried.id));
 
   // And it must not reach the style document, where a source with no tiles

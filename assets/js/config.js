@@ -1298,6 +1298,11 @@ export const OVERLAYS = [
   },
   {
     id: 'ky-byways',
+    // Probed inside the state. Ten of these reported blank on the first run
+    // because the default probe tile sits in Tennessee, where a Kentucky or
+    // Hawaii layer is correctly empty - a trap ky-aerial already carries a
+    // comment about, walked into again.
+    at: [-84.5, 37.8],
     states: ['KY'],
     name: 'Scenic byways',
     description: 'The Commonwealth\'s designated scenic routes.',
@@ -1311,6 +1316,7 @@ export const OVERLAYS = [
   },
   {
     id: 'ky-trails',
+    at: [-83.2, 36.9],
     states: ['KY'],
     name: 'Recreational trails',
     description: 'Trails split by what may travel them - foot, horse, bicycle, ATV, motorcycle.',
@@ -1324,6 +1330,7 @@ export const OVERLAYS = [
   },
   {
     id: 'ky-forests',
+    at: [-84.0, 37.2],
     states: ['KY'],
     name: 'State forests',
     description: 'State forest boundaries.',
@@ -1337,6 +1344,7 @@ export const OVERLAYS = [
   },
   {
     id: 'ky-hunting',
+    at: [-84.5, 37.5],
     states: ['KY'],
     name: 'Public hunting areas',
     description: 'Public land open to hunting, which is public land you may walk onto.',
@@ -1384,6 +1392,7 @@ export const OVERLAYS = [
   },
   {
     id: 'tn-wma',
+    at: [-85.0, 35.6],
     states: ['TN'],
     name: 'Wildlife management areas',
     description: 'TWRA-managed land, named and with its managing agency.',
@@ -1415,6 +1424,7 @@ export const OVERLAYS = [
   },
   {
     id: 'pa-parks',
+    at: [-77.8, 41.2],
     states: ['PA'],
     name: 'State parks & amenities',
     description: 'Park boundaries with the amenities inside them.',
@@ -1429,6 +1439,7 @@ export const OVERLAYS = [
   },
   {
     id: 'vt-routes',
+    at: [-72.8, 44.2],
     states: ['VT'],
     name: 'ANR travel routes',
     description: 'Agency of Natural Resources roads - the state\'s own forest and park access.',
@@ -1477,6 +1488,7 @@ export const OVERLAYS = [
   },
   {
     id: 'nj-trails',
+    at: [-74.5, 40.9],
     states: ['NJ'],
     name: 'State park trails',
     description: 'The State Park Service trail system.',
@@ -1559,6 +1571,7 @@ export const OVERLAYS = [
   },
   {
     id: 'oh-lands',
+    at: [-82.5, 39.5],
     states: ['OH'],
     name: 'ODNR lands',
     description: 'Land the Ohio Department of Natural Resources manages.',
@@ -1572,6 +1585,7 @@ export const OVERLAYS = [
   },
   {
     id: 'ia-recreation',
+    at: [-93.6, 42.0],
     states: ['IA'],
     name: 'Recreation lands',
     description: 'Iowa DNR recreation lands.',
@@ -1637,6 +1651,7 @@ export const OVERLAYS = [
   },
   {
     id: 'hi-trails',
+    at: [-155.5, 19.6],
     states: ['HI'],
     name: 'Na Ala Hele trails',
     description: 'The state trail and access programme.',
