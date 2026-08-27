@@ -77,87 +77,45 @@
     "url": "https://gis.blm.gov/arcgis/rest/services/transportation/BLM_Natl_GTLF_Public_Display/MapServer/0?f=pjson"
   },
   {
-    "id": "rec:agol-ohv",
-    "note": "What any public agency publishes for off-highway vehicle use. The one category this app has no layer for and the one an overlander asks first: where am I allowed to drive.",
+    "id": "rec:tn-twra",
+    "note": "The one recreation-adjacent folder on a server the app already talks to. The question is narrow: does TWRA publish wildlife management area boundaries? A WMA is public land you can walk onto, which makes it an access layer, not a hunting layer.",
     "expect": "data",
-    "find": "\"title\"\\s*:\\s*\"[^\"]{0,80}\"|\"owner\"\\s*:\\s*\"[^\"]{0,40}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=40&sortField=numViews&sortOrder=desc&q=OHV%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,80}\"",
+    "url": "https://tnmap.tn.gov/arcgis/rest/services/TWRA?f=pjson"
   },
   {
-    "id": "rec:agol-motorized",
-    "note": "The other vocabulary for the same thing. Agencies split about evenly between calling it OHV and calling it motorized, and a search for one misses the other entirely.",
+    "id": "rec:ky-thematic",
+    "note": "Kentucky's unexplored raster folder. Wired for aerials already, so anything recreational here is nearly free to add.",
     "expect": "data",
-    "find": "\"title\"\\s*:\\s*\"[^\"]{0,80}\"|\"owner\"\\s*:\\s*\"[^\"]{0,40}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=40&sortField=numViews&sortOrder=desc&q=%22motorized%20trail%22%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,80}\"",
+    "url": "https://kyraster.ky.gov/arcgis/rest/services/ThematicServices?f=pjson"
   },
   {
-    "id": "rec:agol-state-parks",
-    "note": "State park boundaries and what is inside them - campsites, trailheads, facilities. Every state has parks; what differs is whether the amenities are published as data or only as a PDF.",
+    "id": "rec:ky-wgs84",
+    "note": "Kentucky's unexplored vector folder, and the likelier of the two to hold trails, campgrounds or public land.",
     "expect": "data",
-    "find": "\"title\"\\s*:\\s*\"[^\"]{0,80}\"|\"owner\"\\s*:\\s*\"[^\"]{0,40}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=40&sortField=numViews&sortOrder=desc&q=%22state%20park%22%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,80}\"",
+    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services?f=pjson"
   },
   {
-    "id": "rec:agol-dispersed-camping",
-    "note": "Dispersed camping and where it is allowed, which is the question that decides where you sleep and is almost never on a basemap.",
+    "id": "rec:tva-recreation",
+    "note": "TVA holds a great deal of shoreline across the app's home states, but undeveloped-land polygons say nothing about whether you may camp there. This asks whether TVA publishes campgrounds, day use or boat ramps - the amenities that would make it worth drawing.",
     "expect": "data",
-    "find": "\"title\"\\s*:\\s*\"[^\"]{0,80}\"|\"owner\"\\s*:\\s*\"[^\"]{0,40}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=40&sortField=numViews&sortOrder=desc&q=%28dispersed%20camping%20OR%20%22camping%20areas%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,160}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=20&sortField=numViews&sortOrder=desc&q=TVA%20AND%20%28campground%20OR%20recreation%20OR%20%22day%20use%22%20OR%20%22boat%20ramp%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
   },
   {
-    "id": "rec:agol-trailheads",
-    "note": "Trailheads and recreation sites published by states rather than by the federal agencies this app already carries.",
+    "id": "rec:mi-dnr-endpoints",
+    "note": "The strongest state source found, and so far only titles from a search index. This asks for the service URLs behind them, which is what a layer switch actually needs.",
     "expect": "data",
-    "find": "\"title\"\\s*:\\s*\"[^\"]{0,80}\"|\"owner\"\\s*:\\s*\"[^\"]{0,40}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=40&sortField=numViews&sortOrder=desc&q=trailheads%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,160}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=30&sortField=numViews&sortOrder=desc&q=owner%3AMichiganDNR%20AND%20%28roads%20OR%20trails%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
   },
   {
-    "id": "rec:agol-state-forest-roads",
-    "note": "State forest and state land road systems - the state-level equivalent of the MVUM this app already draws for the Forest Service.",
+    "id": "rec:closures",
+    "note": "The Boulder pattern, asked of everybody: a live closure layer beside a static route layer. Seasonal gates and fire closures are what actually stop a drive, and no basemap carries them. If a state publishes this, the pair is worth more than the routes alone.",
     "expect": "data",
-    "find": "\"title\"\\s*:\\s*\"[^\"]{0,80}\"|\"owner\"\\s*:\\s*\"[^\"]{0,40}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=40&sortField=numViews&sortOrder=desc&q=%28%22forest%20roads%22%20OR%20%22state%20forest%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "rec:ky-root",
-    "note": "Kentucky's own server, which this app already draws imagery and hillshade from. What else is on it has never been asked.",
-    "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,80}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer|FeatureServer)\"|\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]",
-    "url": "https://kyraster.ky.gov/arcgis/rest/services?f=pjson"
-  },
-  {
-    "id": "rec:ky-vector",
-    "note": "And Kentucky's vector server, which is a different host from the raster one and is where boundaries and recreation would live if they exist.",
-    "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,80}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer|FeatureServer)\"|\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]",
-    "url": "https://kygisserver.ky.gov/arcgis/rest/services?f=pjson"
-  },
-  {
-    "id": "rec:wv-society",
-    "note": "West Virginia's Society folder - the ISO category that holds parks and recreation.",
-    "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,80}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer|FeatureServer)\"|\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]",
-    "url": "https://services.wvgis.wvu.edu/arcgis/rest/services/Society?f=pjson"
-  },
-  {
-    "id": "rec:wv-structure",
-    "note": "And its Structure folder, where public facilities are catalogued.",
-    "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,80}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer|FeatureServer)\"|\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]",
-    "url": "https://services.wvgis.wvu.edu/arcgis/rest/services/Structure?f=pjson"
-  },
-  {
-    "id": "rec:tn-community",
-    "note": "Tennessee's COMMUNITY folder, the likeliest home for parks and recreation.",
-    "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,80}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer|FeatureServer)\"|\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]",
-    "url": "https://tnmap.tn.gov/arcgis/rest/services/COMMUNITY?f=pjson"
-  },
-  {
-    "id": "rec:tn-environmental",
-    "note": "And its ENVIRONMENTAL folder, where public land and natural areas would sit.",
-    "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,80}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer|FeatureServer)\"|\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]",
-    "url": "https://tnmap.tn.gov/arcgis/rest/services/ENVIRONMENTAL?f=pjson"
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,160}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=30&sortField=numViews&sortOrder=desc&q=%28closure%20OR%20closures%29%20AND%20%28road%20OR%20trail%20OR%20forest%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
   }
 ]
