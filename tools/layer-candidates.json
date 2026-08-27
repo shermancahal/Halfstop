@@ -77,31 +77,31 @@
     "url": "https://gis.blm.gov/arcgis/rest/services/transportation/BLM_Natl_GTLF_Public_Display/MapServer/0?f=pjson"
   },
   {
-    "id": "shield:wv-primary",
-    "note": "West Virginia signs its primary routes on a square and its secondary routes on a circle, and the app draws both as the state's one blank. This asks the tiles what they say about WV 2 at Moundsville - if the shape is in the data, the app can follow it instead of flattening it.",
+    "id": "shield:mi-state-route",
+    "note": "The question the whole change turns on. M-22 through Leland: if a Michigan state route arrives with a shape value it gets Michigan's own diamond, and sending the unknowns to a circle is safe. If it arrives as `default` like the county road two miles away did, then the two are indistinguishable and a circle default would strip the M off every state route in the state.",
     "expect": "data",
-    "find": "\"class\"\\s*:\\s*\"[a-z_]+\"[^}]{0,200}?\"ref\"\\s*:\\s*\"[^\"]{1,12}\"|\"ref\"\\s*:\\s*\"[^\"]{1,12}\"[^}]{0,200}?\"shield\"\\s*:\\s*\"[a-z-]+\"|\"shield\"\\s*:\\s*\"[a-z-]+\"",
-    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-80.74,39.92.json?radius=1200&limit=50&dedupe=false&layers=road&access_token={token}"
+    "find": "\"ref\"\\s*:\\s*\"[^\"]{1,12}\"[^}]{0,200}?\"shield\"\\s*:\\s*\"[a-z-]+\"|\"shield_image\"\\s*:\\s*\"[a-z0-9-]+\"",
+    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-85.76,45.02.json?radius=1500&limit=50&dedupe=false&layers=road&access_token={token}"
   },
   {
-    "id": "shield:wv-secondary",
-    "note": "The other half: a WV secondary route near Elkins. These are county-numbered, often with a fraction - 21/2 - and both the shape and how the ref is written decide whether a shield can hold it.",
+    "id": "shield:mi-state-route-2",
+    "note": "M-72 near Traverse City, because one road is not a rule and a single sample that happened to be tagged well would be the worst possible evidence.",
     "expect": "data",
-    "find": "\"class\"\\s*:\\s*\"[a-z_]+\"[^}]{0,200}?\"ref\"\\s*:\\s*\"[^\"]{1,12}\"|\"ref\"\\s*:\\s*\"[^\"]{1,12}\"[^}]{0,200}?\"shield\"\\s*:\\s*\"[a-z-]+\"|\"shield\"\\s*:\\s*\"[a-z-]+\"",
-    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-79.85,38.93.json?radius=1200&limit=50&dedupe=false&layers=road&access_token={token}"
+    "find": "\"ref\"\\s*:\\s*\"[^\"]{1,12}\"[^}]{0,200}?\"shield\"\\s*:\\s*\"[a-z-]+\"|\"shield_image\"\\s*:\\s*\"[a-z0-9-]+\"",
+    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-85.62,44.76.json?radius=1500&limit=50&dedupe=false&layers=road&access_token={token}"
   },
   {
-    "id": "shield:county-route",
-    "note": "A county route in a state that signs the blue MUTCD pentagon. Michigan's Leelanau County is dense with them. What matters is whether Mapbox reports pentagon-white, and what the ref looks like - CR 651, 651, or something else.",
+    "id": "shield:mi-county-nearby",
+    "note": "A Leelanau county road again, at a second point, to confirm the county side of the pair really is `default` rather than that one road being untagged.",
     "expect": "data",
-    "find": "\"class\"\\s*:\\s*\"[a-z_]+\"[^}]{0,200}?\"ref\"\\s*:\\s*\"[^\"]{1,12}\"|\"ref\"\\s*:\\s*\"[^\"]{1,12}\"[^}]{0,200}?\"shield\"\\s*:\\s*\"[a-z-]+\"|\"shield\"\\s*:\\s*\"[a-z-]+\"",
-    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-85.76,44.9.json?radius=1200&limit=50&dedupe=false&layers=road&access_token={token}"
+    "find": "\"ref\"\\s*:\\s*\"[^\"]{1,12}\"[^}]{0,200}?\"shield\"\\s*:\\s*\"[a-z-]+\"|\"shield_image\"\\s*:\\s*\"[a-z0-9-]+\"",
+    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-85.72,44.99.json?radius=1500&limit=50&dedupe=false&layers=road&access_token={token}"
   },
   {
-    "id": "shield:county-route-ohio",
-    "note": "The same question in a second state, because one county's tagging is not a rule. Ohio numbers and signs its county routes on the same pentagon.",
+    "id": "shield:tn-state-route",
+    "note": "And Tennessee, whose SR 61 started all of this - so the fallback change can be checked against a state whose routes are known to arrive with a shape.",
     "expect": "data",
-    "find": "\"class\"\\s*:\\s*\"[a-z_]+\"[^}]{0,200}?\"ref\"\\s*:\\s*\"[^\"]{1,12}\"|\"ref\"\\s*:\\s*\"[^\"]{1,12}\"[^}]{0,200}?\"shield\"\\s*:\\s*\"[a-z-]+\"|\"shield\"\\s*:\\s*\"[a-z-]+\"",
-    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-82.52,40.3.json?radius=1200&limit=50&dedupe=false&layers=road&access_token={token}"
+    "find": "\"ref\"\\s*:\\s*\"[^\"]{1,12}\"[^}]{0,200}?\"shield\"\\s*:\\s*\"[a-z-]+\"|\"shield_image\"\\s*:\\s*\"[a-z0-9-]+\"",
+    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-84.15,36.1.json?radius=1500&limit=50&dedupe=false&layers=road&access_token={token}"
   }
 ]
