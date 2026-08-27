@@ -77,73 +77,27 @@
     "url": "https://gis.blm.gov/arcgis/rest/services/transportation/BLM_Natl_GTLF_Public_Display/MapServer/0?f=pjson"
   },
   {
-    "id": "wv:imagery-folder",
-    "note": "West Virginia round two. The root answered with folders, and Imagery_BaseMaps_EarthCover is where a state's orthoimagery lives. This asks that folder for its service names.",
-    "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,72}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
-    "url": "https://services.wvgis.wvu.edu/arcgis/rest/services/Imagery_BaseMaps_EarthCover?f=pjson"
+    "id": "wv:aerial-leaf-off",
+    "note": "West Virginia round three. The imagery folder lists wv_imagery_WVGISTC_leaf_off_mosaic, which is the one worth shipping: leaf-off photography shows the roadbed under the canopy, which is the whole reason to look at aerial over a forest. Probed over Canaan Valley rather than the default tile in Tennessee, where a West Virginia service is correctly blank.",
+    "expect": "image",
+    "url": "https://services.wvgis.wvu.edu/arcgis/rest/services/Imagery_BaseMaps_EarthCover/wv_imagery_WVGISTC_leaf_off_mosaic/MapServer/export?bbox=-8844333.5,4725969.7,-8837654.4,4734571.5&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
   },
   {
-    "id": "wv:elevation-folder",
-    "note": "The same for West Virginia's Elevation folder, which is where a lidar hillshade would be published.",
-    "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,72}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
-    "url": "https://services.wvgis.wvu.edu/arcgis/rest/services/Elevation?f=pjson"
+    "id": "wv:aerial-naip-2024",
+    "note": "The fallback if the leaf-off mosaic is empty or gone: the state's 60cm NAIP 2024 mosaic, same folder, same host.",
+    "expect": "image",
+    "url": "https://services.wvgis.wvu.edu/arcgis/rest/services/Imagery_BaseMaps_EarthCover/wv_imagery_NAIP_2024_60cm/MapServer/export?bbox=-8844333.5,4725969.7,-8837654.4,4734571.5&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
   },
   {
-    "id": "tn:basemaps-folder",
-    "note": "Tennessee round two. TNMap's root lists a BASEMAPS folder; the statewide aerial photography programme publishes there.",
-    "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,72}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
-    "url": "https://tnmap.tn.gov/arcgis/rest/services/BASEMAPS?f=pjson"
+    "id": "wv:hillshade-1m",
+    "note": "West Virginia's one-metre lidar hillshade, from the Elevation folder. Ten times the detail of the national ten-metre relief, and the layer that shows an old grade as a shelf on a hillside.",
+    "expect": "image",
+    "url": "https://services.wvgis.wvu.edu/arcgis/rest/services/Elevation/wv_hillshade_1m_mosaic/MapServer/export?bbox=-8844333.5,4725969.7,-8837654.4,4734571.5&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
   },
   {
-    "id": "tn:elevation-folder",
-    "note": "The same for Tennessee's ELEVATION folder - the state flew statewide lidar, and a hillshade off it is the layer worth having.",
-    "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,72}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
-    "url": "https://tnmap.tn.gov/arcgis/rest/services/ELEVATION?f=pjson"
-  },
-  {
-    "id": "in:hosted-folder",
-    "note": "Indiana round two. gisdata.in.gov answered but its root services are thematic rasters rather than imagery; Hosted is where the newer publications go.",
-    "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,72}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
-    "url": "https://gisdata.in.gov/server/rest/services/Hosted?f=pjson"
-  },
-  {
-    "id": "in:imagery-host",
-    "note": "The other half of IndianaMap: imagery is documented as living on its own host rather than in the clearing house. maps.indiana.edu did not resolve, so this asks the imagery hostname directly.",
-    "expect": "data",
-    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]|\"name\"\\s*:\\s*\"[^\"]{0,72}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
-    "url": "https://imagery.indianamap.org/arcgis/rest/services?f=pjson"
-  },
-  {
-    "id": "in:dnr-folder",
-    "note": "Indiana's DNR folder, in case the state's usable outdoor layers are there rather than under Hosted.",
-    "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,72}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
-    "url": "https://gisdata.in.gov/server/rest/services/DNR?f=pjson"
-  },
-  {
-    "id": "oh:odot-root",
-    "note": "Ohio, second attempt. Both OGRIP hostnames are gone - one 404, one does not resolve - so this asks the Department of Transportation's server, which is the other public ArcGIS host the state runs.",
-    "expect": "data",
-    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]|\"name\"\\s*:\\s*\"[^\"]{0,72}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
-    "url": "https://gis.dot.state.oh.us/arcgis/rest/services?f=pjson"
-  },
-  {
-    "id": "oh:geo-root",
-    "note": "And the geography-services hostname the state's imagery has also appeared under.",
-    "expect": "data",
-    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]|\"name\"\\s*:\\s*\"[^\"]{0,72}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
-    "url": "https://geo.oit.ohio.gov/arcgis/rest/services?f=pjson"
-  },
-  {
-    "id": "oh:ogrip-agol",
-    "note": "If Ohio publishes through ArcGIS Online rather than its own server, its organisation's service directory is where the imagery is. This asks whether that organisation id answers at all.",
-    "expect": "data",
-    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]|\"name\"\\s*:\\s*\"[^\"]{0,72}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
-    "url": "https://services.arcgis.com/Wxa9dEwHIRt3Y6FR/arcgis/rest/services?f=pjson"
+    "id": "tn:imagery",
+    "note": "Tennessee round three. Its BASEMAPS folder holds exactly two services and only one of them is not the USGS topo: IMAGERY_WEB_MERCATOR, the statewide aerial programme. Probed over the Cumberland Plateau.",
+    "expect": "image",
+    "url": "https://tnmap.tn.gov/arcgis/rest/services/BASEMAPS/IMAGERY_WEB_MERCATOR/MapServer/export?bbox=-9468835.9,4289619.1,-9462156.7,4297869.8&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
   }
 ]
