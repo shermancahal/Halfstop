@@ -38,7 +38,6 @@ sweep says where land is, not what may be done on it.
 | WV GIS `Society`, `Structure` | fire hydrants, SHPO records, building footprints |
 | TN `COMMUNITY` | schools, polling places, libraries, tax boundaries |
 | Ohio state services | both hostnames dead - 404 and unresolvable |
-| Indiana state server | county-scale odds and ends only |
 | Fire closures, nationally | USFS Region 6 keeps a real one; everyone else spins up a throwaway service per fire, which nothing can be built on |
 
 ## Known flaky
@@ -48,3 +47,40 @@ at 19:51 on the same day. The USFS EDW endpoint is not reliably up, and
 MVUM already ships in the app. Any national plan has to assume its
 sources go down, which is the argument for baking what can be baked at
 build time rather than fetching it live.
+
+## Found, not yet schema-probed
+
+A first pass over the states, by publisher. These answered with a state
+agency's own host or organisation, which is the only signal that has
+correlated with the data being real. None of them are wired.
+
+| State | What it published | Where |
+|---|---|---|
+| Montana | State Parks polygons, Parks Activities, FWP Lands sites and points | MT FWP org |
+| Iowa | State Parks, Recreation Lands - an entire Recreation folder | `programs.iowadnr.gov` |
+| Florida | FFS Recreation Points, Recreation Trails, State Forests | FL Forest Service org |
+| Connecticut | DEEP Property, DEEP Property Access Locations | CT DEEP org |
+| Maryland | State Park, Forest, Recreation Maintained Roads | MD DNR org |
+| Massachusetts | Protected and Recreational OpenSpace, MassWildlifeLands | `gis.eea.mass.gov` |
+| Hawaii | Na Ala Hele Trails, Reserves, DOFAW Managed Lands | `geodata.hawaii.gov` |
+| Indiana | DNR Recreation Sites, Trails Inventory | `gisdata.in.gov` |
+| Colorado | CPW admin and species data, state basemap | `gis.colorado.gov`, CPW org |
+| Idaho | Idaho Recreation Trails | Idaho org |
+| Illinois | Trails, Trails Public, Overlooks | organisation unverified |
+
+Indiana appears here having been recorded as a refusal earlier in this
+file. That was wrong: the earlier probe asked a different server. The
+state publishes DNR recreation sites and a trails inventory on
+`gisdata.in.gov`.
+
+## A caution about absence
+
+The first pass searched by topic - recreation, trails, campground - and
+fourteen states came back with nothing usable. That is a statement about
+the search, not about the states. Minnesota and California both publish
+extensively and neither surfaced; Delaware's results were mostly New
+Jersey and Mississippi's were mostly Minnesota.
+
+Nothing found by a failed search is recorded as a refusal. Only a
+service that was actually asked and actually answered goes in the table
+above.
