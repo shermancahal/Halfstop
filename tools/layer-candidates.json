@@ -75,5 +75,33 @@
     "expect": "data",
     "find": "\"name\"\\s*:\\s*\"[A-Za-z][A-Za-z0-9_]{2,40}\"\\s*,\\s*\"type\"\\s*:\\s*\"esriFieldType[A-Za-z]+\"",
     "url": "https://gis.blm.gov/arcgis/rest/services/transportation/BLM_Natl_GTLF_Public_Display/MapServer/0?f=pjson"
+  },
+  {
+    "id": "shield:wv-primary",
+    "note": "West Virginia signs its primary routes on a square and its secondary routes on a circle, and the app draws both as the state's one blank. This asks the tiles what they say about WV 2 at Moundsville - if the shape is in the data, the app can follow it instead of flattening it.",
+    "expect": "data",
+    "find": "\"class\"\\s*:\\s*\"[a-z_]+\"[^}]{0,200}?\"ref\"\\s*:\\s*\"[^\"]{1,12}\"|\"ref\"\\s*:\\s*\"[^\"]{1,12}\"[^}]{0,200}?\"shield\"\\s*:\\s*\"[a-z-]+\"|\"shield\"\\s*:\\s*\"[a-z-]+\"",
+    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-80.74,39.92.json?radius=1200&limit=50&dedupe=false&layers=road&access_token={token}"
+  },
+  {
+    "id": "shield:wv-secondary",
+    "note": "The other half: a WV secondary route near Elkins. These are county-numbered, often with a fraction - 21/2 - and both the shape and how the ref is written decide whether a shield can hold it.",
+    "expect": "data",
+    "find": "\"class\"\\s*:\\s*\"[a-z_]+\"[^}]{0,200}?\"ref\"\\s*:\\s*\"[^\"]{1,12}\"|\"ref\"\\s*:\\s*\"[^\"]{1,12}\"[^}]{0,200}?\"shield\"\\s*:\\s*\"[a-z-]+\"|\"shield\"\\s*:\\s*\"[a-z-]+\"",
+    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-79.85,38.93.json?radius=1200&limit=50&dedupe=false&layers=road&access_token={token}"
+  },
+  {
+    "id": "shield:county-route",
+    "note": "A county route in a state that signs the blue MUTCD pentagon. Michigan's Leelanau County is dense with them. What matters is whether Mapbox reports pentagon-white, and what the ref looks like - CR 651, 651, or something else.",
+    "expect": "data",
+    "find": "\"class\"\\s*:\\s*\"[a-z_]+\"[^}]{0,200}?\"ref\"\\s*:\\s*\"[^\"]{1,12}\"|\"ref\"\\s*:\\s*\"[^\"]{1,12}\"[^}]{0,200}?\"shield\"\\s*:\\s*\"[a-z-]+\"|\"shield\"\\s*:\\s*\"[a-z-]+\"",
+    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-85.76,44.9.json?radius=1200&limit=50&dedupe=false&layers=road&access_token={token}"
+  },
+  {
+    "id": "shield:county-route-ohio",
+    "note": "The same question in a second state, because one county's tagging is not a rule. Ohio numbers and signs its county routes on the same pentagon.",
+    "expect": "data",
+    "find": "\"class\"\\s*:\\s*\"[a-z_]+\"[^}]{0,200}?\"ref\"\\s*:\\s*\"[^\"]{1,12}\"|\"ref\"\\s*:\\s*\"[^\"]{1,12}\"[^}]{0,200}?\"shield\"\\s*:\\s*\"[a-z-]+\"|\"shield\"\\s*:\\s*\"[a-z-]+\"",
+    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-82.52,40.3.json?radius=1200&limit=50&dedupe=false&layers=road&access_token={token}"
   }
 ]
