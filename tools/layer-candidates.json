@@ -77,87 +77,346 @@
     "url": "https://gis.blm.gov/arcgis/rest/services/transportation/BLM_Natl_GTLF_Public_Display/MapServer/0?f=pjson"
   },
   {
-    "id": "st3:alabama",
-    "note": "Third pass for alabama, asked at the front door instead of through a search index. Two keyword passes found nothing here, and in every case so far where that happened the state turned out to publish plenty - the address was wrong, not the state. A 404 from a named host is a real answer; a search that returns shakemaps is not.",
+    "id": "live:ky-aerial",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
-    "url": "https://services.arcgis.com/hOpd7wfnKm16p9D9/arcgis/rest/services?f=pjson"
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://kyraster.ky.gov/arcgis/rest/services/ImageServices/Ky_KYAPED_Phase3_3IN_WGS84WM/ImageServer?f=pjson"
   },
   {
-    "id": "st3:california",
-    "note": "Third pass for california, asked at the front door instead of through a search index. Two keyword passes found nothing here, and in every case so far where that happened the state turned out to publish plenty - the address was wrong, not the state. A 404 from a named host is a real answer; a search that returns shakemaps is not.",
+    "id": "live:ky-hillshade",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
-    "url": "https://gis.conservation.ca.gov/server/rest/services?f=pjson"
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://kyraster.ky.gov/arcgis/rest/services/ElevationServices/Ky_DEM_KYAPED_5FT_MultiDirectionalHillshade/ImageServer?f=pjson"
   },
   {
-    "id": "st3:missouri",
-    "note": "Third pass for missouri, asked at the front door instead of through a search index. Two keyword passes found nothing here, and in every case so far where that happened the state turned out to publish plenty - the address was wrong, not the state. A 404 from a named host is a real answer; a search that returns shakemaps is not.",
+    "id": "live:wv-aerial",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
-    "url": "https://gisblue.mdc.mo.gov/arcgis/rest/services?f=pjson"
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services.wvgis.wvu.edu/arcgis/rest/services/Imagery_BaseMaps_EarthCover/wv_imagery_WVGISTC_leaf_off_mosaic/MapServer?f=pjson"
   },
   {
-    "id": "st3:nebraska",
-    "note": "Third pass for nebraska, asked at the front door instead of through a search index. Two keyword passes found nothing here, and in every case so far where that happened the state turned out to publish plenty - the address was wrong, not the state. A 404 from a named host is a real answer; a search that returns shakemaps is not.",
+    "id": "live:wv-hillshade",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
-    "url": "https://gis.ne.gov/Enterprise/rest/services?f=pjson"
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services.wvgis.wvu.edu/arcgis/rest/services/Elevation/wv_hillshade_1m_mosaic/MapServer?f=pjson"
   },
   {
-    "id": "st3:southcarolina",
-    "note": "Third pass for southcarolina, asked at the front door instead of through a search index. Two keyword passes found nothing here, and in every case so far where that happened the state turned out to publish plenty - the address was wrong, not the state. A 404 from a named host is a real answer; a search that returns shakemaps is not.",
+    "id": "live:tn-aerial",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
-    "url": "https://arcweb.dnr.sc.gov/server/rest/services?f=pjson"
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://tnmap.tn.gov/arcgis/rest/services/BASEMAPS/IMAGERY_WEB_MERCATOR/MapServer?f=pjson"
   },
   {
-    "id": "st3:nevada",
-    "note": "Third pass for nevada, asked at the front door instead of through a search index. Two keyword passes found nothing here, and in every case so far where that happened the state turned out to publish plenty - the address was wrong, not the state. A 404 from a named host is a real answer; a search that returns shakemaps is not.",
+    "id": "live:ky-byways",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
-    "url": "https://arcgis.shpo.nv.gov/arcgis/rest/services?f=pjson"
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Scenic_Byways_WGS84WM/MapServer?f=pjson"
   },
   {
-    "id": "st3:georgia",
-    "note": "Third pass for georgia, asked at the front door instead of through a search index. Two keyword passes found nothing here, and in every case so far where that happened the state turned out to publish plenty - the address was wrong, not the state. A 404 from a named host is a real answer; a search that returns shakemaps is not.",
+    "id": "live:ky-trails",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
-    "url": "https://gisportal.gadnr.org/arcgis/rest/services?f=pjson"
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Recreational_Trails_WGS84WM/MapServer?f=pjson"
   },
   {
-    "id": "st3:louisiana",
-    "note": "Third pass for louisiana, asked at the front door instead of through a search index. Two keyword passes found nothing here, and in every case so far where that happened the state turned out to publish plenty - the address was wrong, not the state. A 404 from a named host is a real answer; a search that returns shakemaps is not.",
+    "id": "live:ky-forests",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
-    "url": "https://maps.dotd.la.gov/topo/rest/services?f=pjson"
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_StateForests_WGS84WM/MapServer?f=pjson"
   },
   {
-    "id": "st3:kansas",
-    "note": "Third pass for kansas, asked at the front door instead of through a search index. Two keyword passes found nothing here, and in every case so far where that happened the state turned out to publish plenty - the address was wrong, not the state. A 404 from a named host is a real answer; a search that returns shakemaps is not.",
+    "id": "live:ky-hunting",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
-    "url": "https://services.arcgis.com/djZgF6YJCuO8rbmH/arcgis/rest/services?f=pjson"
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Public_Hunting_Areas_WGS84WM/MapServer?f=pjson"
   },
   {
-    "id": "st3:newhampshire",
-    "note": "Third pass for newhampshire, asked at the front door instead of through a search index. Two keyword passes found nothing here, and in every case so far where that happened the state turned out to publish plenty - the address was wrong, not the state. A 404 from a named host is a real answer; a search that returns shakemaps is not.",
+    "id": "live:mi-roads",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
-    "url": "https://nhgeodata.unh.edu/nhgeodata/rest/services?f=pjson"
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services3.arcgis.com/Jdnp1TjADvSDxMAX/arcgis/rest/services/DNR_ROADS/FeatureServer/0?f=pjson"
   },
   {
-    "id": "st3:rhodeisland",
-    "note": "Third pass for rhodeisland, asked at the front door instead of through a search index. Two keyword passes found nothing here, and in every case so far where that happened the state turned out to publish plenty - the address was wrong, not the state. A 404 from a named host is a real answer; a search that returns shakemaps is not.",
+    "id": "live:mi-campgrounds",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
-    "url": "https://services2.arcgis.com/S8zZg9pg23JUEexQ/arcgis/rest/services?f=pjson"
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services3.arcgis.com/Jdnp1TjADvSDxMAX/ArcGIS/rest/services/dnrParksAndRecreation/FeatureServer/3?f=pjson"
   },
   {
-    "id": "st3:alaska",
-    "note": "Third pass for alaska, asked at the front door instead of through a search index. Two keyword passes found nothing here, and in every case so far where that happened the state turned out to publish plenty - the address was wrong, not the state. A 404 from a named host is a real answer; a search that returns shakemaps is not.",
+    "id": "live:mi-orv",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
-    "url": "https://arcgis.dnr.alaska.gov/arcgis/rest/services?f=pjson"
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services3.arcgis.com/Jdnp1TjADvSDxMAX/arcgis/rest/services/DNR_ORV_Scramble_Areas/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:tn-wma",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://tnmap.tn.gov/arcgis/rest/services/ENVIRONMENTAL/TWRA/MapServer?f=pjson"
+  },
+  {
+    "id": "live:tva-dispersed",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services.arcgis.com/w8auYAijfGK1Mydj/arcgis/rest/services/Dispersed_Recreation_Areas/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:pa-parks",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://www.gis.dcnr.pa.gov/agsprod/rest/services/Parks/State_Parks/MapServer?f=pjson"
+  },
+  {
+    "id": "live:vt-routes",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://anrmaps.vermont.gov/arcgis/rest/services/map_services/MAP_ANR_ANRATLASFPR_WM_NOCACHE/MapServer?f=pjson"
+  },
+  {
+    "id": "live:md-roads",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services.arcgis.com/njFNhDsUCentVYJW/arcgis/rest/services/State_Park_Forest_Recreation_Maintained_Roads/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:mt-parks",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services3.arcgis.com/Cdxz8r11hT0MGzg1/arcgis/rest/services/FWPLND_STATEPARKS/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:nj-trails",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://mapsdep.nj.gov/arcgis/rest/services/Applications/DEP_Trails/MapServer?f=pjson"
+  },
+  {
+    "id": "live:or-parks",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://gis.prd.state.or.us/arcgis/rest/services/Land_Ownership/LO_STATE_PARK_STATUS/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:tx-wma",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services1.arcgis.com/1mtXwieMId59thmg/arcgis/rest/services/WMA_Boundaries_4PublicDistribution/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:wa-trails",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services5.arcgis.com/4LKAHwqnBooVDUlX/arcgis/rest/services/Trails/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:wi-closures",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services5.arcgis.com/Ul9AyFFeFTjf08DW/arcgis/rest/services/WI_Park_Closures_PUBLIC_VIEW/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:oh-lands",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://gis.ohiodnr.gov/arcgis/rest/services/OIT_Services/ODNR_ODNR_Lands_External/MapServer?f=pjson"
+  },
+  {
+    "id": "live:ia-recreation",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://programs.iowadnr.gov/geospatial/rest/services/Recreation/Recreation/MapServer?f=pjson"
+  },
+  {
+    "id": "live:fl-forests",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services3.arcgis.com/XYg2eF8UuxZVuVmF/arcgis/rest/services/Florida_State_Forests/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:ct-deep",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services1.arcgis.com/FjPcSmEFuDYlIdKC/arcgis/rest/services/Connecticut_DEEP_Property/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:ma-openspace",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://gis.eea.mass.gov/server/rest/services/Protected_and_Recreational_OpenSpace_Polygons/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:hi-trails",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://geodata.hawaii.gov/arcgis/rest/services/Terrestrial/MapServer?f=pjson"
+  },
+  {
+    "id": "live:in-trails",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://gisdata.in.gov/server/rest/services/Hosted/Trails_AGOL_RO/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:de-parks",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services2.arcgis.com/JSw5FPLGACZknOZv/arcgis/rest/services/State_Park_Boundaries_Consolidated/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:co-cpw",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services5.arcgis.com/ttNGmDvKQA7oeDQ3/arcgis/rest/services/CPWAdminData/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:ut-parks",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services.arcgis.com/ZzrwjTRez6FJiOq4/arcgis/rest/services/Utah_State_Park_Management_Areas/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:nc-trails",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services6.arcgis.com/nRIB86xC7kq6wavB/arcgis/rest/services/State_Trails/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:va-trails",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services1.arcgis.com/PxUNqSbaWFvFgHnJ/arcgis/rest/services/SP_Trails/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:ok-recreation",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services6.arcgis.com/RBtoEUQ2lmN0K3GY/arcgis/rest/services/OklahomaRecreationalAreas/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:sc-parks",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services.arcgis.com/uj05BKeH0fZwqTNZ/arcgis/rest/services/SC_State_Parks/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:id-trails",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services1.arcgis.com/CNPdEkvnGl65jCX8/arcgis/rest/services/Idaho_Recreation_Trails/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:il-trails",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services1.arcgis.com/OSvSLSpuEnbSu0lj/arcgis/rest/services/Trails_Public/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:nm-parks",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services9.arcgis.com/wb84GxCwiPzK3Eow/arcgis/rest/services/NMStateParks(1)/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:nd-forest",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services1.arcgis.com/GOcSXpzwBHyk2nog/arcgis/rest/services/NDGISHUB_State_Forest/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:wy-parks",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services6.arcgis.com/cWzdqIyxbijuhPLw/arcgis/rest/services/StateParkBoundaries/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:sd-parks",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services2.arcgis.com/1sM9tpOC8N7GGkbw/arcgis/rest/services/South_Dakota_State_Parks/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:ms-parks",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services3.arcgis.com/OYP7N6mAJJCyH6hd/arcgis/rest/services/Mississippi_State_Parks_and_WMAs/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:ar-parks",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services5.arcgis.com/bPacKTm9cauMXVfn/arcgis/rest/services/Arkansas_State_Parks/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:mn-parks",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services.arcgis.com/4g6VBrL3kEcjXfMf/arcgis/rest/services/Minnesota_State_Parks/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:ne-parks",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services5.arcgis.com/IOshH1zLrIieqrNk/arcgis/rest/services/Park_Areas/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:me-bpl",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services1.arcgis.com/RbMX0mRVOFNTdLzd/arcgis/rest/services/BPL_Properties_Points_for_MaineFoliage/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "live:ny-hunting",
+    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services.arcgis.com/1xFZPtKn1wKC6POA/arcgis/rest/services/NY_State_Parks_Hunting_Areas_2_view/FeatureServer/0?f=pjson"
   }
 ]

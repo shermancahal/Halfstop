@@ -92,15 +92,21 @@ with the data being real. None of them are wired.
 | Nebraska | Park Areas and Locations; `gis.ne.gov` is live | NE orgs |
 | Maine | Bureau of Parks and Lands property points | Maine Forest Service org |
 
-Still unresolved after two passes: Alabama, Alaska, California, Georgia,
-Kansas, Louisiana, Missouri, Nevada, New Hampshire, Rhode Island.
+Still unresolved after three passes: Alabama, Alaska, California,
+Georgia, Kansas, Louisiana, Missouri, Nevada, New Hampshire, Rhode
+Island.
 
 New Hampshire and Rhode Island returned literally nothing - `total: 0` -
 which means the agency names in the query do not match theirs, not that
 they publish nothing. Missouri's `gisblue.mdc.mo.gov` and California's
 conservation server are both live and neither surfaced anything
-recreational, which is a query problem rather than an answer. These ten
-need a third pass by hostname.
+recreational, which is a query problem rather than an answer. A third pass asked twelve named
+hosts directly and mostly failed on the addresses rather than the data:
+Georgia and Nevada were unreachable, Kansas answered with an empty
+service list, and Alaska's server offers ArcGIS's own SampleWorldCities
+demo. Rhode Island's server is enormous and entirely imagery. These
+remain open, and the honest position is that the addresses have not been
+found rather than that the data is absent.
 
 Two states appear here having been recorded as refusals earlier in this
 file. Both were wrong, and for the same reason - the probe asked the
@@ -124,3 +130,22 @@ Jersey and Mississippi's were mostly Minnesota.
 Nothing found by a failed search is recorded as a refusal. Only a
 service that was actually asked and actually answered goes in the table
 above.
+
+## Shipping
+
+Forty-four layers across thirty-eight states are now in `OVERLAYS`, all
+switched off by default, filed under the one `State data` heading with
+the state written onto each row.
+
+Eight of them have had their fields read. The rest answered only that
+they exist, which is a weaker thing to ship on, and they ship anyway on
+the understanding that a layer drawing nothing is a layer to delete. The
+`live:` probes in `tools/layer-candidates.json` are what will say which
+ones those are - one per shipped layer, asking each service whether it
+is still there.
+
+Two rendering paths carry all of it, both already in the app before this
+landed: a MapServer becomes raster tiles through `/export`, and a
+FeatureServer becomes GeoJSON through a bbox query, drawn as fill and
+line from one source so a trail and a boundary need no different
+handling.
