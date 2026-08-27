@@ -1148,42 +1148,83 @@ html, body { height: 100%; overflow: hidden; }
 
 /* ---------- eclipses ---------- */
 
-.eclipse-hero { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
-.eclipse-hero-text { min-width: 0; }
-.eclipse-kind {
-  margin: 0; font-size: .64rem; font-weight: 600; letter-spacing: .08em;
-  text-transform: uppercase; color: var(--ink-3);
+/*
+ * Built like the weather headline, for the same reason: a wash read before any
+ * of the words, one number at size, and the sentence under it. The wash here
+ * is the colour the moon actually goes.
+ */
+.eclipse-now {
+  position: relative; isolation: isolate;
+  display: flex; align-items: center; gap: 13px;
+  padding: 13px 14px; border-radius: var(--radius);
+  border: 1px solid var(--line);
 }
-.eclipse-when { margin: 2px 0 0; font-family: var(--font-serif); font-size: 1.04rem; color: var(--ink); }
-.eclipse-peak { margin: 2px 0 0; font-size: .82rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.eclipse-now::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
+  background: linear-gradient(135deg, var(--wash-a), var(--wash-b));
+}
+.eclipse-now.is-total     { --wash-a: #2b1a14; --wash-b: #5c2d1c; --ink-on: #f7ece3; }
+.eclipse-now.is-partial   { --wash-a: #262a35; --wash-b: #4a4436; --ink-on: #f4efe6; }
+.eclipse-now.is-penumbral { --wash-a: #2a2c31; --wash-b: #43464c; --ink-on: #eff0f2; }
+
+.eclipse-now-text { min-width: 0; }
+.eclipse-when {
+  font-size: .7rem; font-weight: 650; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ink-on); opacity: .8;
+}
+.eclipse-headline {
+  font-family: var(--font-serif); font-size: 1.7rem; line-height: 1.1;
+  color: var(--ink-on); font-variant-numeric: tabular-nums;
+}
+.eclipse-short { font-size: .82rem; color: var(--ink-on); opacity: .9; margin-top: 2px; }
 
 /* Drawn to scale in earth radii, so a grazing eclipse looks grazing. */
-.eclipse-diagram { flex: none; width: 78px; height: 78px; }
+.eclipse-diagram { flex: none; width: 54px; height: 54px; }
 .eclipse-diagram svg { width: 100%; height: 100%; overflow: visible; }
-.eclipse-penumbra { fill: color-mix(in srgb, var(--ink-3) 22%, transparent); }
-.eclipse-umbra { fill: color-mix(in srgb, #2b1d16 78%, transparent); }
-.eclipse-moon { fill: #efe7d8; }
-/* The copper of a totally eclipsed moon: the only light reaching it is what
-   the earth's atmosphere has bent around the planet, and it is all red. */
-.eclipse-hero.is-total .eclipse-moon { fill: #b4552f; }
-.eclipse-hero.is-partial .eclipse-moon { fill: #e9d9c2; }
+.eclipse-penumbra { fill: rgba(255, 255, 255, .13); }
+.eclipse-umbra { fill: rgba(0, 0, 0, .48); }
+.eclipse-moon { fill: #f0e7d6; }
+.eclipse-now.is-total .eclipse-moon { fill: #c4603a; }
+
+/* The stages, the way four days of weather are a strip. Each chip draws the
+   moon where it actually is, so the bite grows and shrinks across the row. */
+.eclipse-strip {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(52px, 1fr));
+  gap: 6px; margin: 10px 0 12px;
+}
+.eclipse-chip {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 7px 2px; border-radius: var(--radius-sm);
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);
+}
+/* Below the horizon is not a failure, but it is not a plan either. */
+.eclipse-chip.is-down { opacity: .55; }
+/* A fixed two lines, so the moons line up across the row however long a stage
+   is called. Without it "FIRST BITE" wraps, "GREATEST" does not, and the
+   sequence the strip exists to show is pushed out of step. */
+.eclipse-chip-when {
+  font-size: .58rem; text-transform: uppercase; letter-spacing: .03em;
+  color: var(--ink-3); text-align: center; line-height: 1.15;
+  min-height: 2.3em; display: flex; align-items: center;
+}
+.eclipse-diagram.is-plain { width: 28px; height: 28px; }
+.eclipse-chip .eclipse-penumbra { fill: color-mix(in srgb, var(--ink-3) 24%, transparent); }
+.eclipse-chip .eclipse-umbra { fill: color-mix(in srgb, #241812 82%, transparent); }
+/* Never wrapped: "1:26 AM" breaking after the colon put the meridiem on its
+   own line and made every chip a different height. */
+.eclipse-chip-time {
+  font-size: .7rem; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.eclipse-chip-alt { font-size: .58rem; color: var(--ink-3); }
 
 .eclipse-verdict {
-  margin: 0 0 12px; padding: 9px 11px; border-radius: var(--radius-sm);
+  margin: 0 0 10px; padding: 9px 11px; border-radius: var(--radius-sm);
   font-size: .84rem; line-height: 1.45;
   border-left: 3px solid var(--line-strong); background: var(--paper-2); color: var(--ink-2);
 }
 .eclipse-verdict.is-yes { border-left-color: var(--pine); background: var(--pine-soft); color: var(--ink); }
 .eclipse-verdict.is-part { border-left-color: var(--warn); }
 .eclipse-verdict.is-no { border-left-color: var(--ink-3); }
-
-.eclipse-stages { border-top: 0; padding-top: 0; gap: 0; }
-.eclipse-stages dt, .eclipse-stages dd { padding: 6px 9px; }
-.eclipse-stages dt:nth-of-type(odd), .eclipse-stages dd:nth-of-type(odd) { background: var(--paper-2); }
-.eclipse-stages dd { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.eclipse-up { font-size: .7rem; color: var(--ink-3); }
-.eclipse-up.is-no { color: var(--ink-3); opacity: .8; }
-.eclipse-up.is-yes { color: var(--pine); }
 
 .eclipse-later-title {
   margin: 14px 0 6px; font-size: .64rem; font-weight: 600; letter-spacing: .08em;

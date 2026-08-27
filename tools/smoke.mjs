@@ -1903,26 +1903,50 @@ await page.waitForTimeout(600);
 
 const eclipse = await page.evaluate(() => {
   const panel = document.querySelector('.sky-panel');
+  const hero = panel.querySelector('.eclipse-now');
   return {
-    kind: panel.querySelector('.eclipse-kind')?.textContent.trim() || '',
+    kind: hero?.className || '',
+    short: panel.querySelector('.eclipse-short')?.textContent.trim() || '',
     when: panel.querySelector('.eclipse-when')?.textContent.trim() || '',
+    headline: panel.querySelector('.eclipse-headline')?.textContent.trim() || '',
     verdict: panel.querySelector('.eclipse-verdict')?.textContent.trim() || '',
-    stages: [...panel.querySelectorAll('.eclipse-stages dt')].map((n) => n.textContent.trim()),
-    circles: [...panel.querySelectorAll('.eclipse-diagram circle')].map((n) => ({
-      r: Number(n.getAttribute('r')), cy: Number(n.getAttribute('cy')),
-      cls: n.getAttribute('class'),
+    stages: [...panel.querySelectorAll('.eclipse-chip-when')].map((n) => n.textContent.trim()),
+    alts: [...panel.querySelectorAll('.eclipse-chip-alt')].map((n) => n.textContent.trim()),
+    // The moon's centre in each chip, so the sequence can be checked as a
+    // sequence rather than as five unrelated pictures.
+    moons: [...panel.querySelectorAll('.eclipse-chip .eclipse-moon')]
+      .map((n) => Number(n.getAttribute('cx'))),
+    circles: [...panel.querySelectorAll('.eclipse-now .eclipse-diagram circle')].map((n) => ({
+      r: Number(n.getAttribute('r')), cls: n.getAttribute('class'),
     })),
   };
 });
 
-check('it names the kind of eclipse', /lunar eclipse$/.test(eclipse.kind), true);
+check('the headline card is built like the weather one', /eclipse-now/.test(eclipse.kind), true);
+check('and carries the kind in its wash',
+  /is-(total|partial|penumbral)/.test(eclipse.kind), true);
+check('it names the kind of eclipse', /lunar eclipse/.test(eclipse.short), true);
 check('and dates it', eclipse.when.length > 8, true);
+check('with one number at size', eclipse.headline.length > 0, true);
 check('the verdict says whether the moon is up for it here',
   /visible|below the horizon|edges of it/i.test(eclipse.verdict), true);
 check('greatest eclipse is always one of the stages',
-  eclipse.stages.includes('Greatest'), true);
-check('and every stage carries whether the moon is up at that moment',
-  await page.locator('.eclipse-stages .eclipse-up').count() >= eclipse.stages.length, true);
+  eclipse.stages.includes('GREATEST') || eclipse.stages.includes('Greatest'), true);
+check('and every stage says whether the moon is up at that moment',
+  eclipse.alts.length, eclipse.stages.length);
+
+/*
+ * The strip has to read as a sequence.
+ *
+ * Each chip draws the moon where it actually is at that moment — the offset
+ * along the chord — so the bite grows and shrinks across the row. If every
+ * chip drew the same picture the strip would be decoration.
+ */
+check('the moon moves left to right across the strip',
+  eclipse.moons.every((cx, i) => i === 0 || cx > eclipse.moons[i - 1]), true);
+check('and it is at its closest in the middle',
+  eclipse.moons.length >= 3 && Math.abs(eclipse.moons[Math.floor(eclipse.moons.length / 2)] - 14) < 1,
+  true);
 
 /*
  * The picture has to agree with the physics, and it did not.

@@ -2379,53 +2379,56 @@ function eclipsePanel(body, date, lat, lon) {
 
   const [next, ...later] = eclipses;
   const visible = eclipseVisibility(next, lat, lon);
+  const covered = Math.round(Math.max(0, next.umbralMagnitude) * 100);
 
-  body.append(el('div', { class: `eclipse-hero is-${next.kind}` }, [
-    eclipseDiagram(next),
-    el('div', { class: 'eclipse-hero-text' }, [
-      el('p', { class: 'eclipse-kind', text: `${next.kind} lunar eclipse` }),
-      el('p', { class: 'eclipse-when', text: longDate(next.greatest) }),
-      el('p', { class: 'eclipse-peak', text: `Greatest at ${clockTime(next.greatest)}` }),
+  /*
+   * The headline card, built like the weather's.
+   *
+   * Same shape for the same reason: a wash you read before any of the words,
+   * one number at size, and the sentence under it. The wash here is the colour
+   * the moon actually goes — copper for a total, barely touched for a
+   * penumbral — so a glance at the tab says what kind of night it is.
+   */
+  body.append(el('div', { class: `eclipse-now is-${next.kind}` }, [
+    eclipseDiagram(next, { size: 54 }),
+    el('div', { class: 'eclipse-now-text' }, [
+      el('div', { class: 'eclipse-when', text: longDate(next.greatest) }),
+      el('div', { class: 'eclipse-headline', text: next.kind === 'total' ? 'Total' : `${covered}%` }),
+      el('div', { class: 'eclipse-short', text: `${next.kind} lunar eclipse, greatest at ${clockTime(next.greatest)}` }),
     ]),
   ]));
 
   /*
-   * The visibility line first, because it is the one that decides anything.
-   * A total eclipse below the horizon is a fact about the sky and not about
-   * tonight.
+   * The stages as a strip, the way four days of weather are a strip.
+   *
+   * Each chip draws the moon where it actually is at that moment — the offset
+   * along the chord is sqrt(d^2 - gamma^2), so the bite grows and shrinks
+   * across the row and the sequence reads without a word of it.
    */
-  body.append(el('p', {
-    class: `eclipse-verdict is-${visible.state}`,
-    text: visible.text,
-  }));
+  const stages = next.kind === 'penumbral'
+    ? [['Enters', next.penumbral.from], ['Greatest', next.greatest], ['Leaves', next.penumbral.to]]
+    : next.kind === 'total'
+      ? [['First bite', next.partial.from], ['Total', next.total.from], ['Greatest', next.greatest],
+        ['Total ends', next.total.to], ['Last bite', next.partial.to]]
+      : [['Enters', next.penumbral.from], ['First bite', next.partial.from], ['Greatest', next.greatest],
+        ['Last bite', next.partial.to], ['Leaves', next.penumbral.to]];
 
-  const stages = [
-    ['Enters the outer shadow', next.penumbral?.from],
-    ['First bite', next.partial?.from],
-    ['Totality begins', next.total?.from],
-    ['Greatest', next.greatest],
-    ['Totality ends', next.total?.to],
-    ['Last bite', next.partial?.to],
-    ['Leaves the outer shadow', next.penumbral?.to],
-  ].filter(([, when]) => when);
-
-  body.append(el('dl', { class: 'popup-stats eclipse-stages' }, stages.flatMap(([label, when]) => {
+  body.append(el('div', { class: 'eclipse-strip' }, stages.map(([label, when]) => {
     const moon = moonPosition(when, lat, lon);
-    return [
-      el('dt', { text: label }),
-      el('dd', {}, [
-        el('span', { text: clockTime(when) }),
-        // Marked per stage, not just overall: an eclipse can begin below the
-        // horizon and finish well up, and the half you can see is the half
-        // worth setting an alarm for.
-        el('span', {
-          class: `eclipse-up is-${moon.altitude > 0 ? 'yes' : 'no'}`,
-          text: moon.altitude > 0 ? `moon ${Math.round(moon.altitude)}° up` : 'below horizon',
-        }),
-      ]),
-    ];
+    return el('div', { class: `eclipse-chip${moon.altitude > 0 ? '' : ' is-down'}` }, [
+      el('span', { class: 'eclipse-chip-when', text: label }),
+      eclipseDiagram(next, { size: 28, at: when, plain: true }),
+      el('span', { class: 'eclipse-chip-time', text: clockTime(when) }),
+      el('span', {
+        class: 'eclipse-chip-alt',
+        // Per stage, not overall: an eclipse can begin below the horizon and
+        // finish well up, and the half you can see is the half worth an alarm.
+        text: moon.altitude > 0 ? `${Math.round(moon.altitude)}° up` : 'below',
+      }),
+    ]);
   })));
 
+  body.append(el('p', { class: `eclipse-verdict is-${visible.state}`, text: visible.text }));
   body.append(el('p', { class: 'source-note', text: describeEclipse(next) }));
 
   if (later.length) {
@@ -2467,35 +2470,43 @@ function eclipseVisibility(eclipse, lat, lon) {
  * already in, so the picture is the arithmetic rather than an impression of
  * it: a grazing eclipse looks grazing and a deep one looks deep.
  */
-function eclipseDiagram(eclipse) {
-  const SIZE = 78;
-  const scale = SIZE / 3.0;
-  const centre = SIZE / 2;
+function eclipseDiagram(eclipse, { size = 78, at = null, plain = false } = {}) {
+  const scale = size / 3.0;
+  const centre = size / 2;
+  const shape = shadowGeometry(eclipse);
 
   /*
-   * The shadow radii are NOT 1.0128 - u and 1.5573 + u.
+   * Where the moon is at this instant, along the chord it travels.
    *
-   * Those are the distances from the axis to the moon's CENTRE at first
-   * contact, so each already carries a moon radius inside it — which is why
-   * Meeus divides by 0.5450, a moon diameter, to get magnitude. Drawing them
-   * as the shadows made both circles one moon too big, and this partial
-   * eclipse came out looking total: the moon sat comfortably inside an umbra
-   * it actually pokes out of.
+   * At any contact the distance from the shadow axis to the moon's centre is
+   * known — it is the contact distance itself — and gamma is the closest it
+   * ever comes. The along-track offset is the remaining leg of that right
+   * triangle, so the moon tracks across the shadow instead of bobbing towards
+   * the middle of it. Signed by whether the moment is before or after
+   * greatest, so the row reads left to right.
    */
-  const shape = shadowGeometry(eclipse);
-  const moonRadius = shape.moon * scale;
-  const umbra = shape.umbra * scale;
-  const penumbra = shape.penumbra * scale;
-  // Signed here, unlike the geometry, so the moon is drawn on the side of the
-  // axis it actually passes.
-  const offset = eclipse.gamma * scale;
+  let along = 0;
+  if (at) {
+    const contact = (() => {
+      const ms = Math.abs(at.getTime() - eclipse.greatest.getTime()) / 60000;
+      if (eclipse.total && Math.abs(ms - eclipse.total.minutes / 2) < 0.5) return shape.umbra - shape.moon;
+      if (eclipse.partial && Math.abs(ms - eclipse.partial.minutes / 2) < 0.5) return shape.umbra + shape.moon;
+      if (eclipse.penumbral && Math.abs(ms - eclipse.penumbral.minutes / 2) < 0.5) return shape.penumbra + shape.moon;
+      return Math.abs(eclipse.gamma);
+    })();
+    const leg = Math.sqrt(Math.max(0, contact * contact - eclipse.gamma * eclipse.gamma));
+    along = at < eclipse.greatest ? -leg : leg;
+  }
+
+  const cx = (centre + along * scale).toFixed(2);
+  const cy = (centre - eclipse.gamma * scale).toFixed(2);
 
   return el('div', {
-    class: 'eclipse-diagram',
-    html: `<svg viewBox="0 0 ${SIZE} ${SIZE}" role="img" aria-label="${eclipse.kind} lunar eclipse">
-      <circle cx="${centre}" cy="${centre}" r="${penumbra}" class="eclipse-penumbra"/>
-      <circle cx="${centre}" cy="${centre}" r="${umbra}" class="eclipse-umbra"/>
-      <circle cx="${centre}" cy="${(centre - offset).toFixed(2)}" r="${moonRadius.toFixed(2)}" class="eclipse-moon"/>
+    class: `eclipse-diagram${plain ? ' is-plain' : ''}`,
+    html: `<svg viewBox="0 0 ${size} ${size}" role="img" aria-label="${eclipse.kind} lunar eclipse">
+      <circle cx="${centre}" cy="${centre}" r="${(shape.penumbra * scale).toFixed(2)}" class="eclipse-penumbra"/>
+      <circle cx="${centre}" cy="${centre}" r="${(shape.umbra * scale).toFixed(2)}" class="eclipse-umbra"/>
+      <circle cx="${cx}" cy="${cy}" r="${(shape.moon * scale).toFixed(2)}" class="eclipse-moon"/>
     </svg>`,
   });
 }
