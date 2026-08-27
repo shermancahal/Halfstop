@@ -207,3 +207,66 @@ Wisconsin's park closures and Oregon's park status belong to the same
 family. The conclusion that closures were unwireable was drawn from a
 search, and searches have been wrong about every state they were asked
 about.
+
+## Every shipped layer, with its shape and what is wrong with it
+
+All 48 are live at https://shermancahal.github.io/Map/ and all ship switched
+off. "Verified" means the records' fields have been read, not that a human has
+looked at the layer on a map. Nobody has done that yet.
+
+| State | Layer | Shape | Verified | Comments |
+|---|---|---|---|---|
+| Arkansas | State parks | polygon | exists only |  |
+| Colorado | CPW facilities | point | exists only | Facilities, not administered land. Renamed to match. |
+| Connecticut | DEEP property | polygon | exists only |  |
+| Delaware | State park boundaries | polygon | exists only |  |
+| Florida | State forests | polygon | exists only |  |
+| Hawaii | Na Ala Hele trails | raster | exists only | Renders sublayer 34 of a 40-layer Terrestrial service. |
+| Idaho | Area restrictions | polygon | exists only |  |
+| Idaho | Emergency route closures | line | exists only | A maintained closure layer — the thing I wrongly said no state keeps. |
+| Idaho | Recreation routes | line | exists only |  |
+| Indiana | Trails inventory | ? | exists only | **Polygons, not lines.** Trail corridors; not useful alone (your report). |
+| Iowa | Recreation lands | raster | exists only | Service opens on *Beach Status*; show:11 set but unverified. |
+| Kentucky | Aerial (3 in) | raster | exists only |  |
+| Kentucky | Lidar hillshade (5 ft) | raster | exists only |  |
+| Kentucky | Public hunting areas | raster | fields read |  |
+| Kentucky | Recreational trails | raster | fields read |  |
+| Kentucky | Scenic byways | raster | fields read |  |
+| Kentucky | State forests | raster | fields read |  |
+| Maine | Bureau of Parks & Lands sites | point | exists only | From the foliage map dataset; park sites as points. |
+| Maryland | Park & forest maintained roads | line | exists only | Layer is *MDOT Know Your Roads* — may be the DOT inventory, not park roads. |
+| Massachusetts | Protected & recreational open space | polygon | exists only |  |
+| Michigan | Forest roads | line | fields read |  |
+| Michigan | ORV scramble areas | polygon | exists only |  |
+| Michigan | State forest campgrounds | point | fields read |  |
+| Mississippi | State parks & WMAs | polygon | exists only |  |
+| Montana | State parks | polygon | exists only |  |
+| Nebraska | Park areas | polygon | exists only |  |
+| New Jersey | State park trails | raster | exists only | Resolves to *NJ State Open Space (Agency)* points, not the trail lines. Wrong sublayer. |
+| New York | State park hunting areas | polygon | exists only |  |
+| North Carolina | State trails | line | exists only |  |
+| North Dakota | State forest | polygon | exists only |  |
+| Ohio | ODNR lands | raster | exists only |  |
+| Oklahoma | Wildlife management areas | polygon | exists only | Service holds WMAs despite its name. Renamed to match. |
+| Oregon | State parks & status | point | exists only | Park *status* as points, not boundaries. |
+| Pennsylvania | State parks & amenities | raster | exists only | Service layer 0 is *Placeholder1*; show:3,9 set but unverified. |
+| South Carolina | State parks | polygon | exists only |  |
+| South Dakota | State parks | point | exists only | Publisher org looks personal rather than institutional. |
+| Tennessee | Aerial | raster | exists only |  |
+| Tennessee | TVA dispersed recreation | polygon | fields read |  |
+| Tennessee | Wildlife management areas | raster | fields read | Renders sublayer 3 (Lands = WMAs); service root opens on Hatcheries. |
+| Texas | Wildlife management areas | polygon | exists only |  |
+| Utah | State park management areas | polygon | exists only |  |
+| Vermont | ANR travel routes | raster | exists only | Resolves to *State Park* points, not ANR travel routes. Wrong sublayer. |
+| Virginia | State park trails | line | exists only |  |
+| Washington | State park trails | line | exists only |  |
+| West Virginia | Aerial, leaf-off | raster | exists only |  |
+| West Virginia | Lidar hillshade (1 m) | raster | exists only |  |
+| Wisconsin | Park closures | point | exists only | Resolves to *WIParks*, not the closures layer. Wrong index. |
+| Wyoming | State park boundaries | polygon | exists only |  |
+
+Fifteen of forty-eight carry a comment, which is a poor hit rate and worth
+saying plainly. Every one was found by asking the service what shape its
+records are - a question none of the first sixty probes asked, because they
+were all built to ask whether a thing exists. Existence was never the
+interesting question.
