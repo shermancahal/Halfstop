@@ -715,7 +715,36 @@ function labelLayers() {
  * Both halves have to be present to split: a `-duplex` shield is the tag that
  * says the hyphen is a separator rather than part of a number.
  */
-const REF = ['coalesce', ['get', 'ref'], ''];
+/*
+ * The number, without the system that issued it.
+ *
+ * A route marker carries a number: the shape around it is what says which
+ * system numbered it, which is the whole point of a shield being a shape.
+ * Tiles hand us the raw OSM ref, and in most states that carries the prefix —
+ * "SR 61" in Tennessee, "KY 15", "US 27" — so the marker read "SR 61" inside a
+ * state-route blank, which is a sign that exists nowhere.
+ *
+ * Only a one or two character first token is dropped, and only when something
+ * follows it. That is every route system the United States issues — I, US, SR,
+ * the two-letter state codes, CR, FM, SH — and it is deliberately tight: at
+ * three the rule starts eating road names that happen to lead with a short
+ * word, "Old 61" among them, where the first word is the name rather than the
+ * system. A road named across two words keeps both.
+ *
+ * It also fixes the blank: the image is chosen by how many characters the
+ * number has, so "SR 61" was asking for a five-character shield that no state
+ * publishes.
+ */
+const RAW_REF = ['coalesce', ['get', 'ref'], ''];
+const REF = ['let', 'raw', RAW_REF, 'cut', ['index-of', ' ', RAW_REF],
+  ['case',
+    ['all',
+      ['>', ['var', 'cut'], 0],
+      ['<=', ['var', 'cut'], 2],
+      ['>', ['length', ['var', 'raw']], ['+', ['var', 'cut'], 1]]],
+    ['slice', ['var', 'raw'], ['+', ['var', 'cut'], 1]],
+    ['var', 'raw']],
+];
 const REF_CUT = ['index-of', '-', REF];
 const IS_DUPLEX = ['all',
   ['>', REF_CUT, 0],
@@ -859,12 +888,23 @@ function shieldLayers(state = '') {
         // known state drew the number at that state's size and offset on a
         // generic blank — half-applied, which looks like a design mistake
         // rather than a bug.
-        'icon-image': shieldImageExpression(state),
+        /*
+         * Sized from the number we draw, not from the tile's `reflen`.
+         *
+         * `reflen` is the length of the raw ref, so a stripped "SR 61" asked
+         * for a four-wide blank to hold two digits — a wide sign with a small
+         * number floating in the middle of it. The concurrency layers have
+         * always measured their own half; this now does the same.
+         */
+        'icon-image': shieldImageExpression(state, { length: ['length', REF] }),
         // Constant, so the number's size and offset — which are fixed per
         // shield — cannot drift out of register with the marker they sit on.
         'icon-size': 1,
         'icon-rotation-alignment': 'viewport',
-        'text-field': ['get', 'ref'],
+        // The stripped number, not the raw ref — see REF above. This was the
+        // one place that read `ref` straight through, which is why a single
+        // route drew "SR 61" while a concurrency drew bare numbers.
+        'text-field': REF,
         'text-font': FONT_BOLD,
         // Sized and placed per shield: a third of the blanks carry the state's
         // name across the top, and a number centred in the image lands on it.

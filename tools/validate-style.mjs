@@ -109,6 +109,44 @@ for (const [label, actual, expected] of expectations) {
   if (actual !== expected) all.push(['shields', { message: `${label} — got ${JSON.stringify(actual)}, expected ${JSON.stringify(expected)}` }]);
 }
 
+/*
+ * The number on the shield is a number.
+ *
+ * Tiles hand us the raw OSM ref and most states put the system in it — "SR 61",
+ * "KY 15" — so the marker read "SR 61" inside a state-route blank, which is a
+ * sign that exists nowhere. Checked by evaluating the real expression against
+ * the refs that actually come out of the tiles, because "it compiles" and "it
+ * says 61" are different claims.
+ */
+const shieldText = layerBy('road-shield').layout['text-field'];
+const shieldImage = layerBy('road-shield').layout['icon-image'];
+const REFS = [
+  ['SR 61', '61', 'a state route keeps its number and loses its system'],
+  ['US 27', '27', 'so does a US route'],
+  ['I 40', '40', 'and an interstate'],
+  ['KY 15', '15', 'whichever state issued it'],
+  ['CR 1234', '1234', 'and however long the number is'],
+  ['FM 1960', '1960', 'including the ones only one state uses'],
+  ['61', '61', 'a bare number is already the answer'],
+  ['Loop 1', 'Loop 1', 'a road named across two words keeps both — that is a name, not a system'],
+  ['Old 61', 'Old 61', 'which is why the rule stops at two characters and not three'],
+  ['SR', 'SR', 'a prefix with nothing after it is all there is, so it stays'],
+  ['', '', 'and nothing is nothing'],
+];
+for (const [ref, want, why] of REFS) {
+  const got = evaluate(shieldText, { properties: { ref, shield: 'default', class: 'primary' } });
+  if (String(got) !== want) {
+    all.push(['shields', { message: `"${ref}" drew "${got}", expected "${want}" — ${why}` }]);
+  }
+}
+
+// And the blank is sized for the number it holds, not for the raw ref: a
+// stripped "SR 61" asking for a four-wide sign leaves two digits adrift in it.
+const blank = evaluate(shieldImage, { properties: { ref: 'SR 61', shield: 'default', reflen: 5, class: 'primary' } });
+if (!String(blank).endsWith('-2')) {
+  all.push(['shields', { message: `"SR 61" asked for ${blank}, expected a two-character blank` }]);
+}
+
 // The combined shield must stand down where the pair takes over, or the road
 // carries three markers.
 const filters = {
