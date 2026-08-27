@@ -389,3 +389,33 @@ test('trips: the window survives the sync merge', () => {
   }]);
   assert.deepEqual(store.get('f1').trip, { from: '2026-09-12', to: '2026-09-16', retired: false });
 });
+
+test('trips: the queue can be reordered, and nothing falls out of it', () => {
+  /*
+   * A trip is driven in an order, so the order is data. The dangerous case is
+   * a stale list — one built before a pin was added on another device — which
+   * must reorder what it knows about and lose nothing it does not.
+   */
+  const store = new FolderStore({ storage: memoryStorage() });
+  const folder = store.create('Trip');
+  const ids = ['a', 'b', 'c'].map((name) => {
+    store.addFeatures(folder.id, [{
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [-84, 36] },
+      properties: { kind: 'waypoint', name },
+    }]);
+    return store.get(folder.id).items.at(-1).id;
+  });
+
+  store.reorder(folder.id, [ids[2], ids[0], ids[1]]);
+  assert.deepEqual(store.get(folder.id).items.map((item) => item.id), [ids[2], ids[0], ids[1]]);
+
+  // A partial list keeps the rest, in place, at the end.
+  store.reorder(folder.id, [ids[1]]);
+  assert.deepEqual(store.get(folder.id).items.map((item) => item.id), [ids[1], ids[2], ids[0]]);
+
+  // Ids from somewhere else are ignored rather than inserted as holes.
+  store.reorder(folder.id, ['nonsense', ids[0]]);
+  assert.deepEqual(store.get(folder.id).items.map((item) => item.id).sort(), [...ids].sort());
+  assert.equal(store.get(folder.id).items.length, 3);
+});

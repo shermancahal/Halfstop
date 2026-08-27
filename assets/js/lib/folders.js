@@ -373,6 +373,32 @@ export class FolderStore {
     if (folder.items.length !== before) this.emit(folderId);
   }
 
+  /**
+   * Put a folder's items in a given order.
+   *
+   * A trip is driven in an order, so the queue's order is data rather than
+   * presentation. Ids that are not in the folder are ignored and ids the
+   * caller left out keep their place at the end, so a stale list — one built
+   * before a pin was added on another device — reorders what it knows about
+   * and loses nothing.
+   */
+  reorder(folderId, itemIds) {
+    const folder = this.get(folderId);
+    if (!folder) return null;
+
+    const byId = new Map(folder.items.map((item) => [item.id, item]));
+    const ordered = [];
+    for (const id of itemIds) {
+      const item = byId.get(id);
+      if (item && !ordered.includes(item)) ordered.push(item);
+    }
+    for (const item of folder.items) if (!ordered.includes(item)) ordered.push(item);
+
+    folder.items = ordered;
+    this.emit(folderId);
+    return folder;
+  }
+
   moveItem(itemId, fromFolderId, toFolderId) {
     if (fromFolderId === toFolderId) return false;
     const from = this.get(fromFolderId);

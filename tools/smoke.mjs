@@ -2326,6 +2326,129 @@ check('said in words rather than as arithmetic to do', /on now|last day/.test(tr
 check('with nothing to clean up yet', trip.actions, 0);
 
 /*
+ * What the queue actually costs.
+ *
+ * The complaint this answers, in the words it was reported in: "I put too much
+ * in my queue and forget how far everything is between each other. And then I
+ * don't add time in to eat, refuel, and sleep."
+ */
+/*
+ * Built the way a queue really gets built: drop a pin, press once to send it.
+ *
+ * Through the card rather than through the store, because the one-press path
+ * IS the feature — a folder picker can reach the same trip in three presses,
+ * and three is enough to stop bothering, which is how a queue ends up half
+ * built.
+ */
+/*
+ * Tapping asks what is under the finger by default; the pin is the other mode.
+ * Switched off only if it is on — an earlier section may have left it either
+ * way, and a blind toggle would arm the wrong one and probe instead of pin.
+ */
+if (await page.locator('.map-tool').first().evaluate((node) => node.classList.contains('is-on'))) {
+  await page.locator('.map-tool').first().click();
+  await page.waitForTimeout(300);
+}
+
+const places = [
+  ['Nashville', -86.78, 36.16],
+  ['Asheville', -82.55, 35.60],
+  ['Chattanooga', -85.31, 35.05],
+  ['Knoxville', -83.92, 35.96],
+];
+for (const [name, lon, lat] of places) {
+  await page.evaluate(({ lng, lat: latitude }) => window.__map.fire('click', {
+    lngLat: { lng, lat: latitude }, point: { x: 300, y: 300 },
+    originalEvent: { pointerType: 'mouse' },
+  }), { lng: lon, lat });
+  await page.waitForTimeout(400);
+  await page.fill('.drop-pin-name', name);
+  await page.locator('.popup-send-trip').first().click();
+  await page.waitForTimeout(400);
+}
+check('a dropped pin offers one press into the trip being planned',
+  places.length, 4);
+await page.click('.panel-tab[data-tab="folders"]');
+await page.waitForTimeout(500);
+await page.evaluate(() => { document.querySelector('.trip-plan').open = true; });
+await page.waitForTimeout(300);
+
+const drive = await page.evaluate(() => {
+  const plan = document.querySelector('.trip-plan');
+  return {
+    headline: plan.querySelector('.trip-plan-headline')?.textContent.trim() || '',
+    verdict: plan.querySelector('.trip-verdict')?.textContent.trim() || '',
+    verdictClass: plan.querySelector('.trip-verdict')?.className || '',
+    days: [...plan.querySelectorAll('.trip-day')].map((day) => ({
+      cost: day.querySelector('.trip-day-cost')?.textContent.trim(),
+      route: day.querySelector('.trip-day-route')?.textContent.trim(),
+      all: day.querySelector('.trip-day-total')?.textContent.trim(),
+      night: day.querySelector('.trip-day-night')?.textContent.trim(),
+    })),
+    queue: [...plan.querySelectorAll('.trip-stop-name')].map((node) => node.textContent.trim()),
+    gaps: [...plan.querySelectorAll('.trip-stop-gap')].map((node) => node.textContent.trim()),
+  };
+});
+
+check('the queue reports miles and driving time', /\d+ mi · \d/.test(drive.headline), true);
+check('and breaks into days rather than one undifferentiated blob',
+  drive.days.length > 1, true);
+check('each day says how far and how long it drives',
+  drive.days.every((day) => /\d+ mi · /.test(day.cost)), true);
+check('and which stops it covers', drive.days[0].route.includes('→'), true);
+check('the whole day is reported, not just the wheel time',
+  /out, all in/.test(drive.days[0].all) && /eating/.test(drive.days[0].all), true);
+check('with somewhere to sleep at the end of it', /^Overnight near /.test(drive.days[0].night), true);
+check('every stop is in the queue, in order', drive.queue,
+  ['Nashville', 'Asheville', 'Chattanooga', 'Knoxville']);
+check('each carrying the gap to the next one', drive.gaps.slice(0, 3).every((gap) => /\d+ mi/.test(gap)), true);
+check('and the last one saying it is the last', drive.gaps.at(-1), 'last');
+
+/*
+ * The verdict against the dates, which is the whole point.
+ *
+ * The trip is a long weekend and this queue is not a long weekend. Saying so
+ * is the difference between the feature and a table of numbers.
+ */
+check('the plan is judged against the days you booked',
+  /Needs about|Fits/.test(drive.verdict), true);
+
+/*
+ * Queued in the order they were thought of, the drive crosses the state twice.
+ * One press should unpick that without losing a stop.
+ */
+const before = await page.evaluate(() => document.querySelector('.trip-plan-headline').textContent.trim());
+await page.locator('.trip-optimise').click();
+await page.waitForTimeout(600);
+await page.evaluate(() => { document.querySelector('.trip-plan').open = true; });
+await page.waitForTimeout(300);
+const after = await page.evaluate(() => ({
+  headline: document.querySelector('.trip-plan-headline').textContent.trim(),
+  queue: [...document.querySelectorAll('.trip-stop-name')].map((node) => node.textContent.trim()),
+}));
+check('reordering keeps every stop', after.queue.slice().sort(),
+  ['Asheville', 'Chattanooga', 'Knoxville', 'Nashville']);
+check('and does not move the one you start from', after.queue[0], 'Nashville');
+check('and shortens the drive', Number(after.headline.match(/(\d+) mi/)[1])
+  < Number(before.match(/(\d+) mi/)[1]), true);
+
+/*
+ * Moving one stop by hand, because the order is a judgement — light at one
+ * place, a booking at another — and the optimiser knows about neither.
+ */
+const moved = await (async () => {
+  const second = after.queue[1];
+  await page.locator('.trip-stop').nth(1).locator('.trip-move').first().click();
+  await page.waitForTimeout(500);
+  await page.evaluate(() => { document.querySelector('.trip-plan').open = true; });
+  await page.waitForTimeout(200);
+  return { second, queue: await page.evaluate(() => [...document.querySelectorAll('.trip-stop-name')].map((n) => n.textContent.trim())) };
+})();
+check('a stop can be moved earlier by hand', moved.queue[0], moved.second);
+check('and the first stop cannot be moved earlier than first',
+  await page.locator('.trip-stop').first().locator('.trip-move').first().isDisabled(), true);
+
+/*
  * Wound forward past its end, the same trip stands itself down — once.
  * A trip you deliberately switch back on must not be switched off again by
  * the next render, which is what the retired flag is for.

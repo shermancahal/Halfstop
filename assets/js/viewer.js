@@ -33,6 +33,9 @@ import {
 } from './lib/pin-icons.js';
 import { toGPX } from './lib/gpx-write.js';
 import {
+  TRIP_DEFAULTS, planTrip, optimiseOrder, spellHours,
+} from './lib/trip-plan.js';
+import {
   registerShieldImages, shieldRegistrationReport, shieldImageIds, stateDesign, rasterizeShieldById,
   shieldImageIdFor, loadShieldBlank, shieldImageId, hasShieldBlank,
 } from './lib/route-shields.js';
@@ -203,6 +206,8 @@ const state = {
   highlightRegion: '',
   /** Overlay category headings the user has opened, so re-renders keep them. */
   openLayerGroups: new Set(),
+  /** Which trips have their drive breakdown open, so a re-render keeps it. */
+  openTripPlans: new Set(),
   /** Details sections the reader has collapsed, remembered across pins. */
   closedDetailSections: new Set(readClosedSections()),
   /** Set when the chosen basemap could not render as itself, and why. */
@@ -5855,7 +5860,51 @@ function saveToFolderActions(feature, popup) {
   });
   opener.classList.add('popup-save-open');
 
-  return el('div', { class: 'popup-actions popup-save' }, [opener, panel]);
+  /*
+   * One press to the trip you are actually planning.
+   *
+   * The folder picker below can reach it in three, and three is enough to stop
+   * bothering — which is how a queue ends up half-built. The trip on now wins,
+   * then the next one coming up; if there is no trip there is no button.
+   */
+  const trip = plannableTrip();
+  const children = [opener, panel];
+  if (trip) {
+    const send = labelledButton(icons.route, `Add to ${trip.name}`, {
+      tone: 'ghost',
+      title: `Put this in the ${trip.name} queue`,
+      onclick: () => {
+        saveFeatureToFolder(feature, trip.id, null);
+        popup.remove();
+        openTab('folders');
+      },
+    });
+    send.classList.add('popup-send-trip');
+    children.unshift(send);
+  }
+
+  return el('div', { class: 'popup-actions popup-save' }, children);
+}
+
+/**
+ * The trip a stop should go into if you press one button.
+ *
+ * On now beats coming up, and coming up beats finished — a trip you are
+ * driving is the one you are adding to, and a trip that is over is not a queue
+ * any more. Ties broken by which starts first, because the imminent one is the
+ * one being packed for.
+ */
+function plannableTrip() {
+  const ranked = state.folders.list()
+    .filter((folder) => folder.trip)
+    .map((folder) => ({ folder, standing: tripStanding(folder.trip) }))
+    .filter((entry) => entry.standing && entry.standing.state !== 'over')
+    .sort((a, b) => {
+      if (a.standing.state !== b.standing.state) return a.standing.state === 'on' ? -1 : 1;
+      return a.folder.trip.from.localeCompare(b.folder.trip.from);
+    });
+
+  return ranked.length ? ranked[0].folder : null;
 }
 
 /** Actions for a feature already saved in a folder. */
@@ -7224,6 +7273,259 @@ function retireFinishedTrips() {
   }
 }
 
+/*
+ * What the planner assumes, and where those assumptions are kept.
+ *
+ * On the device rather than on the folder: how fast you drive and how long you
+ * stop is a fact about you, not about this trip, and re-entering it for every
+ * trip would guarantee it is wrong on most of them.
+ */
+const TRIP_SETTINGS_KEY = 'ab-maps-trip-settings';
+
+function tripSettings() {
+  try {
+    const saved = JSON.parse(globalThis.localStorage?.getItem(TRIP_SETTINGS_KEY) || '{}');
+    return { ...TRIP_DEFAULTS, ...(saved && typeof saved === 'object' ? saved : {}) };
+  } catch {
+    return { ...TRIP_DEFAULTS };
+  }
+}
+
+function saveTripSettings(patch) {
+  const next = { ...tripSettings(), ...patch };
+  try {
+    globalThis.localStorage?.setItem(TRIP_SETTINGS_KEY, JSON.stringify(next));
+  } catch {
+    // Full or blocked storage: the change still applies for this session.
+  }
+  return next;
+}
+
+/** The stops a trip is planned around: its waypoints, in the order they sit in. */
+function tripStops(folder) {
+  return folder.items
+    .filter((item) => item.feature.geometry?.type === 'Point')
+    .map((item) => ({
+      id: item.id,
+      name: item.feature.properties?.name || 'Unnamed',
+      position: item.feature.geometry.coordinates,
+    }));
+}
+
+/** How many days a trip's dates cover, counting both ends. */
+function tripDayCount(trip) {
+  if (!trip) return null;
+  const from = Date.parse(`${trip.from}T00:00:00Z`);
+  const to = Date.parse(`${trip.to}T00:00:00Z`);
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
+  return Math.round((to - from) / 86400000) + 1;
+}
+
+/**
+ * What the queue actually costs: miles, days, and the things people forget.
+ *
+ * The problem in the words it was reported in — "I put too much in my queue
+ * and forget how far everything is between each other. And then I don't add
+ * time in to eat, refuel, and sleep." A list of pins says nothing about any of
+ * that, and the gap between the list and the week is where trips go wrong.
+ *
+ * It is an estimate and says so. There is no route here — straight lines bent
+ * by a winding factor — because a real route needs a network the app cannot
+ * reach from a trailhead, and because the answer that matters is "three days,
+ * not a weekend", which a rough number gets right.
+ */
+function tripPlanBlock(folder) {
+  const stops = tripStops(folder);
+  const settings = tripSettings();
+  const days = tripDayCount(folder.trip);
+  const plan = planTrip(stops, { ...settings, days });
+
+  const block = el('details', {
+    class: 'trip-plan',
+    open: state.openTripPlans.has(folder.id),
+    ontoggle: (event) => {
+      if (event.target.open) state.openTripPlans.add(folder.id);
+      else state.openTripPlans.delete(folder.id);
+    },
+  });
+
+  block.append(el('summary', { class: 'trip-plan-summary' }, [
+    el('span', { class: 'trip-plan-title', text: 'The drive' }),
+    el('span', {
+      class: 'trip-plan-headline',
+      text: stops.length < 2
+        ? 'add stops'
+        : `${Math.round(plan.totals.miles)} mi · ${spellHours(plan.totals.driveMinutes)} driving`,
+    }),
+  ]));
+
+  if (stops.length < 2) {
+    block.append(el('p', {
+      class: 'hint', style: 'margin:8px 0 0',
+      text: 'Save two or more waypoints into this folder and it will work out how far apart '
+        + 'they are, how many days that is, and where the days break.',
+    }));
+    return block;
+  }
+
+  block.append(el('p', { class: `trip-verdict is-${plan.verdict.state}`, text: plan.verdict.text }));
+  block.append(tripDayList(plan, stops));
+  block.append(tripQueue(folder, plan, stops));
+  block.append(tripKnobs(folder, settings));
+
+  block.append(el('p', {
+    class: 'source-note',
+    text: 'Distances are straight lines with a winding factor, not routes — near enough to '
+      + 'tell a weekend from a week, not near enough to navigate by.',
+  }));
+
+  return block;
+}
+
+/** Day by day: what you drive, what it costs, and where you sleep. */
+function tripDayList(plan, stops) {
+  return el('ol', { class: 'trip-days' }, plan.days.map((day) => el('li', {
+    class: `trip-day${day.long ? ' is-long' : ''}`,
+  }, [
+    el('div', { class: 'trip-day-head' }, [
+      el('span', { class: 'trip-day-name', text: `Day ${day.index}` }),
+      el('span', {
+        class: 'trip-day-cost',
+        text: `${Math.round(day.miles)} mi · ${spellHours(day.driveMinutes)} driving`,
+      }),
+    ]),
+    el('div', {
+      class: 'trip-day-route',
+      text: day.stops.map((index) => stops[index].name).join(' → '),
+    }),
+    /*
+     * The line that answers the complaint.
+     *
+     * Driving hours are the number people quote themselves and the reason the
+     * day overruns; this is the whole day, with the eating and the fuel and
+     * the time actually spent at the places that are the point of going.
+     */
+    el('div', {
+      class: 'trip-day-total',
+      text: `${spellHours(day.totalMinutes)} out, all in — ${spellHours(day.stopMinutes)} at stops, `
+        + `${spellHours(day.mealMinutes)} eating${day.fuelMinutes ? `, ${spellHours(day.fuelMinutes)} fuel` : ''}`,
+    }),
+    day.long
+      ? el('div', { class: 'trip-day-warn', text: 'One leg here is longer than a whole day of driving.' })
+      : null,
+    el('div', { class: 'trip-day-night', text: `Overnight near ${stops[day.to].name}` }),
+  ])));
+}
+
+/**
+ * The queue itself, in driving order, with the gap to the next stop on each.
+ *
+ * Ordered by hand because the order is a judgement — light at one place, a
+ * booking at another — and offered a reorder because a queue built by dropping
+ * pins as you find them is never in a sensible driving order.
+ */
+function tripQueue(folder, plan, stops) {
+  const rows = stops.map((stop, index) => {
+    const leg = plan.legs[index];
+    return el('li', { class: 'trip-stop' }, [
+      el('span', { class: 'trip-stop-number', text: String(index + 1) }),
+      el('span', { class: 'trip-stop-name', text: stop.name }),
+      leg
+        ? el('span', {
+          class: 'trip-stop-gap',
+          text: `${Math.round(leg.miles)} mi · ${spellHours(leg.minutes)}`,
+        })
+        : el('span', { class: 'trip-stop-gap is-last', text: 'last' }),
+      el('span', { class: 'trip-stop-moves' }, [
+        el('button', {
+          class: 'icon-button trip-move', type: 'button',
+          title: 'Earlier in the trip', 'aria-label': `Move ${stop.name} earlier`,
+          disabled: index === 0,
+          html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>',
+          onclick: () => moveTripStop(folder, index, index - 1),
+        }),
+        el('button', {
+          class: 'icon-button trip-move', type: 'button',
+          title: 'Later in the trip', 'aria-label': `Move ${stop.name} later`,
+          disabled: index === stops.length - 1,
+          html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
+          onclick: () => moveTripStop(folder, index, index + 1),
+        }),
+      ]),
+    ]);
+  });
+
+  const optimise = labelledButton(icons.route, 'Put them in a sensible order', {
+    tone: 'secondary',
+    title: 'Reorder the stops after the first into a shorter drive',
+    onclick: () => {
+      const current = tripStops(folder);
+      const result = optimiseOrder(current, { winding: tripSettings().winding });
+      const saved = Math.round(result.milesBefore - result.milesAfter);
+      if (saved <= 0) {
+        toast('Already about as short as it gets.', { tone: 'info' });
+        return;
+      }
+      state.folders.reorder(folder.id, result.order.map((index) => current[index].id));
+      toast(`Reordered — about ${saved} miles shorter.`);
+    },
+  });
+  optimise.classList.add('trip-optimise');
+
+  return el('div', { class: 'trip-queue' }, [
+    el('p', { class: 'trip-queue-title', text: 'In this order' }),
+    el('ol', { class: 'trip-stops' }, rows),
+    optimise,
+  ]);
+}
+
+/** Move one stop in the queue, keeping everything else where it was. */
+function moveTripStop(folder, from, to) {
+  const stops = tripStops(folder);
+  if (to < 0 || to >= stops.length) return;
+  const ids = stops.map((stop) => stop.id);
+  const [moved] = ids.splice(from, 1);
+  ids.splice(to, 0, moved);
+  state.folders.reorder(folder.id, ids);
+}
+
+/**
+ * The assumptions, editable, because they are guesses about you.
+ *
+ * Shown rather than buried: a plan you cannot argue with is a plan you cannot
+ * trust, and the first thing anybody wants to say to an estimate like this is
+ * "I drive faster than that".
+ */
+function tripKnobs(folder, settings) {
+  const knob = (key, label, note, { min, max, step = 1 }) => el('label', { class: 'trip-knob' }, [
+    el('span', { class: 'trip-knob-label', text: label }),
+    el('input', {
+      type: 'number', class: 'trip-knob-input',
+      value: String(settings[key]), min: String(min), max: String(max), step: String(step),
+      onchange: (event) => {
+        const value = Number(event.target.value);
+        if (!Number.isFinite(value) || value < min || value > max) {
+          event.target.value = String(settings[key]);
+          return;
+        }
+        saveTripSettings({ [key]: value });
+        renderFoldersTab();
+      },
+    }),
+    el('span', { class: 'trip-knob-note', text: note }),
+  ]);
+
+  return el('details', { class: 'trip-knobs' }, [
+    el('summary', { class: 'trip-knobs-summary', text: 'What this assumes' }),
+    el('div', { class: 'trip-knob-grid' }, [
+      knob('speedMph', 'Average speed', 'mph, door to door — gravel and gates included', { min: 5, max: 80 }),
+      knob('drivingHoursPerDay', 'Driving a day', 'hours before it stops being fun', { min: 1, max: 14 }),
+      knob('stopMinutes', 'Per stop', 'minutes on the ground at each one', { min: 0, max: 480, step: 5 }),
+      knob('winding', 'Winding factor', 'road miles per straight-line mile', { min: 1, max: 2.5, step: 0.05 }),
+    ]),
+  ]);
+}
+
 /**
  * The date strip on a trip folder: when it is, and where that stands today.
  *
@@ -7291,6 +7593,7 @@ function tripBar(folder) {
       el('span', { class: 'trip-standing', text: words }),
     ]),
     dates,
+    tripPlanBlock(folder),
     actions.childNodes.length ? actions : null,
   ]);
 }

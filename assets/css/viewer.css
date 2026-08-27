@@ -850,6 +850,106 @@ html, body { height: 100%; overflow: hidden; }
 .trip-dash { color: var(--ink-3); font-size: .78rem; }
 .trip-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
+/*
+ * What the queue actually costs.
+ *
+ * Collapsed by default because the trip strip above it is the glance, and this
+ * is the answer you go looking for once the glance has worried you. The
+ * headline sits in the summary so the glance carries the number anyway.
+ */
+.trip-plan { border-top: 1px solid var(--line); padding-top: 8px; }
+.trip-plan-summary {
+  display: flex; align-items: baseline; gap: 8px; cursor: pointer; list-style: none;
+}
+.trip-plan-summary::-webkit-details-marker { display: none; }
+.trip-plan-summary::before {
+  content: '▸'; color: var(--ink-3); font-size: .7rem; transition: transform .15s;
+}
+.trip-plan[open] > .trip-plan-summary::before { transform: rotate(90deg); }
+.trip-plan-title {
+  font-size: .64rem; font-weight: 650; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.trip-plan-headline {
+  margin-left: auto; font-size: .76rem; font-weight: 600; color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The one line the whole feature exists for: does this fit the days you have? */
+.trip-verdict {
+  margin: 9px 0 0; padding: 7px 10px; border-radius: var(--radius-sm);
+  font-size: .8rem; line-height: 1.4;
+  border-left: 3px solid var(--line-strong); background: var(--surface); color: var(--ink-2);
+}
+.trip-verdict.is-fits { border-left-color: var(--pine); }
+.trip-verdict.is-over { border-left-color: var(--clay); color: var(--ink); font-weight: 550; }
+
+.trip-days { list-style: none; margin: 9px 0 0; padding: 0; display: grid; gap: 7px; }
+.trip-day {
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  border: 1px solid var(--line); background: var(--surface);
+}
+.trip-day.is-long { border-color: var(--clay); }
+.trip-day-head { display: flex; align-items: baseline; gap: 8px; }
+.trip-day-name { font-size: .78rem; font-weight: 650; color: var(--ink); }
+.trip-day-cost {
+  margin-left: auto; font-size: .74rem; color: var(--ink-2);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.trip-day-route { margin-top: 3px; font-size: .76rem; color: var(--ink-2); line-height: 1.35; }
+/* The line that answers "I forget to add time to eat, refuel and sleep". */
+.trip-day-total { margin-top: 4px; font-size: .72rem; color: var(--ink-3); line-height: 1.4; }
+.trip-day-warn { margin-top: 4px; font-size: .72rem; color: var(--clay); font-weight: 550; }
+.trip-day-night { margin-top: 3px; font-size: .72rem; color: var(--ink-3); font-style: italic; }
+
+.trip-queue { margin-top: 11px; }
+.trip-queue-title {
+  margin: 0 0 5px; font-size: .64rem; font-weight: 650; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.trip-stops { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.trip-stop {
+  display: flex; align-items: center; gap: 7px; min-width: 0;
+  padding: 4px 2px; border-bottom: 1px solid var(--line);
+}
+.trip-stop:last-child { border-bottom: 0; }
+.trip-stop-number {
+  flex: none; width: 19px; height: 19px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--paper-3); color: var(--ink-2);
+  font-size: .64rem; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.trip-stop-name {
+  flex: 1; min-width: 0; font-size: .78rem; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* The gap to the NEXT stop, on the row of the one you leave — which is the way
+   round you read it when you are deciding what to cut. */
+.trip-stop-gap {
+  flex: none; font-size: .7rem; color: var(--ink-3);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.trip-stop-gap.is-last { font-style: italic; }
+.trip-stop-moves { flex: none; display: flex; gap: 1px; }
+.trip-move { width: 26px; height: 26px; }
+.trip-move svg { width: 14px; height: 14px; }
+.trip-move[disabled] { opacity: .3; cursor: default; }
+.trip-optimise { width: 100%; margin-top: 8px; }
+
+.trip-knobs { margin-top: 10px; }
+.trip-knobs-summary {
+  cursor: pointer; font-size: .7rem; letter-spacing: .04em; color: var(--ink-3);
+}
+.trip-knob-grid { display: grid; gap: 8px; margin-top: 8px; }
+.trip-knob { display: grid; grid-template-columns: 1fr 74px; gap: 4px 8px; align-items: center; }
+.trip-knob-label { font-size: .76rem; color: var(--ink-2); }
+.trip-knob-input {
+  font: inherit; font-size: .78rem; color: var(--ink); text-align: right;
+  background: var(--surface); border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm); padding: 4px 6px;
+}
+.trip-knob-note { grid-column: 1 / -1; font-size: .68rem; color: var(--ink-3); }
+
 /* Saved pin notes, under the row */
 .folder-item-desc {
   margin: -3px 9px 7px 40px; padding: 0;
