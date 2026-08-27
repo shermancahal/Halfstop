@@ -1179,6 +1179,124 @@ export const OVERLAYS = [
    * for a moved URL before concluding the data is gone.
    */
   {
+  /*
+   * Back from the dead, on an index the service named rather than one I
+   * guessed. All four of these shipped pointing at layer zero, which none of
+   * them have; each answered "the requested layer was not found" in a 200 and
+   * the health check waved it through. Asking the service for its own layer
+   * list took one probe and would have taken one probe the first time.
+   */
+    id: 'mi-orv',
+    states: ['MI'],
+    name: 'ORV scramble areas',
+    description: 'Designated off-road riding areas.',
+    query: {
+      url: 'https://services3.arcgis.com/Jdnp1TjADvSDxMAX/arcgis/rest/services/DNR_ORV_Scramble_Areas/FeatureServer/1/query'
+        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
+        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
+        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
+      minzoom: 7,
+      color: '#B45309',
+    },
+    opacity: 0.55,
+    enabled: false,
+    attribution: 'Recreation data © <a href="https://www.michigan.gov/dnr">Michigan DNR</a>',
+  },
+  {
+    id: 'nc-trails',
+    states: ['NC'],
+    name: 'State trails',
+    description: 'State trails maintained by North Carolina.',
+    query: {
+      url: 'https://services6.arcgis.com/nRIB86xC7kq6wavB/arcgis/rest/services/State_Trails/FeatureServer/1/query'
+        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
+        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
+        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
+      minzoom: 7,
+      color: '#6D4C41',
+    },
+    opacity: 0.55,
+    enabled: false,
+    attribution: 'Trails © <a href="https://www.ncparks.gov/">North Carolina State Parks</a>',
+  },
+  {
+    id: 'ny-hunting',
+    states: ['NY'],
+    name: 'State park hunting areas',
+    description: 'Parts of NY state parks open to hunting - public land you may walk onto.',
+    query: {
+      url: 'https://services.arcgis.com/1xFZPtKn1wKC6POA/arcgis/rest/services/NY_State_Parks_Hunting_Areas_2_view/FeatureServer/1/query'
+        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
+        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
+        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
+      minzoom: 7,
+      color: '#2E7D32',
+    },
+    opacity: 0.55,
+    enabled: false,
+    attribution: 'Hunting areas © <a href="https://parks.ny.gov/">New York State Parks</a>',
+  },
+  {
+    id: 'id-routes',
+    states: ['ID'],
+    name: 'Recreation routes',
+    description: 'Statewide recreation routes.',
+    query: {
+      url: 'https://services1.arcgis.com/CNPdEkvnGl65jCX8/arcgis/rest/services/Idaho_Recreation_Trails/FeatureServer/128/query'
+        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
+        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
+        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
+      minzoom: 7,
+      color: '#6D4C41',
+    },
+    opacity: 0.55,
+    enabled: false,
+    attribution: 'Routes and closures © <a href="https://parksandrecreation.idaho.gov/">Idaho Parks and Recreation</a>',
+  },
+  {
+  /*
+   * The thing the closure sweep concluded did not exist.
+   *
+   * That sweep found one maintained closure layer, in USFS Region 6, and a
+   * throwaway service per fire everywhere else - so closures were written off
+   * as unwireable. Idaho keeps one, and it sits at index 127 of a service that
+   * was nearly deleted for having no layer zero. A route you may legally drive
+   * and an order that shut it last week are two different facts.
+   */
+    id: 'id-closures',
+    states: ['ID'],
+    name: 'Emergency route closures',
+    description: 'Routes Idaho has closed - the order, not the road.',
+    query: {
+      url: 'https://services1.arcgis.com/CNPdEkvnGl65jCX8/arcgis/rest/services/Idaho_Recreation_Trails/FeatureServer/127/query'
+        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
+        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
+        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
+      minzoom: 7,
+      color: '#C62828',
+    },
+    opacity: 0.55,
+    enabled: false,
+    attribution: 'Routes and closures © <a href="https://parksandrecreation.idaho.gov/">Idaho Parks and Recreation</a>',
+  },
+  {
+    id: 'id-restrictions',
+    states: ['ID'],
+    name: 'Area restrictions',
+    description: 'Areas under a restriction rather than a full closure.',
+    query: {
+      url: 'https://services1.arcgis.com/CNPdEkvnGl65jCX8/arcgis/rest/services/Idaho_Recreation_Trails/FeatureServer/123/query'
+        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
+        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
+        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
+      minzoom: 7,
+      color: '#EF6C00',
+    },
+    opacity: 0.55,
+    enabled: false,
+    attribution: 'Routes and closures © <a href="https://parksandrecreation.idaho.gov/">Idaho Parks and Recreation</a>',
+  },
+  {
     id: 'ky-byways',
     states: ['KY'],
     name: 'Scenic byways',

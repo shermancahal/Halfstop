@@ -133,10 +133,9 @@ above.
 
 ## Shipping
 
-Forty-two layers across thirty-three states are now in `OVERLAYS`, all
+Forty-eight layers across thirty-six states are now in `OVERLAYS`, all
 switched off by default, filed under the one `State data` heading with
-the state written onto each row. It was forty-four across thirty-eight
-until the probes reported back.
+the state written onto each row.
 
 Eight of them have had their fields read. The rest answered only that
 they exist, which is a weaker thing to ship on, and they ship anyway on
@@ -186,3 +185,25 @@ The lesson is the same one this file keeps recording: the address, not
 the data, is nearly always what is wrong - and a health check that
 cannot tell a refusal from an answer is worse than none, because it
 reports confidence it has not earned.
+
+## The four that came back, and what Idaho was hiding
+
+Every layer removed for having no layer zero had one somewhere else, and
+the service will say where if asked. Michigan's ORV areas, North
+Carolina's trails and New York's hunting boundaries are all at index 1.
+
+Idaho was the one worth the trouble. Its service runs to index 132, and
+alongside the routes at 128 it carries **Emergency Route Closures** at
+127 and **Area Restrictions** at 123.
+
+That matters because this file already recorded, as a finding, that no
+state maintains a closure layer - that USFS Region 6 kept one and
+everyone else spun up a throwaway service per fire. Idaho keeps one. It
+was sitting in a service that came within one commit of being deleted
+for having nothing at index zero, and only turned up because the removal
+was done by asking rather than by assuming.
+
+Wisconsin's park closures and Oregon's park status belong to the same
+family. The conclusion that closures were unwireable was drawn from a
+search, and searches have been wrong about every state they were asked
+about.

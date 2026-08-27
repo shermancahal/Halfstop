@@ -371,31 +371,45 @@
     "url": "https://services1.arcgis.com/RbMX0mRVOFNTdLzd/arcgis/rest/services/BPL_Properties_Points_for_MaineFoliage/FeatureServer/0?f=pjson"
   },
   {
-    "id": "idx:mi-orv",
-    "note": "This service exists and answered, but not at layer zero - it said so in a 200, which is how it shipped dead in the first place. Asking the service root for its own layer list is the difference between guessing an index and knowing one.",
+    "id": "live:mi-orv",
+    "note": "Health check for a shipped layer, on the index its service named.",
     "expect": "data",
-    "find": "\"(?:name|id)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
-    "url": "https://services3.arcgis.com/Jdnp1TjADvSDxMAX/arcgis/rest/services/DNR_ORV_Scramble_Areas/FeatureServer?f=pjson"
+    "find": "\"(?:name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services3.arcgis.com/Jdnp1TjADvSDxMAX/arcgis/rest/services/DNR_ORV_Scramble_Areas/FeatureServer/1?f=pjson"
   },
   {
-    "id": "idx:nc-trails",
-    "note": "This service exists and answered, but not at layer zero - it said so in a 200, which is how it shipped dead in the first place. Asking the service root for its own layer list is the difference between guessing an index and knowing one.",
+    "id": "live:nc-trails",
+    "note": "Health check for a shipped layer, on the index its service named.",
     "expect": "data",
-    "find": "\"(?:name|id)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
-    "url": "https://services6.arcgis.com/nRIB86xC7kq6wavB/arcgis/rest/services/State_Trails/FeatureServer?f=pjson"
+    "find": "\"(?:name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services6.arcgis.com/nRIB86xC7kq6wavB/arcgis/rest/services/State_Trails/FeatureServer/1?f=pjson"
   },
   {
-    "id": "idx:id-trails",
-    "note": "This service exists and answered, but not at layer zero - it said so in a 200, which is how it shipped dead in the first place. Asking the service root for its own layer list is the difference between guessing an index and knowing one.",
+    "id": "live:ny-hunting",
+    "note": "Health check for a shipped layer, on the index its service named.",
     "expect": "data",
-    "find": "\"(?:name|id)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
-    "url": "https://services1.arcgis.com/CNPdEkvnGl65jCX8/arcgis/rest/services/Idaho_Recreation_Trails/FeatureServer?f=pjson"
+    "find": "\"(?:name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services.arcgis.com/1xFZPtKn1wKC6POA/arcgis/rest/services/NY_State_Parks_Hunting_Areas_2_view/FeatureServer/1?f=pjson"
   },
   {
-    "id": "idx:ny-hunting",
-    "note": "This service exists and answered, but not at layer zero - it said so in a 200, which is how it shipped dead in the first place. Asking the service root for its own layer list is the difference between guessing an index and knowing one.",
+    "id": "live:id-routes",
+    "note": "Health check for a shipped layer, on the index its service named.",
     "expect": "data",
-    "find": "\"(?:name|id)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
-    "url": "https://services.arcgis.com/1xFZPtKn1wKC6POA/arcgis/rest/services/NY_State_Parks_Hunting_Areas_2_view/FeatureServer?f=pjson"
+    "find": "\"(?:name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services1.arcgis.com/CNPdEkvnGl65jCX8/arcgis/rest/services/Idaho_Recreation_Trails/FeatureServer/128?f=pjson"
+  },
+  {
+    "id": "live:id-closures",
+    "note": "Health check for a shipped layer, on the index its service named.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services1.arcgis.com/CNPdEkvnGl65jCX8/arcgis/rest/services/Idaho_Recreation_Trails/FeatureServer/127?f=pjson"
+  },
+  {
+    "id": "live:id-restrictions",
+    "note": "Health check for a shipped layer, on the index its service named.",
+    "expect": "data",
+    "find": "\"(?:name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services1.arcgis.com/CNPdEkvnGl65jCX8/arcgis/rest/services/Idaho_Recreation_Trails/FeatureServer/123?f=pjson"
   }
 ]
