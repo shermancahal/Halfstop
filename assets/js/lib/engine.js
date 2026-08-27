@@ -156,8 +156,9 @@ export function overlayParts(overlay) {
   if (overlay.query) {
     return [
       { ...base, query: overlay.query, role: 'fill', layerId: `${OVERLAY_LAYER_PREFIX}${overlay.id}` },
-      { ...base, query: overlay.query, role: 'line', layerId: `${OVERLAY_LAYER_PREFIX}${overlay.id}--1` },
-      { ...base, query: overlay.query, role: 'dot', layerId: `${OVERLAY_LAYER_PREFIX}${overlay.id}--2` },
+      { ...base, query: overlay.query, role: 'casing', layerId: `${OVERLAY_LAYER_PREFIX}${overlay.id}--1` },
+      { ...base, query: overlay.query, role: 'line', layerId: `${OVERLAY_LAYER_PREFIX}${overlay.id}--2` },
+      { ...base, query: overlay.query, role: 'dot', layerId: `${OVERLAY_LAYER_PREFIX}${overlay.id}--3` },
     ];
   }
 

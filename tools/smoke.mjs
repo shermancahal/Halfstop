@@ -1076,7 +1076,7 @@ const fire = await page.evaluate(() => {
   const ids = map.layerIds();
   return {
     fill: ids.includes('overlay-wildfire'),
-    line: ids.includes('overlay-wildfire--1'),
+    line: ids.includes('overlay-wildfire--2'),
     features: map.getSource('overlay-wildfire')?._d?.features?.length ?? null,
   };
 });
@@ -1096,11 +1096,19 @@ check('and the perimeters reach the source', fire.features, 1);
 const shapes = await page.evaluate(() => {
   const map = window.__map;
   const at = (id) => JSON.stringify(map.getLayer(id)?.filter ?? null);
-  return { fill: at('overlay-wildfire'), line: at('overlay-wildfire--1'), dot: at('overlay-wildfire--2') };
+  return {
+    fill: at('overlay-wildfire'),
+    line: at('overlay-wildfire--2'),
+    dot: at('overlay-wildfire--3'),
+    // Wildfire is areas, so it gets no casing. Asking anyway is the check that
+    // a casing is not quietly drawn round every polygon on the map.
+    casing: map.getLayer('overlay-wildfire--1') ? 'present' : 'absent',
+  };
 });
 check('the fill draws polygons only', shapes.fill, '["==",["geometry-type"],"Polygon"]');
 check('the outline draws anything but a point', shapes.line, '["!=",["geometry-type"],"Point"]');
 check('and the dot draws points only', shapes.dot, '["==",["geometry-type"],"Point"]');
+check('an area layer gets no road casing', shapes.casing, 'absent');
 
 // The slider is one control over two kinds of layer now. `raster-opacity` on a
 // fill layer is not a dimmer, it is a spec error, so what it sets has to follow
@@ -1113,7 +1121,7 @@ const paints = await page.evaluate(() => {
   const map = window.__map;
   return {
     fill: Object.keys(map.getLayer('overlay-wildfire')?.paint || {}),
-    line: Object.keys(map.getLayer('overlay-wildfire--1')?.paint || {}),
+    line: Object.keys(map.getLayer('overlay-wildfire--2')?.paint || {}),
     fillValue: map.getLayer('overlay-wildfire')?.paint?.['fill-opacity'],
   };
 });

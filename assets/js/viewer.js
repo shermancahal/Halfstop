@@ -1162,6 +1162,9 @@ function renderLayersTab() {
 function opacityPaint(type, value) {
   if (type === 'fill') return ['fill-opacity', value * 0.45];
   if (type === 'line') return ['line-opacity', Math.min(1, value + 0.25)];
+  // A circle layer has no raster-opacity, and setting one is a spec error the
+  // slider was committing on every point layer.
+  if (type === 'circle') return ['circle-opacity', Math.min(1, value + 0.25)];
   return ['raster-opacity', value];
 }
 
@@ -4712,7 +4715,7 @@ async function refreshPointOverlay(overlay, source, empty) {
 const lastPointFetch = new Map();
 
 function addQueryOverlay(overlay, opacity) {
-  const [fill, line, dot] = overlayLayerIds(overlay);
+  const [fill, casing, line, dot] = overlayLayerIds(overlay);
   const colour = overlay.query.color || '#D84315';
 
   if (overlay.query.points) { addPointOverlay(overlay, fill); return; }
@@ -4735,6 +4738,38 @@ function addQueryOverlay(overlay, opacity) {
       paint: { 'fill-color': colour, 'fill-opacity': amount },
     }, firstDataLayerId());
   }
+  /*
+   * A route is drawn the way the basemap draws a road: a pale casing under a
+   * coloured core, both widening with zoom.
+   *
+   * A single 1.4px hairline is close to invisible over wooded terrain, which
+   * is where these roads are - reported from the map on Maryland's park and
+   * forest roads. The casing is what does the work: it separates the line from
+   * whatever green it crosses, which is why every road on every map has one.
+   *
+   * Areas keep the thin outline. A casing round a county-sized polygon is a
+   * heavy border for no gain.
+   */
+  const road = Boolean(overlay.query.road);
+  const width = (scale) => ['interpolate', ['linear'], ['zoom'],
+    8, 0.9 * scale, 11, 1.6 * scale, 13, 2.6 * scale, 15, 4.2 * scale, 17, 6.5 * scale];
+
+  if (road && !state.map.getLayer(casing)) {
+    const [, amount] = opacityPaint('line', opacity);
+    state.map.addLayer({
+      id: casing,
+      type: 'line',
+      source: fill,
+      filter: ['==', ['geometry-type'], 'LineString'],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#FFFDF7',
+        'line-width': ['*', width(1), 1.9],
+        'line-opacity': amount * 0.9,
+      },
+    }, firstDataLayerId());
+  }
+
   if (!state.map.getLayer(line)) {
     const [, amount] = opacityPaint('line', opacity);
     state.map.addLayer({
@@ -4743,7 +4778,12 @@ function addQueryOverlay(overlay, opacity) {
       source: fill,
       // A line draws a road and the edge of an area; over a point it is noise.
       filter: ['!=', ['geometry-type'], 'Point'],
-      paint: { 'line-color': colour, 'line-width': 1.4, 'line-opacity': amount },
+      layout: road ? { 'line-cap': 'round', 'line-join': 'round' } : {},
+      paint: {
+        'line-color': colour,
+        'line-width': road ? width(1) : 1.4,
+        'line-opacity': amount,
+      },
     }, firstDataLayerId());
   }
 

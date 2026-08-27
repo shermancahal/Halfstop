@@ -1229,6 +1229,7 @@ export const OVERLAYS = [
         + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
         + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
       minzoom: 7,
+      road: true,
       color: '#6D4C41',
     },
     opacity: 0.55,
@@ -1256,6 +1257,7 @@ export const OVERLAYS = [
         + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
         + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
       minzoom: 7,
+      road: true,
       color: '#6D4C41',
     },
     opacity: 0.55,
@@ -1274,6 +1276,7 @@ export const OVERLAYS = [
         + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
         + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
       minzoom: 7,
+      road: true,
       color: '#6D4C41',
     },
     opacity: 0.55,
@@ -1310,6 +1313,7 @@ export const OVERLAYS = [
         + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
         + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
       minzoom: 7,
+      road: true,
       color: '#6D4C41',
     },
     opacity: 0.55,
@@ -1337,6 +1341,7 @@ export const OVERLAYS = [
         + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
         + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
       minzoom: 7,
+      road: true,
       color: '#C62828',
     },
     opacity: 0.55,
@@ -1495,6 +1500,7 @@ export const OVERLAYS = [
         + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
         + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
       minzoom: 7,
+      road: true,
       color: '#6D4C41',
     },
     opacity: 0.55,
@@ -1597,6 +1603,7 @@ export const OVERLAYS = [
         + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
         + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
       minzoom: 7,
+      road: true,
       color: '#6D4C41',
     },
     opacity: 0.55,
@@ -1685,6 +1692,7 @@ export const OVERLAYS = [
         + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
         + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
       minzoom: 7,
+      road: true,
       color: '#6D4C41',
     },
     opacity: 0.55,
