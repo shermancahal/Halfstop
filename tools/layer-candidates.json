@@ -75,5 +75,61 @@
     "expect": "data",
     "find": "\"name\"\\s*:\\s*\"[A-Za-z][A-Za-z0-9_]{2,40}\"\\s*,\\s*\"type\"\\s*:\\s*\"esriFieldType[A-Za-z]+\"",
     "url": "https://gis.blm.gov/arcgis/rest/services/transportation/BLM_Natl_GTLF_Public_Display/MapServer/0?f=pjson"
+  },
+  {
+    "id": "wv:wvgis-root",
+    "note": "West Virginia state data, step one: what is on the server. The WVU GIS Technical Center runs the state's public services and MapWV draws from it. Printing the folder list and the top-level services is the whole of what is needed to name the imagery and lidar endpoints - guessing a service path and shipping it is how a switch ends up drawing nothing for months.",
+    "expect": "data",
+    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]|\"name\"\\s*:\\s*\"[^\"]{0,64}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
+    "url": "https://services.wvgis.wvu.edu/arcgis/rest/services?f=pjson"
+  },
+  {
+    "id": "wv:mapwv-root",
+    "note": "West Virginia state data, step one: what is on the server. The other host MapWV is documented against, in case the WVU one has moved or is not the public face of it.",
+    "expect": "data",
+    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]|\"name\"\\s*:\\s*\"[^\"]{0,64}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
+    "url": "https://mapwv.gov/arcgis/rest/services?f=pjson"
+  },
+  {
+    "id": "oh:oit-root",
+    "note": "Ohio state data, step one: what is on the server. Ohio's OSIP orthoimagery and its statewide lidar are published by OGRIP through the state's IT hosting. Which hostname is current is exactly what cannot be confirmed from documentation, so both are asked.",
+    "expect": "data",
+    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]|\"name\"\\s*:\\s*\"[^\"]{0,64}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
+    "url": "https://gis1.oit.ohio.gov/arcgis/rest/services?f=pjson"
+  },
+  {
+    "id": "oh:ogrip-root",
+    "note": "Ohio state data, step one: what is on the server. The other name the same services have appeared under.",
+    "expect": "data",
+    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]|\"name\"\\s*:\\s*\"[^\"]{0,64}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
+    "url": "https://ogrip.oit.ohio.gov/arcgis/rest/services?f=pjson"
+  },
+  {
+    "id": "in:gisdata-root",
+    "note": "Indiana state data, step one: what is on the server. IndianaMap is the state's clearing house and publishes statewide orthoimagery and lidar derivatives. This asks its server what it holds rather than assuming a service name.",
+    "expect": "data",
+    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]|\"name\"\\s*:\\s*\"[^\"]{0,64}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
+    "url": "https://gisdata.in.gov/server/rest/services?f=pjson"
+  },
+  {
+    "id": "in:maps-indiana-root",
+    "note": "Indiana state data, step one: what is on the server. The university-hosted half of IndianaMap, which historically carried the imagery services.",
+    "expect": "data",
+    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]|\"name\"\\s*:\\s*\"[^\"]{0,64}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
+    "url": "https://maps.indiana.edu/arcgis/rest/services?f=pjson"
+  },
+  {
+    "id": "tn:tnmap-root",
+    "note": "Tennessee state data, step one: what is on the server. Tennessee's statewide base mapping program publishes aerial imagery on a two-year cycle. TNMap is its public face; this asks what it actually serves.",
+    "expect": "data",
+    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]|\"name\"\\s*:\\s*\"[^\"]{0,64}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
+    "url": "https://tnmap.tn.gov/arcgis/rest/services?f=pjson"
+  },
+  {
+    "id": "tn:tngis-root",
+    "note": "Tennessee state data, step one: what is on the server. The other hostname the same program has published under.",
+    "expect": "data",
+    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,700}\\]|\"name\"\\s*:\\s*\"[^\"]{0,64}\"\\s*,\\s*\"type\"\\s*:\\s*\"(?:MapServer|ImageServer)\"",
+    "url": "https://www.tngis.tn.gov/arcgis/rest/services?f=pjson"
   }
 ]

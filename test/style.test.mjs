@@ -17,7 +17,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { buildRasterStyle, overlayParts, overlayIdFromLayer, styleFor } from '../assets/js/lib/engine.js';
-import { BASEMAPS, OVERLAYS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN } from '../assets/js/config.js';
+import {
+  BASEMAPS, OVERLAYS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN, STATE_NAMES, STATE_GROUP,
+} from '../assets/js/config.js';
 import { bywaysStyle, PALETTE, shieldLayerUpdates } from '../assets/js/lib/byways-style.js';
 import { previewFor, tileFor, tileURL, swatchSVG } from '../assets/js/lib/preview.js';
 import {
@@ -202,11 +204,22 @@ test('config: a state-scoped overlay names real states', () => {
       assert.match(code, /^[A-Z]{2}$/,
         `${overlay.id}: "${code}" is not a two-letter state code`);
     }
-    // The panel groups these under the state's name rather than the subject
-    // heading, so a group of their own would never be shown.
-    assert.ok(!overlay.group || overlay.states,
+    /*
+     * The panel writes the state's name onto the row from its code, so a code
+     * with no name would show as "Aerial (3 in) — WV" and read like a bug. The
+     * table is where a new state gets spelled, and this is what says so on the
+     * day somebody adds a layer and forgets it.
+     */
+    for (const code of overlay.states) {
+      assert.ok(STATE_NAMES[code], `${overlay.id}: ${code} has no name in STATE_NAMES`);
+    }
+    // Every state's data sits under one heading, so a subject group of its own
+    // would never be shown.
+    assert.ok(!overlay.group,
       `${overlay.id} cannot be both state-scoped and in a subject group`);
   }
+
+  assert.ok(STATE_GROUP.length > 2, 'the state heading has to say something');
 });
 
 test('config: a queried overlay carries a bbox placeholder and a floor', () => {

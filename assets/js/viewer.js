@@ -11,7 +11,7 @@
 
 import {
   SITE, BASEMAPS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN, OVERLAYS,
-  DEFAULT_VIEW, DEFAULT_UNITS, TRACK_COLORS,
+  DEFAULT_VIEW, DEFAULT_UNITS, TRACK_COLORS, STATE_NAMES, STATE_GROUP,
 } from './config.js';
 import {
   loadEngine, buildRasterStyle, hasMapboxToken, mapboxToken, overlayParts, overlayIdFromLayer, styleFor,
@@ -998,10 +998,15 @@ function renderLayersTab() {
   // so an active layer is never hidden behind a closed heading.
   const overlayGroups = new Map();
   for (const overlay of inScopeOverlays()) {
-    // A state's own layers are grouped under the state's name rather than the
-    // subject heading they would otherwise share, because "Kentucky" is the
-    // fact that makes them worth reading.
-    const name = overlay.states ? (state.shieldStateName || 'This state') : (overlay.group || 'Other');
+    /*
+     * One heading for every state's data, with the state on each row.
+     *
+     * It used to be a heading per state — "Kentucky" — which reads well with
+     * one state in the list and becomes fifty headings of two layers each as
+     * more are added. The subject is "this state publishes its own imagery";
+     * which state is a property of the layer, so that is where it goes.
+     */
+    const name = overlay.states ? STATE_GROUP : (overlay.group || 'Other');
     if (!overlayGroups.has(name)) overlayGroups.set(name, []);
     overlayGroups.get(name).push(overlay);
   }
@@ -4277,7 +4282,7 @@ function layerRow({ entry, selected, control, preview = false }) {
       el('span', { class: 'layer-option-name' }, [
         // The id on the label, so a test can ask which layers are on offer
         // rather than matching on names that are meant to change.
-        el('span', { class: 'layer-option-label', dataset: { layer: entry.id }, text: entry.name }),
+        el('span', { class: 'layer-option-label', dataset: { layer: entry.id }, text: layerName(entry) }),
         layerBadge(entry),
       ]),
     ]),
@@ -4338,6 +4343,18 @@ function basemapThumb(entry) {
  * works shows nothing, and a layer that does not says so in words the reader
  * can act on.
  */
+/**
+ * What a layer is called in the list, which for a state's own data says which
+ * state — "Aerial (3 in) — Kentucky". Near a state line the map can flip
+ * between two of these, and a row that did not name its state would look like
+ * the same layer behaving differently.
+ */
+function layerName(entry) {
+  if (!entry.states?.length) return entry.name;
+  const named = entry.states.map((code) => STATE_NAMES[code] || code).join(', ');
+  return `${entry.name} \u2014 ${named}`;
+}
+
 function layerBadge(entry) {
   if (!layerIsBroken(entry.id)) return null;
   return el('span', {

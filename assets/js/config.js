@@ -290,6 +290,24 @@ export const DEFAULT_BASEMAP = 'byways-topo';
 export const DEFAULT_BASEMAP_WITH_TOKEN = 'byways-topo';
 
 /**
+ * The states whose own data this app carries, spelled out.
+ *
+ * A state layer declares its two-letter code and the panel writes the name, so
+ * adding the next state is one entry here and one in OVERLAYS rather than the
+ * state's name repeated across four layer definitions.
+ */
+export const STATE_NAMES = {
+  IN: 'Indiana',
+  KY: 'Kentucky',
+  OH: 'Ohio',
+  TN: 'Tennessee',
+  WV: 'West Virginia',
+};
+
+/** The heading every state's own layers sit under, whichever state it is. */
+export const STATE_GROUP = 'State data';
+
+/**
  * Overlays drawn on top of the basemap. Each is independently toggleable with
  * its own opacity. Add your own by appending to this list — nothing else needs
  * to change.
@@ -950,21 +968,14 @@ export const OVERLAYS = [
     enabled: false,
     attribution: KY_ATTRIBUTION,
   },
-  {
-    id: 'ky-topo',
-    // Probed over Kentucky rather than the default tile in Tennessee, where this
-    // layer is correctly empty and looked broken for it.
-    at: [-84.5, 37.8],
-    states: ['KY'],
-    name: 'Kentucky topo sheets',
-    description: 'The state\u2019s own 2016 topographic series.',
-    tiles: [`${KY_RASTER}/ImageServices/Ky_USGS_Topographic_Maps_2016/ImageServer/exportImage${ESRI_IMAGE}`],
-    tileSize: 256,
-    maxzoom: 17,
-    opacity: 0.9,
-    enabled: false,
-    attribution: KY_ATTRIBUTION,
-  },
+  /*
+   * Kentucky's topo sheets were here, and are gone.
+   *
+   * They are the USGS 2016 series republished by the state — the same sheets
+   * the national topo basemap already draws, at a lower maximum zoom. Two
+   * switches for one map is a choice nobody can make correctly, and the one to
+   * remove is the one that only works in one state.
+   */
   {
     id: 'trails-hiking',
     group: 'Routes',
@@ -1082,4 +1093,5 @@ export const TRACK_COLORS = [
 export default {
   SITE, MAPBOX_TOKEN, SUPABASE_URL, SUPABASE_KEY, MAP_ENGINE, DEFAULT_VIEW, DEFAULT_UNITS,
   BASEMAPS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN, OVERLAYS, TRACK_COLORS, LAND_LOOKUPS,
+  STATE_NAMES, STATE_GROUP,
 };
