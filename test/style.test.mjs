@@ -712,7 +712,7 @@ test('byways: contours are present, with index lines heavier than the rest', () 
 
 /* ---- route shields ---- */
 
-test('shields: Mapbox shield values collapse onto four designs', () => {
+test('shields: Mapbox shield values collapse onto a handful of designs', () => {
   // Mapbox ships a long tail of variants. A variant drawn as its parent design
   // is far better than a variant drawn as nothing, which is what the first
   // version did when it asked the sprite for a name the sprite did not have.
@@ -721,9 +721,18 @@ test('shields: Mapbox shield values collapse onto four designs', () => {
   assert.equal(shieldDesign('us-highway'), 'us');
   assert.equal(shieldDesign('us-highway-business'), 'us');
   assert.equal(shieldDesign('us-state'), 'state');
-  assert.equal(shieldDesign('something-unheard-of'), 'default');
-  assert.equal(shieldDesign(''), 'default');
-  assert.equal(shieldDesign(undefined), 'default');
+
+  /*
+   * And an unrecognised value is a circle, not a state marker.
+   *
+   * Mapbox says `default` for the roads a state has not signed — probed two
+   * miles apart in Leelanau County, where M-22 comes back `circle-white` and
+   * the county road beside it comes back `default`. Sending the second to the
+   * state's own design is how a county road came to wear Michigan's M.
+   */
+  assert.equal(shieldDesign('something-unheard-of'), 'circle');
+  assert.equal(shieldDesign(''), 'circle');
+  assert.equal(shieldDesign(undefined), 'circle');
 });
 
 test('shields: image ids clamp to the widths actually generated', () => {

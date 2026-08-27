@@ -13,7 +13,7 @@
  */
 
 import { createRequire } from 'node:module';
-import { bywaysStyle } from '../assets/js/lib/byways-style.js';
+import { bywaysStyle, shieldLayerUpdates } from '../assets/js/lib/byways-style.js';
 import { runtimeLayers, runtimeSources } from '../assets/js/lib/runtime-layers.js';
 import { buildRasterStyle, styleHasGlyphs } from '../assets/js/lib/engine.js';
 
@@ -166,6 +166,43 @@ for (let i = 1; i < sizes.length; i += 1) {
 }
 if (!(sizes[3] < sizes[0])) {
   all.push(['shields', { message: `"250/88" is drawn at ${sizes[3]} and "61" at ${sizes[0]} — the long one must be smaller` }]);
+}
+
+/*
+ * A signed state route keeps the state's marker; an unsigned county road does not.
+ *
+ * Probed two miles apart in Leelanau County, Michigan:
+ *
+ *   M-22          ref=22   shield=circle-white  shield_image=us-state-diamond-2
+ *   county road   ref=641  shield=default       shield_image=default-3
+ *
+ * So the data does tell them apart, and this is the check that it keeps
+ * telling them apart — sending `default` to the state's own marker is how a
+ * county road came to be drawn on Michigan's M.
+ */
+/*
+ * Through `shieldLayerUpdates`, which is the path a state actually arrives by.
+ * `bywaysStyle` takes only a token — the style is built stateless and the
+ * marker is applied when the map settles over a state.
+ */
+const shieldFor = (shield, state) => evaluate(
+  shieldLayerUpdates(state).find((entry) => entry.id === 'road-shield').layout['icon-image'],
+  { properties: { ref: '22', shield, class: 'primary' } },
+);
+for (const state of ['MI', 'TN', 'WV', '']) {
+  const signed = String(shieldFor('circle-white', state));
+  const unsigned = String(shieldFor('default', state));
+  if (unsigned === signed) {
+    all.push(['shields', { message: `in ${state || 'no state'} a county road and a state route both drew ${signed}` }]);
+  }
+  if (!unsigned.includes('circle')) {
+    all.push(['shields', { message: `in ${state || 'no state'} an unsigned road drew ${unsigned}, expected the circle` }]);
+  }
+}
+// And a state with a marker of its own still uses it for a signed route.
+const michigan = String(shieldFor('circle-white', 'MI'));
+if (!michigan.includes('st-MI')) {
+  all.push(['shields', { message: `M-22 drew ${michigan}, expected Michigan's own marker` }]);
 }
 
 // The combined shield must stand down where the pair takes over, or the road

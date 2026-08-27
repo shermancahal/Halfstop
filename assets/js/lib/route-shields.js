@@ -24,7 +24,20 @@ import { SHIELD_BOXES, SHIELD_IMAGES } from './shield-boxes.js';
 const MIN_LEN = 2;
 const MAX_LEN = 4;
 
-export const SHIELD_DESIGNS = ['interstate', 'us', 'state', 'default'];
+/*
+ * `circle` is what a numbered road gets when nothing says whose number it is.
+ *
+ * Probing Michigan settled this. Two miles apart in Leelanau County:
+ *
+ *   M-22          ref=22   shield=circle-white  shield_image=us-state-diamond-2
+ *   county road   ref=641  shield=default       shield_image=default-3
+ *
+ * A signed state route carries a shape; a county road carries `default`. So
+ * the two are told apart by the data, and `default` can stop borrowing the
+ * state's own marker — which is how Michigan's county roads came to be drawn
+ * on the M diamond that belongs to its state routes.
+ */
+export const SHIELD_DESIGNS = ['interstate', 'us', 'state', 'circle', 'default'];
 
 /**
  * Where the real shield blanks live, and how a design maps onto one.
@@ -71,7 +84,8 @@ export function shieldDesign(value = '') {
   if (text.startsWith('us-interstate')) return 'interstate';
   if (text.startsWith('us-highway')) return 'us';
   if (text.startsWith('us-state') || text.startsWith('us-')) return 'state';
-  return 'default';
+  // Anything else is a numbered road nobody has claimed — see SHIELD_DESIGNS.
+  return 'circle';
 }
 
 export function shieldImageId(design, length) {
@@ -239,6 +253,10 @@ const COLOURS = {
   interstate: { fill: '#1b3f70', stroke: '#ffffff', crown: '#b0202f', text: '#ffffff' },
   us: { fill: '#ffffff', stroke: '#2b2b2b', text: '#1c1c1c' },
   state: { fill: '#ffffff', stroke: '#3d3225', text: '#1c1c1c' },
+  // The generic county-and-unclassified marker: a plain white circle, which is
+  // what an unsigned numbered road looks like on most state maps and is
+  // deliberately not any state's own shape.
+  circle: { fill: '#ffffff', stroke: '#3d3225', text: '#1c1c1c' },
   default: { fill: '#fbf7ee', stroke: '#64513b', text: '#3a3026' },
 };
 
@@ -639,6 +657,18 @@ export function rasterizeShield(design, length, { pixelRatio = 2 } = {}) {
     // a heavy one closes the notch between the peaks back up.
     ctx.lineWidth = 1;
     ctx.stroke();
+  } else if (design === 'circle') {
+    // Round, and drawn to the shield's height rather than its width, so a
+    // three-character number widens the box without turning the circle into an
+    // ellipse that reads as a different sign.
+    ctx.beginPath();
+    ctx.ellipse(width / 2, HEIGHT / 2, Math.min(width / 2, HEIGHT / 2) - 1, HEIGHT / 2 - 1, 0, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.fillStyle = colours.fill;
+    ctx.fill();
+    ctx.strokeStyle = colours.stroke;
+    ctx.lineWidth = 1.3;
+    ctx.stroke();
   } else {
     roundedRect(ctx, 1, 2, width - 2, HEIGHT - 4, design === 'state' ? 3 : 2.5);
     ctx.fillStyle = colours.fill;
@@ -763,7 +793,7 @@ export function shieldTextSizeExpression(state = '', length = 2, refLength = nul
   return [
     'match', ['get', 'shield'],
     ...SHIELD_MATCH.flatMap((arm) => [arm.values, sized(arm.design)]),
-    sized(LOCAL),
+    sized(UNCLAIMED),
   ];
 }
 
@@ -787,7 +817,7 @@ export function shieldTextOffsetExpression(state = '', length = 2, shiftPx = 0) 
       arm.values,
       ['literal', shift(arm.design === LOCAL ? local : national(arm.design), arm.design)],
     ]),
-    ['literal', shift(local, LOCAL)],
+    ['literal', shift(shieldTextOffset(UNCLAIMED, length), UNCLAIMED)],
   ];
 }
 
@@ -1004,13 +1034,23 @@ const SHIELD_MATCH = [
   },
 ];
 
-/** The design a road with this `shield` value gets, from the map's state. */
+/**
+ * The design a road with this `shield` value gets, from the map's state.
+ *
+ * The fallback is the circle, not the state's own marker. A shield value the
+ * table does not list is a road nothing has told us about, and Mapbox says
+ * `default` for exactly the roads a state has not signed — putting the state's
+ * marker on those is how a Leelanau County road ended up wearing Michigan's M.
+ */
 export function designForShield(shield, state = '') {
   const local = stateDesign(state);
   const arm = SHIELD_MATCH.find((entry) => entry.values.includes(String(shield || '').toLowerCase()));
-  const design = arm ? arm.design : LOCAL;
+  const design = arm ? arm.design : UNCLAIMED;
   return design === LOCAL ? local : design;
 }
+
+/** What a road gets when nothing identifies its system. */
+const UNCLAIMED = 'circle';
 
 /** The image id a road would ask for — the same one the style expression builds. */
 export function shieldImageIdFor(shield, reflen, state = '') {
@@ -1031,7 +1071,9 @@ export function shieldImageExpression(state = '', { length = null } = {}) {
     [
       'match', ['get', 'shield'],
       ...SHIELD_MATCH.flatMap((arm) => [arm.values, arm.design === LOCAL ? local : arm.design]),
-      local,
+      // Not `local`: a shield value the table does not list is a road nothing
+      // has claimed, and it gets the circle rather than the state's marker.
+      UNCLAIMED,
     ],
     '-',
     // `length` lets a caller size the image from something other than the
