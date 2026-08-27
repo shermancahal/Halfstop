@@ -154,13 +154,6 @@
     "url": "https://services3.arcgis.com/Jdnp1TjADvSDxMAX/ArcGIS/rest/services/dnrParksAndRecreation/FeatureServer/3?f=pjson"
   },
   {
-    "id": "live:mi-orv",
-    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
-    "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
-    "url": "https://services3.arcgis.com/Jdnp1TjADvSDxMAX/arcgis/rest/services/DNR_ORV_Scramble_Areas/FeatureServer/0?f=pjson"
-  },
-  {
     "id": "live:tn-wma",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
@@ -308,13 +301,6 @@
     "url": "https://services.arcgis.com/ZzrwjTRez6FJiOq4/arcgis/rest/services/Utah_State_Park_Management_Areas/FeatureServer/0?f=pjson"
   },
   {
-    "id": "live:nc-trails",
-    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
-    "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
-    "url": "https://services6.arcgis.com/nRIB86xC7kq6wavB/arcgis/rest/services/State_Trails/FeatureServer/0?f=pjson"
-  },
-  {
     "id": "live:va-trails",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
@@ -334,27 +320,6 @@
     "expect": "data",
     "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
     "url": "https://services.arcgis.com/uj05BKeH0fZwqTNZ/arcgis/rest/services/SC_State_Parks/FeatureServer/0?f=pjson"
-  },
-  {
-    "id": "live:id-trails",
-    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
-    "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
-    "url": "https://services1.arcgis.com/CNPdEkvnGl65jCX8/arcgis/rest/services/Idaho_Recreation_Trails/FeatureServer/0?f=pjson"
-  },
-  {
-    "id": "live:il-trails",
-    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
-    "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
-    "url": "https://services1.arcgis.com/OSvSLSpuEnbSu0lj/arcgis/rest/services/Trails_Public/FeatureServer/0?f=pjson"
-  },
-  {
-    "id": "live:nm-parks",
-    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
-    "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
-    "url": "https://services9.arcgis.com/wb84GxCwiPzK3Eow/arcgis/rest/services/NMStateParks(1)/FeatureServer/0?f=pjson"
   },
   {
     "id": "live:nd-forest",
@@ -392,13 +357,6 @@
     "url": "https://services5.arcgis.com/bPacKTm9cauMXVfn/arcgis/rest/services/Arkansas_State_Parks/FeatureServer/0?f=pjson"
   },
   {
-    "id": "live:mn-parks",
-    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
-    "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
-    "url": "https://services.arcgis.com/4g6VBrL3kEcjXfMf/arcgis/rest/services/Minnesota_State_Parks/FeatureServer/0?f=pjson"
-  },
-  {
     "id": "live:ne-parks",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
@@ -413,10 +371,31 @@
     "url": "https://services1.arcgis.com/RbMX0mRVOFNTdLzd/arcgis/rest/services/BPL_Properties_Points_for_MaineFoliage/FeatureServer/0?f=pjson"
   },
   {
-    "id": "live:ny-hunting",
-    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "id": "idx:mi-orv",
+    "note": "This service exists and answered, but not at layer zero - it said so in a 200, which is how it shipped dead in the first place. Asking the service root for its own layer list is the difference between guessing an index and knowing one.",
     "expect": "data",
-    "find": "\"(?:name|currentVersion|type)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
-    "url": "https://services.arcgis.com/1xFZPtKn1wKC6POA/arcgis/rest/services/NY_State_Parks_Hunting_Areas_2_view/FeatureServer/0?f=pjson"
+    "find": "\"(?:name|id)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services3.arcgis.com/Jdnp1TjADvSDxMAX/arcgis/rest/services/DNR_ORV_Scramble_Areas/FeatureServer?f=pjson"
+  },
+  {
+    "id": "idx:nc-trails",
+    "note": "This service exists and answered, but not at layer zero - it said so in a 200, which is how it shipped dead in the first place. Asking the service root for its own layer list is the difference between guessing an index and knowing one.",
+    "expect": "data",
+    "find": "\"(?:name|id)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services6.arcgis.com/nRIB86xC7kq6wavB/arcgis/rest/services/State_Trails/FeatureServer?f=pjson"
+  },
+  {
+    "id": "idx:id-trails",
+    "note": "This service exists and answered, but not at layer zero - it said so in a 200, which is how it shipped dead in the first place. Asking the service root for its own layer list is the difference between guessing an index and knowing one.",
+    "expect": "data",
+    "find": "\"(?:name|id)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services1.arcgis.com/CNPdEkvnGl65jCX8/arcgis/rest/services/Idaho_Recreation_Trails/FeatureServer?f=pjson"
+  },
+  {
+    "id": "idx:ny-hunting",
+    "note": "This service exists and answered, but not at layer zero - it said so in a 200, which is how it shipped dead in the first place. Asking the service root for its own layer list is the difference between guessing an index and knowing one.",
+    "expect": "data",
+    "find": "\"(?:name|id)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://services.arcgis.com/1xFZPtKn1wKC6POA/arcgis/rest/services/NY_State_Parks_Hunting_Areas_2_view/FeatureServer?f=pjson"
   }
 ]

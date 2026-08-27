@@ -1265,23 +1265,6 @@ export const OVERLAYS = [
     attribution: 'Recreation data \u00a9 <a href=\"https://www.michigan.gov/dnr\">Michigan DNR</a>',
   },
   {
-    id: 'mi-orv',
-    states: ['MI'],
-    name: 'ORV scramble areas',
-    description: 'Designated off-road riding areas.',
-    query: {
-      url: 'https://services3.arcgis.com/Jdnp1TjADvSDxMAX/arcgis/rest/services/DNR_ORV_Scramble_Areas/FeatureServer/0/query'
-        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
-        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
-        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
-      minzoom: 7,
-      color: '#B45309',
-    },
-    opacity: 0.55,
-    enabled: false,
-    attribution: 'Recreation data \u00a9 <a href=\"https://www.michigan.gov/dnr\">Michigan DNR</a>',
-  },
-  {
     id: 'tn-wma',
     states: ['TN'],
     name: 'Wildlife management areas',
@@ -1475,7 +1458,8 @@ export const OVERLAYS = [
     name: 'Recreation lands',
     description: 'Iowa DNR recreation lands.',
     tiles: ['https://programs.iowadnr.gov/geospatial/rest/services/Recreation/Recreation/MapServer/export'
-      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'],
+      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'
+      + '&layers=show:11'],
     tileSize: 256,
     maxzoom: 16,
     opacity: 0.85,
@@ -1584,8 +1568,8 @@ export const OVERLAYS = [
   {
     id: 'co-cpw',
     states: ['CO'],
-    name: 'CPW administered land',
-    description: 'Land administered by Colorado Parks and Wildlife.',
+    name: 'CPW facilities',
+    description: 'Colorado Parks and Wildlife facilities - the service publishes sites, not the land around them.',
     query: {
       url: 'https://services5.arcgis.com/ttNGmDvKQA7oeDQ3/arcgis/rest/services/CPWAdminData/FeatureServer/0/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
@@ -1616,23 +1600,6 @@ export const OVERLAYS = [
     attribution: 'Parks \u00a9 <a href=\"https://stateparks.utah.gov/\">Utah State Parks</a>',
   },
   {
-    id: 'nc-trails',
-    states: ['NC'],
-    name: 'State trails',
-    description: 'North Carolina\'s state trails.',
-    query: {
-      url: 'https://services6.arcgis.com/nRIB86xC7kq6wavB/arcgis/rest/services/State_Trails/FeatureServer/0/query'
-        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
-        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
-        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
-      minzoom: 7,
-      color: '#6D4C41',
-    },
-    opacity: 0.55,
-    enabled: false,
-    attribution: 'Trails \u00a9 <a href=\"https://www.ncparks.gov/\">North Carolina State Parks</a>',
-  },
-  {
     id: 'va-trails',
     states: ['VA'],
     name: 'State park trails',
@@ -1652,8 +1619,8 @@ export const OVERLAYS = [
   {
     id: 'ok-recreation',
     states: ['OK'],
-    name: 'Recreational areas',
-    description: 'Oklahoma recreational areas.',
+    name: 'Wildlife management areas',
+    description: 'Oklahoma wildlife management areas, which is what this service holds despite its name.',
     query: {
       url: 'https://services6.arcgis.com/RBtoEUQ2lmN0K3GY/arcgis/rest/services/OklahomaRecreationalAreas/FeatureServer/0/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
@@ -1682,57 +1649,6 @@ export const OVERLAYS = [
     opacity: 0.55,
     enabled: false,
     attribution: 'Parks \u00a9 <a href=\"https://southcarolinaparks.com/\">South Carolina State Parks</a>',
-  },
-  {
-    id: 'id-trails',
-    states: ['ID'],
-    name: 'Recreation trails',
-    description: 'Idaho\'s statewide recreation trails.',
-    query: {
-      url: 'https://services1.arcgis.com/CNPdEkvnGl65jCX8/arcgis/rest/services/Idaho_Recreation_Trails/FeatureServer/0/query'
-        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
-        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
-        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
-      minzoom: 7,
-      color: '#6D4C41',
-    },
-    opacity: 0.55,
-    enabled: false,
-    attribution: 'Trails \u00a9 <a href=\"https://parksandrecreation.idaho.gov/\">Idaho Parks and Recreation</a>',
-  },
-  {
-    id: 'il-trails',
-    states: ['IL'],
-    name: 'Trails',
-    description: 'Illinois public trails.',
-    query: {
-      url: 'https://services1.arcgis.com/OSvSLSpuEnbSu0lj/arcgis/rest/services/Trails_Public/FeatureServer/0/query'
-        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
-        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
-        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
-      minzoom: 7,
-      color: '#6D4C41',
-    },
-    opacity: 0.55,
-    enabled: false,
-    attribution: 'Trails \u00a9 <a href=\"https://dnr.illinois.gov/\">Illinois DNR</a>',
-  },
-  {
-    id: 'nm-parks',
-    states: ['NM'],
-    name: 'State parks',
-    description: 'New Mexico state parks.',
-    query: {
-      url: 'https://services9.arcgis.com/wb84GxCwiPzK3Eow/arcgis/rest/services/NMStateParks(1)/FeatureServer/0/query'
-        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
-        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
-        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
-      minzoom: 7,
-      color: '#2E7D32',
-    },
-    opacity: 0.55,
-    enabled: false,
-    attribution: 'Parks \u00a9 <a href=\"https://www.emnrd.nm.gov/spd/\">New Mexico State Parks</a>',
   },
   {
     id: 'nd-forest',
@@ -1820,23 +1736,6 @@ export const OVERLAYS = [
     attribution: 'Parks \u00a9 <a href=\"https://www.arkansasstateparks.com/\">Arkansas State Parks</a>',
   },
   {
-    id: 'mn-parks',
-    states: ['MN'],
-    name: 'State parks',
-    description: 'Minnesota state parks.',
-    query: {
-      url: 'https://services.arcgis.com/4g6VBrL3kEcjXfMf/arcgis/rest/services/Minnesota_State_Parks/FeatureServer/0/query'
-        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
-        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
-        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
-      minzoom: 7,
-      color: '#2E7D32',
-    },
-    opacity: 0.55,
-    enabled: false,
-    attribution: 'Parks \u00a9 <a href=\"https://www.dnr.state.mn.us/\">Minnesota DNR</a>',
-  },
-  {
     id: 'ne-parks',
     states: ['NE'],
     name: 'Park areas',
@@ -1869,23 +1768,6 @@ export const OVERLAYS = [
     opacity: 0.55,
     enabled: false,
     attribution: 'Public lands \u00a9 <a href=\"https://www.maine.gov/dacf/parks/\">Maine Bureau of Parks and Lands</a>',
-  },
-  {
-    id: 'ny-hunting',
-    states: ['NY'],
-    name: 'State park hunting areas',
-    description: 'Parts of NY state parks open to hunting - public land you may walk onto.',
-    query: {
-      url: 'https://services.arcgis.com/1xFZPtKn1wKC6POA/arcgis/rest/services/NY_State_Parks_Hunting_Areas_2_view/FeatureServer/0/query'
-        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
-        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
-        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
-      minzoom: 7,
-      color: '#2E7D32',
-    },
-    opacity: 0.55,
-    enabled: false,
-    attribution: 'Hunting areas \u00a9 <a href=\"https://parks.ny.gov/\">New York State Parks</a>',
   },
 ];
 

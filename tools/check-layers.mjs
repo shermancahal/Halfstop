@@ -164,6 +164,21 @@ function pngSize(bytes) {
  * Deduped and capped, because an unfiltered capabilities document is several
  * hundred lines of log nobody reads.
  */
+/**
+ * The message an ArcGIS service puts in a 200 when it is refusing.
+ *
+ * Returns null for anything that is not one of these, so a body that merely
+ * mentions the word error in a layer name is not mistaken for a failure.
+ */
+function esriError(body) {
+  const text = String(body ?? '');
+  if (!/"error"\s*:\s*\{/.test(text)) return null;
+  const detail = text.match(/"details"\s*:\s*\[\s*"([^"]+)"/);
+  const message = text.match(/"message"\s*:\s*"([^"]+)"/);
+  const code = text.match(/"code"\s*:\s*(\d+)/);
+  return detail?.[1] || message?.[1] || (code ? `code ${code[1]}` : 'unspecified');
+}
+
 function findIn(body, pattern) {
   try {
     const matches = String(body).matchAll(new RegExp(pattern, 'g'));
@@ -314,7 +329,18 @@ async function probe(entry) {
          * allowed to read is as useless as a tile it cannot draw.
          */
         : entry.expect === 'data'
-          ? (!response.headers.get('access-control-allow-origin') ? 'no CORS' : 'ok')
+          ? (!response.headers.get('access-control-allow-origin') ? 'no CORS'
+            /*
+             * An ArcGIS service that cannot answer says so in a 200.
+             *
+             * "The requested layer (layerId: 0) was not found" and "Token
+             * Required" both arrive as HTTP 200 with a JSON error body, so a
+             * check that only reads the status code passes them - and six
+             * shipped layers passed exactly that way before this existed. The
+             * whole point of a health check is to name the dead ones, and it
+             * was quietly certifying them.
+             */
+            : esriError(decoded) ? `service error: ${esriError(decoded)}` : 'ok')
           : !isImage ? 'not an image'
           // A tile a browser is not allowed to read is a tile that does not
           // draw, however well it downloads from a script. Worth failing on:

@@ -133,9 +133,10 @@ above.
 
 ## Shipping
 
-Forty-four layers across thirty-eight states are now in `OVERLAYS`, all
+Forty-two layers across thirty-three states are now in `OVERLAYS`, all
 switched off by default, filed under the one `State data` heading with
-the state written onto each row.
+the state written onto each row. It was forty-four across thirty-eight
+until the probes reported back.
 
 Eight of them have had their fields read. The rest answered only that
 they exist, which is a weaker thing to ship on, and they ship anyway on
@@ -149,3 +150,39 @@ landed: a MapServer becomes raster tiles through `/export`, and a
 FeatureServer becomes GeoJSON through a bbox query, drawn as fill and
 line from one source so a trail and a boundary need no different
 handling.
+
+## What the first health run caught
+
+Six of the forty-four shipped layers drew nothing, and every one of them
+had passed the health check. ArcGIS refuses in a 200: "The requested
+layer (layerId: 0) was not found" and "Token Required" both arrive with
+a success status and a JSON error body, so a check reading only the
+status code certifies them as healthy. `tools/check-layers.mjs` now
+reads the body and fails on it.
+
+Removed, with the reason:
+
+| Layer | Why |
+|---|---|
+| Michigan ORV scramble areas | no layer 0 - the service exists at another index |
+| North Carolina state trails | no layer 0 |
+| Idaho recreation trails | no layer 0 |
+| New York state park hunting areas | no layer 0 |
+| New Mexico state parks | token required; not public |
+| Minnesota state parks | token required; not public |
+| Illinois trails | the records are Lake County forest preserves, not a state layer. Shipping it as Illinois would have been a lie the map told quietly |
+
+The four that exist at some other index now have `idx:` probes asking
+each service for its own layer list, so they can come back on a known
+number rather than a guessed one.
+
+Two more were shipping under names the data did not support. Colorado's
+layer is CPW **facilities**, not administered land; Oklahoma's
+"Recreational Areas" service holds **wildlife management areas**. Both
+now say what they are. Iowa's recreation service opens on beach status,
+so it asks for sublayer 11 instead of drawing everything.
+
+The lesson is the same one this file keeps recording: the address, not
+the data, is nearly always what is wrong - and a health check that
+cannot tell a refusal from an answer is worse than none, because it
+reports confidence it has not earned.
