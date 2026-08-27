@@ -2679,7 +2679,15 @@ check('spelled from the one source both copies read',
   (await page.locator('#panel-brand-name').innerText()).trim(),
   (await page.locator('#brand-name').innerText()).trim());
 
-if (await page.locator('#panel-close').isVisible()) await page.locator('#panel-close').click();
+/*
+ * Asked of the app, not of the pixels.
+ *
+ * A closing panel slides out over 180ms and only becomes `visibility: hidden`
+ * at the end of it, so `isVisible()` is true through the whole slide and the
+ * click lands on whatever is behind the button by the time it arrives. The
+ * class is the app's own answer to "is the panel open", and it flips at once.
+ */
+if (await page.locator('.app.is-panel-open').count()) await page.locator('#panel-close').click();
 await page.setViewportSize({ width: 1280, height: 900 });
 await page.waitForTimeout(300);
 check('while a wide header keeps the title and the menu does not repeat it',
