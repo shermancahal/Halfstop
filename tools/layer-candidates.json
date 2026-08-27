@@ -77,45 +77,31 @@
     "url": "https://gis.blm.gov/arcgis/rest/services/transportation/BLM_Natl_GTLF_Public_Display/MapServer/0?f=pjson"
   },
   {
-    "id": "rec:tn-twra",
-    "note": "The one recreation-adjacent folder on a server the app already talks to. The question is narrow: does TWRA publish wildlife management area boundaries? A WMA is public land you can walk onto, which makes it an access layer, not a hunting layer.",
+    "id": "rec:tn-twra-service",
+    "note": "The last probe asked for TWRA as a folder and was told there is no such folder. It is a service inside ENVIRONMENTAL, so this asks the service itself. The question is unchanged: does it carry wildlife management area boundaries, which are public land you may walk onto.",
     "expect": "data",
     "find": "\"name\"\\s*:\\s*\"[^\"]{0,80}\"",
-    "url": "https://tnmap.tn.gov/arcgis/rest/services/TWRA?f=pjson"
+    "url": "https://tnmap.tn.gov/arcgis/rest/services/ENVIRONMENTAL/TWRA/MapServer?f=pjson"
   },
   {
-    "id": "rec:ky-thematic",
-    "note": "Kentucky's unexplored raster folder. Wired for aerials already, so anything recreational here is nearly free to add.",
+    "id": "rec:twra-agol",
+    "note": "TWRA turned up incidentally on its own ArcGIS Online org while looking for TVA. If the WMAs live anywhere public, they live here.",
     "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,80}\"",
-    "url": "https://kyraster.ky.gov/arcgis/rest/services/ThematicServices?f=pjson"
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,160}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=20&sortField=numViews&sortOrder=desc&q=TWRA%20OR%20%28%22wildlife%20management%20area%22%20AND%20Tennessee%29"
   },
   {
-    "id": "rec:ky-wgs84",
-    "note": "Kentucky's unexplored vector folder, and the likelier of the two to hold trails, campgrounds or public land.",
+    "id": "rec:ky-recreation",
+    "note": "Kentucky's vector folder is long enough that a plain listing hit the match cap around the letter C. This asks the same folder but only for the names that would matter - parks, trails, camping, forest, wildlife, public land, boat access - so the answer is not buried under census tracts.",
     "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,80}\"",
+    "find": "\"name\"\\s*:\\s*\"WGS84WM_Services/[^\"]*(?:Park|Trail|Recreat|Camp|Forest|Wildlife|Nature|Public|Boat|Access|Scenic)[^\"]*\"",
     "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services?f=pjson"
   },
   {
-    "id": "rec:tva-recreation",
-    "note": "TVA holds a great deal of shoreline across the app's home states, but undeveloped-land polygons say nothing about whether you may camp there. This asks whether TVA publishes campgrounds, day use or boat ramps - the amenities that would make it worth drawing.",
+    "id": "rec:usfs-fire-closures",
+    "note": "The closure pattern, and the one hit worth keeping out of a search full of municipal road closures. A road the MVUM says you may drive and an order that shut it last week are two different facts, and only one of them is already in the app. This asks what a closure record actually carries - dates, the order, the geometry.",
     "expect": "data",
     "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,160}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=20&sortField=numViews&sortOrder=desc&q=TVA%20AND%20%28campground%20OR%20recreation%20OR%20%22day%20use%22%20OR%20%22boat%20ramp%22%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "rec:mi-dnr-endpoints",
-    "note": "The strongest state source found, and so far only titles from a search index. This asks for the service URLs behind them, which is what a layer switch actually needs.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,160}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=30&sortField=numViews&sortOrder=desc&q=owner%3AMichiganDNR%20AND%20%28roads%20OR%20trails%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
-  },
-  {
-    "id": "rec:closures",
-    "note": "The Boulder pattern, asked of everybody: a live closure layer beside a static route layer. Seasonal gates and fire closures are what actually stop a drive, and no basemap carries them. If a state publishes this, the pair is worth more than the routes alone.",
-    "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,160}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=30&sortField=numViews&sortOrder=desc&q=%28closure%20OR%20closures%29%20AND%20%28road%20OR%20trail%20OR%20forest%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=30&sortField=numViews&sortOrder=desc&q=%22fire%20closure%22%20AND%20%28forest%20OR%20road%20OR%20trail%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
   }
 ]
