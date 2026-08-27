@@ -439,5 +439,33 @@
     "expect": "data",
     "find": "\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
     "url": "https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services?f=pjson"
+  },
+  {
+    "id": "idx:nj-trails",
+    "note": "Ships as New Jersey's park trails and resolves to open-space points. The search that found it named a generalised-trails layer in this service, so the trails are here at some index that is not zero. Asking the service for its own layer list is one request and has been right every time it has been tried.",
+    "expect": "data",
+    "find": "\"id\"\\s*:\\s*\\d+,\\s*\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
+    "url": "https://mapsdep.nj.gov/arcgis/rest/services/Applications/DEP_Trails/MapServer?f=pjson"
+  },
+  {
+    "id": "idx:vt-routes",
+    "note": "Ships as ANR travel routes and resolves to state park points. Vermont's roads layer is the strongest thing found in that state and it is in this service somewhere. Asking the service for its own layer list is one request and has been right every time it has been tried.",
+    "expect": "data",
+    "find": "\"id\"\\s*:\\s*\\d+,\\s*\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
+    "url": "https://anrmaps.vermont.gov/arcgis/rest/services/map_services/MAP_ANR_ANRATLASFPR_WM_NOCACHE/MapServer?f=pjson"
+  },
+  {
+    "id": "idx:wi-closures",
+    "note": "Ships as park closures and resolves to the parks layer. A state that maintains its own closure layer is rare enough to be worth one more probe. Asking the service for its own layer list is one request and has been right every time it has been tried.",
+    "expect": "data",
+    "find": "\"id\"\\s*:\\s*\\d+,\\s*\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
+    "url": "https://services5.arcgis.com/Ul9AyFFeFTjf08DW/arcgis/rest/services/WI_Park_Closures_PUBLIC_VIEW/FeatureServer?f=pjson"
+  },
+  {
+    "id": "idx:in-trails",
+    "note": "Reported by the user as corridor polygons rather than trail lines. Whether a line layer exists beside the polygons is the whole question, and this is what answers it. Asking the service for its own layer list is one request and has been right every time it has been tried.",
+    "expect": "data",
+    "find": "\"id\"\\s*:\\s*\\d+,\\s*\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
+    "url": "https://gisdata.in.gov/server/rest/services/Hosted/Trails_AGOL_RO/FeatureServer?f=pjson"
   }
 ]
