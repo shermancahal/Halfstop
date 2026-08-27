@@ -77,56 +77,178 @@
     "url": "https://gis.blm.gov/arcgis/rest/services/transportation/BLM_Natl_GTLF_Public_Display/MapServer/0?f=pjson"
   },
   {
-    "id": "rec:ky-byways",
+    "id": "st:alabama",
+    "note": "First pass for Alabama: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
     "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
-    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Scenic_Byways_WGS84WM/MapServer?f=pjson",
-    "note": "The layer whose name is the app's name. Whether it is wireable comes down to one thing - does a byway carry its own name, or only an id that means nothing to a person reading a panel."
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22Alabama%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
   },
   {
-    "id": "rec:ky-trails",
+    "id": "st:alaska",
+    "note": "First pass for Alaska: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
     "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
-    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Recreational_Trails_WGS84WM/MapServer?f=pjson",
-    "note": "Statewide trails on a server the app already talks to. The fields decide whether a trail can be told apart by use - foot, horse, motorised - which is the whole difference between a useful layer and a mess of lines."
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22Alaska%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
   },
   {
-    "id": "rec:ky-hunting",
+    "id": "st:arizona",
+    "note": "First pass for Arizona: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
     "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
-    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Public_Hunting_Areas_WGS84WM/MapServer?f=pjson",
-    "note": "Public hunting areas are public land you may walk onto, which makes this an access layer that happens to be filed under hunting. Worth knowing whether the polygons name their manager."
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22Arizona%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
   },
   {
-    "id": "rec:ky-forests",
+    "id": "st:arkansas",
+    "note": "First pass for Arkansas: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
     "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
-    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_StateForests_WGS84WM/MapServer?f=pjson",
-    "note": "State forest boundaries - the other half of the access question, and the one people actually camp in."
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22Arkansas%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
   },
   {
-    "id": "rec:tn-twra-lands",
+    "id": "st:california",
+    "note": "First pass for California: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
     "expect": "data",
-    "url": "https://tnmap.tn.gov/arcgis/rest/services/ENVIRONMENTAL/TWRA/MapServer/3/query?where=1%3D1&outFields=*&resultRecordCount=3&returnGeometry=false&f=geojson",
-    "note": "Sublayer 3 is listed as Lands, which on a wildlife agency's service should mean wildlife management areas. Three real records with every field settle whether that is what it is."
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22California%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
   },
   {
-    "id": "rec:tva-dispersed",
+    "id": "st:colorado",
+    "note": "First pass for Colorado: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
     "expect": "data",
-    "url": "https://services.arcgis.com/w8auYAijfGK1Mydj/arcgis/rest/services/Dispersed_Recreation_Areas/FeatureServer/0/query?where=1%3D1&outFields=*&resultRecordCount=3&returnGeometry=false&f=geojson",
-    "note": "The rarest thing found in the whole sweep: an authority saying where dispersed use is actually sanctioned. Nearly every other source says where land is, not what you may do on it. If these records carry that distinction they are worth more than any trail layer here."
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22Colorado%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
   },
   {
-    "id": "rec:mi-roads",
+    "id": "st:connecticut",
+    "note": "First pass for Connecticut: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
     "expect": "data",
-    "url": "https://services3.arcgis.com/Jdnp1TjADvSDxMAX/arcgis/rest/services/DNR_ROADS/FeatureServer/0?f=pjson",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
-    "note": "Michigan's state forest road network. The MVUM answers this question federally with a column per vehicle type; the question here is whether a state answers it at all, or just draws the line."
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22Connecticut%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
   },
   {
-    "id": "rec:mi-campgrounds",
+    "id": "st:delaware",
+    "note": "First pass for Delaware: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
     "expect": "data",
-    "url": "https://services3.arcgis.com/Jdnp1TjADvSDxMAX/ArcGIS/rest/services/dnrParksAndRecreation/FeatureServer/3/query?where=1%3D1&outFields=*&resultRecordCount=3&returnGeometry=false&f=geojson",
-    "note": "Campgrounds on state forest land - the closest thing any state publishes to somewhere to sleep that is not a reservation system."
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22Delaware%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+  },
+  {
+    "id": "st:florida",
+    "note": "First pass for Florida: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
+    "expect": "data",
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22Florida%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+  },
+  {
+    "id": "st:georgia",
+    "note": "First pass for Georgia: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
+    "expect": "data",
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22Georgia%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+  },
+  {
+    "id": "st:hawaii",
+    "note": "First pass for Hawaii: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
+    "expect": "data",
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22Hawaii%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+  },
+  {
+    "id": "st:idaho",
+    "note": "First pass for Idaho: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
+    "expect": "data",
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22Idaho%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+  },
+  {
+    "id": "st:illinois",
+    "note": "First pass for Illinois: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
+    "expect": "data",
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22Illinois%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+  },
+  {
+    "id": "st:indiana",
+    "note": "First pass for Indiana: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
+    "expect": "data",
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22Indiana%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+  },
+  {
+    "id": "st:iowa",
+    "note": "First pass for Iowa: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
+    "expect": "data",
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22Iowa%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+  },
+  {
+    "id": "st:kansas",
+    "note": "First pass for Kansas: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
+    "expect": "data",
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22Kansas%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+  },
+  {
+    "id": "st:louisiana",
+    "note": "First pass for Louisiana: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
+    "expect": "data",
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22Louisiana%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+  },
+  {
+    "id": "st:maine",
+    "note": "First pass for Maine: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
+    "expect": "data",
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22Maine%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+  },
+  {
+    "id": "st:maryland",
+    "note": "First pass for Maryland: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
+    "expect": "data",
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22Maryland%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+  },
+  {
+    "id": "st:massachusetts",
+    "note": "First pass for Massachusetts: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
+    "expect": "data",
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22Massachusetts%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+  },
+  {
+    "id": "st:minnesota",
+    "note": "First pass for Minnesota: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
+    "expect": "data",
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22Minnesota%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+  },
+  {
+    "id": "st:mississippi",
+    "note": "First pass for Mississippi: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
+    "expect": "data",
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22Mississippi%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+  },
+  {
+    "id": "st:missouri",
+    "note": "First pass for Missouri: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
+    "expect": "data",
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22Missouri%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+  },
+  {
+    "id": "st:montana",
+    "note": "First pass for Montana: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
+    "expect": "data",
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22Montana%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+  },
+  {
+    "id": "st:nebraska",
+    "note": "First pass for Nebraska: does the state publish recreation services at all, and under whose name. Titles alone decide nothing - anything that looks real gets a schema probe before it goes near the layer menu.",
+    "expect": "data",
+    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,140}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=6&sortField=numViews&sortOrder=desc&q=%22Nebraska%22%20AND%20%28recreation%20OR%20trails%20OR%20%22state%20park%22%20OR%20campground%20OR%20ORV%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
   }
 ]
