@@ -242,7 +242,7 @@ looked at the layer on a map. Nobody has done that yet.
 | Mississippi | State parks & WMAs | polygon | exists only |  |
 | Montana | State parks | polygon | exists only |  |
 | Nebraska | Park areas | polygon | exists only |  |
-| New Jersey | State park trails | raster | exists only | Resolves to *NJ State Open Space (Agency)* points, not the trail lines. Wrong sublayer. |
+| New Jersey | State park trails | raster | index confirmed | Correct: show:0 is *NJ State Park Service Trails (Generalized)*. |
 | New York | State park hunting areas | polygon | exists only |  |
 | North Carolina | State trails | line | exists only |  |
 | North Dakota | State forest | polygon | exists only |  |
@@ -257,12 +257,12 @@ looked at the layer on a map. Nobody has done that yet.
 | Tennessee | Wildlife management areas | raster | fields read | Renders sublayer 3 (Lands = WMAs); service root opens on Hatcheries. |
 | Texas | Wildlife management areas | polygon | exists only |  |
 | Utah | State park management areas | polygon | exists only |  |
-| Vermont | ANR travel routes | raster | exists only | Resolves to *State Park* points, not ANR travel routes. Wrong sublayer. |
+| Vermont | ANR travel routes | raster | index confirmed | Correct: show:10 is *Roads (ANR Travel Routes)*. |
 | Virginia | State park trails | line | exists only |  |
 | Washington | State park trails | line | exists only |  |
 | West Virginia | Aerial, leaf-off | raster | exists only |  |
 | West Virginia | Lidar hillshade (1 m) | raster | exists only |  |
-| Wisconsin | Park closures | point | exists only | Resolves to *WIParks*, not the closures layer. Wrong index. |
+| Wisconsin | State parks | polygon | index confirmed | The service is named for closures and holds one layer, WIParks. Renamed. |
 | Wyoming | State park boundaries | polygon | exists only |  |
 
 Fifteen of forty-eight carry a comment, which is a poor hit rate and worth
@@ -270,3 +270,35 @@ saying plainly. Every one was found by asking the service what shape its
 records are - a question none of the first sixty probes asked, because they
 were all built to ask whether a thing exists. Existence was never the
 interesting question.
+
+## Two rows in that table were wrong, and the probe was why
+
+New Jersey and Vermont were both written up as pointing at the wrong
+sublayer. Both were correct. New Jersey's `show:0` is *NJ State Park
+Service Trails (Generalized)* and Vermont's `show:10` is *Roads (ANR
+Travel Routes)*, and each service says so when asked for its layer list.
+
+The health probe reads a MapServer's **root**, which reports layer zero
+- not the sublayer the app draws. So for every raster state layer it was
+describing something other than what ships, and two of those descriptions
+were confident and wrong. The probes now read the sublayer.
+
+That is the third time in this file the answer has been "the address was
+wrong", and the second time the wrong address was in the checking rather
+than in the app.
+
+Asking Vermont properly also paid: beside the roads at 10 sit **Primitive
+Camping Areas at 22**, State Park Campsites at 175, Recreation Sites at
+2 and Trails at 3. Primitive camping is the rarest thing in this whole
+sweep - only TVA and Michigan publish anything comparable - and it was
+sitting behind a layer this file had already declared broken.
+
+Idaho's routes deserve the same note. They carry `Season_Auto`,
+`Season_Jeep`, `Season_UTV`, `Season_ATV` and `Season_Motorcycle`, and a
+symbol class for `High-Clearance`. That is MVUM-grade detail published by
+a state.
+
+BLM's layer 0 is named IDENTIFY and refuses every query form tried, which
+is how a group layer behaves; a probe now asks for the sublayer list.
+PAD-US moved and listing its organisation returned four hundred kilobytes
+of unrelated services, so that is a targeted search now.

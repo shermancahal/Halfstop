@@ -1297,6 +1297,61 @@ export const OVERLAYS = [
     attribution: 'Routes and closures © <a href="https://parksandrecreation.idaho.gov/">Idaho Parks and Recreation</a>',
   },
   {
+  /*
+   * What asking Vermont for its layer list turned up beside the roads.
+   *
+   * The roads layer was already correct at index 10 - the table in
+   * docs/state-layers.md said otherwise and the table was wrong, because the
+   * health probe reads a MapServer's root and reports layer zero rather than
+   * the sublayer actually drawn. Asking properly also produced primitive
+   * camping areas, which is the thing this app most wants and almost nobody
+   * publishes.
+   */
+    id: 'vt-camping',
+    at: [-72.8, 44.2],
+    states: ['VT'],
+    name: 'Primitive camping areas',
+    description: 'Where Vermont sanctions primitive camping.',
+    tiles: ['https://anrmaps.vermont.gov/arcgis/rest/services/map_services/MAP_ANR_ANRATLASFPR_WM_NOCACHE/MapServer/export'
+      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'
+      + '&layers=show:22'],
+    tileSize: 256,
+    maxzoom: 16,
+    opacity: 0.85,
+    enabled: false,
+    attribution: 'Recreation data © <a href="https://anr.vermont.gov/">Vermont Agency of Natural Resources</a>',
+  },
+  {
+    id: 'vt-trails',
+    at: [-72.8, 44.2],
+    states: ['VT'],
+    name: 'Trails',
+    description: 'ANR travel-route trails, the walking half of the network.',
+    tiles: ['https://anrmaps.vermont.gov/arcgis/rest/services/map_services/MAP_ANR_ANRATLASFPR_WM_NOCACHE/MapServer/export'
+      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'
+      + '&layers=show:3'],
+    tileSize: 256,
+    maxzoom: 16,
+    opacity: 0.85,
+    enabled: false,
+    attribution: 'Recreation data © <a href="https://anr.vermont.gov/">Vermont Agency of Natural Resources</a>',
+  },
+  {
+    id: 'vt-recreation',
+    at: [-72.7, 44.4],
+    states: ['VT'],
+    name: 'Recreation sites',
+    description: 'ANR recreation sites.',
+    tiles: ['https://anrmaps.vermont.gov/arcgis/rest/services/map_services/MAP_ANR_ANRATLASFPR_WM_NOCACHE/MapServer/export'
+      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'
+      + '&layers=show:2'],
+    tileSize: 256,
+    maxzoom: 16,
+    opacity: 0.85,
+    enabled: false,
+    attribution: 'Recreation data © <a href="https://anr.vermont.gov/">Vermont Agency of Natural Resources</a>',
+  },
+  {
     id: 'ky-byways',
     // Probed inside the state. Ten of these reported blank on the first run
     // because the default probe tile sits in Tennessee, where a Kentucky or
@@ -1555,8 +1610,8 @@ export const OVERLAYS = [
   {
     id: 'wi-closures',
     states: ['WI'],
-    name: 'Park closures',
-    description: 'What the state has closed, maintained as its own layer rather than per incident.',
+    name: 'State parks',
+    description: 'Wisconsin state parks. The service is named for closures and contains only a parks layer; any closure is an attribute, not a layer of its own.',
     query: {
       url: 'https://services5.arcgis.com/Ul9AyFFeFTjf08DW/arcgis/rest/services/WI_Park_Closures_PUBLIC_VIEW/FeatureServer/0/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'

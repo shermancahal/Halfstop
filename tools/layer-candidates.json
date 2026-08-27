@@ -148,10 +148,10 @@
   },
   {
     "id": "live:tn-wma",
-    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "note": "Reads the sublayer that is actually drawn. Reading the service root instead reported layer zero's name and put two wrong rows in the layer table - New Jersey and Vermont were both correct and were both written up as broken.",
     "expect": "data",
     "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
-    "url": "https://tnmap.tn.gov/arcgis/rest/services/ENVIRONMENTAL/TWRA/MapServer?f=pjson"
+    "url": "https://tnmap.tn.gov/arcgis/rest/services/ENVIRONMENTAL/TWRA/MapServer/3?f=pjson"
   },
   {
     "id": "live:tva-dispersed",
@@ -162,17 +162,17 @@
   },
   {
     "id": "live:pa-parks",
-    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "note": "Reads the sublayer that is actually drawn. Reading the service root instead reported layer zero's name and put two wrong rows in the layer table - New Jersey and Vermont were both correct and were both written up as broken.",
     "expect": "data",
     "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
-    "url": "https://www.gis.dcnr.pa.gov/agsprod/rest/services/Parks/State_Parks/MapServer?f=pjson"
+    "url": "https://www.gis.dcnr.pa.gov/agsprod/rest/services/Parks/State_Parks/MapServer/9?f=pjson"
   },
   {
     "id": "live:vt-routes",
-    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "note": "Reads the sublayer that is actually drawn. Reading the service root instead reported layer zero's name and put two wrong rows in the layer table - New Jersey and Vermont were both correct and were both written up as broken.",
     "expect": "data",
     "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
-    "url": "https://anrmaps.vermont.gov/arcgis/rest/services/map_services/MAP_ANR_ANRATLASFPR_WM_NOCACHE/MapServer?f=pjson"
+    "url": "https://anrmaps.vermont.gov/arcgis/rest/services/map_services/MAP_ANR_ANRATLASFPR_WM_NOCACHE/MapServer/10?f=pjson"
   },
   {
     "id": "live:md-roads",
@@ -190,10 +190,10 @@
   },
   {
     "id": "live:nj-trails",
-    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "note": "Reads the sublayer that is actually drawn. Reading the service root instead reported layer zero's name and put two wrong rows in the layer table - New Jersey and Vermont were both correct and were both written up as broken.",
     "expect": "data",
     "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
-    "url": "https://mapsdep.nj.gov/arcgis/rest/services/Applications/DEP_Trails/MapServer?f=pjson"
+    "url": "https://mapsdep.nj.gov/arcgis/rest/services/Applications/DEP_Trails/MapServer/0?f=pjson"
   },
   {
     "id": "live:or-parks",
@@ -232,10 +232,10 @@
   },
   {
     "id": "live:ia-recreation",
-    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "note": "Reads the sublayer that is actually drawn. Reading the service root instead reported layer zero's name and put two wrong rows in the layer table - New Jersey and Vermont were both correct and were both written up as broken.",
     "expect": "data",
     "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
-    "url": "https://programs.iowadnr.gov/geospatial/rest/services/Recreation/Recreation/MapServer?f=pjson"
+    "url": "https://programs.iowadnr.gov/geospatial/rest/services/Recreation/Recreation/MapServer/11?f=pjson"
   },
   {
     "id": "live:fl-forests",
@@ -260,10 +260,10 @@
   },
   {
     "id": "live:hi-trails",
-    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
+    "note": "Reads the sublayer that is actually drawn. Reading the service root instead reported layer zero's name and put two wrong rows in the layer table - New Jersey and Vermont were both correct and were both written up as broken.",
     "expect": "data",
     "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
-    "url": "https://geodata.hawaii.gov/arcgis/rest/services/Terrestrial/MapServer?f=pjson"
+    "url": "https://geodata.hawaii.gov/arcgis/rest/services/Terrestrial/MapServer/34?f=pjson"
   },
   {
     "id": "live:in-trails",
@@ -413,20 +413,6 @@
     "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_BasicOwnership_01/MapServer/0/query?geometry=%7B%22x%22%3A-88.7%2C%22y%22%3A37.5%2C%22spatialReference%22%3A%7B%22wkid%22%3A4326%7D%7D&geometryType=esriGeometryPoint&spatialRel=esriSpatialRelIntersects&where=1%3D1&outFields=*&returnGeometry=false&f=json"
   },
   {
-    "id": "land:blm-a",
-    "note": "BLM as the app asks, plus an explicit inSR. The identify feature falls through its services in order, so a broken first entry costs a round trip on every click before the working one answers.",
-    "expect": "data",
-    "find": "\"(?:attributes|ADMIN_UNIT_NAME|ADMIN_AGENCY_CODE|Own_Name|Loc_Nm|Mang_Name)\"\\s*:\\s*\"?[^\",}]{0,50}\"?",
-    "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_LimitedScale/MapServer/0/query?geometry=%7B%22x%22%3A-111.5%2C%22y%22%3A38.5%2C%22spatialReference%22%3A%7B%22wkid%22%3A4326%7D%7D&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&where=1%3D1&outFields=*&returnGeometry=false&f=json"
-  },
-  {
-    "id": "land:blm-b",
-    "note": "BLM with the x,y shorthand the comment says it rejected - worth re-testing, services change. The identify feature falls through its services in order, so a broken first entry costs a round trip on every click before the working one answers.",
-    "expect": "data",
-    "find": "\"(?:attributes|ADMIN_UNIT_NAME|ADMIN_AGENCY_CODE|Own_Name|Loc_Nm|Mang_Name)\"\\s*:\\s*\"?[^\",}]{0,50}\"?",
-    "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_LimitedScale/MapServer/0/query?geometry=-111.5%2C38.5&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&where=1%3D1&outFields=*&returnGeometry=false&f=json"
-  },
-  {
     "id": "land:blm-layers",
     "note": "What BLM_Natl_SMA_LimitedScale actually publishes - layer 0 may not be the one. The identify feature falls through its services in order, so a broken first entry costs a round trip on every click before the working one answers.",
     "expect": "data",
@@ -434,38 +420,38 @@
     "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_LimitedScale/MapServer?f=pjson"
   },
   {
-    "id": "land:padus-list",
-    "note": "Which PAD-US services exist. The configured PADUS4_0Fee answers Invalid URL, and this has now moved at least twice. The identify feature falls through its services in order, so a broken first entry costs a round trip on every click before the working one answers.",
+    "id": "live:vt-camping",
+    "note": "Vermont primitive camping.",
     "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
-    "url": "https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services?f=pjson"
+    "find": "\"(?:title|url|name|type)\"\\s*:\\s*\"[^\"]{0,90}\"",
+    "url": "https://anrmaps.vermont.gov/arcgis/rest/services/map_services/MAP_ANR_ANRATLASFPR_WM_NOCACHE/MapServer/22?f=pjson"
   },
   {
-    "id": "idx:nj-trails",
-    "note": "Ships as New Jersey's park trails and resolves to open-space points. The search that found it named a generalised-trails layer in this service, so the trails are here at some index that is not zero. Asking the service for its own layer list is one request and has been right every time it has been tried.",
+    "id": "live:vt-trails",
+    "note": "Vermont ANR trails.",
     "expect": "data",
-    "find": "\"id\"\\s*:\\s*\\d+,\\s*\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
-    "url": "https://mapsdep.nj.gov/arcgis/rest/services/Applications/DEP_Trails/MapServer?f=pjson"
+    "find": "\"(?:title|url|name|type)\"\\s*:\\s*\"[^\"]{0,90}\"",
+    "url": "https://anrmaps.vermont.gov/arcgis/rest/services/map_services/MAP_ANR_ANRATLASFPR_WM_NOCACHE/MapServer/3?f=pjson"
   },
   {
-    "id": "idx:vt-routes",
-    "note": "Ships as ANR travel routes and resolves to state park points. Vermont's roads layer is the strongest thing found in that state and it is in this service somewhere. Asking the service for its own layer list is one request and has been right every time it has been tried.",
+    "id": "live:vt-recreation",
+    "note": "Vermont recreation sites.",
     "expect": "data",
-    "find": "\"id\"\\s*:\\s*\\d+,\\s*\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
-    "url": "https://anrmaps.vermont.gov/arcgis/rest/services/map_services/MAP_ANR_ANRATLASFPR_WM_NOCACHE/MapServer?f=pjson"
+    "find": "\"(?:title|url|name|type)\"\\s*:\\s*\"[^\"]{0,90}\"",
+    "url": "https://anrmaps.vermont.gov/arcgis/rest/services/map_services/MAP_ANR_ANRATLASFPR_WM_NOCACHE/MapServer/2?f=pjson"
   },
   {
-    "id": "idx:wi-closures",
-    "note": "Ships as park closures and resolves to the parks layer. A state that maintains its own closure layer is rare enough to be worth one more probe. Asking the service for its own layer list is one request and has been right every time it has been tried.",
+    "id": "land:blm-sublayer",
+    "note": "BLM layer 0 is named IDENTIFY and rejects every query form tried - explicit point geometry, shorthand, with and without inSR. A group layer would do exactly that. This asks for every sublayer with its type, to find the one that holds Surface Management Agency and can actually be queried.",
     "expect": "data",
-    "find": "\"id\"\\s*:\\s*\\d+,\\s*\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
-    "url": "https://services5.arcgis.com/Ul9AyFFeFTjf08DW/arcgis/rest/services/WI_Park_Closures_PUBLIC_VIEW/FeatureServer?f=pjson"
+    "find": "\"(?:title|url|name|type)\"\\s*:\\s*\"[^\"]{0,90}\"",
+    "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_LimitedScale/MapServer/layers?f=pjson"
   },
   {
-    "id": "idx:in-trails",
-    "note": "Reported by the user as corridor polygons rather than trail lines. Whether a line layer exists beside the polygons is the whole question, and this is what answers it. Asking the service for its own layer list is one request and has been right every time it has been tried.",
+    "id": "land:padus-find",
+    "note": "Where PAD-US went. The configured PADUS4_0Fee answers Invalid URL, and listing the whole organisation returned four hundred kilobytes of unrelated services in alphabetical order, which answered nothing.",
     "expect": "data",
-    "find": "\"id\"\\s*:\\s*\\d+,\\s*\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
-    "url": "https://gisdata.in.gov/server/rest/services/Hosted/Trails_AGOL_RO/FeatureServer?f=pjson"
+    "find": "\"(?:title|url|name|type)\"\\s*:\\s*\"[^\"]{0,90}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=10&q=PADUS%20AND%20owner%3Av01gqwM5QqNysAAi%20AND%20type%3A%22Feature%20Service%22"
   }
 ]
