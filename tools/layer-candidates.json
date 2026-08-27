@@ -77,31 +77,56 @@
     "url": "https://gis.blm.gov/arcgis/rest/services/transportation/BLM_Natl_GTLF_Public_Display/MapServer/0?f=pjson"
   },
   {
-    "id": "rec:tn-twra-service",
-    "note": "The last probe asked for TWRA as a folder and was told there is no such folder. It is a service inside ENVIRONMENTAL, so this asks the service itself. The question is unchanged: does it carry wildlife management area boundaries, which are public land you may walk onto.",
+    "id": "rec:ky-byways",
     "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,80}\"",
-    "url": "https://tnmap.tn.gov/arcgis/rest/services/ENVIRONMENTAL/TWRA/MapServer?f=pjson"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
+    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Scenic_Byways_WGS84WM/MapServer?f=pjson",
+    "note": "The layer whose name is the app's name. Whether it is wireable comes down to one thing - does a byway carry its own name, or only an id that means nothing to a person reading a panel."
   },
   {
-    "id": "rec:twra-agol",
-    "note": "TWRA turned up incidentally on its own ArcGIS Online org while looking for TVA. If the WMAs live anywhere public, they live here.",
+    "id": "rec:ky-trails",
     "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,160}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=20&sortField=numViews&sortOrder=desc&q=TWRA%20OR%20%28%22wildlife%20management%20area%22%20AND%20Tennessee%29"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
+    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Recreational_Trails_WGS84WM/MapServer?f=pjson",
+    "note": "Statewide trails on a server the app already talks to. The fields decide whether a trail can be told apart by use - foot, horse, motorised - which is the whole difference between a useful layer and a mess of lines."
   },
   {
-    "id": "rec:ky-recreation",
-    "note": "Kentucky's vector folder is long enough that a plain listing hit the match cap around the letter C. This asks the same folder but only for the names that would matter - parks, trails, camping, forest, wildlife, public land, boat access - so the answer is not buried under census tracts.",
+    "id": "rec:ky-hunting",
     "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"WGS84WM_Services/[^\"]*(?:Park|Trail|Recreat|Camp|Forest|Wildlife|Nature|Public|Boat|Access|Scenic)[^\"]*\"",
-    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services?f=pjson"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
+    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Public_Hunting_Areas_WGS84WM/MapServer?f=pjson",
+    "note": "Public hunting areas are public land you may walk onto, which makes this an access layer that happens to be filed under hunting. Worth knowing whether the polygons name their manager."
   },
   {
-    "id": "rec:usfs-fire-closures",
-    "note": "The closure pattern, and the one hit worth keeping out of a search full of municipal road closures. A road the MVUM says you may drive and an order that shut it last week are two different facts, and only one of them is already in the app. This asks what a closure record actually carries - dates, the order, the geometry.",
+    "id": "rec:ky-forests",
     "expect": "data",
-    "find": "\"(?:title|url)\"\\s*:\\s*\"[^\"]{0,160}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=30&sortField=numViews&sortOrder=desc&q=%22fire%20closure%22%20AND%20%28forest%20OR%20road%20OR%20trail%29%20AND%20%28type%3A%22Map%20Service%22%20OR%20type%3A%22Feature%20Service%22%29"
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
+    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_StateForests_WGS84WM/MapServer?f=pjson",
+    "note": "State forest boundaries - the other half of the access question, and the one people actually camp in."
+  },
+  {
+    "id": "rec:tn-twra-lands",
+    "expect": "data",
+    "url": "https://tnmap.tn.gov/arcgis/rest/services/ENVIRONMENTAL/TWRA/MapServer/3/query?where=1%3D1&outFields=*&resultRecordCount=3&returnGeometry=false&f=geojson",
+    "note": "Sublayer 3 is listed as Lands, which on a wildlife agency's service should mean wildlife management areas. Three real records with every field settle whether that is what it is."
+  },
+  {
+    "id": "rec:tva-dispersed",
+    "expect": "data",
+    "url": "https://services.arcgis.com/w8auYAijfGK1Mydj/arcgis/rest/services/Dispersed_Recreation_Areas/FeatureServer/0/query?where=1%3D1&outFields=*&resultRecordCount=3&returnGeometry=false&f=geojson",
+    "note": "The rarest thing found in the whole sweep: an authority saying where dispersed use is actually sanctioned. Nearly every other source says where land is, not what you may do on it. If these records carry that distinction they are worth more than any trail layer here."
+  },
+  {
+    "id": "rec:mi-roads",
+    "expect": "data",
+    "url": "https://services3.arcgis.com/Jdnp1TjADvSDxMAX/arcgis/rest/services/DNR_ROADS/FeatureServer/0?f=pjson",
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
+    "note": "Michigan's state forest road network. The MVUM answers this question federally with a column per vehicle type; the question here is whether a state answers it at all, or just draws the line."
+  },
+  {
+    "id": "rec:mi-campgrounds",
+    "expect": "data",
+    "url": "https://services3.arcgis.com/Jdnp1TjADvSDxMAX/ArcGIS/rest/services/dnrParksAndRecreation/FeatureServer/3/query?where=1%3D1&outFields=*&resultRecordCount=3&returnGeometry=false&f=geojson",
+    "note": "Campgrounds on state forest land - the closest thing any state publishes to somewhere to sleep that is not a reservation system."
   }
 ]
