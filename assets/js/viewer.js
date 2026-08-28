@@ -1165,6 +1165,7 @@ function opacityPaint(type, value) {
   // A circle layer has no raster-opacity, and setting one is a spec error the
   // slider was committing on every point layer.
   if (type === 'circle') return ['circle-opacity', Math.min(1, value + 0.25)];
+  if (type === 'symbol') return ['icon-opacity', Math.min(1, value + 0.25)];
   return ['raster-opacity', value];
 }
 
@@ -4714,6 +4715,50 @@ async function refreshPointOverlay(overlay, source, empty) {
 /** What the last point query returned, per overlay, for the inspector. */
 const lastPointFetch = new Map();
 
+/**
+ * A diagonal hatch in a given colour, registered once and reused.
+ *
+ * Solid fills stack badly. Three state layers over one another - a forest, a
+ * hunting area and a park - come out as one muddy colour nobody can read, which
+ * is what was reported over New York. Hatching is the cartographic answer and
+ * has been since long before screens: the lines of each layer stay visible
+ * through the lines of the next, and the boundary line still says where the
+ * edge is.
+ *
+ * Returns null if there is no canvas to draw on, and the caller falls back to a
+ * solid fill rather than drawing nothing.
+ */
+function hatchPattern(colour) {
+  const id = `hatch-${String(colour).replace('#', '')}`;
+  try {
+    if (state.map.hasImage?.(id)) return id;
+    const ratio = 2;
+    const size = 8 * ratio;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = 1.5 * ratio;
+    // Three passes so the diagonal meets itself across the tile edge; two
+    // leaves a visible seam every eight pixels.
+    ctx.beginPath();
+    for (const offset of [-size, 0, size]) {
+      ctx.moveTo(offset, size);
+      ctx.lineTo(offset + size, 0);
+    }
+    ctx.stroke();
+
+    const { data } = ctx.getImageData(0, 0, size, size);
+    state.map.addImage(id, { width: size, height: size, data: new Uint8Array(data) }, { pixelRatio: ratio });
+    return id;
+  } catch {
+    return null;
+  }
+}
+
 function addQueryOverlay(overlay, opacity) {
   const [fill, casing, line, dot] = overlayLayerIds(overlay);
   const colour = overlay.query.color || '#D84315';
@@ -4729,13 +4774,18 @@ function addQueryOverlay(overlay, opacity) {
   }
   if (!state.map.getLayer(fill)) {
     const [, amount] = opacityPaint('fill', opacity);
+    const hatch = hatchPattern(colour);
     state.map.addLayer({
       id: fill,
       type: 'fill',
       source: fill,
       // Only what a fill can draw. See the note on the circle layer below.
       filter: ['==', ['geometry-type'], 'Polygon'],
-      paint: { 'fill-color': colour, 'fill-opacity': amount },
+      paint: hatch
+        // Hatched, so layers stacked on one another stay separable. The
+        // outline below is what states the boundary; this only states extent.
+        ? { 'fill-pattern': hatch, 'fill-opacity': Math.min(1, amount * 2.2) }
+        : { 'fill-color': colour, 'fill-opacity': amount },
     }, firstDataLayerId());
   }
   /*
@@ -4802,20 +4852,47 @@ function addQueryOverlay(overlay, opacity) {
    */
   if (!state.map.getLayer(dot)) {
     const [, amount] = opacityPaint('line', opacity);
-    state.map.addLayer({
-      id: dot,
-      type: 'circle',
-      source: fill,
-      filter: ['==', ['geometry-type'], 'Point'],
-      paint: {
-        'circle-color': colour,
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 2.5, 12, 5, 16, 7],
-        'circle-opacity': amount,
-        'circle-stroke-color': '#ffffff',
-        'circle-stroke-width': 1,
-        'circle-stroke-opacity': amount * 0.8,
-      },
-    }, firstDataLayerId());
+    /*
+     * A named site gets the same pin the recreation layer uses.
+     *
+     * A campground is a campground whoever published it, and the app already
+     * has a pin vocabulary for exactly these things - so a state's campgrounds
+     * should not arrive as anonymous dots in a second visual language. A layer
+     * naming an icon gets the pin; anything else keeps the dot, which is still
+     * the right mark for a facility with no obvious symbol.
+     */
+    const icon = overlay.query.icon;
+    if (icon) {
+      registerNPSImages(state.map);
+      state.map.addLayer({
+        id: dot,
+        type: 'symbol',
+        source: fill,
+        filter: ['==', ['geometry-type'], 'Point'],
+        layout: {
+          'icon-image': `nps-${icon}`,
+          'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.55, 13, 0.85, 16, 1],
+          'icon-allow-overlap': false,
+          'icon-anchor': 'bottom',
+        },
+        paint: { 'icon-opacity': amount },
+      }, firstDataLayerId());
+    } else {
+      state.map.addLayer({
+        id: dot,
+        type: 'circle',
+        source: fill,
+        filter: ['==', ['geometry-type'], 'Point'],
+        paint: {
+          'circle-color': colour,
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 2.5, 12, 5, 16, 7],
+          'circle-opacity': amount,
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 1,
+          'circle-stroke-opacity': amount * 0.8,
+        },
+      }, firstDataLayerId());
+    }
   }
 
   refreshQueryOverlay(overlay);

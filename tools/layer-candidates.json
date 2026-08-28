@@ -446,5 +446,12 @@
     "expect": "data",
     "find": "\"(?:attributes|ADMIN_UNIT_NAME|AGBUR|FEATURE1|NAME1)\"\\s*:\\s*\"?[^\",}]{0,50}\"?",
     "url": "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/USA_Federal_Lands/FeatureServer/0/query?geometry=%7B%22x%22%3A-111.5%2C%22y%22%3A38.5%2C%22spatialReference%22%3A%7B%22wkid%22%3A4326%7D%7D&geometryType=esriGeometryPoint&spatialRel=esriSpatialRelIntersects&where=1%3D1&outFields=*&returnGeometry=false&f=json"
+  },
+  {
+    "id": "live:md-roads-query",
+    "note": "Maryland draws nothing on the map. Its metadata says polyline and its service is alive, so the question is whether the bbox query the app actually sends comes back with features - which no probe here has ever asked of any layer. Every check so far has asked whether a service exists and what shape it claims; none has asked whether it answers with data for a real extent.",
+    "expect": "data",
+    "find": "\"(?:type|coordinates|OBJECTID|features)\"\\s*:\\s*\"?[^\",\\[]{0,40}",
+    "url": "https://services.arcgis.com/njFNhDsUCentVYJW/arcgis/rest/services/State_Park_Forest_Recreation_Maintained_Roads/FeatureServer/0/query?where=1%3D1&geometry=-79.5,39.0,-78.5,39.7&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson"
   }
 ]

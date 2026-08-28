@@ -1519,6 +1519,7 @@ export const OVERLAYS = [
         + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
         + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
       minzoom: 7,
+      icon: 'campground',
       color: '#2E7D32',
     },
     opacity: 0.55,
@@ -1656,6 +1657,7 @@ export const OVERLAYS = [
         + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
         + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
       minzoom: 7,
+      icon: 'ranger',
       color: '#2E7D32',
     },
     opacity: 0.55,
@@ -1848,6 +1850,7 @@ export const OVERLAYS = [
         + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
         + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
       minzoom: 7,
+      icon: 'ranger',
       color: '#2E7D32',
     },
     opacity: 0.55,
@@ -1956,6 +1959,7 @@ export const OVERLAYS = [
         + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
         + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
       minzoom: 7,
+      icon: 'ranger',
       color: '#2E7D32',
     },
     opacity: 0.55,
@@ -2028,6 +2032,7 @@ export const OVERLAYS = [
         + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
         + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
       minzoom: 7,
+      icon: 'information',
       color: '#2E7D32',
     },
     opacity: 0.55,
