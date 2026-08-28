@@ -4641,6 +4641,7 @@ async function refreshQueryOverlay(overlay) {
   if ((state.map.getZoom?.() ?? 0) < minzoom) { source.setData(empty); return; }
 
   if (points) { await refreshPointOverlay(overlay, source, empty); return; }
+  if (overlay.query.uses) { await refreshUseOverlay(overlay, source, empty); return; }
 
   try {
     const response = await fetch(queryURL(url, state.map));
@@ -4657,6 +4658,48 @@ async function refreshQueryOverlay(overlay) {
   } catch {
     noteLayerHealth(overlayLayerIds(overlay)[0], false);
   }
+}
+
+/**
+ * Several sublayers, one layer of lines, each carrying what it is for.
+ *
+ * Kentucky splits its trails by who may travel them - federal hiking, federal
+ * ATV, KDFWR horse, state park - across twelve endpoints. The agency's own
+ * raster drew each in its own colour and its own dash pattern, which is where
+ * the mixture of dashed and solid lines came from; none of it was reachable
+ * from outside the picture.
+ *
+ * Merging them and tagging each feature with its use puts the distinction in a
+ * column, where a single match expression can colour by it and a key can name
+ * six things instead of six hundred. The same shape as the points path above,
+ * for the same reason: the sublayer that answered is the fact, decided before
+ * the data arrives rather than read out of a code table.
+ *
+ * Twelve requests is not free, which is why these layers carry a higher zoom
+ * floor than the rest.
+ */
+async function refreshUseOverlay(overlay, source, empty) {
+  const { url, uses } = overlay.query;
+
+  const answers = await Promise.all(uses.map(async (kind) => {
+    try {
+      const response = await fetch(queryURL(url.replace('{layer}', String(kind.layer)), state.map));
+      if (!response.ok) return [];
+      const data = await response.json();
+      if (data.error || !Array.isArray(data.features)) return [];
+      return data.features.map((feature) => ({
+        ...feature,
+        properties: { ...feature.properties, use: kind.use },
+      }));
+    } catch {
+      return [];
+    }
+  }));
+
+  const features = answers.flat();
+  source.setData(features.length ? { type: 'FeatureCollection', features } : empty);
+  // Every sublayer failing is a broken layer; some failing is a quiet view.
+  noteLayerHealth(overlayLayerIds(overlay)[0], answers.some((answer) => answer.length) || !features.length);
 }
 
 /**
@@ -4840,6 +4883,7 @@ function addQueryOverlay(overlay, opacity) {
    * heavy border for no gain.
    */
   const road = Boolean(overlay.query.road);
+  const trail = Boolean(overlay.query.trail);
   /*
    * The scale is baked into the stops, not applied to the result.
    *
@@ -4853,7 +4897,7 @@ function addQueryOverlay(overlay, opacity) {
   const width = (scale) => ['interpolate', ['linear'], ['zoom'],
     8, 0.9 * scale, 11, 1.6 * scale, 13, 2.6 * scale, 15, 4.2 * scale, 17, 6.5 * scale];
 
-  if (road && !state.map.getLayer(casing)) {
+  if ((road || trail) && !state.map.getLayer(casing)) {
     const [, amount] = opacityPaint('line', opacity);
     addPart('road casing', {
       id: casing,
@@ -4863,7 +4907,7 @@ function addQueryOverlay(overlay, opacity) {
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
         'line-color': '#FFFDF7',
-        'line-width': width(1.9),
+        'line-width': width(trail ? 1.5 : 1.9),
         'line-opacity': amount * 0.9,
       },
     }, firstDataLayerId());
@@ -4877,11 +4921,17 @@ function addQueryOverlay(overlay, opacity) {
       source: fill,
       // A line draws a road and the edge of an area; over a point it is noise.
       filter: ['!=', ['geometry-type'], 'Point'],
-      layout: road ? { 'line-cap': 'round', 'line-join': 'round' } : {},
+      layout: (road || trail)
+        ? { 'line-cap': trail ? 'butt' : 'round', 'line-join': 'round' }
+        : {},
       paint: {
         'line-color': tint || colour,
-        'line-width': road ? width(1) : 1.4,
+        'line-width': road ? width(1) : trail ? width(0.62) : 1.4,
         'line-opacity': amount,
+        // A path is dashed on every map that draws one, and a dash cannot be
+        // driven by a column - so one pattern for all of them, and the colour
+        // carries the use instead.
+        ...(trail ? { 'line-dasharray': [2.2, 1.4] } : {}),
       },
     }, firstDataLayerId());
   }
@@ -4966,8 +5016,8 @@ function addQueryOverlay(overlay, opacity) {
         'text-field': ['coalesce', ['get', overlay.query.label], ''],
         'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Regular'],
         'text-size': ['interpolate', ['linear'], ['zoom'], 8, 10, 13, 12, 16, 13],
-        'symbol-placement': road ? 'line' : 'point',
-        'text-max-width': road ? 20 : 8,
+        'symbol-placement': (road || trail) ? 'line' : 'point',
+        'text-max-width': (road || trail) ? 20 : 8,
         'text-padding': 6,
         'text-optional': true,
       },

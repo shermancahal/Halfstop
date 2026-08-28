@@ -258,6 +258,11 @@ const runtimeExpressions = {
   'road core width': [roadWidth(1), NUMBER],
   'site icon size': [['interpolate', ['linear'], ['zoom'], 8, 0.55, 13, 0.85, 16, 1], NUMBER],
   'dot radius': [['interpolate', ['linear'], ['zoom'], 7, 2.5, 12, 5, 16, 7], NUMBER],
+  // The trail widths, which are the same curve at a smaller scale. Baked into
+  // the stops for the reason the casing had to be: a zoom expression cannot be
+  // an argument to anything.
+  'trail casing width': [roadWidth(1.5), NUMBER],
+  'trail core width': [roadWidth(0.62), NUMBER],
 };
 for (const [what, [value, spec]] of Object.entries(runtimeExpressions)) {
   const compiled = expression.createPropertyExpression(value, spec);

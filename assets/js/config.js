@@ -1380,19 +1380,75 @@ export const OVERLAYS = [
     attribution: 'Recreation data © <a href="https://technology.ky.gov/gis/">Kentucky Division of Geographic Information</a>',
   },
   {
+    /*
+     * Twelve endpoints, one layer, coloured by who may travel it.
+     *
+     * Kentucky publishes its trails split by use - federal hiking, federal ATV,
+     * KDFWR horse, state park, rails to trails - and as a raster each arrived
+     * in the agency's colour and the agency's dash pattern, which is where the
+     * mixture of dashed and solid lines came from. Merging the sublayers and
+     * tagging each feature with its use turns that into a column, so six key
+     * entries cover the lot instead of a list per trail.
+     *
+     * All of them dashed, because a path is dashed on every map that draws one
+     * and a dash cannot be driven by a column anyway. The colour carries the
+     * use; the width is narrower than a road, which is what a trail should be.
+     *
+     * Zoom floor of ten: twelve requests per pan is a real cost and not one to
+     * pay while somebody is looking at half a state.
+     */
+    legend: [
+      { color: '#2E7D32', label: 'Hiking' },
+      { color: '#6D4C41', label: 'Horse' },
+      { color: '#1565C0', label: 'Bicycle' },
+      { color: '#B45309', label: 'ATV' },
+      { color: '#8E24AA', label: 'Motorcycle' },
+      { color: '#0097A7', label: 'Water' },
+      { color: '#546E7A', label: 'Mixed use' },
+    ],
     id: 'ky-trails',
-    legendNote: 'The agency draws this layer itself, so the colours are theirs and there is no key to read out of it. Tap a feature to see what it is.',
-    at: [-83.2, 36.9],
     states: ['KY'],
     name: 'Recreational trails',
-    description: 'Trails split by what may travel them - foot, horse, bicycle, ATV, motorcycle.',
-    tiles: ['https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Recreational_Trails_WGS84WM/MapServer/export'
-      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'],
-    tileSize: 256,
-    maxzoom: 16,
-    opacity: 0.85,
+    description: 'Trails coloured by what may travel them.',
+    query: {
+      url: 'https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Recreational_Trails_WGS84WM/MapServer/{layer}/query'
+        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
+        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
+        + '&outSR=4326&maxAllowableOffset=0.0002&resultRecordCount=300&f=geojson',
+      minzoom: 10,
+      trail: true,
+      color: '#546E7A',
+      uses: [
+        { layer: 0, use: 'Hiking' },
+        { layer: 1, use: 'Hiking' },
+        { layer: 11, use: 'Hiking' },
+        { layer: 4, use: 'Horse' },
+        { layer: 10, use: 'Horse' },
+        { layer: 9, use: 'Bicycle' },
+        { layer: 3, use: 'Bicycle' },
+        { layer: 7, use: 'ATV' },
+        { layer: 8, use: 'Motorcycle' },
+        { layer: 5, use: 'Water' },
+        { layer: 6, use: 'Mixed use' },
+        { layer: 2, use: 'Mixed use' },
+      ],
+      fillBy: {
+        field: 'use',
+        colors: {
+          Hiking: '#2E7D32',
+          Horse: '#6D4C41',
+          Bicycle: '#1565C0',
+          ATV: '#B45309',
+          Motorcycle: '#8E24AA',
+          Water: '#0097A7',
+          'Mixed use': '#546E7A',
+        },
+        fallback: '#546E7A',
+      },
+    },
+    opacity: 0.7,
     enabled: false,
-    attribution: 'Recreation data \u00a9 <a href=\"https://technology.ky.gov/gis/\">Kentucky Division of Geographic Information</a>',
+    attribution: 'Recreation data © <a href="https://technology.ky.gov/gis/">Kentucky Division of Geographic Information</a>',
   },
   {
     /*
