@@ -353,8 +353,17 @@ html, body { height: 100%; overflow: hidden; }
   }
   .panel-toggle { display: inline-flex; }
 }
+/*
+ * On a wide screen the toggle is what opens a panel that now starts closed.
+ *
+ * It used to be hidden above 820px because the panel was always open there and
+ * the button would have done nothing but close it. With the panel closed until
+ * asked for, hiding this leaves a desktop with no way to open it at all - so
+ * it shows whenever the panel is shut and gets out of the way once it is open,
+ * which is the same rule the narrow layout already used.
+ */
 @media (min-width: 821px) {
-  .panel-toggle { display: none; }
+  .app.is-panel-open .panel-toggle { display: none; }
 }
 
 /* ==========================================================================
@@ -658,6 +667,25 @@ html, body { height: 100%; overflow: hidden; }
 /* ==========================================================================
    Compact layer rows — descriptions fold away behind (i)
    ========================================================================== */
+
+/*
+ * Two columns where there is room for them.
+ *
+ * The list has grown past forty layers and reads as a scroll rather than a
+ * menu. Two columns halves that, but only once the panel is wide enough that a
+ * name like "State park boundaries (South Carolina)" does not wrap to three
+ * lines - below that, one readable column beats two cramped ones. So the panel
+ * widens first and the columns follow it, rather than the columns being forced
+ * into the width the panel already had.
+ */
+@media (min-width: 1200px) {
+  .panel { width: 460px; }
+  .layer-group-body,
+  #basemap-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; align-items: start; }
+}
+/* Each layer is one grid cell: its row, its description and its slider move
+   together. */
+.layer-item { min-width: 0; }
 
 .layer-row {
   display: flex; align-items: center; gap: 4px;

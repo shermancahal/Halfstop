@@ -198,6 +198,23 @@ const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PAT
 const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' });
 const page = await context.newPage();
 
+/*
+ * Open the panel if it is shut, then show a tab.
+ *
+ * The panel now starts closed - it is a tool you reach for, and opening it
+ * over the map before anyone asked made the map narrower for no reason. Every
+ * tab click in this file used to assume it was already open, which was true by
+ * accident: an earlier interaction happened to open it, and the first reload
+ * that came afterwards took the assumption away.
+ */
+const showTab = async (name) => {
+  if (await page.locator('#panel').isHidden()) {
+    await page.locator('#panel-toggle').click();
+    await page.waitForTimeout(120);
+  }
+  await page.click(`.panel-tab[data-tab="${name}"]`);
+};
+
 const consoleErrors = [];
 page.on('pageerror', (error) => consoleErrors.push(`pageerror: ${error.message}`));
 page.on('console', (message) => { if (message.type() === 'error' && !/404/.test(message.text())) consoleErrors.push(message.text()); });
@@ -768,7 +785,7 @@ const scoped = await page.evaluate(async () => {
 });
 check('the catalogue has some', scoped.length > 0, true);
 
-await page.click('.panel-tab[data-tab="layers"]');
+await showTab('layers');
 await page.waitForTimeout(600);
 const offered = await page.evaluate((ids) => ids.filter((id) => {
   const rows = [...document.querySelectorAll('#overlay-list .layer-option-label')];
@@ -792,22 +809,54 @@ check('while the layers that apply everywhere still are',
 
 // One heading for all of them, with the state on each row: fifty headings of
 // two layers each is what the old grouping would have become.
-const stateRows = await page.evaluate(() => {
+/*
+ * Picked by layer id, not by punctuation.
+ *
+ * Matching labels containing a bracket used to mean "a state layer" and now
+ * means nothing - "Aerial (3 in)" and "Roads & trails (USGS)" both have one,
+ * and only the first is a state's. The ids of the state-scoped layers are
+ * already known here, so they are what the check asks for.
+ */
+const stateRows = await page.evaluate((ids) => {
   const heads = [...document.querySelectorAll('.layer-group-summary span:first-child')]
     .map((node) => node.textContent.trim());
   const named = [...document.querySelectorAll('#overlay-list .layer-option-label')]
-    .filter((node) => /\u2014/.test(node.textContent))
+    .filter((node) => ids.includes(node.dataset.layer))
     .map((node) => node.textContent.trim());
   return { heads, named };
-});
+}, scoped.filter((entry) => entry.states.includes('TN')).map((entry) => entry.id));
 check('state data sits under one heading, not one per state',
   stateRows.heads.includes('State data'), true);
 check('and no heading is a state name', stateRows.heads.includes('Tennessee'), false);
 check('while every state row says which state it is',
-  stateRows.named.length > 0 && stateRows.named.every((text) => text.endsWith('\u2014 Tennessee')), true);
+  stateRows.named.length > 0 && stateRows.named.every((text) => text.endsWith('(Tennessee)')), true);
+
+/*
+ * The panel is shut until asked for, and opens on Layers.
+ *
+ * Both halves matter and both were wrong: it opened over the map on every wide
+ * screen, and it opened on Folders - so the first thing anybody saw was an
+ * empty list of their own files rather than the map they came for. The toggle
+ * has to be reachable on a wide screen too, or closing by default strands a
+ * desktop with no way back in.
+ */
+console.log('\nThe panel waits to be asked, and opens on Layers');
+{
+  const fresh = await context.newPage();
+  await fresh.goto(hosted.url, { waitUntil: 'networkidle' });
+  await fresh.waitForTimeout(900);
+  check('it starts closed', await fresh.locator('#panel').isHidden(), true);
+  check('and the way to open it is on screen', await fresh.locator('#panel-toggle').isVisible(), true);
+  await fresh.locator('#panel-toggle').click();
+  await fresh.waitForTimeout(200);
+  check('opening it shows the panel', await fresh.locator('#panel').isVisible(), true);
+  check('on the Layers tab', await fresh.locator('#tab-layers').isVisible(), true);
+  check('not on Folders', await fresh.locator('#tab-folders').isHidden(), true);
+  await fresh.close();
+}
 
 console.log('\nEvery basemap previews itself');
-await page.click('.panel-tab[data-tab="layers"]');
+await showTab('layers');
 await page.waitForTimeout(700);
 const previews = await page.evaluate(() => ({
   rows: document.querySelectorAll('#basemap-list .layer-row').length,
@@ -823,7 +872,7 @@ check('and the rest ask for a tile near the middle of the map',
   /\/12\/1609\/1089|1609.*1089/.test(previews.src), true);
 
 console.log('\nSwitch to a raster basemap and back');
-await page.click('.panel-tab[data-tab="layers"]');
+await showTab('layers');
 await page.locator('.layer-row', { hasText: /^USGS Topo$/ }).locator('input[type=radio]').check();
 await page.waitForTimeout(900);
 const afterRaster = await state();
@@ -868,7 +917,7 @@ check('waypoints repaired after a silent diff', afterDiff.folderFeatures, afterI
  * same treatment — the memory is the part that breaks, not the rendering.
  */
 console.log('\nThe sky panels open, and the open one is remembered');
-await page.click('.panel-tab[data-tab="waypoints"]');
+await showTab('waypoints');
 await page.waitForTimeout(300);
 await page.locator('.waypoint-card').first().click();
 await page.waitForTimeout(900);
@@ -902,7 +951,7 @@ check('only one box at a time', await page.locator('.sky-panel').count(), 1);
 
 await page.reload({ waitUntil: 'networkidle' });
 await page.waitForTimeout(1200);
-await page.click('.panel-tab[data-tab="waypoints"]');
+await showTab('waypoints');
 await page.waitForTimeout(300);
 await page.locator('.waypoint-card').first().click();
 await page.waitForTimeout(900);
@@ -949,7 +998,7 @@ check('and no label layer without glyphs to draw it with',
  * typography and are now the same swatch list the radar layer draws.
  */
 console.log('\nA weather layer draws the service colour scale as swatches');
-await page.click('.panel-tab[data-tab="layers"]');
+await showTab('layers');
 await page.waitForTimeout(300);
 // The group is a <details>, and a row inside a closed one is not clickable.
 await openGroup(/Weather/);
@@ -993,7 +1042,7 @@ check('and the prose that restated it is gone', scale.prose, 0);
  * claim as "the switch puts a layer on the map".
  */
 console.log('\nLight pollution is offered and adds a layer');
-await page.click('.panel-tab[data-tab="layers"]');
+await showTab('layers');
 await page.waitForTimeout(300);
 const lpOffered = await page.evaluate(() => !!document.querySelector('[data-layer="light-pollution"]'));
 check('the layer is in the panel', lpOffered, true);
@@ -1011,7 +1060,7 @@ check('and it is a raster', lp.type, 'raster');
 check('with a source behind it', lp.hasSource, true);
 
 console.log('\nRecreation sites draw as icons, one per kind of place');
-await page.click('.panel-tab[data-tab="layers"]');
+await showTab('layers');
 await page.waitForTimeout(300);
 await openGroup(/Land & access/);
 await page.locator('.layer-row', { hasText: /^Recreation/ }).locator('input[type=checkbox]').check();
@@ -1065,7 +1114,7 @@ check('and says what the last query returned per kind',
   report.switchedOn.find((row) => row.id === 'recreation').lastFetch.total, 8);
 
 console.log('\nA queried overlay loads features for the view');
-await page.click('.panel-tab[data-tab="layers"]');
+await showTab('layers');
 await page.waitForTimeout(300);
 await openGroup(/Conditions/);
 await page.locator('.layer-row', { hasText: /^Wildfire/ }).locator('input[type=checkbox]').check();
@@ -1176,7 +1225,7 @@ const afterOff = await page.evaluate(() => window.__map.layerIds().filter((id) =
 check('switching it off takes both layers with it', afterOff, []);
 
 console.log('\nThe Location section leads with decimal and hides the rest');
-await page.click('.panel-tab[data-tab="waypoints"]');
+await showTab('waypoints');
 await page.waitForTimeout(300);
 await page.locator('.waypoint-card').first().click();
 await page.waitForTimeout(900);
@@ -1216,7 +1265,7 @@ await page.locator('textarea[aria-label="New field note"]').fill('Gate locked at
 await page.locator('button', { hasText: /^Add note$/ }).click();
 await page.waitForTimeout(400);
 
-await page.click('.panel-tab[data-tab="waypoints"]');
+await showTab('waypoints');
 await page.waitForTimeout(500);
 const cardNote = await page.locator('.waypoint-note').first().innerText().catch(() => '');
 check('the newest note is on the waypoint card', /Gate locked at the second/.test(cardNote), true);
@@ -1351,7 +1400,7 @@ check('and the map keeps its drawing buffer so it can be read back',
   snapshot.preserved, true);
 
 console.log('\nSpace weather reaches the Photography panel');
-await page.click('.panel-tab[data-tab="waypoints"]');
+await showTab('waypoints');
 await page.waitForTimeout(400);
 await page.locator('.waypoint-card').first().click();
 await page.waitForTimeout(800);
@@ -1396,7 +1445,7 @@ check('alongside the planetary K index', /5/.test(aurora.text), true);
 check('and Kp is translated into what it means here', /storm/.test(aurora.note), true);
 
 console.log('\nThe Milky Way band is drawn, and the night can be scrubbed');
-await page.click('.panel-tab[data-tab="waypoints"]');
+await showTab('waypoints');
 await page.waitForTimeout(400);
 await page.locator('.waypoint-card').first().click();
 await page.waitForTimeout(800);
@@ -1521,7 +1570,7 @@ if (spoke.present) {
 
 console.log('\nCollapsed Details sections survive a reload');
 // Back onto a pin: the step above reloaded, so the panel is on its first tab.
-await page.click('.panel-tab[data-tab="waypoints"]');
+await showTab('waypoints');
 await page.waitForTimeout(400);
 await page.locator('.waypoint-card').first().click();
 await page.waitForTimeout(800);
@@ -1532,7 +1581,7 @@ check('collapsing closes the section', await sunMoon().evaluate((node) => node.o
 
 await page.reload({ waitUntil: 'networkidle' });
 await page.waitForTimeout(1200);
-await page.click('.panel-tab[data-tab="waypoints"]');
+await showTab('waypoints');
 await page.waitForTimeout(300);
 await page.locator('.waypoint-card').first().click();
 await page.waitForTimeout(900);
@@ -1553,7 +1602,7 @@ await page.waitForTimeout(1400);
 await page.click('#import-ask button:has-text("New folder")').catch(() => {});
 await page.waitForTimeout(900);
 
-await page.click('.panel-tab[data-tab="waypoints"]');
+await showTab('waypoints');
 await page.waitForTimeout(500);
 const firstPage = await page.locator('.waypoint-card').count();
 check('the flat list renders one page, not the lot', firstPage <= 30 && firstPage > 0, true);
@@ -1576,7 +1625,7 @@ check('a search from a later page still shows results', found > 0, true);
 check('and the cards carry the note that tells them apart',
   await page.locator('.waypoint-blurb').count() > 0, true);
 
-await page.click('.panel-tab[data-tab="folders"]');
+await showTab('folders');
 await page.waitForTimeout(500);
 // Per folder, not across the panel: a second folder from an earlier step is
 // still open below this one.
@@ -1604,7 +1653,7 @@ await page.locator('.folder-eye').first().click();
 await page.waitForTimeout(300);
 
 console.log('\nA pin is edited on the map, not by hunting for its row');
-await page.click('.panel-tab[data-tab="waypoints"]');
+await showTab('waypoints');
 await page.waitForTimeout(400);
 await page.locator('.waypoint-edit').first().click();
 await page.waitForTimeout(700);
@@ -1895,7 +1944,7 @@ check('Close closes it', await page.locator('.drop-pin').count(), 0);
 console.log('\nA tap can ask what a road is');
 // Earlier sections leave another tab showing, and a checkbox in a hidden tab
 // panel is present but unclickable.
-await page.click('.panel-tab[data-tab="layers"]');
+await showTab('layers');
 await page.waitForTimeout(300);
 await openGroup('Land & access');
 for (const name of ['Forest roads (MVUM)', 'BLM routes']) {
@@ -2130,7 +2179,7 @@ check('each class drawn with the swatch the service published', blmKey.swatches,
  * a reason to drive somewhere.
  */
 console.log('\nThe next eclipse, and whether this spot will see it');
-await page.click('.panel-tab[data-tab="waypoints"]');
+await showTab('waypoints');
 await page.waitForTimeout(300);
 await page.locator('.waypoint-card').first().click();
 await page.waitForTimeout(700);
@@ -2403,7 +2452,7 @@ await page.waitForTimeout(300);
  * So a finished trip comes off the map and stays in the folder.
  */
 console.log('\nA trip is a folder with dates on it');
-await page.click('.panel-tab[data-tab="folders"]');
+await showTab('folders');
 await page.waitForTimeout(300);
 await page.click('#new-trip');
 await page.waitForTimeout(500);
@@ -2478,7 +2527,7 @@ for (const [name, lon, lat] of places) {
 }
 check('a dropped pin offers one press into the trip being planned',
   places.length, 4);
-await page.click('.panel-tab[data-tab="folders"]');
+await showTab('folders');
 await page.waitForTimeout(500);
 await page.evaluate(() => { document.querySelector('.trip-plan').open = true; });
 await page.waitForTimeout(300);
@@ -2620,9 +2669,9 @@ check('and it offers what to do about them',
  */
 await page.locator('.folder:has(.trip-bar) .folder-eye').first().click();
 await page.waitForTimeout(400);
-await page.click('.panel-tab[data-tab="layers"]');
+await showTab('layers');
 await page.waitForTimeout(200);
-await page.click('.panel-tab[data-tab="folders"]');
+await showTab('folders');
 await page.waitForTimeout(400);
 check('switching it back on sticks, rather than being undone on the next render',
   await page.locator('.folder:has(.trip-bar) .folder-eye').first()

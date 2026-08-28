@@ -367,7 +367,16 @@ async function main() {
   });
   // On a phone the panel covers the map, so the map is what you should land on.
   // Desktop has room for both, so it stays open there.
-  setPanelOpen(!window.matchMedia('(max-width: 820px)').matches);
+  /*
+   * Closed until asked for, and opening lands on Layers.
+   *
+   * It used to open on every wide screen and show Folders, so the first thing
+   * anybody saw was an empty list of their own files rather than the map they
+   * came for - and the map was narrower for it. The panel is a tool you reach
+   * for; the map is the thing.
+   */
+  selectTab('layers');
+  setPanelOpen(false);
 
   wirePanel();
   wireFolders();
@@ -1123,7 +1132,17 @@ function renderLayersTab() {
     }
   }
 
-  const activeCount = OVERLAYS.filter((o) => state.overlays.get(o.id)?.visible).length;
+  /*
+   * Counted from what the list shows, not from everything that exists.
+   *
+   * A state's layers stay switched on when you pan out of that state - which
+   * is the right behaviour, they come back when you return - but they are
+   * neither drawn nor listed while you are elsewhere. Counting all of OVERLAYS
+   * therefore reported "20 on" over a list showing one, and the twenty were
+   * not on any map. `activeOverlays` is scoped the same way, so this now
+   * counts exactly the layers that are actually drawn.
+   */
+  const activeCount = inScopeOverlays().filter((o) => state.overlays.get(o.id)?.visible).length;
   const counter = document.getElementById('overlay-count');
   if (counter) counter.textContent = activeCount ? `${activeCount} on` : '';
 
@@ -1163,8 +1182,13 @@ function renderLayersTab() {
         el('span', { class: 'count', text: activeInGroup ? `${activeInGroup} on` : '' }),
       ]),
     ]);
+    // Rows go in a body rather than straight into the <details>, which also
+    // holds the summary - a grid over the element itself would try to lay the
+    // heading out as a cell.
+    const body = el('div', { class: 'layer-group-body' });
+    group.append(body);
     dom.overlayList.append(group);
-    renderOverlayRows(group, entries);
+    renderOverlayRows(body, entries);
   }
 }
 
@@ -1209,8 +1233,7 @@ function renderOverlayRows(container, entries) {
       el('output', { text: `${Math.round(entry.opacity * 100)}%` }),
     ]);
 
-    container.append(
-      layerRow({
+    const item = layerRow({
         entry: overlay,
         selected: entry.visible,
         control: el('input', {
@@ -1223,9 +1246,9 @@ function renderOverlayRows(container, entries) {
             writeURL();
           },
         }),
-      }),
-      opacityRow,
-    );
+    });
+    item.append(opacityRow);
+    container.append(item);
   }
 }
 
@@ -4649,10 +4672,15 @@ function layerRow({ entry, selected, control, preview = false }) {
     info,
   ]);
 
-  if (!descriptionNode) return row;
-  const wrap = document.createDocumentFragment();
-  wrap.append(row, descriptionNode);
-  return wrap;
+  /*
+   * One element per layer, always - not a bare row and sometimes a fragment.
+   *
+   * A row, its description and its opacity slider are one thing on screen and
+   * have to be one thing in the DOM before the list can be laid out in
+   * columns; as siblings they would be placed in separate cells and a
+   * description would open under someone else's layer.
+   */
+  return el('div', { class: 'layer-item' }, descriptionNode ? [row, descriptionNode] : [row]);
 }
 
 /**
@@ -4712,7 +4740,10 @@ function basemapThumb(entry) {
 function layerName(entry) {
   if (!entry.states?.length) return entry.name;
   const named = entry.states.map((code) => STATE_NAMES[code] || code).join(', ');
-  return `${entry.name} \u2014 ${named}`;
+  // Parenthesised rather than dashed: the state qualifies the name, it is not
+  // a second half of it, and a column of em-dashes reads as a list of
+  // compound titles rather than of layers that happen to be state-scoped.
+  return `${entry.name} (${named})`;
 }
 
 function layerBadge(entry) {

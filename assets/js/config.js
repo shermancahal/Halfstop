@@ -538,7 +538,10 @@ export const OVERLAYS = [
   },
   {
     id: 'forest-cover',
-    group: 'Forest',
+    // Terrain, not a group of its own. Canopy is a property of the ground the
+    // hillshade and contours describe, and a heading with one layer under it
+    // is a heading that costs more than it explains.
+    group: 'Terrain',
     name: 'Forest cover',
     description: 'Percentage of ground under tree canopy, from 30 m satellite data. Source: MRLC / NLCD',
     /*

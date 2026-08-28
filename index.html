@@ -94,11 +94,11 @@
         <span id="panel-brand-name">American Byways GPS</span>
       </p>
       <div class="panel-tabs" role="tablist">
-        <button class="panel-tab" role="tab" data-tab="layers" aria-selected="false" aria-controls="tab-layers" type="button">
+        <button class="panel-tab" role="tab" data-tab="layers" aria-selected="true" aria-controls="tab-layers" type="button">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
           Layers
         </button>
-        <button class="panel-tab" role="tab" data-tab="folders" aria-selected="true" aria-controls="tab-folders" type="button">
+        <button class="panel-tab" role="tab" data-tab="folders" aria-selected="false" aria-controls="tab-folders" type="button">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h3.6a2 2 0 0 1 1.4.6L11.4 7H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
           Folders
         </button>
@@ -114,7 +114,7 @@
 
       <div class="panel-scroll">
 
-        <div id="tab-layers" role="tabpanel" hidden>
+        <div id="tab-layers" role="tabpanel">
           <div class="panel-section">
             <h2 class="panel-title">
               <span>Map</span>
@@ -123,15 +123,15 @@
           </div>
           <div class="panel-section">
             <h2 class="panel-title">
-              <span>Add on top</span>
+              <span>Layers</span>
               <span class="count" id="overlay-count"></span>
             </h2>
-            <p class="hint" style="margin:-4px 0 10px">Overlays stack over the map above. Each has its own opacity.</p>
+            <p class="hint" style="margin:-4px 0 10px">These stack over the map above. Each has its own opacity.</p>
             <div id="overlay-list"></div>
           </div>
         </div>
 
-        <div id="tab-folders" role="tabpanel">
+        <div id="tab-folders" role="tabpanel" hidden>
           <div class="panel-section">
             <h2 class="panel-title">
               <span>Your folders</span>
