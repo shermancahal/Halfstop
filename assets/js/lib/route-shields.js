@@ -151,6 +151,24 @@ export function shieldImageIds({ state = '' } = {}) {
  *
  * Adding a state is one line. Correcting one is one word.
  */
+/*
+ * bg and fg describe the real sign, not a stylised idea of it.
+ *
+ * Six of these declared white numerals on a dark field - Michigan and North
+ * Carolina as dark diamonds, Vermont and South Dakota green, South Carolina
+ * blue, Nevada black. That was a reasonable sketch of each state's marker and
+ * it stopped being true the moment the real blanks arrived: every one of those
+ * blanks puts the number in a white field, so white numerals rendered white on
+ * white and the shield came up empty. The reported symptom was a generic
+ * circle flashing with its number and then the state shield appearing without
+ * one - which is exactly this, the base design drawing first and the blank
+ * replacing it.
+ *
+ * Measured rather than judged: `shields: the number is legible on its own
+ * blank` decodes each PNG and reads the luminance of the box the text is
+ * actually drawn in, so a blank that gets redrawn darker fails the test rather
+ * than quietly swallowing its number.
+ */
 export const STATE_SHIELDS = {
   /* Plain squares — the most common marker by a wide margin */
   AL: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
@@ -165,7 +183,7 @@ export const STATE_SHIELDS = {
   MA: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
   MT: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
   NE: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
-  NV: { shape: 'square', bg: '#1c1c1c', fg: '#ffffff' },
+  NV: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
   NY: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
   OH: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
   RI: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
@@ -199,8 +217,8 @@ export const STATE_SHIELDS = {
   VA: { shape: 'circle', bg: '#ffffff', fg: '#1c1c1c' },
 
   /* Diamonds */
-  MI: { shape: 'diamond', bg: '#1c1c1c', fg: '#ffffff' },
-  NC: { shape: 'diamond', bg: '#1c1c1c', fg: '#ffffff' },
+  MI: { shape: 'diamond', bg: '#ffffff', fg: '#1c1c1c' },
+  NC: { shape: 'diamond', bg: '#ffffff', fg: '#1c1c1c' },
 
   /* State outlines — simplified; at this size the silhouette is all that reads */
   AK: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
@@ -213,7 +231,7 @@ export const STATE_SHIELDS = {
   OK: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c' },
   ID: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c' },
   LA: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c' },
-  SD: { shape: 'outline', bg: '#0b6b3a', fg: '#ffffff' },
+  SD: { shape: 'outline', bg: '#ffffff', fg: '#1c1c1c' },
 
   /* The distinctive ones, and the reason this was worth doing at all */
   CA: { shape: 'spade', bg: '#0b6b3a', fg: '#ffffff' },
@@ -227,8 +245,8 @@ export const STATE_SHIELDS = {
   /* Coloured plates */
   WY: { shape: 'square', bg: '#f2c744', fg: '#1c1c1c' },
   MN: { shape: 'square', bg: '#1e4b8f', fg: '#ffffff' },
-  VT: { shape: 'square', bg: '#0b6b3a', fg: '#ffffff' },
-  SC: { shape: 'square', bg: '#1e4b8f', fg: '#ffffff' },
+  VT: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
+  SC: { shape: 'square', bg: '#ffffff', fg: '#1c1c1c' },
 };
 
 /**

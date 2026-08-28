@@ -131,7 +131,7 @@ const REFS = [
   ['FM 1960', '1960', 'including the ones only one state uses'],
   ['61', '61', 'a bare number is already the answer'],
   ['Loop 1', 'Loop 1', 'a road named across two words keeps both — that is a name, not a system'],
-  ['Old 61', 'Old 61', 'which is why the rule stops at two characters and not three'],
+  ['Old 61', 'Old 61', 'a name leading with a short word survives, because upcasing Old changes it'],
   ['SR', 'SR', 'a prefix with nothing after it is all there is, so it stays'],
   /*
    * The banner designations. On the road these are a separate plate above the
@@ -148,6 +148,21 @@ const REFS = [
   ['US 40 Spur', '40', 'and spur'],
   ['KY 80 East', '80 East', 'the prefix goes as always; the direction stays, not being a designation'],
   ['', '', 'and nothing is nothing'],
+
+  /*
+   * Forest roads, which is why the length rule became a capitals rule.
+   *
+   * FSR is three characters, so the old "one or two" limit kept it and the
+   * shield read FSR 300 - a name where a number belongs. These hold the new
+   * line: a system is written in capitals, a name is not, and a number is
+   * neither.
+   */
+  ['FSR 300', '300', 'a forest road drops its system, which is three letters long'],
+  ['NF-9', '9', 'and does so across a hyphen, which is how the other half are signed'],
+  ['CR 1230', '1230', 'so does a county road'],
+  ['Old 61', 'Old 61', 'but Old is a name, and upcasing it would change it'],
+  ['Bear Creek', 'Bear Creek', 'a road named across two words keeps both'],
+  ['300 Spur', '300', 'a number leading is not a system - the Spur suffix goes, the 300 stays'],
 ];
 for (const [ref, want, why] of REFS) {
   const got = evaluate(shieldText, { properties: { ref, shield: 'default', class: 'primary' } });

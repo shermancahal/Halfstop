@@ -724,26 +724,46 @@ function labelLayers() {
  * "SR 61" in Tennessee, "KY 15", "US 27" — so the marker read "SR 61" inside a
  * state-route blank, which is a sign that exists nowhere.
  *
- * Only a one or two character first token is dropped, and only when something
- * follows it. That is every route system the United States issues — I, US, SR,
- * the two-letter state codes, CR, FM, SH — and it is deliberately tight: at
- * three the rule starts eating road names that happen to lead with a short
- * word, "Old 61" among them, where the first word is the name rather than the
- * system. A road named across two words keeps both.
+ * The rule used to be "one or two characters", which covers I, US, SR and the
+ * state codes and stops at three — where it would start eating road names that
+ * lead with a short word, "Old 61" among them, in which the first word is the
+ * name rather than the system.
+ *
+ * That length limit left FSR 300 reading "FSR 300" in a shield sized for three
+ * characters. The distinction was never really length: a route system is
+ * written in capitals and a name is not. So the test is now that the first
+ * token is all upper case and contains a letter — FSR, NF, CR, US, KY all
+ * qualify; "Old" does not, because upcasing it changes it.
+ *
+ * The letter check matters: "300 Spur" would otherwise lose its 300, since
+ * upcasing a number changes nothing and the token would look like a system.
+ *
+ * Hyphens count as separators too, so NF-9 loses its NF the same way FSR 9
+ * does. Forest roads are signed both ways and neither spelling is the number.
  *
  * It also fixes the blank: the image is chosen by how many characters the
  * number has, so "SR 61" was asking for a five-character shield that no state
  * publishes.
  */
 const RAW_REF = ['coalesce', ['get', 'ref'], ''];
-const PREFIXLESS = ['let', 'raw', RAW_REF, 'cut', ['index-of', ' ', RAW_REF],
-  ['case',
-    ['all',
-      ['>', ['var', 'cut'], 0],
-      ['<=', ['var', 'cut'], 2],
-      ['>', ['length', ['var', 'raw']], ['+', ['var', 'cut'], 1]]],
-    ['slice', ['var', 'raw'], ['+', ['var', 'cut'], 1]],
-    ['var', 'raw']],
+const PREFIXLESS = ['let', 'raw', RAW_REF,
+  'space', ['index-of', ' ', RAW_REF],
+  'dash', ['index-of', '-', RAW_REF],
+  ['let', 'cut',
+    // The first separator of either kind, ignoring the one that is absent.
+    ['case',
+      ['<', ['var', 'space'], 0], ['var', 'dash'],
+      ['<', ['var', 'dash'], 0], ['var', 'space'],
+      ['min', ['var', 'space'], ['var', 'dash']]],
+    ['let', 'head', ['slice', ['var', 'raw'], 0, ['max', 0, ['var', 'cut']]],
+      ['case',
+        ['all',
+          ['>', ['var', 'cut'], 0],
+          ['>', ['length', ['var', 'raw']], ['+', ['var', 'cut'], 1]],
+          ['==', ['upcase', ['var', 'head']], ['var', 'head']],
+          ['!=', ['downcase', ['var', 'head']], ['var', 'head']]],
+        ['slice', ['var', 'raw'], ['+', ['var', 'cut'], 1]],
+        ['var', 'raw']]]],
 ];
 
 /*
