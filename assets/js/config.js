@@ -1179,34 +1179,6 @@ export const OVERLAYS = [
    * for a moved URL before concluding the data is gone.
    */
   {
-    /*
-     * Removed once and restored.
-     *
-     * It was deleted for drawing polygons and dots where it promises trails,
-     * on a report from the map - but the dots were ours, from an unfiltered
-     * circle layer putting a point on every vertex, and the service reports
-     * polyline. Deleting somebody's data for a fault in our own renderer is
-     * the wrong way round, so it comes back to be looked at again.
-     */
-    legend: [{ color: '#6D4C41', label: 'Route: State park trails' }],
-    id: 'va-trails',
-    states: ['VA'],
-    name: 'State park trails',
-    description: 'Virginia State Parks trails.',
-    query: {
-      url: 'https://services1.arcgis.com/PxUNqSbaWFvFgHnJ/arcgis/rest/services/SP_Trails/FeatureServer/0/query'
-        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
-        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
-        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
-      minzoom: 7,
-      road: true,
-      color: '#6D4C41',
-    },
-    opacity: 0.55,
-    enabled: false,
-    attribution: 'Trails © <a href="https://www.dcr.virginia.gov/state-parks/">Virginia State Parks</a>',
-  },
-  {
     legend: [{ color: '#6D4C41', label: 'Route: State trails' }],
     id: 'nc-trails',
     states: ['NC'],
@@ -1220,6 +1192,7 @@ export const OVERLAYS = [
       minzoom: 7,
       road: true,
       color: '#6D4C41',
+      label: 'TRAILNAME',
     },
     opacity: 0.55,
     enabled: false,
@@ -1622,22 +1595,6 @@ export const OVERLAYS = [
     opacity: 0.55,
     enabled: false,
     attribution: 'Parks \u00a9 <a href=\"https://fwp.mt.gov/\">Montana Fish, Wildlife & Parks</a>',
-  },
-  {
-    id: 'nj-trails',
-    legendNote: 'The agency draws this layer itself, so the colours are theirs and there is no key to read out of it. Tap a feature to see what it is.',
-    at: [-74.5, 40.9],
-    states: ['NJ'],
-    name: 'State park trails',
-    description: 'The State Park Service trail system.',
-    tiles: ['https://mapsdep.nj.gov/arcgis/rest/services/Applications/DEP_Trails/MapServer/export'
-      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'
-      + '&layers=show:0'],
-    tileSize: 256,
-    maxzoom: 16,
-    opacity: 0.85,
-    enabled: false,
-    attribution: 'Trails \u00a9 <a href=\"https://dep.nj.gov/\">New Jersey DEP</a>',
   },
   {
     legend: [{ color: '#2E7D32', label: 'Site: State parks & status' }],

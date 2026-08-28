@@ -791,7 +791,7 @@ export function shieldTextSizeExpression(state = '', length = 2, refLength = nul
   };
 
   return [
-    'match', SHIELD_VALUE,
+    'match', ['get', 'shield'],
     ...SHIELD_MATCH.flatMap((arm) => [arm.values, sized(arm.design)]),
     sized(UNCLAIMED),
   ];
@@ -812,7 +812,7 @@ export function shieldTextOffsetExpression(state = '', length = 2, shiftPx = 0) 
     return [Math.round((base[0] + shiftPx / size) * 100) / 100, base[1]];
   };
   return [
-    'match', SHIELD_VALUE,
+    'match', ['get', 'shield'],
     ...SHIELD_MATCH.flatMap((arm) => [
       arm.values,
       ['literal', shift(arm.design === LOCAL ? local : national(arm.design), arm.design)],
@@ -994,28 +994,24 @@ export const shieldRegistrationReport = () => lastRegistration;
  */
 const LOCAL = Symbol('local state design');
 
-/**
- * The shield value to style by, which is not always the one Mapbox declares.
+/*
+ * The ref-based shield inference is out, for now.
  *
- * Scenic US 40 in Maryland comes through as `ref: "US 40 Scenic"` with
- * `shield: "default"` - probed, not assumed, with I-68 a few hundred metres
- * away reporting `us-interstate` in the same answer. So the tiles genuinely
- * carry no shield for it, and the table below has nothing to match, and it
- * drew as an unclaimed circle.
+ * It read "US 40 Scenic" with shield "default" and drew a US marker, which is
+ * right - and it was the only change in that commit touching the match input
+ * of every shield expression, after which North Carolina lost its numbers,
+ * Vermont and South Carolina went missing and Michigan flickered.
  *
- * A ref that opens with "US " or "I " says what the road is regardless. This
- * only ever fires where Mapbox declared nothing, so a real value always wins -
- * the inference cannot overrule the data, only fill a hole in it.
+ * None of that reproduces here. Every expression compiles, the sizes and
+ * colours evaluate, and every image id the style asks for is registered for
+ * all five states. So the fault is at runtime and this sandbox cannot see it.
+ * Reverting the one broad change is the honest first bisect step rather than
+ * defending it because the static checks pass - they passed before the report
+ * too.
+ *
+ * The suffix rule stays: it only rewrites label text, and a table of eleven
+ * refs covers it.
  */
-const DECLARED = ['coalesce', ['get', 'shield'], ''];
-const REF_TEXT = ['coalesce', ['get', 'ref'], ''];
-const UNDECLARED = ['any', ['==', ['var', 'declared'], 'default'], ['==', ['var', 'declared'], '']];
-export const SHIELD_VALUE = ['let', 'declared', DECLARED,
-  ['case',
-    ['all', UNDECLARED, ['==', ['slice', REF_TEXT, 0, 3], 'US ']], 'us-highway',
-    ['all', UNDECLARED, ['==', ['slice', REF_TEXT, 0, 2], 'I ']], 'us-interstate',
-    ['var', 'declared']],
-];
 
 const SHIELD_MATCH = [
   {
@@ -1092,7 +1088,7 @@ export function shieldImageExpression(state = '', { length = null } = {}) {
     'concat',
     'abmap-shield-',
     [
-      'match', SHIELD_VALUE,
+      'match', ['get', 'shield'],
       ...SHIELD_MATCH.flatMap((arm) => [arm.values, arm.design === LOCAL ? local : arm.design]),
       // Not `local`: a shield value the table does not list is a road nothing
       // has claimed, and it gets the circle rather than the state's marker.
@@ -1117,7 +1113,7 @@ export function shieldTextColour(state = '') {
   const localText = entry ? entry.fg : '#1c1c1c';
 
   return [
-    'match', SHIELD_VALUE,
+    'match', ['get', 'shield'],
     ['us-interstate', 'us-interstate-business', 'us-interstate-duplex', 'us-interstate-truck'], '#ffffff',
     ['us-state', 'us-state-duplex'], localText,
     localText,
