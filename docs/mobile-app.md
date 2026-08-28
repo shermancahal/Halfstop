@@ -196,3 +196,68 @@ Two routes, and they are not equivalent:
 | A Mac | required for iOS, no way around it |
 | First build to running-on-a-device | an afternoon |
 | First build to *in both stores* | a week or two, most of it review and store listings |
+
+---
+
+## 9. Drawing the map natively, and what it would actually take
+
+Mapbox offline downloads are real. They are not available to this app, and the
+reason is architectural rather than commercial: their offline API lives in the
+native Mobile Maps SDK, and everything here renders through Mapbox GL JS inside
+a web view. No plan upgrade reaches it. This section is what reaching it would
+involve, written down so the decision is made on the size of the job rather
+than on a guess about it.
+
+### The part that is easy to underestimate
+
+The basemap is not the map. A native Mapbox view renders *underneath* the web
+view — that is how every Capacitor map plugin works — with a transparent hole
+punched through the page above it. Everything currently drawn by GL JS would
+then be on the wrong side of that hole:
+
+- forty-odd overlays, raster and queried
+- the route shields, which are canvases drawn at runtime and registered as map
+  images
+- every popup, the identify card, the drop-pin flow
+- waypoints, folders, imported GPX and KML
+- the offline region rectangles
+
+Each of those either moves into Swift against the native SDK, or stays in the
+web view and is kept in sync with a camera it no longer owns. Two engines
+sharing one camera is the option that looks cheaper and is not: every pan
+becomes a bridge message, and the two drift under momentum scrolling.
+
+So this is not "swap the renderer". It is a second implementation of the map
+layer, for one platform, in a language the rest of the project does not use.
+
+### What it buys
+
+Genuine offline for the Mapbox basemaps, billed under Mapbox's mobile pricing,
+plus native rendering performance and gestures. For a premium tier that is a
+real proposition — better than "it looks nicer", which is all a hosted Mapbox
+style offers today.
+
+### The order to do it in, if it is done
+
+1. **Protomaps first.** It removes the metered dependency from the default and
+   makes offline work for everybody, on both platforms, with no native code. If
+   the native path is never taken, the app is still complete.
+2. **A native shell for one basemap only.** Prove the plugin, the token, the
+   offline region download and the camera bridge with nothing but a basemap on
+   screen. No overlays, no shields.
+3. **Decide the overlay question with that in hand** — port to Swift, or keep
+   the web view drawing over a native basemap and measure the drift honestly
+   before committing.
+
+### What cannot be verified from here
+
+None of it. This repository is built and tested on Linux; a native iOS build
+needs Xcode, a macOS host, a device or simulator, and a Mapbox download token
+that is not in this repo and must not be. Swift written here would compile for
+the first time on somebody else's machine.
+
+That matters more than usual for this project, which has spent a lot of effort
+on the difference between a service existing and a service answering. Native
+code written blind is the same failure with a compiler instead of an HTTP
+request: it looks like progress, and the first honest test is the one that has
+not happened yet.

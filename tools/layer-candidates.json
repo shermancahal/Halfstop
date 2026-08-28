@@ -706,5 +706,19 @@
     "note": "The published file tree of @protomaps/basemaps 5.7.2, from unpkg's ?meta listing. Three attempts have now failed on paths and versions I invented rather than read - 5.0.0 did not exist, dist/basemaps.json did not exist, and the last find pattern did not compile. This asks the registry what is actually in the package and stops guessing.",
     "find": "\"path\":\"[^\"]{0,80}\"",
     "url": "https://unpkg.com/@protomaps/basemaps@5.7.2/?meta"
+  },
+  {
+    "id": "pm:base-layers",
+    "expect": "data",
+    "note": "base_layers.ts is where Protomaps declares every layer it draws and the source-layer each reads from. This is the file the whole port hinges on: Byways Topo reads Mapbox Streets source-layers and fields, and each one has to map onto something here. Read from the published package rather than a wiki, and at the version that actually exists.",
+    "find": "\"source-layer\"\\s*:\\s*\"[a-z_]{2,24}\"|sourceLayer:\\s*\"[a-z_]{2,24}\"",
+    "url": "https://unpkg.com/@protomaps/basemaps@5.7.2/src/base_layers.ts"
+  },
+  {
+    "id": "pm:road-fields",
+    "expect": "data",
+    "note": "The same file, read for the road attributes instead of the layer names. The shield system branches on Mapbox's precomputed shield field and on ref and reflen; whether anything equivalent exists here decides how much of that survives the port and how much has to be inferred from the number alone.",
+    "find": "[\"']?(?:ref|shield|network|kind|kind_detail|pmap:kind)[\"']?\\s*[:=]",
+    "url": "https://unpkg.com/@protomaps/basemaps@5.7.2/src/base_layers.ts"
   }
 ]
