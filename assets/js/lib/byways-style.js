@@ -80,6 +80,67 @@ export const MAPBOX_SCHEMA = {
   },
 };
 
+/**
+ * The same world, described by Protomaps.
+ *
+ * Layer names read from the published package; the attribute names read from
+ * the get expressions in it rather than from prose about it.
+ *
+ * Two findings changed the estimate, both in our favour. Protomaps precomputes
+ * `shield_text` - the number already stripped of its system - and `network`,
+ * which says whose number it is: US:I, US:US, US:KY. Mapbox's `shield` field
+ * only ever gave a shape, and the state had to be inferred from wherever the
+ * map happened to be looking, which is wrong within a few miles of a border.
+ * Under this schema a road says which network it belongs to, so the shield can
+ * stop guessing.
+ *
+ * The gaps are real and named rather than papered over. There is no contour
+ * layer and no hillshade - the USGS contour overlay already in the catalogue
+ * is the answer for the first, and terrain relief is already its own overlay.
+ * `null` here means "this schema cannot draw that", and the style is expected
+ * to skip the layer rather than ask for a source-layer that does not exist and
+ * silently draw nothing.
+ *
+ * `natural` is marked uncertain on purpose. Mapbox's natural_label carries
+ * peaks and water names; whether those live in Protomaps' places or its pois
+ * has not been established, and writing a guess here would produce exactly the
+ * silent blank this file exists to avoid.
+ */
+export const PROTOMAPS_SCHEMA = {
+  id: 'protomaps',
+  source: 'protomaps',
+  reliefSource: null,
+  layers: {
+    landcover: 'landcover',
+    landuse: 'landuse',
+    // Protomaps has one landuse layer rather than a base and an overlay.
+    landuseOverlay: null,
+    water: 'water',
+    // Rivers and coastline are the same layer here, told apart by `kind`.
+    waterway: 'water',
+    road: 'roads',
+    place: 'places',
+    natural: null,
+    boundary: 'boundaries',
+    contour: null,
+    hillshade: null,
+  },
+  fields: {
+    // `kind` is the universal classification field, where Mapbox uses `class`.
+    roadClass: 'kind',
+    ref: 'ref',
+    refLength: null,
+    // Not a shape but a network: US:I, US:US, US:KY. Richer than what it
+    // replaces, and the reason the shield work mostly survives.
+    shield: 'network',
+    shieldText: 'shield_text',
+    name: 'name',
+    nameEn: 'name:en',
+    surface: null,
+    elevation: null,
+  },
+};
+
 /*
  * The schema in force while a style is being built.
  *

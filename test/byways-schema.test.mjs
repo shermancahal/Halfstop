@@ -21,7 +21,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
-import { bywaysStyle, MAPBOX_SCHEMA } from '../assets/js/lib/byways-style.js';
+import { bywaysStyle, MAPBOX_SCHEMA, PROTOMAPS_SCHEMA } from '../assets/js/lib/byways-style.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SNAPSHOT = path.join(HERE, 'fixtures', 'byways-style.snapshot.json');
@@ -84,4 +84,49 @@ test('byways: the schema names a layer for everything the style needs', () => {
     .filter(([, name]) => !used.has(name))
     .map(([key]) => key);
   assert.deepEqual(unused, [], 'the schema names source-layers the style never reads');
+});
+
+
+test('byways: the two schemas describe the same shape', () => {
+  /*
+   * A second schema is only useful if the style can read it the same way. The
+   * keys have to line up exactly - a missing one reads as `undefined`, which
+   * becomes `'source-layer': undefined` and draws nothing without erroring,
+   * which is the failure this whole seam exists to prevent.
+   *
+   * `null` is the honest value for something a schema genuinely cannot supply,
+   * and is what the style is expected to branch on. Absent is not the same as
+   * null and must not be allowed to stand in for it.
+   */
+  assert.deepEqual(
+    Object.keys(PROTOMAPS_SCHEMA.layers).sort(),
+    Object.keys(MAPBOX_SCHEMA.layers).sort(),
+    'the schemas name different sets of layers',
+  );
+  for (const key of Object.keys(MAPBOX_SCHEMA.fields)) {
+    assert.ok(key in PROTOMAPS_SCHEMA.fields, `Protomaps does not say what it uses for ${key}`);
+  }
+
+  // Every value is a usable name or an explicit null; nothing is undefined.
+  for (const [name, schema] of [['mapbox', MAPBOX_SCHEMA], ['protomaps', PROTOMAPS_SCHEMA]]) {
+    for (const [key, value] of Object.entries({ ...schema.layers, ...schema.fields })) {
+      assert.ok(value === null || (typeof value === 'string' && value.length > 0),
+        `${name}.${key} is ${JSON.stringify(value)}, which is neither a name nor an honest null`);
+    }
+  }
+});
+
+test('byways: what Protomaps cannot draw is declared, not discovered', () => {
+  /*
+   * Recorded so the port cannot quietly lose them. Contours and hillshade have
+   * no equivalent in this source; both are already available as overlays,
+   * which is why the gap is acceptable rather than fatal.
+   */
+  assert.equal(PROTOMAPS_SCHEMA.layers.contour, null);
+  assert.equal(PROTOMAPS_SCHEMA.layers.hillshade, null);
+  assert.equal(PROTOMAPS_SCHEMA.reliefSource, null);
+
+  // And the finding that made the shield port tractable: a network, not a shape.
+  assert.equal(PROTOMAPS_SCHEMA.fields.shield, 'network');
+  assert.equal(PROTOMAPS_SCHEMA.fields.shieldText, 'shield_text');
 });

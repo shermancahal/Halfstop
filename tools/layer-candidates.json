@@ -720,5 +720,12 @@
     "note": "Every attribute the Protomaps base layers read, captured as the get expressions themselves. The previous pattern looked for `kind:` and `ref:` as though the file declared them as object keys; it found one string and told me almost nothing. Roads are the half of the port with the most work banked in it - twenty of this style's filters branch on Mapbox's class values, and the shields branch on a precomputed shield field - so what roads actually carry decides the estimate.",
     "find": "\\[\"get\",\\s*\"[a-z_:]{2,24}\"\\]",
     "url": "https://unpkg.com/@protomaps/basemaps@5.7.2/src/base_layers.ts"
+  },
+  {
+    "id": "pm:road-kinds",
+    "expect": "data",
+    "note": "The values Protomaps uses for a road's kind, which is what twenty of this style's filters branch on. Mapbox says motorway, trunk, primary, secondary, tertiary, street, track, path; nothing guarantees the other vocabulary divides the world at the same points, and a filter matching a value that never occurs draws an empty road class - a missing highway rather than a visible error.",
+    "find": "\"(?:highway|major_road|medium_road|minor_road|other|path|rail|ferry|siding|yard|link|motorway|trunk|primary|secondary|tertiary)\"",
+    "url": "https://unpkg.com/@protomaps/basemaps@5.7.2/src/base_layers.ts"
   }
 ]
