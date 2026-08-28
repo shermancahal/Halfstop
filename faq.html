@@ -92,13 +92,22 @@
         than estimated, and is what decides whether the next download will fit.
       </p>
 
-      <h3>What cannot be downloaded, and why</h3>
+      <h3>What cannot be downloaded here, and why</h3>
       <p>
         <strong>Byways Topo, Mapbox Outdoors and Satellite Streets cannot be stored
-        offline.</strong> They render from Mapbox vector tiles, and Mapbox reserve
-        offline storage to their own native SDK — this app is Mapbox GL JS running
-        in a web view, which is not that SDK. The app will say so rather than
-        offering a button that quietly downloads something else.
+        offline by this app.</strong> They render from Mapbox vector tiles, and
+        Mapbox reserve offline storage to their own native mobile toolkit. This app
+        is Mapbox GL JS running in a web view, which is not that toolkit and has no
+        offline facility at all — so it says so rather than offering a button that
+        quietly downloads something else.
+      </p>
+      <p>
+        Worth being exact, because it affects what a paid tier could offer:
+        <em>Mapbox offline is a real capability, it is simply not available on the
+        web.</em> Their mobile toolkit downloads regions properly and is billed
+        under their mobile pricing. Reaching it would mean the app drawing its maps
+        natively on the phone rather than in a web view — a different piece of
+        engineering, not a setting, and not something a paid plan alone unlocks.
       </p>
       <p>
         Everything else can: USGS Topo and Imagery, the state aerial and lidar
@@ -167,9 +176,11 @@
         visible, it will be noted here rather than quietly absorbed.
       </p>
       <p>
-        Mapbox is likely to stay available as an option for anyone who prefers it.
-        The point is that the default should not cost money to look at or stop
-        working where there is no signal.
+        Mapbox is likely to stay available as an option for anyone who prefers it,
+        and if this app ever draws natively on the phone rather than in a web view,
+        that option could carry proper offline downloads too. The point of the
+        change is not to leave Mapbox behind — it is that the default should not
+        cost money to look at or stop working where there is no signal.
       </p>
     </section>
 

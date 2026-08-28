@@ -487,10 +487,16 @@ export class OfflineStore extends EventTarget {
  *
  * Not a technical question. USGS, the state agencies and the federal services
  * publish public data and put no such condition on it, and every one of them
- * is fetchable from a browser or it would not be in the catalogue. Mapbox's
- * terms reserve offline storage of their tiles to their own SDK's offline
- * APIs, and this is Mapbox GL JS in a webview - not that SDK - so caching them
- * here would be using the service in a way it is not licensed for.
+ * is fetchable from a browser or it would not be in the catalogue.
+ *
+ * Mapbox is a licensing question rather than an impossibility, and the
+ * distinction matters to anyone costing a paid tier: their native mobile
+ * toolkit downloads regions properly and bills for it. What has no offline
+ * facility is Mapbox GL JS, which is what runs here, and their terms reserve
+ * storage of their tiles to the sanctioned SDKs - so caching them from a
+ * webview would be using the service in a way it is not licensed for, at any
+ * price. Reaching the supported route means drawing natively on the phone,
+ * which is engineering rather than a plan upgrade.
  *
  * Written as an explicit deny list of hosts rather than an allow list of
  * everything else, so a new state layer is downloadable the day it is added

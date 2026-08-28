@@ -4539,10 +4539,10 @@ function downloadRow(region) {
     row.append(el('p', {
       class: 'source-note',
       text: rendersVector
-        ? `${basemap.name} draws from vector tiles, which cannot be stored offline — `
-          + 'Mapbox allow that only through their own SDK. Switch to USGS Topo, an aerial '
-          + 'or another raster map, and this region will download.'
-        : 'This basemap cannot be stored offline.',
+        ? `${basemap.name} draws from vector tiles, which this app cannot store offline — `
+          + 'Mapbox allow that only through their native mobile toolkit, not on the web. '
+          + 'Switch to USGS Topo, an aerial or another raster map, and this region will download.'
+        : 'This basemap cannot be stored offline by this app.',
     }));
     return row;
   }
