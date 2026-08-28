@@ -75,6 +75,24 @@ test('byways: no source-layer is written inline past the seam', () => {
     'a source-layer is written inline; it must come from the schema so a second schema can replace it');
 });
 
+test('byways: no classification field is written inline either', () => {
+  /*
+   * Same argument as the source-layer check above, and the same reason it has
+   * to read the text: `['get', 'class']` inline is identical in output to
+   * `['get', S.fields.classField]`, and correct against Mapbox. It is only
+   * wrong under Protomaps, where the field is `kind` and asking for `class`
+   * returns nothing - every road filtered out, an empty road network, no error.
+   *
+   * Twenty of these were inline before the seam. Missing one would leave a
+   * single road class absent from the Protomaps map, which is exactly the kind
+   * of gap nobody notices until they are looking for a road that is not there.
+   */
+  const source = readFileSync(path.join(HERE, '..', 'assets', 'js', 'lib', 'byways-style.js'), 'utf8');
+  const inline = [...source.matchAll(/\['get', '(class|kind)'\]/g)].map((match) => match[0]);
+  assert.deepEqual(inline, [],
+    'a classification field is written inline; it must come from the schema');
+});
+
 test('byways: the schema names a layer for everything the style needs', () => {
   // And the other direction: a name in the schema that nothing draws from is
   // dead weight the Protomaps mapping would have to account for anyway.
@@ -129,4 +147,38 @@ test('byways: what Protomaps cannot draw is declared, not discovered', () => {
   // And the finding that made the shield port tractable: a network, not a shape.
   assert.equal(PROTOMAPS_SCHEMA.fields.shield, 'network');
   assert.equal(PROTOMAPS_SCHEMA.fields.shieldText, 'shield_text');
+});
+
+
+test('byways: the road hierarchy maps across, and says where it flattens', () => {
+  /*
+   * Eleven Mapbox classes, five Protomaps kinds. The mapping has to be total -
+   * a class with no entry becomes `undefined` in a filter and matches nothing,
+   * which removes a whole road class from the map without erroring.
+   */
+  assert.deepEqual(
+    Object.keys(PROTOMAPS_SCHEMA.roadClasses).sort(),
+    Object.keys(MAPBOX_SCHEMA.roadClasses).sort(),
+    'the two schemas classify roads differently, so a class would go missing',
+  );
+  for (const [key, value] of Object.entries(PROTOMAPS_SCHEMA.roadClasses)) {
+    assert.ok(typeof value === 'string' && value.length > 0, `${key} maps to nothing`);
+  }
+
+  // Mapbox maps each class to itself; anything else means the inline values
+  // and the schema have drifted apart.
+  for (const [key, value] of Object.entries(MAPBOX_SCHEMA.roadClasses)) {
+    assert.ok(value.length > 0, `${key} has no Mapbox class`);
+  }
+
+  /*
+   * And the loss is asserted rather than left as prose. Five distinct weights
+   * become three, which is the difference between reading this map at speed
+   * and squinting at it - recorded so that if kind_detail turns out to exist,
+   * the improvement is visible as this number changing.
+   */
+  const distinct = new Set(Object.values(PROTOMAPS_SCHEMA.roadClasses)).size;
+  const before = new Set(Object.values(MAPBOX_SCHEMA.roadClasses)).size;
+  assert.equal(before, 11, 'Mapbox draws eleven distinguishable road classes');
+  assert.equal(distinct, 5, 'Protomaps collapses them to five; if this changes, the mapping changed');
 });

@@ -727,5 +727,12 @@
     "note": "The values Protomaps uses for a road's kind, which is what twenty of this style's filters branch on. Mapbox says motorway, trunk, primary, secondary, tertiary, street, track, path; nothing guarantees the other vocabulary divides the world at the same points, and a filter matching a value that never occurs draws an empty road class - a missing highway rather than a visible error.",
     "find": "\"(?:highway|major_road|medium_road|minor_road|other|path|rail|ferry|siding|yard|link|motorway|trunk|primary|secondary|tertiary)\"",
     "url": "https://unpkg.com/@protomaps/basemaps@5.7.2/src/base_layers.ts"
+  },
+  {
+    "id": "pm:kind-detail",
+    "expect": "page",
+    "note": "Whether Protomaps tiles carry kind_detail, holding the original OSM highway value. This is the difference between eleven road weights and five, and so between an atlas you can read at speed and one you squint at. What has been confirmed so far is only what Protomaps' own default style reads, which is not the same as what the tiles contain - the schema documentation is where that distinction is published.",
+    "find": "kind_detail",
+    "url": "https://docs.protomaps.com/basemaps/layers"
   }
 ]
