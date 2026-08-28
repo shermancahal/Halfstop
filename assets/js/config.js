@@ -297,6 +297,7 @@ export const BASEMAPS = [
     description: 'Vector terrain with contours and trails.',
     style: 'mapbox://styles/mapbox/outdoors-v12',
     requiresToken: true,
+    audience: 'editors',
     attribution: '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> © OpenStreetMap',
   },
   {
@@ -306,6 +307,7 @@ export const BASEMAPS = [
     description: 'Mapbox imagery with road and place labels.',
     style: 'mapbox://styles/mapbox/satellite-streets-v12',
     requiresToken: true,
+    audience: 'editors',
     attribution: '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> © OpenStreetMap © Maxar',
   },
 ];
@@ -317,6 +319,19 @@ export const BASEMAPS = [
  * better than the alternatives, and it is the one being refined — so it should
  * be what people see first rather than something they have to find. The two
  * constants are kept separate because a token still changes what is available.
+ */
+/*
+ * `audience: 'editors'` hides a basemap from the picker for everyone else.
+ *
+ * Decluttering, not access control. The token is in the page either way and
+ * anybody can call the tileset directly; what this does is keep two Mapbox
+ * maps out of a list that is meant to offer things people can actually rely
+ * on - and let one account keep them visible to evaluate against.
+ *
+ * Byways Topo is deliberately NOT gated yet. It is the only drawn map here,
+ * and hiding it before its Protomaps twin exists would leave the public site
+ * with no drawn map at all. It joins them when there is something to replace
+ * it with.
  */
 export const DEFAULT_BASEMAP = 'byways-topo';
 export const DEFAULT_BASEMAP_WITH_TOKEN = 'byways-topo';

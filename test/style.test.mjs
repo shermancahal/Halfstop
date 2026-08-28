@@ -435,6 +435,28 @@ test('style: a hatched fillBy names a colour for every value it tags', () => {
   }
 });
 
+test('style: a gated basemap is never the default anyone lands on', () => {
+  /*
+   * `audience: 'editors'` keeps a basemap out of the picker for everyone else.
+   * A default nobody can see is a map that loads and cannot be switched away
+   * from by name, which is the one way this decluttering could become a fault.
+   */
+  const gated = BASEMAPS.filter((basemap) => basemap.audience === 'editors');
+  assert.ok(gated.length > 0, 'nothing is gated, so this test is about nothing');
+  for (const id of [DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN]) {
+    const basemap = BASEMAPS.find((entry) => entry.id === id);
+    assert.equal(basemap?.audience, undefined, `${id} is the default and must be visible to everyone`);
+  }
+
+  /*
+   * And at least one drawn map stays public. Gating Byways Topo before its
+   * Protomaps twin exists would leave the site with nothing but agency
+   * rasters, which is the thing this project exists to improve on.
+   */
+  const publicDrawn = BASEMAPS.filter((basemap) => (basemap.style || basemap.custom) && basemap.audience !== 'editors');
+  assert.ok(publicDrawn.length > 0, 'every drawn basemap is gated, leaving the public site with none');
+});
+
 test('style: a combined overlay contributes one layer per source', () => {
   // Tested against a constructed overlay rather than whichever config entry
   // happens to use several sources today — the machinery is what has to keep

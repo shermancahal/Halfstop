@@ -64,6 +64,7 @@ import { kpNow, auroraChance, describeKp } from './lib/aurora.js';
 import { lunarEclipses, describeEclipse, shadowGeometry } from './lib/eclipse.js';
 import { describeSync } from './lib/sync.js';
 import { registerServiceWorker, applyServiceWorkerUpdate } from './lib/pwa.js';
+import { mayEdit } from './lib/editable.js';
 import {
   OfflineStore, MAX_ZOOM as OFFLINE_MAX_ZOOM, TILE_BUDGET,
   mayCacheTiles, tileURLsFor, downloadTiles, clearTiles,
@@ -306,7 +307,20 @@ function whenStyleReady(run) {
 }
 
 /** Basemaps needing a Mapbox token are hidden entirely when none is configured. */
-const availableBasemaps = () => BASEMAPS.filter((b) => !b.requiresToken || hasMapboxToken());
+/*
+ * The basemaps this visitor is offered.
+ *
+ * Two filters, and they answer different questions. `requiresToken` is about
+ * whether the map can render at all; `audience` is about whether it belongs in
+ * the list. The second is presentation - the token ships in the page either
+ * way and the tileset is one fetch away - so this keeps a map out of a menu
+ * rather than out of reach, which is all it claims to do.
+ */
+const availableBasemaps = () => BASEMAPS.filter((basemap) => {
+  if (basemap.requiresToken && !hasMapboxToken()) return false;
+  if (basemap.audience === 'editors') return mayEdit(state.account?.user);
+  return true;
+});
 
 const sourceIdFor = (key) => `data-${key}`;
 const layerIdsFor = (key) => [
@@ -348,7 +362,15 @@ async function main() {
     refreshRegionData();
   });
   state.account = new Account(state.folders);
-  state.account.addEventListener('change', renderAccount);
+  state.account.addEventListener('change', () => {
+    renderAccount();
+    /*
+     * The basemap list depends on who is signed in, so it has to be rebuilt
+     * when that changes - otherwise an editor signs in and the maps gated to
+     * them appear only after a reload, which reads as the gate not working.
+     */
+    renderLayersTab();
+  });
 
   state.folders.onChange((_store, folderId) => {
     // Push the folder that changed straight away; a full sync still runs on
