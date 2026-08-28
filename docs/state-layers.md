@@ -374,3 +374,54 @@ All of it becomes possible the moment the same services are queried for
 features instead, which is what TVA, Michigan and Maryland already do.
 The `vec:` probes ask whether these services will do that and which
 fields carry the names and the designations.
+
+## Proposed descriptions
+
+Current text against proposed. The proposals state what the layer is and
+nothing else - no reasoning, no caveats, no history of how it got here - with
+the agency named in one consistent form.
+
+| State | Layer | Current description | Proposed |
+|---|---|---|---|
+| Arkansas | State parks | Arkansas state parks. | State park boundaries. *Source: Arkansas State Parks* |
+| Colorado | CPW facilities | Colorado Parks and Wildlife facilities — the service publishes sites, not the land around them. | Campgrounds, trailheads and other facilities on CPW land. *Source: Colorado Parks and Wildlife* |
+| Connecticut | DEEP property | State land held by the Department of Energy and Environmental Protection. | State forests, parks and wildlife areas. *Source: Connecticut DEEP* |
+| Delaware | State park boundaries | Consolidated state park boundaries. | State park boundaries. *Source: Delaware DNREC* |
+| Florida | State forests | Florida Forest Service state forests. | State forest boundaries. *Source: Florida Forest Service* |
+| Hawaii | Na Ala Hele trails | The state trail and access programme. | State trails and public access points. *Source: Hawaii DLNR* |
+| Idaho | Area restrictions | Areas under a restriction rather than a full closure. | Areas under a travel restriction. *Source: Idaho Parks and Recreation* |
+| Idaho | Recreation routes | Statewide recreation routes. | Motorised and non-motorised routes, with seasons of use. *Source: Idaho Parks and Recreation* |
+| Iowa | Recreation lands | Iowa DNR recreation lands. | State recreation lands. *Source: Iowa DNR* |
+| Kentucky | Aerial (3 in) | KyFromAbove orthoimagery. Three-inch resolution — close enough to count fence posts. | Three-inch aerial imagery. *Source: KyFromAbove* |
+| Kentucky | Lidar hillshade (5 ft) | Terrain from five-foot lidar. Old roadbeds, quarry benches and hollows the national hillshade misses. | Terrain relief from five-foot lidar. *Source: KyFromAbove* |
+| Kentucky | Recreational trails | Trails coloured by what may travel them. | Trails by permitted use: foot, horse, bicycle, ATV, motorcycle, water. *Source: Kentucky DGI* |
+| Kentucky | Scenic byways | The Commonwealth's designated scenic routes. | Designated scenic byways. *Source: Kentucky DGI* |
+| Kentucky | State forests | State forest boundaries, named. | State forest boundaries. *Source: Kentucky DGI* |
+| Maine | Bureau of Parks & Lands sites | Public reserved land and state park sites. | State park and public reserved land sites. *Source: Maine Bureau of Parks and Lands* |
+| Maryland | Park & forest maintained roads | Roads the state maintains inside its parks and forests. | Roads maintained inside state parks and forests. *Source: Maryland DNR* |
+| Massachusetts | Protected & recreational open space | Open space, protected and recreational. | Protected and recreational open space. *Source: MassGIS* |
+| Michigan | Forest roads | State forest roads with surface, condition and why a closed one is closed. | State forest roads, with surface and condition. *Source: Michigan DNR* |
+| Michigan | State forest campgrounds | Campgrounds on state forest land. | Campgrounds on state forest land. *Source: Michigan DNR* |
+| Mississippi | State parks & WMAs | State parks and wildlife management areas in one layer. | State parks and wildlife management areas. *Source: Mississippi Wildlife, Fisheries and Parks* |
+| Montana | State parks | Montana FWP state park boundaries. | State park boundaries. *Source: Montana Fish, Wildlife & Parks* |
+| Nebraska | Park areas | Nebraska park areas. | State park and recreation areas. *Source: Nebraska Game and Parks* |
+| North Carolina | State trails | State trails maintained by North Carolina. | State trails, named. *Source: North Carolina State Parks* |
+| North Dakota | State forest | North Dakota state forest. | State forest boundaries. *Source: North Dakota GIS Hub* |
+| Ohio | ODNR lands | Land the Ohio DNR manages, coloured by division. | State land by managing division: parks, forestry, wildlife, nature preserves. *Source: Ohio DNR* |
+| Oklahoma | Wildlife management areas | Oklahoma wildlife management areas, which is what this service holds despite its name. | Wildlife management areas. *Source: Oklahoma Department of Wildlife Conservation* |
+| Pennsylvania | State parks & amenities | Park boundaries with the amenities inside them. | State park boundaries and amenities. *Source: Pennsylvania DCNR* |
+| South Carolina | State parks | South Carolina state parks. | State park boundaries. *Source: South Carolina State Parks* |
+| South Dakota | State parks | South Dakota state parks. | State park locations. *Source: South Dakota Game, Fish and Parks* |
+| Tennessee | Aerial | The state's own base mapping imagery, flown on a rolling cycle and sharper than the national mosaic. | State aerial imagery. *Source: Tennessee STS GIS* |
+| Tennessee | TVA dispersed recreation | Where TVA sanctions dispersed use, and where it is restricted. | TVA dispersed recreation areas, with restrictions. *Source: Tennessee Valley Authority* |
+| Tennessee | Wildlife management areas | TWRA-managed land, named and with its managing agency. | Wildlife management areas. *Source: Tennessee Wildlife Resources Agency* |
+| Texas | Wildlife management areas | TPWD wildlife management areas released for public distribution. | Wildlife management areas. *Source: Texas Parks and Wildlife* |
+| Utah | State park management areas | Utah state park management areas. | State park management areas. *Source: Utah State Parks* |
+| Vermont | ANR travel routes | Agency of Natural Resources roads — the state's own forest and park access. | Forest and park access roads. *Source: Vermont ANR* |
+| Vermont | Primitive camping areas | Where Vermont sanctions primitive camping. | Designated primitive camping areas. *Source: Vermont ANR* |
+| Vermont | Recreation sites | ANR recreation sites. | State recreation sites. *Source: Vermont ANR* |
+| Vermont | Trails | ANR travel-route trails, the walking half of the network. | State trails. *Source: Vermont ANR* |
+| West Virginia | Aerial, leaf-off | Flown with the leaves down, so old grades, benches and roadbeds show through the canopy. | Leaf-off aerial imagery. *Source: WV GIS Technical Center* |
+| West Virginia | Lidar hillshade (1 m) | Terrain from one-metre lidar — ten times the detail of the national relief. | Terrain relief from one-metre lidar. *Source: WV GIS Technical Center* |
+| Wisconsin | State parks | Wisconsin state parks. The service is named for closures and contains only a parks layer. | State park boundaries. *Source: Wisconsin DNR* |
+| Wyoming | State park boundaries | Wyoming state park boundaries. | State park boundaries. *Source: Wyoming State Parks* |

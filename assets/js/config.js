@@ -1569,25 +1569,6 @@ export const OVERLAYS = [
     attribution: 'Parks \u00a9 <a href=\"https://fwp.mt.gov/\">Montana Fish, Wildlife & Parks</a>',
   },
   {
-    legend: [{ color: '#2E7D32', label: 'Site: State parks & status' }],
-    id: 'or-parks',
-    states: ['OR'],
-    name: 'State parks & status',
-    description: 'Park boundaries and whether each is open.',
-    query: {
-      url: 'https://gis.prd.state.or.us/arcgis/rest/services/Land_Ownership/LO_STATE_PARK_STATUS/FeatureServer/0/query'
-        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
-        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
-        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
-      minzoom: 7,
-      icon: 'ranger',
-      color: '#2E7D32',
-    },
-    opacity: 0.55,
-    enabled: false,
-    attribution: 'Parks \u00a9 <a href=\"https://stateparks.oregon.gov/\">Oregon Parks and Recreation</a>',
-  },
-  {
     legend: [{ color: '#2E7D32', label: 'Area: Wildlife management areas' }],
     id: 'tx-wma',
     states: ['TX'],
