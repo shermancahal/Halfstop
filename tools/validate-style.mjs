@@ -22,8 +22,9 @@ const require = createRequire(import.meta.url);
 
 let validate;
 let expression;
+let styleSpec;
 try {
-  ({ validate, expression } = require('@mapbox/mapbox-gl-style-spec'));
+  ({ validate, expression, v8: styleSpec } = require('@mapbox/mapbox-gl-style-spec'));
 } catch {
   console.error('@mapbox/mapbox-gl-style-spec is not installed.');
   console.error('Run: npm install --no-save @mapbox/mapbox-gl-style-spec');
@@ -306,6 +307,35 @@ for (const overlay of fillByOverlays) {
   }
 }
 
+/*
+ * A hatched fillBy compiles as a fill-pattern.
+ *
+ * fill-pattern takes an image name, and a `match` returning the wrong type is
+ * rejected at addLayer - which in this app means the try/catch swallows it and
+ * the layer is simply missing its fill. Compiled against the real spec so that
+ * failure is a build error rather than an empty area on a map about where you
+ * may not fly.
+ *
+ * What this can and cannot see, stated plainly: it catches a branch of the
+ * wrong type and an input that was not coerced, both confirmed by breaking
+ * them. It cannot tell whether the image names correspond to patterns that
+ * were actually registered - nothing static can, since they are drawn on a
+ * canvas at runtime. That half is covered by the fallback in the viewer, which
+ * reverts to a flat tint unless every pattern registered.
+ */
+for (const overlay of fillByOverlays.filter((entry) => entry.query.fillBy.hatch)) {
+  const by = overlay.query.fillBy;
+  // Image names stand in for what hatchPattern registers at runtime; the shape
+  // of the expression is what is under test, not the canvas it draws.
+  const pattern = ['match', ['coalesce', ['to-string', ['get', by.field]], ''],
+    ...Object.entries(by.colors).flatMap(([value, hex]) => [value, `hatch-${hex.replace('#', '')}`]),
+    `hatch-${String(by.fallback).replace('#', '')}`];
+  const compiled = expression.createPropertyExpression(pattern, styleSpec.paint_fill['fill-pattern']);
+  if (compiled.result !== 'success') {
+    for (const error of compiled.value) all.push(['hatch', { message: `${overlay.id}: ${error.message}` }]);
+  }
+}
+
 if (all.length) {
   console.error(`\n${all.length} validation error(s):`);
   for (const [where, error] of all) console.error(`  [${where}] ${error.message}`);
@@ -315,4 +345,5 @@ if (all.length) {
 console.log(`Shields — 23-60 splits into ${evaluate(layerBy('road-shield-first').layout['text-field'], DUPLEX)} and ${evaluate(layerBy('road-shield-second').layout['text-field'], DUPLEX)}`);
 console.log(`Runtime paint — ${Object.keys(runtimeExpressions).length} overlay expressions compile`);
 console.log(`fillBy — ${fillByOverlays.length} layers pick the colour they asked for`);
+console.log(`Hatching — ${fillByOverlays.filter((e) => e.query.fillBy.hatch).length} layer(s) compile as a fill-pattern`);
 console.log('Valid.');

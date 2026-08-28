@@ -563,55 +563,59 @@ export const OVERLAYS = [
   {
     id: 'faa-restrictions',
     legend: [
-      { color: '#8E44AD', label: 'Special use airspace' },
-      { color: '#C0392B', label: 'National defence' },
-      { color: '#D97A2B', label: 'Stadium' },
+      { color: '#C0392B', label: 'No fly' },
+      { color: '#D9A441', label: 'Permit or caution' },
     ],
     /*
-     * Standing and scheduled restrictions - not the hour-by-hour kind.
+     * One layer, two severities, because that is the only distinction that
+     * changes what you do.
      *
-     * Worth being exact, because the difference is the whole safety argument.
-     * These three services carry restrictions that exist on a schedule or
-     * permanently: special use airspace, national defence areas, and stadiums
-     * (which close a three-mile circle around game time). The genuinely
-     * temporary ones - a wildfire, a VIP movement, something that appeared
-     * this morning - are NOTAMs, and they live at tfr.faa.gov, which answers
-     * 31kB of good JSON and sends no CORS header. A browser may not read it.
+     * A prohibited area and a national park are both worth seeing before you
+     * drive somewhere, and they are not the same fact. Red is "do not fly
+     * here"; amber is "you can, with permission, or with care". Colouring by
+     * agency instead would have made six categories out of one question.
      *
-     * So this layer does not claim to show today's TFRs, the note says so, and
-     * the card carries a link to the list that does. Drawing three services
-     * and calling the result "TFRs" would be the most dangerous thing on this
-     * map: a pilot who checked it and saw nothing would have been told the sky
-     * was clear by a layer that never had the answer.
+     * Hatched rather than washed, for the reason Ohio's lands are: these
+     * overlap each other and everything else, and a flat fill stacked twice
+     * reads as a third colour that means nothing.
+     *
+     * MOAs are deliberately not here. A military operating area does not
+     * restrict civilian flight - it is an advisory - and is generally based
+     * above 1,000 AGL, which is 600 feet above anything this map's users are
+     * flying. Drawing them would be filling the screen with warnings that do
+     * not apply.
      */
     legendNote: 'Standing and scheduled restrictions only. Same-day TFRs — fires, VIP '
       + 'movements — are NOTAMs and are not in this layer; use the link on any feature to '
       + 'check the current list before you fly.',
     group: 'Airspace',
-    name: 'Flight restrictions',
-    description: 'Special use airspace, national defence areas and stadiums. Source: FAA',
+    name: 'Restrictions & advisories',
+    description: 'Where drones may not fly, and where you would need permission. Source: FAA, NPS, USFS',
     query: {
       /*
-       * One layer over three services, using the sublayer machinery Kentucky's
-       * trails already use. The placeholder happens to take a service name
-       * rather than a numeric id, which needs no code: all three sit on the
-       * same host behind the same query shape, and merging them puts the kind
-       * of restriction in a column where one match expression can colour it.
+       * The FAA services share a host and a query shape, so they differ only
+       * by the name in `{layer}`. Anything on another host carries its own
+       * `url` instead - the sublayer machinery takes either.
        */
       url: 'https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/{layer}/FeatureServer/0/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
         + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
         + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=300&f=geojson',
       uses: [
-        { layer: 'Special_Use_Airspace', use: 'Special use' },
-        { layer: 'National_Defense_Airspace_TFR_Areas', use: 'National defence' },
-        { layer: 'Stadiums', use: 'Stadium' },
+        { layer: 'Special_Use_Airspace', use: 'Prohibited or restricted airspace', tag: { severity: 'No fly' } },
+        { layer: 'National_Defense_Airspace_TFR_Areas', use: 'National defence area', tag: { severity: 'No fly' } },
+        // A stadium TFR is real but not permanent: it runs from an hour before
+        // an event to an hour after, for venues seating 30,000 or more. Red,
+        // because when it is on it is a genuine prohibition, and the panel
+        // says when.
+        { layer: 'Stadiums', use: 'Stadium — during events', tag: { severity: 'No fly' } },
       ],
       minzoom: 7,
-      color: '#8E44AD',
+      color: '#C0392B',
       label: 'NAME',
       fields: {
-        use: { label: 'Restriction' },
+        severity: { label: 'Status' },
+        use: { label: 'Kind' },
         LOCAL_TYPE: { label: 'Type' },
         UPPER_VAL: { label: 'Ceiling', suffix: ' ft' },
         LOWER_VAL: { label: 'Floor', suffix: ' ft' },
@@ -624,16 +628,13 @@ export const OVERLAYS = [
         { label: 'B4UFLY', href: 'https://www.faa.gov/uas/getting_started/b4ufly' },
       ],
       fillBy: {
-        field: 'use',
-        colors: {
-          'Special use': '#8E44AD',
-          'National defence': '#C0392B',
-          Stadium: '#D97A2B',
-        },
-        fallback: '#7D6E8C',
+        field: 'severity',
+        hatch: true,
+        colors: { 'No fly': '#C0392B', 'Permit or caution': '#D9A441' },
+        fallback: '#B08A4A',
       },
     },
-    opacity: 0.4,
+    opacity: 0.45,
     enabled: false,
     attribution: 'Restrictions © <a href="https://www.faa.gov/">FAA</a>',
   },

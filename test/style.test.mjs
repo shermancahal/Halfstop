@@ -243,6 +243,19 @@ test('config: a queried overlay carries a bbox placeholder and a floor', () => {
   for (const overlay of OVERLAYS.filter((o) => o.query)) {
     assert.ok(overlay.query.url.includes('{bbox}'),
       `${overlay.id} has nowhere to put the view`);
+    /*
+     * A sublayer bringing its own URL has to bring the placeholder too.
+     *
+     * Without {bbox} the request asks for the whole country, which either
+     * times out or comes back truncated - and a truncated restriction layer
+     * has gaps in it that look like open airspace.
+     */
+    for (const kind of overlay.query.uses || []) {
+      if (!kind.url) continue;
+      assert.ok(kind.url.includes('{bbox}'),
+        `${overlay.id}: the ${kind.use} sublayer would query the whole country`);
+      assert.match(kind.url, /f=geojson/, `${overlay.id}: the ${kind.use} sublayer does not ask for GeoJSON`);
+    }
     assert.match(overlay.query.url, /f=geojson/, `${overlay.id} does not ask for GeoJSON`);
     assert.ok(overlay.query.minzoom >= 1,
       `${overlay.id} would query the whole country at once`);
@@ -393,6 +406,32 @@ test('ui: a file goes out by whichever route the browser has', async () => {
   } finally {
     restore();
     delete globalThis.document;
+  }
+});
+
+test('style: a hatched fillBy names a colour for every value it tags', () => {
+  /*
+   * A `match` on fill-pattern that names an image which was never registered
+   * draws nothing at all - not the fallback, nothing. On a layer whose whole
+   * job is showing where you may not fly, an area that silently stops drawing
+   * is the worst possible failure, so every severity a sublayer can apply has
+   * to have a colour waiting for it.
+   */
+  for (const overlay of OVERLAYS.filter((o) => o.query?.fillBy?.hatch)) {
+    const by = overlay.query.fillBy;
+    const tagged = new Set((overlay.query.uses || [])
+      .map((kind) => kind.tag?.[by.field] ?? (by.field === 'use' ? kind.use : undefined))
+      .filter((value) => value !== undefined));
+    assert.ok(tagged.size > 0, `${overlay.id} hatches by ${by.field} but tags nothing with it`);
+    for (const value of tagged) {
+      assert.ok(Object.hasOwn(by.colors, value),
+        `${overlay.id} tags features "${value}" but has no colour for it`);
+    }
+    // And the legend says what the colours mean, in the same words.
+    for (const value of Object.keys(by.colors)) {
+      assert.ok((overlay.legend || []).some((entry) => entry.label === value),
+        `${overlay.id}: "${value}" is painted but never explained in the key`);
+    }
   }
 });
 

@@ -4870,13 +4870,24 @@ async function refreshUseOverlay(overlay, source, empty) {
 
   const answers = await Promise.all(uses.map(async (kind) => {
     try {
-      const response = await fetch(queryURL(url.replace('{layer}', String(kind.layer)), state.map));
+      /*
+       * A sublayer may bring its own address and its own tags.
+       *
+       * Kentucky's twelve trail endpoints differ only by a number in one URL,
+       * which is what `{layer}` is for. Flight restrictions are three agencies
+       * on three hosts saying related things, so an entry can carry a whole
+       * URL instead - and `tag` lets it carry more than its name, which is how
+       * a park and a prohibited area end up in one layer while still being
+       * told apart by how serious each is.
+       */
+      const target = kind.url || url.replace('{layer}', String(kind.layer));
+      const response = await fetch(queryURL(target, state.map));
       if (!response.ok) return [];
       const data = await response.json();
       if (data.error || !Array.isArray(data.features)) return [];
       return data.features.map((feature) => ({
         ...feature,
-        properties: { ...feature.properties, use: kind.use },
+        properties: { ...feature.properties, use: kind.use, ...(kind.tag || {}) },
       }));
     } catch {
       return [];
@@ -5052,7 +5063,29 @@ function addQueryOverlay(overlay, opacity) {
   }
   if (!state.map.getLayer(fill)) {
     const [, amount] = opacityPaint('fill', opacity);
-    const hatch = tint ? null : hatchPattern(colour);
+    /*
+     * Hatched per value, not just per layer.
+     *
+     * `fill-pattern` is data-driven the same way `fill-color` is, so a layer
+     * that asks for it gets one diagonal per category rather than one flat
+     * wash - which is what makes a red no-fly area and an amber "you would
+     * need a permit" legible as different things at a glance rather than as
+     * two shades of the same warning.
+     *
+     * Falls back to the flat tint if any of the patterns failed to register:
+     * a `match` naming an image that does not exist draws nothing at all, and
+     * an area that silently stops drawing is the worst outcome on this layer.
+     */
+    let patterned = null;
+    if (by?.hatch) {
+      const named = Object.entries(by.colors).map(([value, hex]) => [value, hatchPattern(hex)]);
+      const fallbackImage = hatchPattern(by.fallback || colour);
+      if (fallbackImage && named.every(([, image]) => image)) {
+        patterned = ['match', ['coalesce', ['to-string', ['get', by.field]], ''],
+          ...named.flat(), fallbackImage];
+      }
+    }
+    const hatch = patterned || (tint ? null : hatchPattern(colour));
     addPart('fill', {
       id: fill,
       type: 'fill',
