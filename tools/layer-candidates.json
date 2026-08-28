@@ -797,5 +797,26 @@
     "url": "https://unpkg.com/@protomaps/basemaps@5.7.2/src/base_layers.ts",
     "find": "(id: \"[a-z_0-9]*label[a-z_0-9]*\",[\\s\\S]{0,220}?\"source-layer\": \"[a-z_]+\")",
     "note": "Every label layer in Protomaps' own style, with the source-layer each reads. Two label layers here - the names of lakes and rivers, and the names of summits - are dropped because Mapbox puts them in natural_label and this schema has no such layer. Whatever draws those names in the default style has to name where it gets them."
+  },
+  {
+    "id": "pm:landcover-kinds",
+    "expect": "data",
+    "url": "https://unpkg.com/@protomaps/basemaps@5.7.2/src/base_layers.ts",
+    "find": "(\"source-layer\": \"landcover\"[\\s\\S]{0,900})",
+    "note": "What Protomaps calls forest, scrub, grass and snow. Three layers here still carry Mapbox's landcover and landuse class names spelled out - wood, scrub, grass, snow, park, sand - which over Protomaps geometry match nothing and paint every fill the fallback colour. Same bug the road filters had, in the layers that make up the ground the map is drawn on. The style source shows the layer's own filter and colour ramp together."
+  },
+  {
+    "id": "pm:landuse-fill-kinds",
+    "expect": "data",
+    "url": "https://unpkg.com/@protomaps/basemaps@5.7.2/src/base_layers.ts",
+    "find": "(id: \"landuse_[a-z_]+\",[\\s\\S]{0,500})",
+    "note": "Every landuse fill in Protomaps' own style, with the kinds each draws. The park layer was read from here already; this asks for the rest of them, because this style paints park, grass, wood, scrub and sand and needs the vocabulary for all five."
+  },
+  {
+    "id": "pm:places-ranking",
+    "expect": "data",
+    "url": "https://unpkg.com/@protomaps/basemaps@5.7.2/src/base_layers.ts",
+    "find": "(id: \"places_[a-z_]+\",[\\s\\S]{0,500})",
+    "note": "How Protomaps distinguishes a city from a hamlet. The place label here sizes text by whether the class is Mapbox's 'settlement', a value this schema does not have - so every place name from a state capital to a crossroads would be drawn at the same small size. The confirmed kinds are country, region, province, locality, neighbourhood and macrohood; what is needed is which of those is a town and how its importance is ranked."
   }
 ]

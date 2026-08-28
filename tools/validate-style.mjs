@@ -164,6 +164,55 @@ for (const layer of protomaps.layers) {
   }
 }
 
+/*
+ * The same check, for every field that is not the road class.
+ *
+ * The road version found seven hardcoded values and stopped there, because
+ * roads were where the work was. Everything else classifies through the same
+ * `classField`, and three layers still carried Mapbox's vocabulary - the
+ * landcover ramp, the landuse fill and the place-label sizing. Those are the
+ * ground the map is drawn on and the names on it: matching nothing means a
+ * uniform green country with every town's name the same size, which reads as
+ * a design decision rather than as a bug.
+ *
+ * The schema names each set, so the test is that every value a layer asks for
+ * comes from one of them.
+ */
+{
+  const known = new Set([
+    ...PROTOMAPS_SCHEMA.landcoverClasses || [],
+    ...PROTOMAPS_SCHEMA.landuseClasses || [],
+    ...PROTOMAPS_SCHEMA.protectedClasses || [],
+    ...PROTOMAPS_SCHEMA.waterClasses || [],
+    ...PROTOMAPS_SCHEMA.summitClasses || [],
+    ...PROTOMAPS_SCHEMA.placeClasses || [],
+  ]);
+  const field = PROTOMAPS_SCHEMA.fields.classField;
+  const asked = new Map();
+  const walk = (node, id) => {
+    if (!Array.isArray(node)) return;
+    const reads = Array.isArray(node[1]) && node[1][0] === 'get' && node[1][1] === field;
+    if ((node[0] === 'match' || node[0] === '==') && reads) {
+      for (const value of node.slice(2).flat()) {
+        // Colours and sizes sit in the same arms as the values they answer for.
+        if (typeof value === 'string' && !value.startsWith('#')) asked.set(value, id);
+      }
+    }
+    for (const child of node) walk(child, id);
+  };
+  for (const layer of protomaps.layers) {
+    if (layer['source-layer'] === PROTOMAPS_SCHEMA.layers.road) continue;
+    walk(layer.filter, layer.id);
+    for (const value of Object.values(layer.paint || {})) walk(value, layer.id);
+    for (const value of Object.values(layer.layout || {})) walk(value, layer.id);
+  }
+  for (const [value, id] of asked) {
+    if (!known.has(value)) {
+      all.push(['Protomaps', { message: `${id} filters on "${value}", which the schema never names — it will match nothing` }]);
+    }
+  }
+}
+
 // And the archive is addressed through the protocol, not fetched as a tile.
 {
   const source = protomaps.sources[PROTOMAPS_SCHEMA.source];
