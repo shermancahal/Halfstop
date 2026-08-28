@@ -93,6 +93,25 @@ test('byways: no classification field is written inline either', () => {
     'a classification field is written inline; it must come from the schema');
 });
 
+test('byways: every layer draws from a source the schema names', () => {
+  /*
+   * The same seam, one level up. `source: 'composite'` inline is Mapbox's
+   * source name; under Protomaps the source is called something else and a
+   * layer pointing at a source that is not in the style is dropped by the
+   * renderer without complaint.
+   *
+   * Checked in the output rather than the text this time, because unlike a
+   * source-layer this one IS visible there: a layer naming a source the style
+   * does not define is wrong under any schema.
+   */
+  const style = bywaysStyle('pk.snapshot');
+  const defined = new Set(Object.keys(style.sources));
+  const orphans = style.layers
+    .filter((layer) => layer.source && !defined.has(layer.source))
+    .map((layer) => `${layer.id} draws from ${layer.source}`);
+  assert.deepEqual(orphans, [], 'a layer names a source the style never defines');
+});
+
 test('byways: the schema names a layer for everything the style needs', () => {
   // And the other direction: a name in the schema that nothing draws from is
   // dead weight the Protomaps mapping would have to account for anyway.

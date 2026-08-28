@@ -458,7 +458,7 @@ function groundLayers() {
     {
       id: 'landcover',
       type: 'fill',
-      source: 'composite',
+      source: S.source,
       'source-layer': S.layers.landcover,
       paint: {
         'fill-color': [
@@ -478,7 +478,7 @@ function groundLayers() {
     {
       id: 'national-park',
       type: 'fill',
-      source: 'composite',
+      source: S.source,
       'source-layer': S.layers.landuseOverlay,
       filter: ['==', ['get', S.fields.classField], 'national_park'],
       paint: { 'fill-color': PALETTE.park, 'fill-opacity': 0.5 },
@@ -486,7 +486,7 @@ function groundLayers() {
     {
       id: 'landuse',
       type: 'fill',
-      source: 'composite',
+      source: S.source,
       'source-layer': S.layers.landuse,
       filter: ['match', ['get', S.fields.classField], ['park', 'grass', 'wood', 'scrub', 'sand'], true, false],
       paint: {
@@ -509,7 +509,7 @@ function reliefLayers() {
     {
       id: 'hillshade',
       type: 'fill',
-      source: 'terrain',
+      source: S.reliefSource,
       'source-layer': S.layers.hillshade,
       paint: {
         'fill-color': PALETTE.hillshade,
@@ -528,7 +528,7 @@ function reliefLayers() {
     {
       id: 'contour',
       type: 'line',
-      source: 'terrain',
+      source: S.reliefSource,
       'source-layer': S.layers.contour,
       filter: ['!=', ['get', 'index'], 5],
       minzoom: 10,
@@ -541,7 +541,7 @@ function reliefLayers() {
     {
       id: 'contour-index',
       type: 'line',
-      source: 'terrain',
+      source: S.reliefSource,
       'source-layer': S.layers.contour,
       filter: ['==', ['get', 'index'], 5],
       minzoom: 9,
@@ -554,7 +554,7 @@ function reliefLayers() {
     {
       id: 'contour-label',
       type: 'symbol',
-      source: 'terrain',
+      source: S.reliefSource,
       'source-layer': S.layers.contour,
       filter: ['==', ['get', 'index'], 5],
       minzoom: 13,
@@ -581,14 +581,14 @@ function waterLayers() {
     {
       id: 'water',
       type: 'fill',
-      source: 'composite',
+      source: S.source,
       'source-layer': S.layers.water,
       paint: { 'fill-color': PALETTE.water },
     },
     {
       id: 'waterway',
       type: 'line',
-      source: 'composite',
+      source: S.source,
       'source-layer': S.layers.waterway,
       minzoom: 8,
       layout: { 'line-cap': 'round', 'line-join': 'round' },
@@ -618,7 +618,7 @@ function roadLayers() {
   layers.push({
     id: 'road-track',
     type: 'line',
-    source: 'composite',
+    source: S.source,
     'source-layer': S.layers.road,
     filter: ['match', ['get', S.fields.classField], ['track', 'service'], true, false],
     minzoom: 11,
@@ -634,7 +634,7 @@ function roadLayers() {
   layers.push({
     id: 'road-path',
     type: 'line',
-    source: 'composite',
+    source: S.source,
     'source-layer': S.layers.road,
     filter: ['match', ['get', S.fields.classField], ['path', 'pedestrian'], true, false],
     minzoom: 13,
@@ -650,7 +650,7 @@ function roadLayers() {
     layers.push({
       id: `road-${className}-casing`,
       type: 'line',
-      source: 'composite',
+      source: S.source,
       'source-layer': S.layers.road,
       filter: roadFilter(className),
       minzoom: className === 'motorway' ? 4 : className === 'trunk' ? 5 : 8,
@@ -671,7 +671,7 @@ function roadLayers() {
   layers.push({
     id: 'road-street-casing',
     type: 'line',
-    source: 'composite',
+    source: S.source,
     'source-layer': S.layers.road,
     filter: ['match', ['get', S.fields.classField], ['street', 'street_limited'], true, false],
     minzoom: 11,
@@ -686,7 +686,7 @@ function roadLayers() {
     layers.push({
       id: `road-${className}`,
       type: 'line',
-      source: 'composite',
+      source: S.source,
       'source-layer': S.layers.road,
       filter: roadFilter(className),
       minzoom: className === 'motorway' ? 4 : className === 'trunk' ? 5 : 8,
@@ -698,7 +698,7 @@ function roadLayers() {
   layers.push({
     id: 'road-street',
     type: 'line',
-    source: 'composite',
+    source: S.source,
     'source-layer': S.layers.road,
     filter: ['match', ['get', S.fields.classField], ['street', 'street_limited'], true, false],
     minzoom: 11,
@@ -720,7 +720,7 @@ function roadLayers() {
   layers.push({
     id: 'road-unpaved',
     type: 'line',
-    source: 'composite',
+    source: S.source,
     'source-layer': S.layers.road,
     filter: ['all', UNPAVED, ['match', ['get', S.fields.classField], SEALED_CLASSES, true, false]],
     minzoom: 9,
@@ -743,7 +743,7 @@ function boundaryLayers() {
     {
       id: 'boundary-state',
       type: 'line',
-      source: 'composite',
+      source: S.source,
       'source-layer': S.layers.boundary,
       filter: ['all', ['==', ['get', 'admin_level'], 1], ['==', ['get', 'maritime'], 'false']],
       paint: {
@@ -755,7 +755,7 @@ function boundaryLayers() {
     {
       id: 'boundary-country',
       type: 'line',
-      source: 'composite',
+      source: S.source,
       'source-layer': S.layers.boundary,
       filter: ['all', ['<=', ['get', 'admin_level'], 0], ['==', ['get', 'maritime'], 'false']],
       paint: {
@@ -773,7 +773,7 @@ function labelLayers() {
     {
       id: 'label-water',
       type: 'symbol',
-      source: 'composite',
+      source: S.source,
       'source-layer': S.layers.natural,
       filter: ['match', ['get', S.fields.classField], ['lake', 'ocean', 'sea', 'river'], true, false],
       minzoom: 7,
@@ -792,7 +792,7 @@ function labelLayers() {
     {
       id: 'label-summit',
       type: 'symbol',
-      source: 'composite',
+      source: S.source,
       'source-layer': S.layers.natural,
       filter: ['match', ['get', S.fields.classField], ['landform'], true, false],
       minzoom: 11,
@@ -812,7 +812,7 @@ function labelLayers() {
     {
       id: 'label-road',
       type: 'symbol',
-      source: 'composite',
+      source: S.source,
       'source-layer': S.layers.road,
       filter: ['match', ['get', S.fields.classField],
         ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'street', 'track'], true, false],
@@ -839,7 +839,7 @@ function labelLayers() {
       // clutter over a county.
       id: 'label-trail',
       type: 'symbol',
-      source: 'composite',
+      source: S.source,
       'source-layer': S.layers.road,
       filter: ['all',
         ['match', ['get', S.fields.classField], ['path', 'service'], true, false],
@@ -863,7 +863,7 @@ function labelLayers() {
     {
       id: 'label-place',
       type: 'symbol',
-      source: 'composite',
+      source: S.source,
       'source-layer': S.layers.place,
       layout: {
         'text-field': LABEL_NAME,
@@ -1114,7 +1114,7 @@ function shieldLayers(state = '') {
   const half = (id, text, shiftPx) => ({
     id,
     type: 'symbol',
-    source: 'composite',
+    source: S.source,
     'source-layer': S.layers.road,
     filter: ['all', ['has', 'ref'], onARoad, IS_DUPLEX],
     minzoom: 6,
@@ -1152,7 +1152,7 @@ function shieldLayers(state = '') {
     {
       id: 'road-shield',
       type: 'symbol',
-      source: 'composite',
+      source: S.source,
       'source-layer': S.layers.road,
       filter: ['all',
         ['has', 'ref'],
