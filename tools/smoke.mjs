@@ -1126,9 +1126,10 @@ const slider = page.locator('.layer-row', { hasText: /^Wildfire/ })
  * which is the first time it has said anything at all.
  */
 await page.evaluate(() => {
-  const row = [...document.querySelectorAll('.layer-row')]
-    .find((element) => /^Wildfire/.test(element.textContent || ''));
-  const range = row?.nextElementSibling?.querySelector('input[type=range]');
+  // By its aria-label, which the panel sets to "<layer> opacity". Walking the
+  // DOM from the row text was my first attempt and it matched nothing: the
+  // row's textContent is not anchored at the layer name.
+  const range = document.querySelector('input[type=range][aria-label="Wildfire opacity"]');
   if (!range) throw new Error('no opacity slider for Wildfire');
   range.value = '30';
   range.dispatchEvent(new Event('input', { bubbles: true }));
