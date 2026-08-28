@@ -630,34 +630,6 @@
     "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Special_Use_Airspace/FeatureServer/0?f=pjson"
   },
   {
-    "id": "nps:mapservices",
-    "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
-    "note": "A second candidate host for the same thing. NPS publishes through more than one, and which one answers a browser with CORS is the question that decides it.",
-    "url": "https://mapservices.nps.gov/arcgis/rest/services?f=pjson"
-  },
-  {
-    "id": "wild:usfs",
-    "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]*(?:[Ww]ilderness)[^\"]*\"",
-    "note": "Designated wilderness from the Forest Service's enterprise warehouse, which this app already reads for basic ownership. Wilderness is a ground rule rather than airspace too - motorised equipment is prohibited - and the FAA asks for 2,000 feet of clearance on top.",
-    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW?f=pjson"
-  },
-  {
-    "id": "wild:blm",
-    "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]*(?:[Ww]ilderness|WSA)[^\"]*\"",
-    "note": "BLM holds wilderness and wilderness study areas the Forest Service does not. Between the two agencies the coverage is most of it.",
-    "url": "https://gis.blm.gov/arcgis/rest/services/lands?f=pjson"
-  },
-  {
-    "id": "nps:national",
-    "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
-    "note": "The Park Service's NationalDatasets folder, which is where a nationwide boundary would live. The community org listing turned up per-park layers - one park's boundary, another park's landholdings - which is not the same thing as the boundary of every unit.",
-    "url": "https://mapservices.nps.gov/arcgis/rest/services/NationalDatasets?f=pjson"
-  },
-  {
     "id": "wild:usfs-fields",
     "expect": "data",
     "find": "\"(?:name|alias)\"\\s*:\\s*\"[^\"]{0,60}\"",
@@ -677,5 +649,33 @@
     "find": "\"(?:name|alias)\"\\s*:\\s*\"[^\"]{0,60}\"",
     "note": "BLM's wilderness and wilderness study areas - the ones the Forest Service does not hold. Sublayers and columns first, because this service is a MapServer with several and the BLM lookup has already cost an afternoon by answering from a group layer that rejects every query.",
     "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_NLCS_WLD_WSA/MapServer?f=pjson"
+  },
+  {
+    "id": "wild:usfs-geojson",
+    "expect": "data",
+    "find": "\"type\"\\s*:\\s*\"(?:FeatureCollection|Feature|Polygon|MultiPolygon)\"|\"(?:WILDERNESSNAME|NAME|UNIT_NAME|nlcs_name)\"\\s*:\\s*\"[^\"]{0,50}\"",
+    "note": "The same wilderness query asked for GeoJSON rather than Esri JSON, which is the format the overlay actually needs. This is a MapServer rather than a hosted FeatureServer and f=geojson is not universal on those - and a layer that answers f=json beautifully and refuses f=geojson looks, from inside the app, exactly like a layer with no data in it.",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_Wilderness_01/MapServer/0/query?where=1%3D1&geometry=-85.0,34.6,-81.0,37.0&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=WILDERNESSNAME%2CGIS_ACRES&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=5&f=geojson"
+  },
+  {
+    "id": "wild:blm-geojson",
+    "expect": "data",
+    "find": "\"type\"\\s*:\\s*\"(?:FeatureCollection|Feature|Polygon|MultiPolygon)\"|\"(?:WILDERNESSNAME|NAME|UNIT_NAME|nlcs_name)\"\\s*:\\s*\"[^\"]{0,50}\"",
+    "note": "BLM's wilderness areas as GeoJSON, over the Utah canyon country where there is certainly some. Layer 0 is NLCS Wilderness Area and layer 1 is the study areas, read off the service rather than guessed - the BLM lookup has already cost an afternoon by querying a group layer that rejects everything.",
+    "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_NLCS_WLD_WSA/MapServer/0/query?where=1%3D1&geometry=-112.0,37.0,-109.0,39.0&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=5&f=geojson"
+  },
+  {
+    "id": "nps:boundary",
+    "expect": "data",
+    "find": "\"(?:UNIT_NAME|PARKNAME|UNIT_CODE|UNIT_TYPE)\"\\s*:\\s*\"[^\"]{0,60}\"",
+    "note": "The Park Service's nationwide unit boundary, asked directly. NationalDatasets turned out to hold buildings, parking lots, points of interest, roads and trails - and no boundary at all - and the community org listing is alphabetical and capped, so anything named NPS_ was past the end of it. Asked over the Smokies, where a park boundary certainly exists.",
+    "url": "https://services1.arcgis.com/fBc8EJBxQRMcHlei/arcgis/rest/services/NPS_Land_Resources_Division_Boundary_and_Tract_Data_Service/FeatureServer/2/query?where=1%3D1&geometry=-84.0,35.4,-83.0,35.8&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=5&f=json"
+  },
+  {
+    "id": "sua:fields",
+    "expect": "data",
+    "find": "\"name\"\\s*:\\s*\"[A-Z_]{2,24}\"",
+    "note": "Special use airspace's own columns, printed on their own so they are readable. MOAs are in this service and have to come out - they do not restrict civilian flight and sit above 1,000 AGL - and the filter needs the real column name. The last attempt guessed LOCAL_TYPE and TYPE_CODE from a sibling service and got 'outFields is invalid'.",
+    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Special_Use_Airspace/FeatureServer/0?f=pjson"
   }
 ]
