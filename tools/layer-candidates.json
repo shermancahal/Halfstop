@@ -550,5 +550,12 @@
     "note": "The failing request kept whole, so the ServiceException says in its own words what it objected to. The first failure was truncated to three hundred characters of XML preamble, which named the format of the complaint and not the complaint.",
     "find": "<ServiceException[^>]*>\\s*([^<]{1,300})",
     "url": "https://www.mrlc.gov/geoserver/mrlc_display/wms?service=WMS&version=1.3.0&request=GetMap&layers=mrlc_NLCD_Tree_Canopy&styles=&crs=EPSG:3857&bbox=-9361969.2,4495009.3,-9339705.3,4523072.3&width=256&height=256&format=image/png&transparent=true"
+  },
+  {
+    "id": "canopy:mrlc-legend",
+    "expect": "data",
+    "note": "The canopy ramp as JSON, to decide whether the panel can draw a key for it. A continuous 0-100 percentage may come back as a hundred entries, which is worse than no key at all - so this looks before a legend is wired rather than after.",
+    "find": "\"label\"\\s*:\\s*\"[^\"]{0,30}\"",
+    "url": "https://www.mrlc.gov/geoserver/mrlc_display/wms?service=WMS&version=1.3.0&request=GetLegendGraphic&layer=nlcd_tcc_conus_2021_v2021-4&format=application/json"
   }
 ]

@@ -120,6 +120,19 @@ const ESRI_IMAGE = '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857'
  */
 const NWS_GEOSERVER = 'https://mapservices.weather.noaa.gov/geoserver';
 
+/*
+ * MRLC publishes the National Land Cover Database, canopy included.
+ *
+ * The layer name is `nlcd_tcc_conus_2021_v2021-4`, read out of the service's
+ * capabilities and then confirmed by drawing a tile with it. Both halves were
+ * necessary: `mrlc_NLCD_Tree_Canopy` is also in that capabilities document and
+ * answers a GetMap with "Could not find layer mrlc_display:mrlc_NLCD_Tree_
+ * Canopy". Esri's Living Atlas copy of the same data wants a token and answers
+ * a browser with 499.
+ */
+const MRLC_WMS = 'https://www.mrlc.gov/geoserver/mrlc_display/wms';
+const MRLC_CANOPY = 'nlcd_tcc_conus_2021_v2021-4';
+
 const wmsTile = (endpoint, layer) => `${endpoint}?service=WMS&version=1.3.0&request=GetMap`
   + `&layers=${layer}&styles=&crs=EPSG:3857&bbox={bbox-epsg-3857}`
   + '&width=256&height=256&format=image/png&transparent=true';
@@ -524,6 +537,30 @@ export const OVERLAYS = [
     attribution: USGS_ATTRIBUTION,
   },
   {
+    id: 'forest-cover',
+    group: 'Forest',
+    name: 'Forest cover',
+    description: 'Percentage of ground under tree canopy, from 30 m satellite data. Source: MRLC / NLCD',
+    /*
+     * Canopy as an overlay rather than a change to the basemap.
+     *
+     * Byways Topo paints its greens from Mapbox's own landcover, where wood,
+     * scrub and grass all come out green and brown is simply the background
+     * showing through where no polygon exists. Replacing that with canopy
+     * would mean rebuilding the style around a source that can go down, and a
+     * basemap that can go down is a basemap you cannot rely on. As an overlay
+     * an outage costs one switch, and the map underneath is untouched.
+     *
+     * Thirty-metre data, so it is honest to about zoom 14 and no further.
+     */
+    tiles: [wmsTile(MRLC_WMS, MRLC_CANOPY)],
+    tileSize: 256,
+    maxzoom: 14,
+    opacity: 0.55,
+    enabled: false,
+    attribution: 'Canopy © <a href="https://www.mrlc.gov/">MRLC</a> / NLCD',
+  },
+  {
     id: 'faa-airspace',
     legend: [
       { color: '#2C5FA8', label: 'Class B' },
@@ -546,6 +583,16 @@ export const OVERLAYS = [
      * The colours are the sectional's own: blue for B and D, magenta for C and
      * E. Anyone who reads charts already knows what they mean, and anyone who
      * does not is better served by the panel than by a colour I invented.
+     *
+     * Expect this to be intermittent, and not because of anything here. The
+     * FAA's ArcGIS Online org has a shared per-minute request quota and it is
+     * already being exceeded by its other consumers - a probe run of three
+     * requests came back "API calls quota exceeded (6138 request units)!
+     * maximum allowed request units (6000) per Minute". That arrives as a 200
+     * with an error object, which the refresh already tells apart from an
+     * empty view, so the layer badges itself as not responding and keeps
+     * whatever it last drew rather than blanking. The VFR sectional is a
+     * cached tile service on a different host and is not subject to it.
      */
     query: {
       url: 'https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Class_Airspace/FeatureServer/0/query'
