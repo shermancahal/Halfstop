@@ -4801,6 +4801,16 @@ function addQueryOverlay(overlay, opacity) {
    * heavy border for no gain.
    */
   const road = Boolean(overlay.query.road);
+  /*
+   * The scale is baked into the stops, not applied to the result.
+   *
+   * The casing was ['*', <interpolate on zoom>, 1.9], which the spec forbids -
+   * a zoom expression may only be the top-level input to step or interpolate.
+   * addLayer threw, addQueryOverlay aborted before it reached the core line and
+   * the dot, and every road layer drew nothing at all. Reported as Maryland
+   * having no roads; it was all eight of them, broken by the commit that was
+   * meant to make them legible.
+   */
   const width = (scale) => ['interpolate', ['linear'], ['zoom'],
     8, 0.9 * scale, 11, 1.6 * scale, 13, 2.6 * scale, 15, 4.2 * scale, 17, 6.5 * scale];
 
@@ -4814,7 +4824,7 @@ function addQueryOverlay(overlay, opacity) {
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
         'line-color': '#FFFDF7',
-        'line-width': ['*', width(1), 1.9],
+        'line-width': width(1.9),
         'line-opacity': amount * 0.9,
       },
     }, firstDataLayerId());

@@ -222,6 +222,36 @@ for (const [id, wanted] of Object.entries(filters)) {
   }
 }
 
+/*
+ * The paint expressions the viewer builds for a queried overlay.
+ *
+ * These are assembled in viewer.js at runtime and never reach the style
+ * document, so nothing here has ever looked at them - which is how a casing
+ * width of ['*', <interpolate on zoom>, 1.9] shipped. The spec forbids it: a
+ * zoom expression may only be the top-level input to step or interpolate.
+ * addLayer threw, the function aborted before adding the core line, and all
+ * eight road layers drew nothing.
+ *
+ * The widths are duplicated from viewer.js rather than imported, because
+ * viewer.js expects a browser. Duplication is the cost of checking them at
+ * all, and the stops are the part that has to stay in step.
+ */
+const roadWidth = (scale) => ['interpolate', ['linear'], ['zoom'],
+  8, 0.9 * scale, 11, 1.6 * scale, 13, 2.6 * scale, 15, 4.2 * scale, 17, 6.5 * scale];
+const NUMBER = { type: 'number', 'property-type': 'data-driven', expression: { interpolated: true, parameters: ['zoom', 'feature'] } };
+const runtimeExpressions = {
+  'road casing width': [roadWidth(1.9), NUMBER],
+  'road core width': [roadWidth(1), NUMBER],
+  'site icon size': [['interpolate', ['linear'], ['zoom'], 8, 0.55, 13, 0.85, 16, 1], NUMBER],
+  'dot radius': [['interpolate', ['linear'], ['zoom'], 7, 2.5, 12, 5, 16, 7], NUMBER],
+};
+for (const [what, [value, spec]] of Object.entries(runtimeExpressions)) {
+  const compiled = expression.createPropertyExpression(value, spec);
+  if (compiled.result !== 'success') {
+    for (const error of compiled.value) all.push(['runtime', { message: `${what}: ${error.message}` }]);
+  }
+}
+
 if (all.length) {
   console.error(`\n${all.length} validation error(s):`);
   for (const [where, error] of all) console.error(`  [${where}] ${error.message}`);
@@ -229,4 +259,5 @@ if (all.length) {
 }
 
 console.log(`Shields — 23-60 splits into ${evaluate(layerBy('road-shield-first').layout['text-field'], DUPLEX)} and ${evaluate(layerBy('road-shield-second').layout['text-field'], DUPLEX)}`);
+console.log(`Runtime paint — ${Object.keys(runtimeExpressions).length} overlay expressions compile`);
 console.log('Valid.');
