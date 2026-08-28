@@ -621,5 +621,47 @@
     "find": "\"[A-Z_a-z]{2,24}\"\\s*:\\s*(?:\"[^\"]{1,50}\"|\\d+)",
     "note": "National defence airspace TFR areas. Asked over a national box rather than a regional one: there may be only a handful in the country and a regional window would report an empty layer.",
     "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/National_Defense_Airspace_TFR_Areas/FeatureServer/0/query?where=1%3D1&geometry=-125,24,-66,49&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=5&f=json"
+  },
+  {
+    "id": "sua:types",
+    "expect": "data",
+    "find": "\"(?:LOCAL_TYPE|TYPE_CODE)\"\\s*:\\s*\"[^\"]{0,40}\"",
+    "note": "Every distinct kind of special use airspace the service publishes. MOAs have to come out - they do not restrict civilian flight and are generally based above 1,000 AGL, so they are noise on a map for aircraft that stay under 400 - and a filter written from a guessed spelling either removes nothing or removes the wrong thing.",
+    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Special_Use_Airspace/FeatureServer/0/query?where=1%3D1&outFields=LOCAL_TYPE%2CTYPE_CODE&returnDistinctValues=true&returnGeometry=false&f=json"
+  },
+  {
+    "id": "sua:floors",
+    "expect": "data",
+    "find": "\"(?:LOCAL_TYPE|LOWER_VAL|LOWER_CODE)\"\\s*:\\s*(?:\"[^\"]{0,30}\"|\\d+)",
+    "note": "The floor of each kind, to see whether altitude alone can do the filtering. If prohibited and restricted areas run from the surface and the rest start thousands of feet up, the rule can be about height rather than about a list of type codes that may be renamed.",
+    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Special_Use_Airspace/FeatureServer/0/query?where=1%3D1&outFields=LOCAL_TYPE%2CLOWER_VAL%2CLOWER_CODE&returnGeometry=false&resultRecordCount=40&f=json"
+  },
+  {
+    "id": "nps:org",
+    "expect": "data",
+    "find": "\"name\"\\s*:\\s*\"[^\"]*(?:[Bb]oundar|[Uu]nit|[Ll]and)[^\"]*\"",
+    "note": "The Park Service's own ArcGIS org, filtered to boundaries. National parks are not airspace restrictions - the rule is on the ground, that you may not launch, land or operate from park land without a permit - but that is exactly the thing a pilot wants to see before driving there.",
+    "url": "https://services1.arcgis.com/fBc8EJBxQRMcHlei/arcgis/rest/services?f=pjson"
+  },
+  {
+    "id": "nps:mapservices",
+    "expect": "data",
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
+    "note": "A second candidate host for the same thing. NPS publishes through more than one, and which one answers a browser with CORS is the question that decides it.",
+    "url": "https://mapservices.nps.gov/arcgis/rest/services?f=pjson"
+  },
+  {
+    "id": "wild:usfs",
+    "expect": "data",
+    "find": "\"name\"\\s*:\\s*\"[^\"]*(?:[Ww]ilderness)[^\"]*\"",
+    "note": "Designated wilderness from the Forest Service's enterprise warehouse, which this app already reads for basic ownership. Wilderness is a ground rule rather than airspace too - motorised equipment is prohibited - and the FAA asks for 2,000 feet of clearance on top.",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW?f=pjson"
+  },
+  {
+    "id": "wild:blm",
+    "expect": "data",
+    "find": "\"name\"\\s*:\\s*\"[^\"]*(?:[Ww]ilderness|WSA)[^\"]*\"",
+    "note": "BLM holds wilderness and wilderness study areas the Forest Service does not. Between the two agencies the coverage is most of it.",
+    "url": "https://gis.blm.gov/arcgis/rest/services/lands?f=pjson"
   }
 ]
