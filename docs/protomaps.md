@@ -88,12 +88,30 @@ the expensive axis — each level is four times the one below it — so the hone
 question is what depth the map is actually read at rather than how much ground
 it covers.
 
-Then confirm the depth the file really has, because the style has to declare it
-before anything is fetched:
+Then check it, before pointing the site at it:
 
 ```sh
-pmtiles show byways.pmtiles
+npm run check:archive -- https://tiles.example.com/byways.pmtiles
 ```
+
+That asks the three questions above of the host itself — whether it honoured
+the `Range` header, what CORS it sent, what the archive is compressed with —
+reads the zoom range and bounds out of the header, and then reads an actual
+tile from the middle of the archive's own declared coverage, because a
+perfectly well-formed header can sit on a file whose directories do not
+decompress. It prints the two config lines to paste, with the maxzoom the file
+really has.
+
+There is a local archive to try it against, which needs no network and no
+bucket:
+
+```sh
+node tools/serve-archive.mjs &
+npm run check:archive -- http://127.0.0.1:8788/byways.pmtiles
+```
+
+It takes `--ignore-range` and `--no-cors` so each of the three failures can be
+seen being reported rather than taken on trust.
 
 Overstating `ABMAP_PROTOMAPS_MAXZOOM` draws blank ground past the archive's
 real depth. The app reads the header when it opens the archive and says so in

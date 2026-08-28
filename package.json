@@ -17,7 +17,8 @@
     "test": "node --test test/*.test.mjs",
     "validate:style": "node tools/validate-style.mjs",
     "smoke": "node tools/smoke.mjs",
-    "check:layers": "node tools/check-layers.mjs"
+    "check:layers": "node tools/check-layers.mjs",
+    "check:archive": "node tools/check-archive.mjs"
   },
   "license": "UNLICENSED",
   "devDependencies": {
