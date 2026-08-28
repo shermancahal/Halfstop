@@ -70,6 +70,8 @@ export const MAPBOX_SCHEMA = {
   },
   fields: {
     classField: 'class',
+    // Mapbox puts every classification in one field, so roads read it too.
+    roadClassField: 'class',
     ref: 'ref',
     refLength: 'reflen',
     shield: 'shield',
@@ -147,8 +149,21 @@ export const PROTOMAPS_SCHEMA = {
   },
   fields: {
     // `kind` is the universal classification field, where Mapbox uses
-    // `class` - roads, landcover, landuse and relief all read it.
+    // `class` - landcover, landuse and relief all read it.
     classField: 'kind',
+    /*
+     * Roads read `kind_detail`, not `kind`, and this is what saves the map.
+     *
+     * `kind` has five values, which would have collapsed motorway into trunk
+     * and primary into secondary - the distinctions that make a road atlas
+     * readable at speed. `kind_detail` carries the original OSM highway value,
+     * so the eleven-way hierarchy survives intact.
+     *
+     * Confirmed present in the published schema. The values below are the
+     * standard OSM highway tags, which is what kind_detail holds by
+     * definition; the two that are inferred rather than read are marked.
+     */
+    roadClassField: 'kind_detail',
     ref: 'ref',
     refLength: null,
     // Not a shape but a network: US:I, US:US, US:KY. Richer than what it
@@ -161,42 +176,35 @@ export const PROTOMAPS_SCHEMA = {
     elevation: null,
   },
   /*
-   * Eleven classes onto five kinds, and this is the port's real cost.
+   * The hierarchy survives, because roads read kind_detail rather than kind.
    *
-   * Protomaps publishes highway, major_road, minor_road, other, path and rail
-   * - confirmed from the package, not assumed. Mapbox distinguishes motorway
-   * from trunk, and primary from secondary from tertiary; Protomaps' default
-   * schema does not. Collapsed as below, a US highway and a county road would
-   * be drawn at the same weight, and the figure-ground that lets you read this
-   * map at speed in bad light would flatten.
+   * `kind` has five values and would have collapsed motorway into trunk and
+   * primary into secondary - a US highway and a county road at the same
+   * weight, and the figure-ground that lets you read this map at speed gone
+   * with it. `kind_detail` carries the original OSM highway tag, which is the
+   * same vocabulary Mapbox derives its own classes from, so eleven classes map
+   * onto eleven.
    *
-   * That is not acceptable as a final answer and is not being treated as one.
-   * Protomaps tiles are understood to carry `kind_detail`, holding the
-   * original OSM highway value - motorway, trunk, primary and the rest - which
-   * would restore the hierarchy exactly. What has been confirmed so far is
-   * only what Protomaps' own default style *reads*, and it does not read
-   * kind_detail; whether the tiles carry it is a separate question and is
-   * being asked.
-   *
-   * So this mapping is the floor, not the plan: what the map would look like
-   * if kind_detail turns out not to exist. Every entry that loses a
-   * distinction is marked.
+   * Two are inferred rather than read, and are marked. Mapbox's `street` and
+   * `street_limited` are its own groupings rather than OSM tags; residential
+   * and living_street are the nearest OSM equivalents, and if they turn out to
+   * be wrong the symptom is minor roads drawn at the wrong weight rather than
+   * missing, which is recoverable.
    */
   roadClasses: {
-    motorway: 'highway',
-    // Collapses into motorway. A trunk route and an interstate become one weight.
-    trunk: 'highway',
-    primary: 'major_road',
-    // Collapses into primary.
-    secondary: 'major_road',
-    tertiary: 'minor_road',
-    // Collapses into tertiary.
-    street: 'minor_road',
-    streetLimited: 'minor_road',
-    service: 'minor_road',
-    track: 'other',
+    motorway: 'motorway',
+    trunk: 'trunk',
+    primary: 'primary',
+    secondary: 'secondary',
+    tertiary: 'tertiary',
+    // Inferred: Mapbox's grouping, not an OSM tag.
+    street: 'residential',
+    // Inferred, same.
+    streetLimited: 'living_street',
+    service: 'service',
+    track: 'track',
     path: 'path',
-    pedestrian: 'path',
+    pedestrian: 'pedestrian',
   },
 };
 
@@ -332,7 +340,7 @@ const linkOf = (className) => `${className}_link`;
 
 /** Matches a road class and the ramps that belong to it. */
 const roadFilter = (className) => [
-  'match', ['get', S.fields.classField], [className, linkOf(className)], true, false,
+  'match', ['get', S.fields.roadClassField], [className, linkOf(className)], true, false,
 ];
 
 /**
@@ -344,7 +352,7 @@ const roadFilter = (className) => [
  * ramp and mainline happens at each stop rather than around the whole curve.
  */
 const roadWidth = (className, base, top) => {
-  const isLink = ['==', ['get', S.fields.classField], linkOf(className)];
+  const isLink = ['==', ['get', S.fields.roadClassField], linkOf(className)];
   const pick = (value) => ['case', isLink, value * LINK_SCALE, value];
   return [
     'interpolate', ['linear'], ['zoom'],
@@ -620,7 +628,7 @@ function roadLayers() {
     type: 'line',
     source: S.source,
     'source-layer': S.layers.road,
-    filter: ['match', ['get', S.fields.classField], ['track', 'service'], true, false],
+    filter: ['match', ['get', S.fields.roadClassField], ['track', 'service'], true, false],
     minzoom: 11,
     layout: { 'line-cap': 'butt', 'line-join': 'round' },
     paint: {
@@ -636,7 +644,7 @@ function roadLayers() {
     type: 'line',
     source: S.source,
     'source-layer': S.layers.road,
-    filter: ['match', ['get', S.fields.classField], ['path', 'pedestrian'], true, false],
+    filter: ['match', ['get', S.fields.roadClassField], ['path', 'pedestrian'], true, false],
     minzoom: 13,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
@@ -673,7 +681,7 @@ function roadLayers() {
     type: 'line',
     source: S.source,
     'source-layer': S.layers.road,
-    filter: ['match', ['get', S.fields.classField], ['street', 'street_limited'], true, false],
+    filter: ['match', ['get', S.fields.roadClassField], ['street', 'street_limited'], true, false],
     minzoom: 11,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
@@ -700,7 +708,7 @@ function roadLayers() {
     type: 'line',
     source: S.source,
     'source-layer': S.layers.road,
-    filter: ['match', ['get', S.fields.classField], ['street', 'street_limited'], true, false],
+    filter: ['match', ['get', S.fields.roadClassField], ['street', 'street_limited'], true, false],
     minzoom: 11,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
@@ -722,7 +730,7 @@ function roadLayers() {
     type: 'line',
     source: S.source,
     'source-layer': S.layers.road,
-    filter: ['all', UNPAVED, ['match', ['get', S.fields.classField], SEALED_CLASSES, true, false]],
+    filter: ['all', UNPAVED, ['match', ['get', S.fields.roadClassField], SEALED_CLASSES, true, false]],
     minzoom: 9,
     layout: { 'line-cap': 'butt', 'line-join': 'round' },
     paint: {
@@ -842,7 +850,7 @@ function labelLayers() {
       source: S.source,
       'source-layer': S.layers.road,
       filter: ['all',
-        ['match', ['get', S.fields.classField], ['path', 'service'], true, false],
+        ['match', ['get', S.fields.roadClassField], ['path', 'service'], true, false],
         ['has', 'name'],
       ],
       minzoom: 14,
@@ -1039,7 +1047,7 @@ const SECOND_REF = ['let', 'rest', ['slice', REF, ['+', REF_CUT, 1]],
 ];
 
 // An interstate marker outranks a county route where they land together.
-const SHIELD_ORDER = ['match', ['get', S.fields.classField],
+const SHIELD_ORDER = ['match', ['get', S.fields.roadClassField],
   'motorway', 1, 'trunk', 2, 'primary', 3, 'secondary', 4, 5];
 
 /** Every shield layer's id, and how far off centre its number sits. */
@@ -1107,7 +1115,7 @@ function shieldLayers(state = '') {
    * It costs nothing at low zoom: tertiary roads are not in the tiles until
    * z8, so the layer has nothing to draw before then anyway.
    */
-  const onARoad = ['match', ['get', S.fields.classField],
+  const onARoad = ['match', ['get', S.fields.roadClassField],
     ['motorway', 'trunk', 'primary', 'secondary', 'tertiary'], true, false];
 
   /** Half a concurrency: its own number, its own image, shifted off centre. */

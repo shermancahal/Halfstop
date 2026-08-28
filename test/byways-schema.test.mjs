@@ -199,5 +199,13 @@ test('byways: the road hierarchy maps across, and says where it flattens', () =>
   const distinct = new Set(Object.values(PROTOMAPS_SCHEMA.roadClasses)).size;
   const before = new Set(Object.values(MAPBOX_SCHEMA.roadClasses)).size;
   assert.equal(before, 11, 'Mapbox draws eleven distinguishable road classes');
-  assert.equal(distinct, 5, 'Protomaps collapses them to five; if this changes, the mapping changed');
+  /*
+   * Eleven, not five. Reading kind_detail rather than kind is what recovered
+   * the six that the coarse field would have thrown away, and this number is
+   * the whole reason that was worth chasing - if it drops back, the road
+   * hierarchy has flattened and the map is worse in a way that is easy to
+   * look at and not notice.
+   */
+  assert.equal(distinct, 11, 'the road hierarchy has flattened; roads must read kind_detail, not kind');
+  assert.equal(PROTOMAPS_SCHEMA.fields.roadClassField, 'kind_detail');
 });
