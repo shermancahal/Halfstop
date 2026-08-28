@@ -316,7 +316,21 @@ async function candidates() {
       ...BASEMAPS.filter((entry) => entry.tiles).map((entry) => ({ ...entry, kind: 'basemap' })),
       ...OVERLAYS.filter((entry) => entry.tiles).map((entry) => ({ ...entry, kind: 'overlay' })),
     ];
-  return all.filter((entry) => (only ? entry.id === only : true));
+  /*
+   * Substring rather than equality.
+   *
+   * `--only pm:` is how you ask about a family of candidates, and an exact
+   * match answers that with silence: the run finished in under a second,
+   * reported nothing, and looked like every probe passing. A filter that can
+   * match nothing without saying so is the same shape as a find pattern that
+   * cannot compile.
+   */
+  const picked = all.filter((entry) => (only ? entry.id.includes(only) : true));
+  if (only && !picked.length) {
+    console.error(`--only ${only} matched none of the ${all.length} entries.`);
+    process.exit(2);
+  }
+  return picked;
 }
 
 async function probe(entry) {
