@@ -308,7 +308,7 @@ test('protomaps: what the schema cannot draw is dropped, and it is the expected 
   const dropped = [...mapbox].filter((id) => !protomaps.has(id));
   assert.deepEqual(dropped.sort(), [
     'contour', 'contour-index', 'contour-label', 'hillshade',
-    'label-summit', 'label-water',
+    'label-summit',
     /*
      * The surface marking, which is the one that stings: "tracks and surfaces"
      * is how this basemap describes itself. Protomaps' schema does not name a
@@ -439,4 +439,20 @@ test('byways: the Mapbox park fill still draws exactly what it drew', () => {
   const park = bywaysStyle('pk.snapshot').layers.find((layer) => layer.id === 'national-park');
   assert.equal(park['source-layer'], 'landuse_overlay');
   assert.deepEqual(park.filter, ['match', ['get', 'class'], ['national_park'], true, false]);
+});
+
+test('protomaps: named water is labelled, from the water features themselves', () => {
+  /*
+   * Mapbox keeps the names of natural features in their own layer; Protomaps
+   * puts the names of lakes and rivers on the water polygons. Read from its
+   * own style, whose water_label_ocean and water_label_lakes both declare
+   * "source-layer": "water" — not guessed from the absence of anything better.
+   */
+  const label = protomapsStyle().layers.find((layer) => layer.id === 'label-water');
+  assert.ok(label, 'water names must be drawn');
+  assert.equal(label['source-layer'], 'water');
+  const text = JSON.stringify(label.filter);
+  for (const kind of ['ocean', 'lake', 'river']) assert.ok(text.includes(kind), kind);
+  assert.ok(!text.includes('playa'), 'a dry lake bed labelled as water is worse than not labelling it');
+  assert.ok(text.includes('"has"'), 'and only where there is a name — most water carries none');
 });

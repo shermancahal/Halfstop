@@ -63,7 +63,14 @@ export const MAPBOX_SCHEMA = {
     waterway: 'waterway',
     road: 'road',
     place: 'place_label',
-    natural: 'natural_label',
+    /*
+     * Mapbox keeps the names of natural features in one layer, whatever kind
+     * of feature they are. Split into two here because the other schema does
+     * not: it has no natural-feature layer at all, and puts the names of lakes
+     * and rivers on the water polygons themselves.
+     */
+    waterLabel: 'natural_label',
+    summitLabel: 'natural_label',
     boundary: 'admin',
     contour: 'contour',
     hillshade: 'hillshade',
@@ -125,6 +132,10 @@ export const MAPBOX_SCHEMA = {
   },
   /** Mapbox's landuse_overlay distinguishes exactly one kind of protected ground. */
   protectedClasses: ['national_park'],
+  /** Named water worth a label. Mapbox's natural_label vocabulary. */
+  waterClasses: ['lake', 'ocean', 'sea', 'river'],
+  /** And the one class that covers peaks, ridges and passes. */
+  summitClasses: ['landform'],
 };
 
 /**
@@ -175,7 +186,21 @@ export const PROTOMAPS_SCHEMA = {
     waterway: 'water',
     road: 'roads',
     place: 'places',
-    natural: null,
+    /*
+     * The names ride on the water features themselves - read from Protomaps'
+     * own style, whose water_label_ocean and water_label_lakes both declare
+     * "source-layer": "water".
+     */
+    waterLabel: 'water',
+    /*
+     * Summits, still unplaced. `peak` is a documented kind and there is no
+     * natural-feature layer to hold it, so it is in pois or in places -
+     * neither of which turned up under an anchored search, because the
+     * documentation lists kinds in one flat table with no layer column. Null
+     * until that is read rather than guessed, which drops the layer instead of
+     * pointing it at a source-layer that would silently draw nothing.
+     */
+    summitLabel: null,
     boundary: 'boundaries',
     contour: null,
     hillshade: null,
@@ -256,6 +281,15 @@ export const PROTOMAPS_SCHEMA = {
    * would leave them as bare parchment.
    */
   protectedClasses: ['national_park', 'protected_area', 'nature_reserve', 'forest'],
+  /*
+   * Protomaps' water kinds, read from the schema documentation: ocean, lake,
+   * river, riverbank, reservoir and playa. Riverbank and reservoir are named
+   * bodies of water like any other; playa is left out, because a dry lake bed
+   * labelled as water is worse than not labelling it.
+   */
+  waterClasses: ['ocean', 'lake', 'river', 'riverbank', 'reservoir'],
+  // Nothing to filter while summitLabel is null; the layer is dropped anyway.
+  summitClasses: [],
   // The same OSM tags, since kind_detail is the OSM highway value.
   roadLinks: {
     motorway: 'motorway_link',
@@ -969,8 +1003,11 @@ function labelLayers() {
       id: 'label-water',
       type: 'symbol',
       source: S.source,
-      'source-layer': S.layers.natural,
-      filter: ['match', ['get', S.fields.classField], ['lake', 'ocean', 'sea', 'river'], true, false],
+      'source-layer': S.layers.waterLabel,
+      filter: ['all',
+        ['has', S.fields.name],
+        ['match', ['get', S.fields.classField], S.waterClasses, true, false],
+      ],
       minzoom: 7,
       layout: {
         'text-field': labelName(),
@@ -988,8 +1025,8 @@ function labelLayers() {
       id: 'label-summit',
       type: 'symbol',
       source: S.source,
-      'source-layer': S.layers.natural,
-      filter: ['match', ['get', S.fields.classField], ['landform'], true, false],
+      'source-layer': S.layers.summitLabel,
+      filter: ['match', ['get', S.fields.classField], S.summitClasses, true, false],
       minzoom: 11,
       layout: {
         'text-field': labelName(),

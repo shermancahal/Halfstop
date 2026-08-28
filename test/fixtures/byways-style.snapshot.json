@@ -1554,19 +1554,26 @@
    "source": "composite",
    "source-layer": "natural_label",
    "filter": [
-    "match",
+    "all",
     [
-     "get",
-     "class"
+     "has",
+     "name"
     ],
     [
-     "lake",
-     "ocean",
-     "sea",
-     "river"
-    ],
-    true,
-    false
+     "match",
+     [
+      "get",
+      "class"
+     ],
+     [
+      "lake",
+      "ocean",
+      "sea",
+      "river"
+     ],
+     true,
+     false
+    ]
    ],
    "minzoom": 7,
    "layout": {
