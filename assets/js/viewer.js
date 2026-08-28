@@ -4760,7 +4760,7 @@ function hatchPattern(colour) {
 }
 
 function addQueryOverlay(overlay, opacity) {
-  const [fill, casing, line, dot] = overlayLayerIds(overlay);
+  const [fill, casing, line, dot, label] = overlayLayerIds(overlay);
   const colour = overlay.query.color || '#D84315';
 
   if (overlay.query.points) { addPointOverlay(overlay, fill); return; }
@@ -4774,7 +4774,21 @@ function addQueryOverlay(overlay, opacity) {
   }
   if (!state.map.getLayer(fill)) {
     const [, amount] = opacityPaint('fill', opacity);
-    const hatch = hatchPattern(colour);
+    /*
+     * A layer that carries a designation is coloured by it.
+     *
+     * Ohio publishes every parcel it manages in one layer with a division on
+     * each - forestry, parks, wildlife, natural areas - and drawing them all
+     * one colour throws away the only thing that distinguishes a state forest
+     * from a nature preserve. Soft flat colours read better here than a hatch,
+     * which is what a land-status map does and why it was asked for.
+     */
+    const by = overlay.query.fillBy;
+    const tint = by
+      ? ['match', ['coalesce', ['get', by.field], ''],
+        ...Object.entries(by.colors).flatMap(([value, hex]) => [value, hex]), by.fallback || colour]
+      : null;
+    const hatch = tint ? null : hatchPattern(colour);
     state.map.addLayer({
       id: fill,
       type: 'fill',
@@ -4785,7 +4799,7 @@ function addQueryOverlay(overlay, opacity) {
         // Hatched, so layers stacked on one another stay separable. The
         // outline below is what states the boundary; this only states extent.
         ? { 'fill-pattern': hatch, 'fill-opacity': Math.min(1, amount * 2.2) }
-        : { 'fill-color': colour, 'fill-opacity': amount },
+        : { 'fill-color': tint || colour, 'fill-opacity': tint ? Math.min(1, amount * 1.4) : amount },
     }, firstDataLayerId());
   }
   /*
@@ -4840,7 +4854,7 @@ function addQueryOverlay(overlay, opacity) {
       filter: ['!=', ['geometry-type'], 'Point'],
       layout: road ? { 'line-cap': 'round', 'line-join': 'round' } : {},
       paint: {
-        'line-color': colour,
+        'line-color': tint || colour,
         'line-width': road ? width(1) : 1.4,
         'line-opacity': amount,
       },
@@ -4903,6 +4917,42 @@ function addQueryOverlay(overlay, opacity) {
         },
       }, firstDataLayerId());
     }
+  }
+
+  /*
+   * The name, once per feature.
+   *
+   * The repetition reported over Hocking - one forest labelled six times -
+   * comes from the agency's raster, whose label engine repeats a name across
+   * every tile it touches. A symbol layer over the features draws one label
+   * per feature and lets the collision detector drop the rest, which is the
+   * whole reason to hold the geometry rather than a picture of it.
+   *
+   * Along the line for a route, so a byway reads like a road label rather than
+   * a tag stuck on one end of it.
+   */
+  if (overlay.query.label && !state.map.getLayer(label)) {
+    const [, amount] = opacityPaint('line', opacity);
+    state.map.addLayer({
+      id: label,
+      type: 'symbol',
+      source: fill,
+      layout: {
+        'text-field': ['coalesce', ['get', overlay.query.label], ''],
+        'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Regular'],
+        'text-size': ['interpolate', ['linear'], ['zoom'], 8, 10, 13, 12, 16, 13],
+        'symbol-placement': road ? 'line' : 'point',
+        'text-max-width': road ? 20 : 8,
+        'text-padding': 6,
+        'text-optional': true,
+      },
+      paint: {
+        'text-color': '#33291f',
+        'text-halo-color': 'rgba(255,253,247,0.92)',
+        'text-halo-width': 1.4,
+        'text-opacity': amount,
+      },
+    });
   }
 
   refreshQueryOverlay(overlay);

@@ -1349,23 +1349,32 @@ export const OVERLAYS = [
     attribution: 'Recreation data © <a href="https://anr.vermont.gov/">Vermont Agency of Natural Resources</a>',
   },
   {
+    /*
+     * The name rides along the line, which is the option asked for over a key.
+     *
+     * Tapping the raster reported Nada Tunnel Rd - the basemap road underneath,
+     * because a picture has nothing under it to hit. RT_DESCR is the label for
+     * now; the field list ran past the probe's match cap, so a probe reads real
+     * records to see whether something better carries the byway's own name.
+     */
+    legend: [{ color: '#8D6E63', label: 'Route: Scenic byways' }],
     id: 'ky-byways',
-    legendNote: 'The agency draws this layer itself, so the colours are theirs and there is no key to read out of it. Tap a feature to see what it is.',
-    // Probed inside the state. Ten of these reported blank on the first run
-    // because the default probe tile sits in Tennessee, where a Kentucky or
-    // Hawaii layer is correctly empty - a trap ky-aerial already carries a
-    // comment about, walked into again.
-    at: [-84.5, 37.8],
     states: ['KY'],
     name: 'Scenic byways',
-    description: 'The Commonwealth\'s designated scenic routes.',
-    tiles: ['https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Scenic_Byways_WGS84WM/MapServer/export'
-      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'],
-    tileSize: 256,
-    maxzoom: 16,
-    opacity: 0.85,
+    description: "The Commonwealth's designated scenic routes.",
+    query: {
+      url: 'https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Scenic_Byways_WGS84WM/MapServer/0/query'
+        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
+        + '&spatialRel=esriSpatialRelIntersects&outFields=RT_DESCR%2CRT_PREFIX%2CRT_NUMBER%2CMILES%2CGOV_LEVEL%2CCNTY_NAME%2COBJECTID&returnGeometry=true'
+        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=400&f=geojson',
+      minzoom: 7,
+      road: true,
+      color: '#8D6E63',
+      label: 'RT_DESCR',
+    },
+    opacity: 0.55,
     enabled: false,
-    attribution: 'Recreation data \u00a9 <a href=\"https://technology.ky.gov/gis/\">Kentucky Division of Geographic Information</a>',
+    attribution: 'Recreation data © <a href="https://technology.ky.gov/gis/">Kentucky Division of Geographic Information</a>',
   },
   {
     id: 'ky-trails',
@@ -1383,20 +1392,33 @@ export const OVERLAYS = [
     attribution: 'Recreation data \u00a9 <a href=\"https://technology.ky.gov/gis/\">Kentucky Division of Geographic Information</a>',
   },
   {
+    /*
+     * Held as features rather than taken as a picture.
+     *
+     * As a raster this drew the agency's own palette, repeated its labels
+     * across every tile, put a StoryMap point in the middle of each forest,
+     * and answered a tap with whatever basemap road lay underneath. None of
+     * that was fixable from outside. The service hands over polygons with a
+     * NAME on each - Kentenia State Forest, and so on - so it draws one label
+     * per forest and a tap reports the forest.
+     */
+    legend: [{ color: '#2E7D32', label: 'Area: State forests' }],
     id: 'ky-forests',
-    legendNote: 'The agency draws this layer itself, so the colours are theirs and there is no key to read out of it. Tap a feature to see what it is.',
-    at: [-84.0, 37.2],
     states: ['KY'],
     name: 'State forests',
-    description: 'State forest boundaries.',
-    tiles: ['https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_StateForests_WGS84WM/MapServer/export'
-      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'
-      + '&layers=show:1'],
-    tileSize: 256,
-    maxzoom: 16,
-    opacity: 0.85,
+    description: 'State forest boundaries, named.',
+    query: {
+      url: 'https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_StateForests_WGS84WM/MapServer/1/query'
+        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
+        + '&spatialRel=esriSpatialRelIntersects&outFields=NAME%2COBJECTID%2CACRES&returnGeometry=true'
+        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=400&f=geojson',
+      minzoom: 7,
+      color: '#2E7D32',
+      label: 'NAME',
+    },
+    opacity: 0.55,
     enabled: false,
-    attribution: 'Recreation data \u00a9 <a href=\"https://technology.ky.gov/gis/\">Kentucky Division of Geographic Information</a>',
+    attribution: 'Recreation data © <a href="https://technology.ky.gov/gis/">Kentucky Division of Geographic Information</a>',
   },
   {
     legend: [{ color: '#6D4C41', label: 'Route: Forest roads' }],
@@ -1437,20 +1459,23 @@ export const OVERLAYS = [
     attribution: 'Recreation data \u00a9 <a href=\"https://www.michigan.gov/dnr\">Michigan DNR</a>',
   },
   {
+    legend: [{ color: '#2E7D32', label: 'Area: Wildlife management areas' }],
     id: 'tn-wma',
-    legendNote: 'The agency draws this layer itself, so the colours are theirs and there is no key to read out of it. Tap a feature to see what it is.',
-    at: [-85.0, 35.6],
     states: ['TN'],
     name: 'Wildlife management areas',
     description: 'TWRA-managed land, named and with its managing agency.',
-    tiles: ['https://tnmap.tn.gov/arcgis/rest/services/ENVIRONMENTAL/TWRA/MapServer/export'
-      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'
-      + '&layers=show:3'],
-    tileSize: 256,
-    maxzoom: 16,
-    opacity: 0.85,
+    query: {
+      url: 'https://tnmap.tn.gov/arcgis/rest/services/ENVIRONMENTAL/TWRA/MapServer/3/query'
+        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
+        + '&spatialRel=esriSpatialRelIntersects&outFields=NAME%2CMANAGEMENT%2CCONAME%2CACRES%2CREGION&returnGeometry=true'
+        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=400&f=geojson',
+      minzoom: 7,
+      color: '#2E7D32',
+      label: 'NAME',
+    },
+    opacity: 0.55,
     enabled: false,
-    attribution: 'Wildlife management areas \u00a9 <a href=\"https://www.tn.gov/twra\">Tennessee Wildlife Resources Agency</a>',
+    attribution: 'Wildlife management areas © <a href="https://www.tn.gov/twra">Tennessee Wildlife Resources Agency</a>',
   },
   {
     legend: [{ color: '#2E7D32', label: 'Area: TVA dispersed recreation' }],

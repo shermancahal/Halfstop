@@ -160,7 +160,7 @@ test('style: overlays are drawn above the basemap, in configuration order', () =
   );
 });
 
-test('style: a queried overlay is four layers over one source, and no tiles', () => {
+test('style: a queried overlay is five layers over one source, and no tiles', () => {
   const queried = {
     id: 'test-queried',
     name: 'Queried',
@@ -182,12 +182,13 @@ test('style: a queried overlay is four layers over one source, and no tiles', ()
    * because that is what makes a road legible over terrain, and a part list in
    * the wrong order would put the pale line on top of the coloured one.
    */
-  assert.equal(parts.length, 4, 'a fill, a casing, the core line, and a dot');
-  assert.deepEqual(parts.map((part) => part.role), ['fill', 'casing', 'line', 'dot']);
+  assert.equal(parts.length, 5, 'a fill, a casing, the core line, a dot, and the name');
+  assert.deepEqual(parts.map((part) => part.role), ['fill', 'casing', 'line', 'dot', 'label']);
   assert.equal(parts[0].layerId, 'overlay-test-queried');
   assert.equal(parts[1].layerId, 'overlay-test-queried--1');
   assert.equal(parts[2].layerId, 'overlay-test-queried--2');
   assert.equal(parts[3].layerId, 'overlay-test-queried--3');
+  assert.equal(parts[4].layerId, 'overlay-test-queried--4');
   assert.ok(parts.every((part) => !part.tiles), 'there are no tiles to fetch');
 
   // Tearing the overlay down by its id has to find every part, or a layer is

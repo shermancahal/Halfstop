@@ -434,38 +434,17 @@
     "url": "https://services.arcgis.com/njFNhDsUCentVYJW/arcgis/rest/services/State_Park_Forest_Recreation_Maintained_Roads/FeatureServer/0/query?where=1%3D1&geometry=-79.5,39.0,-78.5,39.7&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson"
   },
   {
-    "id": "vec:oh-fields",
-    "note": "The field list for Ohio's lands. Labels need a name column and the line asked for between a state forest and a nature preserve needs a designation column - and the last probe guessed at both and matched neither, which is not evidence of absence.",
+    "id": "vec:oh-divisions",
+    "note": "The division values themselves, not their column name. Ohio's renderer classes read Forestry, Parks, Wildlife, Watercraft and Natural Area, and DIV_CODE_desc almost certainly holds those words - but 'almost certainly' is how a state preserve came to be labelled a national park, so the palette waits for the strings.",
     "expect": "data",
-    "find": "\"(?:name|alias|geometryType)\"\\s*:\\s*\"[^\"]{0,50}\"",
-    "url": "https://gis.ohiodnr.gov/arcgis/rest/services/OIT_Services/ODNR_ODNR_Lands_External/MapServer/0?f=pjson"
+    "find": "\"(?:DIV_CODE_desc|PROP_TYPE|Name_Label|LANDS_NAME)\"\\s*:\\s*\"[^\"]{0,44}\"",
+    "url": "https://gis.ohiodnr.gov/arcgis/rest/services/OIT_Services/ODNR_ODNR_Lands_External/MapServer/0/query?where=1%3D1&geometry=-82.9,39.2,-82.1,39.8&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=DIV_CODE_desc%2CPROP_TYPE%2CName_Label%2CLANDS_NAME&returnGeometry=false&resultRecordCount=12&f=json"
   },
   {
-    "id": "vec:oh-values",
-    "note": "Four real Ohio parcels with every attribute, so the designation column is read rather than inferred from a column name.",
+    "id": "vec:ky-byway-values",
+    "note": "Real byway records with every column. RT_DESCR is the label until this says whether something carries the byway's own name - Red River Gorge Scenic Byway rather than a route description - because the field list ran past the probe's forty-match cap.",
     "expect": "data",
-    "find": "\"[A-Za-z_]{2,30}\"\\s*:\\s*\"[^\"]{0,44}\"",
-    "url": "https://gis.ohiodnr.gov/arcgis/rest/services/OIT_Services/ODNR_ODNR_Lands_External/MapServer/0/query?where=1%3D1&geometry=-82.7,39.3,-82.3,39.7&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&outSR=4326&resultRecordCount=4&f=json"
-  },
-  {
-    "id": "vec:ky-byway-fields",
-    "note": "Which column holds a byway's name. It is what would sit along the line, and what a tap should report instead of the road underneath.",
-    "expect": "data",
-    "find": "\"(?:name|alias|geometryType)\"\\s*:\\s*\"[^\"]{0,50}\"",
-    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Scenic_Byways_WGS84WM/MapServer/0?f=pjson"
-  },
-  {
-    "id": "vec:ky-forest-fields",
-    "note": "The same for Kentucky's forests.",
-    "expect": "data",
-    "find": "\"(?:name|alias|geometryType)\"\\s*:\\s*\"[^\"]{0,50}\"",
-    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_StateForests_WGS84WM/MapServer/1?f=pjson"
-  },
-  {
-    "id": "vec:ky-forest-query",
-    "note": "Asked again over eastern Kentucky. The first attempt returned an empty collection and that was the bbox, not the layer - a distinction worth making explicitly, since an empty answer reads exactly like a dead one.",
-    "expect": "data",
-    "find": "\"[A-Za-z_]{2,30}\"\\s*:\\s*\"[^\"]{0,44}\"",
-    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_StateForests_WGS84WM/MapServer/1/query?where=1%3D1&geometry=-84.6,36.6,-83.0,37.7&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&outSR=4326&resultRecordCount=4&f=json"
+    "find": "\"[A-Z_]{2,14}\"\\s*:\\s*\"[^\"]{0,44}\"",
+    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Scenic_Byways_WGS84WM/MapServer/0/query?where=1%3D1&geometry=-84.3,37.6,-83.4,38.0&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=4&f=json"
   }
 ]
