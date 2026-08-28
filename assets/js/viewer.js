@@ -40,7 +40,7 @@ import {
   shieldImageIdFor, loadShieldBlank, shieldImageId, hasShieldBlank,
 } from './lib/route-shields.js';
 import { shieldLayerUpdates, PALETTE } from './lib/byways-style.js';
-import { previewFor, swatchSVG } from './lib/preview.js';
+import { previewFor, swatchSVG, tileURL } from './lib/preview.js';
 import { Account, isConfigured as accountsAvailable } from './lib/account.js';
 import {
   formatDD, formatDMS, formatDDM, toUTM, distanceBearing, compassPoint, reverseGeocode, searchPlaces,
@@ -66,6 +66,7 @@ import { describeSync } from './lib/sync.js';
 import { registerServiceWorker, applyServiceWorkerUpdate } from './lib/pwa.js';
 import {
   OfflineStore, MAX_ZOOM as OFFLINE_MAX_ZOOM, TILE_BUDGET,
+  mayCacheTiles, tileURLsFor, downloadTiles, clearTiles,
   measureRegion, buildManifest, regionsToGeoJSON, formatBytes as formatTileBytes,
 } from './lib/offline.js';
 import {
@@ -4394,7 +4395,88 @@ function regionRow(region, kind) {
       class: 'region-meta',
       text: `${Math.round(measure.area).toLocaleString()} km² · ${region.basemapName || 'no basemap recorded'}`,
     }),
+    downloadRow(region),
   ]);
+}
+
+/**
+ * Actually fetching a region, for the basemaps whose tiles we may keep.
+ *
+ * Not every basemap can do this, and the row says which and why rather than
+ * offering a button that fails. Mapbox reserve offline storage of their tiles
+ * to their own SDK's offline API, and this is Mapbox GL JS in a webview - so
+ * on a Mapbox basemap the honest thing is to say so and name one that works.
+ */
+function downloadRow(region) {
+  const basemap = basemapById(state.basemapId);
+  const templates = (basemap?.tiles || []).filter(mayCacheTiles);
+  const row = el('div', { class: 'region-download' });
+
+  if (!globalThis.caches) {
+    row.append(el('p', { class: 'source-note', text: 'This browser cannot store map tiles offline.' }));
+    return row;
+  }
+  if (!templates.length) {
+    row.append(el('p', {
+      class: 'source-note',
+      text: basemap?.style
+        ? `${basemap.name} cannot be stored offline — Mapbox allow that only through their own SDK. `
+          + 'Switch to USGS Topo, Byways Topo or an aerial layer and the download below will work.'
+        : 'This basemap cannot be stored offline.',
+    }));
+    return row;
+  }
+
+  const status = el('p', { class: 'source-note', text: '' });
+  let controller = null;
+
+  const button = el('button', {
+    class: 'button button-secondary button-small', type: 'button',
+    text: 'Download for offline',
+    onclick: async () => {
+      if (controller) { controller.abort(); return; }
+      controller = new AbortController();
+      button.textContent = 'Stop';
+
+      const tiers = [{ zoom: region.minZoom, boxes: [region.bounds] }];
+      for (let zoom = region.minZoom + 1; zoom <= region.maxZoom; zoom += 1) {
+        tiers.push({ zoom, boxes: [region.bounds] });
+      }
+      const urls = tileURLsFor(tiers, templates, tileURL);
+      status.textContent = `0 of ${urls.length.toLocaleString()}…`;
+
+      try {
+        const result = await downloadTiles(urls, {
+          signal: controller.signal,
+          onProgress: (done, failed, total) => {
+            status.textContent = `${done.toLocaleString()} of ${total.toLocaleString()}`
+              + `${failed ? ` · ${failed.toLocaleString()} unavailable` : ''}`;
+          },
+        });
+        /*
+         * Said differently depending on what happened, because "done" over a
+         * download that skipped a fifth of its tiles is the kind of reassurance
+         * that gets found out on a mountain with no signal.
+         */
+        if (result.cancelled) {
+          status.textContent = `Stopped. ${result.done.toLocaleString()} tiles kept.`;
+        } else if (result.failed) {
+          status.textContent = `${result.done.toLocaleString()} saved, `
+            + `${result.failed.toLocaleString()} not available from the service.`;
+        } else {
+          status.textContent = `${result.done.toLocaleString()} tiles saved. This region works offline.`;
+        }
+      } catch (error) {
+        status.textContent = error.message || 'The download could not start.';
+      } finally {
+        controller = null;
+        button.textContent = 'Download for offline';
+      }
+    },
+  });
+
+  row.append(el('div', { class: 'region-controls' }, [button, status]));
+  return row;
 }
 
 /**

@@ -479,3 +479,117 @@ export class OfflineStore extends EventTarget {
     return this.regions.reduce((sum, region) => sum + measureRegion(region, kind).tiles, 0);
   }
 }
+
+/* ------------------------------------------------------- downloading tiles */
+
+/**
+ * Whether this app may keep a source's tiles on disk.
+ *
+ * Not a technical question. USGS, the state agencies and the federal services
+ * publish public data and put no such condition on it, and every one of them
+ * is fetchable from a browser or it would not be in the catalogue. Mapbox's
+ * terms reserve offline storage of their tiles to their own SDK's offline
+ * APIs, and this is Mapbox GL JS in a webview - not that SDK - so caching them
+ * here would be using the service in a way it is not licensed for.
+ *
+ * Written as an explicit deny list of hosts rather than an allow list of
+ * everything else, so a new state layer is downloadable the day it is added
+ * and nobody has to remember to permit it.
+ */
+const NO_CACHE_HOSTS = [/(^|\.)mapbox\.com$/i, /(^|\.)tiles\.mapbox\.com$/i];
+
+export function mayCacheTiles(template) {
+  try {
+    const { hostname, protocol } = new URL(String(template).replace(/\{[^}]*\}/g, '0'));
+    if (protocol !== 'https:') return false;
+    return !NO_CACHE_HOSTS.some((pattern) => pattern.test(hostname));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Every tile URL a region needs, deduplicated.
+ *
+ * A set of keys rather than a list of rectangles: boxes around neighbouring
+ * waypoints overlap, and fetching the same tile twice is bandwidth somebody is
+ * paying for on a hotel wifi.
+ *
+ * @param {Array<{zoom: number, boxes: object[]}>} tiers from `tieredPlan`
+ * @param {string[]} templates tile URL templates to fill
+ * @param {(template: string, tile: {z:number,x:number,y:number}) => string} fill
+ * @returns {string[]}
+ */
+export function tileURLsFor(tiers, templates, fill) {
+  const urls = new Set();
+  for (const tier of tiers || []) {
+    for (const box of tier.boxes || []) {
+      for (const part of spans(box)) {
+        const range = tileRange(part, tier.zoom);
+        if (!range) continue;
+        for (let x = range.minX; x <= range.maxX; x += 1) {
+          for (let y = range.minY; y <= range.maxY; y += 1) {
+            for (const template of templates) {
+              if (!mayCacheTiles(template)) continue;
+              urls.add(fill(template, { z: tier.zoom, x, y }));
+            }
+          }
+        }
+      }
+    }
+  }
+  return [...urls];
+}
+
+/**
+ * Fetch a list of tiles into a named cache, a few at a time.
+ *
+ * Serial would take an hour and unbounded parallelism gets a shared government
+ * tile server to rate-limit or drop the connection - which reads to the person
+ * waiting as the download breaking. Six at a time is enough to saturate a
+ * phone's connection and few enough that no server treats it as abuse.
+ *
+ * A tile that will not come back is skipped rather than fatal. A region is
+ * thousands of tiles and one 404 at the edge of a service's coverage must not
+ * throw away the other four thousand; the count of failures is returned so the
+ * caller can say something true about how complete the result is.
+ *
+ * @returns {Promise<{done: number, failed: number, cancelled: boolean}>}
+ */
+export async function downloadTiles(urls, {
+  cacheName = 'abmap-tiles-v1', concurrency = 6, onProgress, signal, caches: store = globalThis.caches,
+} = {}) {
+  if (!store?.open) throw new Error('This browser cannot store tiles offline.');
+  const cache = await store.open(cacheName);
+  let done = 0;
+  let failed = 0;
+  let index = 0;
+
+  const worker = async () => {
+    while (index < urls.length) {
+      if (signal?.aborted) return;
+      const url = urls[index];
+      index += 1;
+      try {
+        // Already held from an earlier download of an overlapping region.
+        if (await cache.match(url, { ignoreVary: true })) { done += 1; onProgress?.(done, failed, urls.length); continue; }
+        const response = await fetch(url, { mode: 'cors', signal });
+        if (!response.ok) throw new Error(String(response.status));
+        await cache.put(url, response);
+        done += 1;
+      } catch {
+        failed += 1;
+      }
+      onProgress?.(done, failed, urls.length);
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.max(1, concurrency) }, worker));
+  return { done, failed, cancelled: Boolean(signal?.aborted) };
+}
+
+/** Drop every tile a cache holds. */
+export async function clearTiles(cacheName = 'abmap-tiles-v1', store = globalThis.caches) {
+  if (!store?.delete) return false;
+  return store.delete(cacheName);
+}

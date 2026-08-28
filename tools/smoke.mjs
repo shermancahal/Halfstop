@@ -2933,6 +2933,16 @@ if (!external) {
     const ran = await offlinePage.waitForFunction(
       () => typeof globalThis.abmapOverlays === 'function', null, { timeout: 20000 },
     ).then(() => true).catch(() => false);
+    /*
+     * This check is the offline downloader's regression test.
+     *
+     * Its first version had the worker intercept every cross-origin request to
+     * look for a cached tile, which meant respondWith took over the style
+     * fetch, the token check and the worker script too - and the app never
+     * finished initialising with the network down. This is what failed, and
+     * reverting the worker is what made it pass again; only tile-shaped URLs
+     * may be intercepted now.
+     */
     check('its scripts came back too, so the app actually ran', ran, true);
     check('and the layer panel built itself from the cached catalogue',
       await offlinePage.locator('.layer-row').count() > 0, true);

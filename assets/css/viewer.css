@@ -2297,3 +2297,10 @@ html, body { height: 100%; overflow: hidden; }
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 @media (max-width: 360px) { .sky-tab-text { font-size: .62rem; } }
+
+
+/* The download control under a saved region. The status sits beside the button
+   rather than under it, so a running download does not reflow the list. */
+.region-download { margin-top: 8px; }
+.region-download .region-controls { align-items: center; gap: 10px; }
+.region-download .source-note { margin: 0; }

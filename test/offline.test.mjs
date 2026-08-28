@@ -18,6 +18,7 @@ import {
   createRegion, measureRegion, regionDefinition, buildManifest, regionsToGeoJSON,
   tieredPlan,
   countTieredTiles,
+  mayCacheTiles, tileURLsFor, downloadTiles, clearTiles,
 } from '../assets/js/lib/offline.js';
 
 // The Cherokee National Forest, roughly — the ground this app was built for.
@@ -342,4 +343,107 @@ test('tiered: rubbish in is null or zero, never a throw', () => {
   // A pin with a missing or non-numeric coordinate is skipped, not plotted at
   // the origin — which is in the Atlantic.
   assert.equal(tieredPlan(TIER_BOX, [[NaN, 35], null, [-84.28, 35.96]])[2].boxes.length, 1);
+});
+
+
+/* ------------------------------------------------- downloading tiles */
+
+const fill = (template, tile) => String(template)
+  .replace('{z}', tile.z).replace('{x}', tile.x).replace('{y}', tile.y);
+
+test('offline: Mapbox tiles are not ours to keep', () => {
+  /*
+   * A licensing line, not a technical one. Mapbox reserve offline storage of
+   * their tiles to their own SDK's offline API, and this is Mapbox GL JS in a
+   * webview rather than that SDK.
+   */
+  assert.equal(mayCacheTiles('https://api.mapbox.com/v4/x/{z}/{x}/{y}.png'), false);
+  assert.equal(mayCacheTiles('https://a.tiles.mapbox.com/v4/{z}/{x}/{y}.png'), false);
+
+  // A deny list rather than an allow list, so a state layer added tomorrow is
+  // downloadable without anyone remembering to permit it.
+  assert.equal(mayCacheTiles('https://basemap.nationalmap.gov/arcgis/x/tile/{z}/{y}/{x}'), true);
+  assert.equal(mayCacheTiles('https://gis.blm.gov/arcgis/x/MapServer/tile/{z}/{y}/{x}'), true);
+
+  // Not a host that merely contains the word.
+  assert.equal(mayCacheTiles('https://mapbox.com.example.org/{z}/{x}/{y}.png'), true);
+  assert.equal(mayCacheTiles('http://insecure.example.gov/{z}/{x}/{y}.png'), false);
+  assert.equal(mayCacheTiles('nonsense'), false);
+});
+
+test('offline: a tile wanted twice is fetched once', () => {
+  // Two tiers over the same ground: the second must not re-bill tiles the
+  // first already counted, because the number goes to somebody deciding
+  // whether to press download on a hotel wifi.
+  const tiers = [
+    { zoom: 8, boxes: [SMOKIES] },
+    { zoom: 8, boxes: [SMOKIES] },
+  ];
+  const urls = tileURLsFor(tiers, ['https://example.gov/{z}/{x}/{y}.png'], fill);
+  assert.equal(urls.length, new Set(urls).size, 'the list is already a set');
+  assert.equal(urls.length, countTiles(SMOKIES, 8, 8));
+
+  // A source that may not be cached contributes nothing, rather than being
+  // fetched and then quietly discarded.
+  const mixed = tileURLsFor(tiers, [
+    'https://example.gov/{z}/{x}/{y}.png',
+    'https://api.mapbox.com/{z}/{x}/{y}.png',
+  ], fill);
+  assert.equal(mixed.length, urls.length);
+});
+
+test('offline: one dead tile does not lose the region', async () => {
+  const stored = new Map();
+  const cache = {
+    async match(url) { return stored.get(String(url)) || undefined; },
+    async put(url, response) { stored.set(String(url), response); },
+  };
+  const store = { open: async () => cache, delete: async () => true };
+
+  const urls = ['https://e.gov/a', 'https://e.gov/gone', 'https://e.gov/b'];
+  globalThis.fetch = async (url) => (String(url).endsWith('/gone')
+    ? { ok: false, status: 404 }
+    : { ok: true, status: 200 });
+
+  const seen = [];
+  const result = await downloadTiles(urls, {
+    caches: store, concurrency: 2, onProgress: (done, failed) => seen.push([done, failed]),
+  });
+
+  // The other two are kept. A region is thousands of tiles and one 404 at the
+  // edge of a service's coverage must not throw away the rest.
+  assert.deepEqual(result, { done: 2, failed: 1, cancelled: false });
+  assert.equal(stored.size, 2);
+  assert.ok(seen.length >= 3, 'progress is reported per tile, not at the end');
+
+  // A second run over the same list re-fetches nothing.
+  let fetched = 0;
+  globalThis.fetch = async () => { fetched += 1; return { ok: true, status: 200 }; };
+  const again = await downloadTiles(urls, { caches: store, concurrency: 2 });
+  assert.equal(fetched, 1, 'only the one that failed last time is asked for again');
+  assert.equal(again.done, 3);
+
+  assert.equal(await clearTiles('abmap-tiles-v1', store), true);
+});
+
+test('offline: cancelling stops the download where it stands', async () => {
+  const stored = new Map();
+  const store = {
+    open: async () => ({
+      async match() { return undefined; },
+      async put(url, response) { stored.set(String(url), response); },
+    }),
+  };
+  const controller = new AbortController();
+  globalThis.fetch = async () => {
+    // Cancel once the first tile is in, so the abort lands mid-run rather than
+    // before it starts - the case where a half-finished download has to stop.
+    if (stored.size >= 1) controller.abort();
+    return { ok: true, status: 200 };
+  };
+
+  const urls = Array.from({ length: 40 }, (_, i) => `https://e.gov/${i}`);
+  const result = await downloadTiles(urls, { caches: store, concurrency: 1, signal: controller.signal });
+  assert.equal(result.cancelled, true);
+  assert.ok(result.done < urls.length, 'it stopped rather than running to the end');
 });
