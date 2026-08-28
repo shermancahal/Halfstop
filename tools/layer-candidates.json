@@ -469,9 +469,10 @@
     "url": "https://gis.prd.state.or.us/arcgis/rest/services/Land_Ownership/LO_STATE_PARK_STATUS/FeatureServer/0/query?where=1%3D1&geometry=-124.6,41.9,-116.4,46.3&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=5&f=json"
   },
   {
-    "id": "canopy:tile",
-    "note": "The exact tile the layer now asks for, over the Cumberland Plateau where the basemap shows bare ground and the ground is forest. An ImageServer that needs a token answers 200 with JSON rather than a PNG, and a tile a browser may not read is a tile that does not draw - both of which this catches and neither of which is visible from the config.",
-    "expect": "image",
-    "url": "https://landscape10.arcgis.com/arcgis/rest/services/USA_NLCD_Tree_Canopy/ImageServer/exportImage?bbox=-9400000,4460000,-9380000,4480000&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
+    "id": "canopy:mrlc-names",
+    "note": "The same capabilities document, asked only for layer names carrying tree, canopy or tcc. The first attempt matched every name and stopped at forty, which alphabetically got as far as ExoticAnnualGrass - so the canopy layers were never in the answer. Esri's Living Atlas copy answers 499 Token Required, which is why this matters: MRLC is the public route and its CORS header is a wildcard.",
+    "expect": "data",
+    "find": "<Name>[^<]*(?:[Tt]ree|[Cc]anopy|TCC|tcc)[^<]*</Name>",
+    "url": "https://www.mrlc.gov/geoserver/mrlc_display/wms?service=WMS&version=1.3.0&request=GetCapabilities"
   }
 ]

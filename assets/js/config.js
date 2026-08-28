@@ -524,32 +524,6 @@ export const OVERLAYS = [
     attribution: USGS_ATTRIBUTION,
   },
   {
-    /*
-     * Tree canopy, because the basemap's green is a coverage map rather than a
-     * forest map.
-     *
-     * Mapbox draws three landcover classes and all three are green; the brown
-     * across north-east Georgia and south-east Kentucky is the background
-     * showing through where it has no polygon at all. NLCD is continuous, so
-     * this says what is actually under the canopy.
-     *
-     * From Esri's Living Atlas rather than MRLC's own GeoServer: same data,
-     * on a CDN, which matters for something drawn over a whole viewport.
-     */
-    id: 'tree-canopy',
-    group: 'Terrain',
-    name: 'Tree canopy',
-    description: 'Percentage tree canopy cover. Source: USGS NLCD via Esri Living Atlas',
-    legendNote: 'Darker is denser canopy. Covers the lower 48, Alaska and Hawaii only, '
-      + 'so it stops at the border rather than fading out.',
-    tiles: [`https://landscape10.arcgis.com/arcgis/rest/services/USA_NLCD_Tree_Canopy/ImageServer/exportImage${ESRI_IMAGE}`],
-    tileSize: 256,
-    maxzoom: 16,
-    opacity: 0.55,
-    enabled: false,
-    attribution: 'Tree canopy © <a href="https://www.mrlc.gov/">USGS NLCD</a> via <a href="https://livingatlas.arcgis.com/">Esri Living Atlas</a>',
-  },
-  {
     id: 'usgs-transport',
     group: 'Routes',
     name: 'Roads & trails (USGS)',
