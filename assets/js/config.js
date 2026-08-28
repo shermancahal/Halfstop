@@ -653,6 +653,25 @@ export const OVERLAYS = [
        * and looking like a colour scheme rather than a bug. A step that never
        * occurs costs nothing; one that is missing costs a wrong colour.
        */
+      /*
+       * Where a pilot goes to actually ask.
+       *
+       * The FAA's supplier list rather than one company's app: it is the
+       * FAA's own page, it stays current without us, and it keeps this map
+       * out of the business of recommending a vendor.
+       *
+       * No phone number. The FAA's airport layer publishes identity, position,
+       * elevation and operating hours and carries no contact column at all -
+       * checked field by field rather than assumed - and a control tower's
+       * number would be the wrong answer even if it were there. Part 107
+       * authorisation is not granted over the phone, and offering a number
+       * invites a call that cannot do what the caller wants.
+       */
+      links: [
+        { label: 'Request authorisation', href: 'https://faadronezone-access.faa.gov/' },
+        { label: 'Instant approval (LAANC)', href: 'https://www.faa.gov/uas/programs_partnerships/data_exchange' },
+        { label: 'B4UFLY', href: 'https://www.faa.gov/uas/getting_started/b4ufly' },
+      ],
       fillBy: {
         field: 'CEILING',
         colors: {

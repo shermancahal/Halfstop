@@ -534,22 +534,22 @@
   {
     "id": "link:faa-dronezone",
     "expect": "page",
-    "find": "(?i)<title[^>]*>([^<]{3,120})</title>",
-    "note": "FAA DroneZone, where an authorisation LAANC cannot grant instantly is applied for. Re-asked: the first run used an inline (?i), which JavaScript does not support, and the checker returned the compile error as though it were a match - so the page was certified by a check that never ran.",
+    "find": "(?i)(DroneZone)",
+    "note": "Tightened from any <title> to the word itself. A soft 404 has a title too, so the looser pattern proved only that the server returned a page - not that it returned the right one.",
     "url": "https://faadronezone-access.faa.gov/"
   },
   {
     "id": "link:faa-laanc",
     "expect": "page",
-    "find": "(?i)<title[^>]*>([^<]{3,120})</title>",
-    "note": "The FAA's own list of approved LAANC suppliers. Linking to the list rather than to one company: it stays current without us and does not put this app in the position of recommending a vendor.",
+    "find": "(?i)(LAANC)",
+    "note": "Same tightening. This page has to actually be about LAANC for the link to be worth putting in front of somebody about to fly.",
     "url": "https://www.faa.gov/uas/programs_partnerships/data_exchange"
   },
   {
     "id": "link:faa-b4ufly",
     "expect": "page",
-    "find": "(?i)<title[^>]*>([^<]{3,120})</title>",
-    "note": "B4UFLY, which is the app most drone pilots already have.",
+    "find": "(?i)(B4UFLY)",
+    "note": "Same tightening.",
     "url": "https://www.faa.gov/uas/getting_started/b4ufly"
   },
   {
@@ -586,5 +586,40 @@
     "find": "\"(?:name|alias)\"\\s*:\\s*\"[^\"]{0,40}\"",
     "note": "The airport/heliport layer's columns, to answer whether the FAA publishes a contact for a facility at all. Asked rather than assumed: the answer decides whether a contact row is possible, and if it is not, saying so is the deliverable.",
     "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/ADHP/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "link:faa-tfr",
+    "expect": "page",
+    "find": "(?i)(Temporary Flight Restriction)",
+    "note": "tfr.faa.gov sends no CORS header, so a browser cannot read its JSON however good the data is. A link is navigated to rather than fetched, which makes it the one route to this data that works.",
+    "url": "https://tfr.faa.gov/tfr2/list.html"
+  },
+  {
+    "id": "rest:uas-nsufr",
+    "expect": "data",
+    "find": "\"[A-Z_a-z]{2,24}\"\\s*:\\s*(?:\"[^\"]{1,50}\"|\\d+)",
+    "note": "National security UAS flight restrictions - the standing no-drone areas over certain federal sites. Asked over a wide box across Kentucky and Tennessee rather than a square I picked, because an empty answer from a bad box has been read as a dead layer three times in this file.",
+    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Part_Time_National_Security_UAS_Flight_Restrictions/FeatureServer/0/query?where=1%3D1&geometry=-89.6,36.4,-81.9,39.2&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=5&f=json"
+  },
+  {
+    "id": "rest:stadiums",
+    "expect": "data",
+    "find": "\"[A-Z_a-z]{2,24}\"\\s*:\\s*(?:\"[^\"]{1,50}\"|\\d+)",
+    "note": "Stadiums, which carry a standing restriction around game time and are the one most likely to catch a hobbyist out.",
+    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Stadiums/FeatureServer/0/query?where=1%3D1&geometry=-89.6,36.4,-81.9,39.2&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=5&f=json"
+  },
+  {
+    "id": "rest:sua",
+    "expect": "data",
+    "find": "\"[A-Z_a-z]{2,24}\"\\s*:\\s*(?:\"[^\"]{1,50}\"|\\d+)",
+    "note": "Special use airspace - restricted, prohibited, warning and alert areas. Standing rather than temporary, and the ones a drone pilot has to stay out of regardless of altitude.",
+    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Special_Use_Airspace/FeatureServer/0/query?where=1%3D1&geometry=-89.6,36.4,-81.9,39.2&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=5&f=json"
+  },
+  {
+    "id": "rest:ndz",
+    "expect": "data",
+    "find": "\"[A-Z_a-z]{2,24}\"\\s*:\\s*(?:\"[^\"]{1,50}\"|\\d+)",
+    "note": "National defence airspace TFR areas. Asked over a national box rather than a regional one: there may be only a handful in the country and a regional window would report an empty layer.",
+    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/National_Defense_Airspace_TFR_Areas/FeatureServer/0/query?where=1%3D1&geometry=-125,24,-66,49&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=5&f=json"
   }
 ]
