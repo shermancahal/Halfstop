@@ -5585,11 +5585,9 @@ function showIdentifyResults(position, groups, { pending = false } = {}) {
           : null,
       ]));
     }
-    body.append(el('p', {
-      class: 'source-note',
-      text: 'The agency’s current map is the legal authority for what is open. '
-        + 'Seasonal closures change and a published layer lags them.',
-    }));
+    // The standing caveat about published layers lagging the agency's own map
+    // belongs in a README or an FAQ, not on every card. Noted in
+    // docs/state-layers.md until there is somewhere better for it.
   }
 
   content.append(el('div', { class: 'popup-bar' }, [

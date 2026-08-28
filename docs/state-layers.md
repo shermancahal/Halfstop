@@ -351,3 +351,26 @@ The agency-drawn raster layers cannot have one: they arrive as finished
 pictures in somebody else's palette, so they carry a note saying so and
 pointing at tap-to-identify instead. Imagery and hillshade get neither,
 being pictures of the ground rather than thematic layers.
+
+## Notes parked for a README or FAQ
+
+The identify card carried a standing caveat on every result: that the
+agency's current map is the legal authority for what is open, and that a
+published layer lags seasonal closures. True, and worth saying once
+somewhere - not on every card a person opens. Removed from the card and
+recorded here until there is a README or FAQ to hold it.
+
+## Why the agency-drawn layers cannot be styled
+
+Ohio's ODNR lands, Kentucky's byways, trails and state forests and
+Tennessee's WMAs arrive as raster tiles: the agency renders them into a
+finished picture in its own palette, with its own labels, and we receive
+pixels. That means no hatching, no soft fill, no control of labels, no
+line between a state forest and a nature preserve, and nothing under a
+tap - a click falls through to the basemap road beneath, which is why a
+scenic byway reported itself as Nada Tunnel Rd.
+
+All of it becomes possible the moment the same services are queried for
+features instead, which is what TVA, Michigan and Maryland already do.
+The `vec:` probes ask whether these services will do that and which
+fields carry the names and the designations.

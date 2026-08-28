@@ -119,13 +119,6 @@
     "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_StateForests_WGS84WM/MapServer?f=pjson"
   },
   {
-    "id": "live:ky-hunting",
-    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
-    "expect": "data",
-    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
-    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Public_Hunting_Areas_WGS84WM/MapServer?f=pjson"
-  },
-  {
     "id": "live:mi-roads",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
@@ -259,13 +252,6 @@
     "url": "https://geodata.hawaii.gov/arcgis/rest/services/Terrestrial/MapServer/34?f=pjson"
   },
   {
-    "id": "live:in-trails",
-    "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
-    "expect": "data",
-    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
-    "url": "https://gisdata.in.gov/server/rest/services/Hosted/Trails_AGOL_RO/FeatureServer/0?f=pjson"
-  },
-  {
     "id": "live:de-parks",
     "note": "Health check for a layer that is now shipping. It was found by asking whether the service exists and, for most states, nothing more - so this is what will say when one goes dead or moves. A layer that draws nothing should be deleted, and guessing which is not good enough.",
     "expect": "data",
@@ -371,13 +357,6 @@
     "url": "https://services6.arcgis.com/nRIB86xC7kq6wavB/arcgis/rest/services/State_Trails/FeatureServer/1?f=pjson"
   },
   {
-    "id": "live:ny-hunting",
-    "note": "Health check for a shipped layer, on the index its service named.",
-    "expect": "data",
-    "find": "\"(?:geometryType|name|currentVersion)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
-    "url": "https://services.arcgis.com/1xFZPtKn1wKC6POA/arcgis/rest/services/NY_State_Parks_Hunting_Areas_2_view/FeatureServer/1?f=pjson"
-  },
-  {
     "id": "live:id-routes",
     "note": "Health check for a shipped layer, on the index its service named.",
     "expect": "data",
@@ -453,5 +432,40 @@
     "expect": "data",
     "find": "\"(?:type|coordinates|OBJECTID|features)\"\\s*:\\s*\"?[^\",\\[]{0,40}",
     "url": "https://services.arcgis.com/njFNhDsUCentVYJW/arcgis/rest/services/State_Park_Forest_Recreation_Maintained_Roads/FeatureServer/0/query?where=1%3D1&geometry=-79.5,39.0,-78.5,39.7&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson"
+  },
+  {
+    "id": "vec:oh-layers",
+    "note": "Ohio's ODNR Lands is a picture we cannot restyle, label or click. This asks what sublayers it has - and in particular whether a field tells a state forest from a nature preserve, which is the line asked for on the map.",
+    "expect": "data",
+    "find": "\"(?:name|geometryType|id)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://gis.ohiodnr.gov/arcgis/rest/services/OIT_Services/ODNR_ODNR_Lands_External/MapServer?f=pjson"
+  },
+  {
+    "id": "vec:oh-query",
+    "note": "Whether the same service will hand over features instead of pixels. If it will, Ohio becomes ours to draw: soft fills, a hatch, one label per parcel rather than six, and a tap that answers.",
+    "expect": "data",
+    "find": "\"(?:type|NAME|Name|NAME1|AREA_NAME|PROPERTY|UNIT_TYPE|LABEL|BYWAY|Trail_Name|TRAILNAME)\"\\s*:\\s*\"?[^\",\\[}]{0,50}",
+    "url": "https://gis.ohiodnr.gov/arcgis/rest/services/OIT_Services/ODNR_ODNR_Lands_External/MapServer/0/query?where=1%3D1&geometry=-82.7,39.3,-82.3,39.7&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.001&resultRecordCount=8&f=geojson"
+  },
+  {
+    "id": "vec:ky-byways",
+    "note": "Clicking a scenic byway reports a basemap road because the byway is a raster with nothing under the tap. As vectors the name can sit along the line, which is the better of the two options asked about.",
+    "expect": "data",
+    "find": "\"(?:type|NAME|Name|NAME1|AREA_NAME|PROPERTY|UNIT_TYPE|LABEL|BYWAY|Trail_Name|TRAILNAME)\"\\s*:\\s*\"?[^\",\\[}]{0,50}",
+    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Scenic_Byways_WGS84WM/MapServer/0/query?where=1%3D1&geometry=-84.3,37.6,-83.5,38.1&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.001&resultRecordCount=8&f=geojson"
+  },
+  {
+    "id": "vec:ky-forests",
+    "note": "The forest boundaries as features, so the name can be drawn once per forest rather than repeated by the agency's own label engine.",
+    "expect": "data",
+    "find": "\"(?:type|NAME|Name|NAME1|AREA_NAME|PROPERTY|UNIT_TYPE|LABEL|BYWAY|Trail_Name|TRAILNAME)\"\\s*:\\s*\"?[^\",\\[}]{0,50}",
+    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_StateForests_WGS84WM/MapServer/1/query?where=1%3D1&geometry=-84.3,37.6,-83.5,38.1&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.001&resultRecordCount=8&f=geojson"
+  },
+  {
+    "id": "vec:ky-trails-layers",
+    "note": "The trails service splits by use - federal ATV, motorcycle, horse, hiking, state park - and the ids are what a per-use style needs. The dashed and solid lines asked about are the agency's own symbology and will go when we draw them ourselves.",
+    "expect": "data",
+    "find": "\"(?:name|geometryType|id)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
+    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Recreational_Trails_WGS84WM/MapServer?f=pjson"
   }
 ]

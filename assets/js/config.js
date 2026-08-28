@@ -1179,64 +1179,6 @@ export const OVERLAYS = [
    * for a moved URL before concluding the data is gone.
    */
   {
-  /*
-   * Back from the dead, on an index the service named rather than one I
-   * guessed. All four of these shipped pointing at layer zero, which none of
-   * them have; each answered "the requested layer was not found" in a 200 and
-   * the health check waved it through. Asking the service for its own layer
-   * list took one probe and would have taken one probe the first time.
-   */
-    legend: [{ color: '#B45309', label: 'Area: ORV scramble areas' }],
-    id: 'mi-orv',
-    states: ['MI'],
-    name: 'ORV scramble areas',
-    description: 'Designated off-road riding areas.',
-    query: {
-      url: 'https://services3.arcgis.com/Jdnp1TjADvSDxMAX/arcgis/rest/services/DNR_ORV_Scramble_Areas/FeatureServer/1/query'
-        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
-        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
-        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
-      minzoom: 7,
-      color: '#B45309',
-    },
-    opacity: 0.55,
-    enabled: false,
-    attribution: 'Recreation data © <a href="https://www.michigan.gov/dnr">Michigan DNR</a>',
-  },
-  {
-    /*
-     * Removed once and restored, for the same reason Virginia was.
-     *
-     * Reported as drawing polygons and dots where it promises a trail
-     * inventory. I removed it and argued the polygons were genuine because the
-     * report predated the unfiltered circle layer - then was told it had dots
-     * too, which dates it after and makes the dots ours. The argument was
-     * built to defend a deletion I had already made.
-     *
-     * Whether the polygons are Indiana's own corridors is still open and the
-     * probe has never reported this service's geometry. It draws correctly now
-     * and can be judged on that.
-     */
-    legend: [{ color: '#6D4C41', label: 'Route: Trails inventory' }],
-    id: 'in-trails',
-    at: [-86.2, 39.2],
-    states: ['IN'],
-    name: 'Trails inventory',
-    description: "Indiana's open trails inventory.",
-    query: {
-      url: 'https://gisdata.in.gov/server/rest/services/Hosted/Trails_AGOL_RO/FeatureServer/0/query'
-        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
-        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
-        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
-      minzoom: 7,
-      road: true,
-      color: '#6D4C41',
-    },
-    opacity: 0.55,
-    enabled: false,
-    attribution: 'Trails © <a href="https://www.in.gov/dnr/">Indiana DNR</a>',
-  },
-  {
     /*
      * Removed once and restored.
      *
@@ -1282,24 +1224,6 @@ export const OVERLAYS = [
     opacity: 0.55,
     enabled: false,
     attribution: 'Trails © <a href="https://www.ncparks.gov/">North Carolina State Parks</a>',
-  },
-  {
-    legend: [{ color: '#2E7D32', label: 'Area: State park hunting areas' }],
-    id: 'ny-hunting',
-    states: ['NY'],
-    name: 'State park hunting areas',
-    description: 'Parts of NY state parks open to hunting - public land you may walk onto.',
-    query: {
-      url: 'https://services.arcgis.com/1xFZPtKn1wKC6POA/arcgis/rest/services/NY_State_Parks_Hunting_Areas_2_view/FeatureServer/1/query'
-        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
-        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
-        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
-      minzoom: 7,
-      color: '#2E7D32',
-    },
-    opacity: 0.55,
-    enabled: false,
-    attribution: 'Hunting areas © <a href="https://parks.ny.gov/">New York State Parks</a>',
   },
   {
     legend: [{ color: '#6D4C41', label: 'Route: Recreation routes' }],
@@ -1466,22 +1390,8 @@ export const OVERLAYS = [
     name: 'State forests',
     description: 'State forest boundaries.',
     tiles: ['https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_StateForests_WGS84WM/MapServer/export'
-      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'],
-    tileSize: 256,
-    maxzoom: 16,
-    opacity: 0.85,
-    enabled: false,
-    attribution: 'Recreation data \u00a9 <a href=\"https://technology.ky.gov/gis/\">Kentucky Division of Geographic Information</a>',
-  },
-  {
-    id: 'ky-hunting',
-    legendNote: 'The agency draws this layer itself, so the colours are theirs and there is no key to read out of it. Tap a feature to see what it is.',
-    at: [-84.5, 37.5],
-    states: ['KY'],
-    name: 'Public hunting areas',
-    description: 'Public land open to hunting, which is public land you may walk onto.',
-    tiles: ['https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Public_Hunting_Areas_WGS84WM/MapServer/export'
-      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'],
+      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'
+      + '&layers=show:1'],
     tileSize: 256,
     maxzoom: 16,
     opacity: 0.85,
