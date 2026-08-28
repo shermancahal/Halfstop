@@ -625,23 +625,9 @@
   {
     "id": "sua:types",
     "expect": "data",
-    "find": "\"(?:LOCAL_TYPE|TYPE_CODE)\"\\s*:\\s*\"[^\"]{0,40}\"",
-    "note": "Every distinct kind of special use airspace the service publishes. MOAs have to come out - they do not restrict civilian flight and are generally based above 1,000 AGL, so they are noise on a map for aircraft that stay under 400 - and a filter written from a guessed spelling either removes nothing or removes the wrong thing.",
-    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Special_Use_Airspace/FeatureServer/0/query?where=1%3D1&outFields=LOCAL_TYPE%2CTYPE_CODE&returnDistinctValues=true&returnGeometry=false&f=json"
-  },
-  {
-    "id": "sua:floors",
-    "expect": "data",
-    "find": "\"(?:LOCAL_TYPE|LOWER_VAL|LOWER_CODE)\"\\s*:\\s*(?:\"[^\"]{0,30}\"|\\d+)",
-    "note": "The floor of each kind, to see whether altitude alone can do the filtering. If prohibited and restricted areas run from the surface and the rest start thousands of feet up, the rule can be about height rather than about a list of type codes that may be renamed.",
-    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Special_Use_Airspace/FeatureServer/0/query?where=1%3D1&outFields=LOCAL_TYPE%2CLOWER_VAL%2CLOWER_CODE&returnGeometry=false&resultRecordCount=40&f=json"
-  },
-  {
-    "id": "nps:org",
-    "expect": "data",
-    "find": "\"name\"\\s*:\\s*\"[^\"]*(?:[Bb]oundar|[Uu]nit|[Ll]and)[^\"]*\"",
-    "note": "The Park Service's own ArcGIS org, filtered to boundaries. National parks are not airspace restrictions - the rule is on the ground, that you may not launch, land or operate from park land without a permit - but that is exactly the thing a pilot wants to see before driving there.",
-    "url": "https://services1.arcgis.com/fBc8EJBxQRMcHlei/arcgis/rest/services?f=pjson"
+    "find": "\"(?:name|alias)\"\\s*:\\s*\"[^\"]{0,60}\"",
+    "note": "The special use airspace layer's own field list. Asking it for distinct LOCAL_TYPE and TYPE_CODE came back \"'outFields' parameter is invalid\", which means those are not its columns - they were read off a different service in the same org and assumed to be shared. The columns have to be read before anything can be filtered by them.",
+    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Special_Use_Airspace/FeatureServer/0?f=pjson"
   },
   {
     "id": "nps:mapservices",
@@ -663,5 +649,33 @@
     "find": "\"name\"\\s*:\\s*\"[^\"]*(?:[Ww]ilderness|WSA)[^\"]*\"",
     "note": "BLM holds wilderness and wilderness study areas the Forest Service does not. Between the two agencies the coverage is most of it.",
     "url": "https://gis.blm.gov/arcgis/rest/services/lands?f=pjson"
+  },
+  {
+    "id": "nps:national",
+    "expect": "data",
+    "find": "\"name\"\\s*:\\s*\"[^\"]{0,70}\"",
+    "note": "The Park Service's NationalDatasets folder, which is where a nationwide boundary would live. The community org listing turned up per-park layers - one park's boundary, another park's landholdings - which is not the same thing as the boundary of every unit.",
+    "url": "https://mapservices.nps.gov/arcgis/rest/services/NationalDatasets?f=pjson"
+  },
+  {
+    "id": "wild:usfs-fields",
+    "expect": "data",
+    "find": "\"(?:name|alias)\"\\s*:\\s*\"[^\"]{0,60}\"",
+    "note": "EDW_Wilderness_01, which the folder listing confirmed exists. Its sublayers and columns, before anything is drawn from it.",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_Wilderness_01/MapServer?f=pjson"
+  },
+  {
+    "id": "wild:usfs-data",
+    "expect": "data",
+    "find": "\"(?:NAME|WILDERNESS|AREANAME|GIS_ACRES)[A-Z_]*\"\\s*:\\s*(?:\"[^\"]{0,50}\"|\\d+)",
+    "note": "Real rows from it over the southern Appalachians, where there is certainly designated wilderness. Existing, advertising fields and returning data are three questions and only the third puts a shape on a map.",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_Wilderness_01/MapServer/0/query?where=1%3D1&geometry=-85.0,34.6,-81.0,37.0&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=5&f=json"
+  },
+  {
+    "id": "wild:blm-fields",
+    "expect": "data",
+    "find": "\"(?:name|alias)\"\\s*:\\s*\"[^\"]{0,60}\"",
+    "note": "BLM's wilderness and wilderness study areas - the ones the Forest Service does not hold. Sublayers and columns first, because this service is a MapServer with several and the BLM lookup has already cost an afternoon by answering from a group layer that rejects every query.",
+    "url": "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_NLCS_WLD_WSA/MapServer?f=pjson"
   }
 ]

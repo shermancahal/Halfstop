@@ -4328,18 +4328,67 @@ function renderOfflineTab() {
   for (const region of regions) list.append(regionRow(region, kind));
   dom.offline.append(list);
 
-  // The Mapbox ceiling is per account across every region, so one region being
-  // comfortable says nothing — the total is the number that decides whether the
-  // download succeeds.
+  /*
+   * Two different ceilings, and they were being conflated.
+   *
+   * TILE_BUDGET is Mapbox's per-account limit on regions downloaded through
+   * their offline SDK, which is what the exported manifest feeds. It has
+   * nothing to do with tiles this app fetches into its own cache, and quoting
+   * it under a download that does not touch Mapbox told somebody their USGS
+   * region was over a limit that does not apply to it.
+   *
+   * So the Mapbox number is stated where the manifest is, and what the app
+   * itself is holding is read from the browser rather than estimated - the
+   * quota is the real constraint on a phone, and it is knowable.
+   */
   const totalTiles = state.offline.totalTiles(kind);
-  const overBudget = totalTiles > TILE_BUDGET;
-  dom.offline.append(el('p', {
-    class: overBudget ? 'region-warning' : 'source-note',
-    text: overBudget
-      ? `${totalTiles.toLocaleString()} tiles in total, over the ${TILE_BUDGET.toLocaleString()} `
-        + 'Mapbox allows per account by default. Trim a region, lower a maximum zoom, or ask Mapbox to raise the limit.'
-      : `${totalTiles.toLocaleString()} tiles in total of the ${TILE_BUDGET.toLocaleString()} Mapbox allows per account.`,
-  }));
+  if (kind === 'vector') {
+    const overBudget = totalTiles > TILE_BUDGET;
+    dom.offline.append(el('p', {
+      class: overBudget ? 'region-warning' : 'source-note',
+      text: overBudget
+        ? `${totalTiles.toLocaleString()} tiles in total, over the ${TILE_BUDGET.toLocaleString()} `
+          + 'Mapbox allows per account by default for a manifest export. Trim a region, lower a maximum zoom, or ask Mapbox to raise the limit.'
+        : `${totalTiles.toLocaleString()} tiles in total of the ${TILE_BUDGET.toLocaleString()} Mapbox allows per account for a manifest export.`,
+    }));
+  }
+
+  const storage = el('p', { class: 'source-note', text: '' });
+  dom.offline.append(el('div', { class: 'offline-storage' }, [storage, el('button', {
+    class: 'button button-ghost button-small', type: 'button',
+    text: 'Delete downloaded tiles',
+    onclick: async () => {
+      await clearTiles();
+      toast('Downloaded tiles removed.');
+      renderOfflineTab();
+    },
+  })]));
+  describeStorage(storage);
+}
+
+/**
+ * How much room the downloads are actually taking, and how much there is.
+ *
+ * Read from the browser rather than estimated from a tile count. An estimate
+ * built from an average tile size is wrong by a factor of three between an
+ * aerial and a contour sheet, and the number that decides whether the next
+ * download succeeds is the quota - which the browser will simply tell you.
+ *
+ * Both halves are best-effort: `estimate()` is absent in some browsers and
+ * approximate in the rest, and it counts everything this origin stores rather
+ * than the tile cache alone. Saying "about" is the honest way to show a number
+ * that is genuinely about.
+ */
+async function describeStorage(node) {
+  try {
+    const { usage = 0, quota = 0 } = (await navigator.storage?.estimate?.()) || {};
+    if (!quota) { node.textContent = 'This browser does not report how much it can store.'; return; }
+    const share = Math.round((usage / quota) * 100);
+    node.textContent = `About ${formatTileBytes(usage)} stored of roughly `
+      + `${formatTileBytes(quota)} available${share >= 1 ? ` (${share}%)` : ''}.`;
+  } catch {
+    node.textContent = '';
+  }
 }
 
 /** One saved region: what it covers, what it costs, and what you can do to it. */
@@ -5858,9 +5907,24 @@ function showIdentifyResults(position, groups, { pending = false } = {}) {
     }
     for (const group of groups) {
       const rows = attributeRows(group);
+      /*
+       * One prominent line per group, always.
+       *
+       * The card has a small grey caps kicker for the source and a bold line
+       * for the thing itself, which reads well when the feature has a name.
+       * When it does not - a drone grid cell, a nameless road - the bold line
+       * was simply absent and the caps kicker was left doing the naming, so
+       * the card went straight from a shouted layer name into a table.
+       *
+       * So a group with no name of its own promotes its source into the bold
+       * slot and drops the kicker: the layer's name is what this is, and it
+       * only needs saying once.
+       */
+      const heading = group.designation || group.source;
+      const kicker = group.designation ? group.source : '';
       body.append(el('div', { class: 'identify-group' }, [
-        el('p', { class: 'identify-source', text: group.source }),
-        group.designation ? el('p', { class: 'identify-designation', text: group.designation }) : null,
+        kicker ? el('p', { class: 'identify-source', text: kicker }) : null,
+        heading ? el('p', { class: 'identify-designation', text: heading }) : null,
         rows.length
           ? el('dl', { class: 'popup-stats' }, rows.flatMap(([label, value]) => [
             el('dt', { text: label }),

@@ -1546,6 +1546,9 @@ html, body { height: 100%; overflow: hidden; }
 .identify-designation {
   margin: 2px 0 6px; font-size: .88rem; font-weight: 600; color: var(--ink);
 }
+/* Standing alone, it is the first thing in the group and needs no gap above
+   the kicker that is not there. */
+.identify-designation:first-child { margin-top: 0; }
 /*
  * Striped, because these cards run long.
  *
@@ -2304,3 +2307,11 @@ html, body { height: 100%; overflow: hidden; }
 .region-download { margin-top: 8px; }
 .region-download .region-controls { align-items: center; gap: 10px; }
 .region-download .source-note { margin: 0; }
+
+/* Storage figure and the button that clears it, on one line until the panel is
+   too narrow to hold both. */
+.offline-storage {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line);
+}
+.offline-storage .source-note { margin: 0; }
