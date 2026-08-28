@@ -1655,19 +1655,54 @@ export const OVERLAYS = [
     attribution: 'Closures \u00a9 <a href=\"https://dnr.wisconsin.gov/\">Wisconsin DNR</a>',
   },
   {
+    /*
+     * Coloured by the division that manages it, which is the distinction the
+     * agency's own raster drew and we could not reach.
+     *
+     * Two of these strings are read from real records - Hocking Hills State
+     * Park under Parks and Watercraft, Conkles Hollow State Nature Preserve
+     * under Natural Areas and Preserves. Forestry and Wildlife are not: the
+     * service's renderer names those divisions and the sample bbox held
+     * neither, so they are written as the agency spells the other two and will
+     * fall through to the default colour if that guess is wrong. A wrong guess
+     * costs a shade here; it does not mislabel anything.
+     *
+     * Name_Label is the agency's own field, aliased "Field for labeling on
+     * maps" - Hocking Hills SP, Conkles Hollow DNP - so the label is short by
+     * their choice rather than truncated by ours.
+     */
+    legend: [
+      { color: '#5E9E5A', label: 'Parks and Watercraft' },
+      { color: '#3F7F6E', label: 'Natural Areas and Preserves' },
+      { color: '#2F6B33', label: 'Forestry' },
+      { color: '#9A7B3A', label: 'Wildlife' },
+    ],
     id: 'oh-lands',
-    legendNote: 'The agency draws this layer itself, so the colours are theirs and there is no key to read out of it. Tap a feature to see what it is.',
-    at: [-82.5, 39.5],
     states: ['OH'],
     name: 'ODNR lands',
-    description: 'Land the Ohio Department of Natural Resources manages.',
-    tiles: ['https://gis.ohiodnr.gov/arcgis/rest/services/OIT_Services/ODNR_ODNR_Lands_External/MapServer/export'
-      + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'],
-    tileSize: 256,
-    maxzoom: 16,
-    opacity: 0.85,
+    description: 'Land the Ohio Department of Natural Resources manages, coloured by division.',
+    query: {
+      url: 'https://gis.ohiodnr.gov/arcgis/rest/services/OIT_Services/ODNR_ODNR_Lands_External/MapServer/0/query'
+        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
+        + '&spatialRel=esriSpatialRelIntersects&outFields=Name_Label%2CLANDS_NAME%2CDIV_CODE_desc%2CPROP_TYPE%2CCOUNTY&returnGeometry=true'
+        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=400&f=geojson',
+      minzoom: 8,
+      color: '#5E9E5A',
+      label: 'Name_Label',
+      fillBy: {
+        field: 'DIV_CODE_desc',
+        colors: {
+          'Division of Parks and Watercraft': '#5E9E5A',
+          'Division of Natural Areas and Preserves': '#3F7F6E',
+          'Division of Forestry': '#2F6B33',
+          'Division of Wildlife': '#9A7B3A',
+        },
+        fallback: '#7E8C6A',
+      },
+    },
+    opacity: 0.5,
     enabled: false,
-    attribution: 'Lands \u00a9 <a href=\"https://ohiodnr.gov/\">Ohio DNR</a>',
+    attribution: 'Lands © <a href="https://ohiodnr.gov/">Ohio DNR</a>',
   },
   {
     id: 'ia-recreation',

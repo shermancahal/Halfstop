@@ -434,38 +434,31 @@
     "url": "https://services.arcgis.com/njFNhDsUCentVYJW/arcgis/rest/services/State_Park_Forest_Recreation_Maintained_Roads/FeatureServer/0/query?where=1%3D1&geometry=-79.5,39.0,-78.5,39.7&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson"
   },
   {
-    "id": "vec:oh-divisions",
-    "note": "The division values themselves, not their column name. Ohio's renderer classes read Forestry, Parks, Wildlife, Watercraft and Natural Area, and DIV_CODE_desc almost certainly holds those words - but 'almost certainly' is how a state preserve came to be labelled a national park, so the palette waits for the strings.",
+    "id": "shield:md-40-townhill",
+    "note": "Scenic US 40 over Town Hill. The last three probes put the point on farm tracks and one of them - the I-68 control - came back with no features at all, which says the coordinates were wrong rather than the data missing. Six kilometres of radius rather than nine hundred metres, and fifty results rather than twenty-five.",
     "expect": "data",
-    "find": "\"(?:DIV_CODE_desc|PROP_TYPE|Name_Label|LANDS_NAME)\"\\s*:\\s*\"[^\"]{0,44}\"",
-    "url": "https://gis.ohiodnr.gov/arcgis/rest/services/OIT_Services/ODNR_ODNR_Lands_External/MapServer/0/query?where=1%3D1&geometry=-82.9,39.2,-82.1,39.8&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=DIV_CODE_desc%2CPROP_TYPE%2CName_Label%2CLANDS_NAME&returnGeometry=false&resultRecordCount=12&f=json"
+    "find": "\"(?:ref|shield|reflen)\"\\s*:\\s*\"?[^\",}]{0,40}\"?",
+    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-78.45,39.657.json?radius=6000&limit=50&dedupe=false&layers=road&access_token={token}"
   },
   {
-    "id": "vec:ky-byway-values",
-    "note": "Real byway records with every column. RT_DESCR is the label until this says whether something carries the byway's own name - Red River Gorge Scenic Byway rather than a route description - because the field list ran past the probe's forty-match cap.",
+    "id": "shield:md-40-sideling",
+    "note": "The same route over Sideling Hill, far enough east to be a genuinely separate sample.",
     "expect": "data",
-    "find": "\"[A-Z_]{2,14}\"\\s*:\\s*\"[^\"]{0,44}\"",
-    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Scenic_Byways_WGS84WM/MapServer/0/query?where=1%3D1&geometry=-84.3,37.6,-83.4,38.0&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=4&f=json"
+    "find": "\"(?:ref|shield|reflen)\"\\s*:\\s*\"?[^\",}]{0,40}\"?",
+    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-78.30,39.700.json?radius=6000&limit=50&dedupe=false&layers=road&access_token={token}"
   },
   {
-    "id": "shield:md-scenic-40-east",
-    "note": "Scenic US 40 near Sideling Hill. It draws as a circle reading '40 Scenic', which means two things at once: the shield value is not one this app maps to the US design, and the ref carries a suffix the prefix-stripper does not touch.",
+    "id": "shield:md-40-cumberland",
+    "note": "West towards Cumberland, where US 40 and I-68 run together - so whatever shield the interstate carries appears beside whatever the scenic route carries, in one answer.",
     "expect": "data",
-    "find": "\"(?:ref|shield|shield_text_color|reflen|class|name)\"\\s*:\\s*\"?[^\",}]{0,40}\"?",
-    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-78.42,39.68.json?radius=900&limit=25&dedupe=false&layers=road&access_token={token}"
+    "find": "\"(?:ref|shield|reflen)\"\\s*:\\s*\"?[^\",}]{0,40}\"?",
+    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-78.72,39.652.json?radius=6000&limit=50&dedupe=false&layers=road&access_token={token}"
   },
   {
-    "id": "shield:md-scenic-40-west",
-    "note": "The same route west of Cumberland, because one sample is one sample and a shield rule written from a single feature is how the SR prefix problem arrived in the first place.",
+    "id": "vec:ky-byway-name",
+    "note": "RT_DESCR reads NADA TUNNEL RD+FORESTRY RD - a road description, not a byway name, and not something to draw along a line. The service also carries SC_ROUTE and SC_SEQ, and SC on a scenic byways layer is worth reading before assuming. This asks for those values.",
     "expect": "data",
-    "find": "\"(?:ref|shield|shield_text_color|reflen|class|name)\"\\s*:\\s*\"?[^\",}]{0,40}\"?",
-    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-78.86,39.66.json?radius=900&limit=25&dedupe=false&layers=road&access_token={token}"
-  },
-  {
-    "id": "shield:md-i68",
-    "note": "I-68 alongside it, as a control. If the interstate reports a shield this app already knows and the scenic route does not, the difference is the answer.",
-    "expect": "data",
-    "find": "\"(?:ref|shield|shield_text_color|reflen|class|name)\"\\s*:\\s*\"?[^\",}]{0,40}\"?",
-    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-78.60,39.65.json?radius=700&limit=25&dedupe=false&layers=road&access_token={token}"
+    "find": "\"(?:SC_ROUTE|SC_SEQ|DESC_OF_ROUTE|ROAD|RT_DESCR)\"\\s*:\\s*\"[^\"]{0,60}\"",
+    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Scenic_Byways_WGS84WM/MapServer/0/query?where=1%3D1&outFields=SC_ROUTE%2CSC_SEQ%2CDESC_OF_ROUTE%2CROAD%2CRT_DESCR&returnGeometry=false&resultRecordCount=10&f=json"
   }
 ]
