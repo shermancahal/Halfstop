@@ -321,3 +321,37 @@ export function overlayRows(fields, properties = {}, humanise = String) {
   }
   return rows;
 }
+
+/**
+ * The action links for one overlay feature.
+ *
+ * Templated against the feature, so a link can carry the thing that was
+ * clicked: `{APT1_FAAID}` in an href becomes LEX. A link whose template names
+ * a field this feature has no value for is dropped rather than shipped with a
+ * hole in it - a URL ending `?airport=` is worse than no link, because it
+ * looks like it worked.
+ *
+ * Only http(s), mailto and tel survive. The catalogue is ours, but this puts
+ * a URL from a data file into an href, and the list of schemes that belong
+ * there is short enough to write down.
+ *
+ * @param {Array<{label: string, href: string}>} links the catalogue's `query.links`
+ * @param {object} properties the feature's properties
+ * @returns {Array<{label: string, href: string}>}
+ */
+export function overlayLinks(links, properties = {}) {
+  const out = [];
+  for (const link of links || []) {
+    if (!link?.href || !link?.label) continue;
+    let missing = false;
+    const href = String(link.href).replace(/\{([A-Za-z0-9_]+)\}/g, (whole, field) => {
+      const value = properties[field];
+      if (value === null || value === undefined || value === '') { missing = true; return ''; }
+      return encodeURIComponent(String(value));
+    });
+    if (missing) continue;
+    if (!/^(https?:|mailto:|tel:)/i.test(href)) continue;
+    out.push({ label: link.label, href });
+  }
+  return out;
+}

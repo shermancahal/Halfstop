@@ -646,6 +646,15 @@ html, body { height: 100%; overflow: hidden; }
 :root[data-theme="dark"] .layer-badge.is-broken,
 :root:not([data-theme="light"]) .layer-badge.is-broken { color: #f0806f; }
 
+/* Waiting on zoom, not failing. Amber rather than red: the layer is fine and
+   the view is the thing that has to change. */
+.layer-badge.is-waiting {
+  background: color-mix(in srgb, #b7791f 14%, transparent);
+  color: #8a5d12; border-color: color-mix(in srgb, #b7791f 34%, transparent);
+}
+:root[data-theme="dark"] .layer-badge.is-waiting,
+:root:not([data-theme="light"]) .layer-badge.is-waiting { color: #e3b23c; }
+
 /* ==========================================================================
    Compact layer rows — descriptions fold away behind (i)
    ========================================================================== */
@@ -1524,6 +1533,10 @@ html, body { height: 100%; overflow: hidden; }
   margin: 0 0 9px; color: var(--ink);
 }
 .identify-group + .identify-group { margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--line); }
+/* Action links under an identify card - they wrap rather than widening the
+   popup, which is capped at 340px and has a map behind it. */
+.identify-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.identify-links .button { text-decoration: none; }
 /* The agency is a heading, not a footnote: both of them say "open to all
    vehicles" and neither means quite the same thing by it. */
 .identify-source {

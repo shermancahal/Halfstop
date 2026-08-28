@@ -362,6 +362,20 @@ async function probe(entry) {
          * CORS still matters exactly as much: a JSON body a browser is not
          * allowed to read is as useless as a tile it cannot draw.
          */
+        /*
+         * A page a person is sent to, not a resource the app fetches.
+         *
+         * The identify card can carry a link - "request authorisation" points
+         * at FAA DroneZone - and a link is navigated to, so no CORS header is
+         * involved and demanding one would fail every link that works. What
+         * matters is that it answers, and that it is not a soft 404: a
+         * "page not found" served as 200 with a full site chrome around it is
+         * the failure mode here, so a candidate can still name what the page
+         * has to say.
+         */
+        : entry.expect === 'page'
+          ? (bytes < EMPTY_BYTES ? 'blank'
+            : (entry.find && !findIn(decoded, entry.find).length) ? 'page did not say it' : 'ok')
         : entry.expect === 'data'
           ? (!response.headers.get('access-control-allow-origin') ? 'no CORS'
             /*
@@ -417,7 +431,7 @@ if (asJSON) {
   console.log(JSON.stringify(results, null, 2));
 } else {
   const mark = {
-    ok: 'ok  ', blank: 'BLANK', failed: 'FAIL', 'not an image': 'FAIL', 'no features': 'NONE', unreachable: 'DOWN',
+    ok: 'ok  ', blank: 'BLANK', failed: 'FAIL', 'not an image': 'FAIL', 'no features': 'NONE', 'page did not say it': 'FAIL', unreachable: 'DOWN',
     'no CORS': 'CORS',
     // Snow depth in August is empty because there is no snow, not because the
     // service is wrong. Marked in the catalogue rather than guessed at here.

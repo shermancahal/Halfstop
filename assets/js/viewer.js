@@ -15,7 +15,7 @@ import {
 } from './config.js';
 import {
   loadEngine, buildRasterStyle, hasMapboxToken, mapboxToken, overlayParts, overlayIdFromLayer, overlayRows,
-  styleFor, styleHasGlyphs,
+  overlayLinks, styleFor, styleHasGlyphs,
 } from './lib/engine.js';
 import { loadCatalog, findMap } from './lib/catalog.js';
 import { parseMapFile, linePositions } from './lib/parse.js';
@@ -1907,9 +1907,22 @@ function trackSkyScale() {
 
 function trackQueryOverlays() {
   let timer = null;
+  // Which floors the view was above last time, so the panel is only rebuilt
+  // when one is actually crossed rather than on every pan.
+  let floorsMet = '';
   state.map.on('moveend', () => {
     clearTimeout(timer);
     timer = setTimeout(refreshQueryOverlays, 700);
+
+    const zoom = state.map.getZoom?.() ?? 0;
+    const met = inScopeOverlays()
+      .filter((entry) => entry.query?.minzoom)
+      .map((entry) => `${entry.id}:${zoom >= entry.query.minzoom ? 1 : 0}`)
+      .join(',');
+    if (met !== floorsMet) {
+      floorsMet = met;
+      renderLayersTab();
+    }
   });
 }
 
@@ -4550,12 +4563,33 @@ function layerName(entry) {
 }
 
 function layerBadge(entry) {
-  if (!layerIsBroken(entry.id)) return null;
-  return el('span', {
-    class: 'layer-badge is-broken',
-    title: 'This layer\u2019s tile server is not responding. The endpoint may have moved — see assets/js/config.js.',
-    text: 'not responding',
-  });
+  if (layerIsBroken(entry.id)) {
+    return el('span', {
+      class: 'layer-badge is-broken',
+      title: 'This layer\u2019s tile server is not responding. The endpoint may have moved — see assets/js/config.js.',
+      text: 'not responding',
+    });
+  }
+
+  /*
+   * A zoom floor that says so, instead of an empty map that does not.
+   *
+   * A queried layer below its floor draws nothing, and nothing looks exactly
+   * like a layer that is broken or a place with no data in it. On the drone
+   * grid that reading is worse than confusing: an absent cell means Class G,
+   * airspace where no authorisation is needed, so a layer silently withholding
+   * its cells is a layer quietly saying "you are clear". It has to say which
+   * one it means.
+   */
+  const floor = entry.query?.minzoom;
+  if (floor && state.overlays.get(entry.id)?.visible && (state.map?.getZoom?.() ?? 99) < floor) {
+    return el('span', {
+      class: 'layer-badge is-waiting',
+      title: `This layer loads from zoom ${floor}. Below that it asks for more than the service will return in one answer, and a truncated reply would leave gaps that look like open ground.`,
+      text: `zoom in to ${floor}`,
+    });
+  }
+  return null;
 }
 
 function setBasemap(id) {
@@ -5724,6 +5758,18 @@ function showIdentifyResults(position, groups, { pending = false } = {}) {
             el('dd', { text: String(value) }),
           ]))
           : null,
+        // Where a layer can point at the thing you would do next. The drone
+        // grid tells you a flight needs authorising; these are where you go
+        // and ask for it.
+        group.links?.length
+          ? el('div', { class: 'identify-links' }, group.links.map((link) => el('a', {
+            class: 'button button-ghost button-small',
+            href: link.href,
+            target: '_blank',
+            rel: 'noopener noreferrer',
+            text: link.label,
+          })))
+          : null,
       ]));
     }
     // The standing caveat about published layers lagging the agency's own map
@@ -5893,6 +5939,7 @@ function describeOverlayFeature(feature) {
     designation: String(name),
     attributes: null,
     rows,
+    links: overlayLinks(overlay.query?.links, properties),
   };
 }
 

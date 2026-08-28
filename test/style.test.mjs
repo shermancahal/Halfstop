@@ -16,7 +16,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildRasterStyle, overlayParts, overlayIdFromLayer, overlayRows, styleFor } from '../assets/js/lib/engine.js';
+import { buildRasterStyle, overlayParts, overlayIdFromLayer, overlayLinks, overlayRows, styleFor } from '../assets/js/lib/engine.js';
 import {
   BASEMAPS, OVERLAYS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN, STATE_NAMES, STATE_GROUP,
 } from '../assets/js/config.js';
@@ -303,6 +303,40 @@ test('style: a coded column reads as words, not as digits', () => {
 
   // Absent, empty and deliberately blanked all leave the panel alone.
   assert.deepEqual(overlayRows(fields, { APT1_NAME: '', CEILING: null, HIDDEN: 7 }), []);
+});
+
+test('style: a link with a hole in it is not shipped', () => {
+  const links = [
+    { label: 'Request authorisation', href: 'https://faadronezone-access.faa.gov/' },
+    { label: 'This airport', href: 'https://example.gov/a?id={APT1_FAAID}' },
+    { label: 'Call', href: 'tel:+18443596982' },
+    { label: 'Script', href: 'javascript:alert(1)' },
+  ];
+
+  assert.deepEqual(overlayLinks(links, { APT1_FAAID: 'LEX' }), [
+    { label: 'Request authorisation', href: 'https://faadronezone-access.faa.gov/' },
+    { label: 'This airport', href: 'https://example.gov/a?id=LEX' },
+    { label: 'Call', href: 'tel:+18443596982' },
+  ]);
+
+  /*
+   * The templated link goes away when the field does, rather than shipping as
+   * `?id=`. A URL with an empty parameter is worse than a missing link: it
+   * looks like it worked, and the page it lands on is entitled to interpret
+   * the blank however it likes.
+   */
+  assert.deepEqual(
+    overlayLinks(links, {}).map((link) => link.label),
+    ['Request authorisation', 'Call'],
+  );
+
+  // Values are escaped on the way into the URL, and only navigable schemes
+  // survive - the catalogue is ours, but this is still data going into an href.
+  assert.equal(
+    overlayLinks([links[1]], { APT1_FAAID: 'a b&c' })[0].href,
+    'https://example.gov/a?id=a%20b%26c',
+  );
+  assert.deepEqual(overlayLinks([links[3]], {}), []);
 });
 
 test('style: a combined overlay contributes one layer per source', () => {
