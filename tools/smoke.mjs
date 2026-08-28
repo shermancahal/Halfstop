@@ -858,11 +858,34 @@ console.log('\nThe panel waits to be asked, and opens on Layers');
   await fresh.waitForTimeout(900);
   check('it starts closed', await fresh.locator('#panel').isHidden(), true);
   check('and the way to open it is on screen', await fresh.locator('#panel-toggle').isVisible(), true);
+  /*
+   * The toggle and the search bar are two controls, not one.
+   *
+   * They sit at the same height in the same surface with the same shadow, and
+   * were close enough to read as a single segmented control - reported as "the
+   * hamburger is part of the search". Measured while the panel is closed,
+   * which is the only state in which both are on screen: opening it hides the
+   * toggle, and an earlier draft of this check clicked it a second time and
+   * waited a minute for a button that was no longer there.
+   */
+  const spacing = await fresh.evaluate(() => {
+    const button = document.getElementById('panel-toggle').getBoundingClientRect();
+    const search = document.getElementById('map-search').getBoundingClientRect();
+    return { gap: Math.round(search.left - button.right), buttonRight: Math.round(button.right), searchLeft: Math.round(search.left), round: getComputedStyle(document.getElementById('panel-toggle')).borderRadius };
+  });
+  check('there is clear air between them', spacing.gap >= 12, true);
+  check('and the toggle is round, not another pill', /50%|19px/.test(spacing.round), true);
+
   await fresh.locator('#panel-toggle').click();
   await fresh.waitForTimeout(200);
   check('opening it shows the panel', await fresh.locator('#panel').isVisible(), true);
   check('on the Layers tab', await fresh.locator('#tab-layers').isVisible(), true);
   check('not on Folders', await fresh.locator('#tab-folders').isHidden(), true);
+
+  // The two floating buttons that duplicated the panel's own tabs are gone.
+  check('no duplicate Layers button floats over the map',
+    await fresh.locator('#quick-layers').count(), 0);
+  check('nor a duplicate Folders one', await fresh.locator('#quick-folders').count(), 0);
   await fresh.close();
 }
 

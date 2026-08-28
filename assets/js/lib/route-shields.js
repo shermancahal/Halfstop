@@ -70,6 +70,16 @@ export const REF_DESIGNS = ['scenic', 'forest'];
  */
 const SHIELD_IMAGE_ROOT = 'assets/shields';
 
+/*
+ * The brown of a recreation sign, declared here rather than inside COLOURS.
+ *
+ * `shieldBlankFor` needs it and is defined two hundred lines above COLOURS -
+ * which works, since it is only read when the function is called, and is
+ * exactly the arrangement that produced a ReferenceError in the overlay code
+ * earlier. Not worth relying on twice.
+ */
+const RECREATION_BROWN = '#5f3a22';
+
 /**
  * The blank for a design, if there is one.
  *
@@ -79,12 +89,95 @@ const SHIELD_IMAGE_ROOT = 'assets/shields';
  * exists; a state with no blank at all returns null and gets drawn instead.
  */
 export function shieldBlankFor(design, length) {
-  const code = design.startsWith('st-') ? design.slice(3) : design;
+  /*
+   * Scenic borrows the US blank and has it recoloured.
+   *
+   * Drawing the shield on a canvas instead gave a shape that was recognisably
+   * the US outline and not much else - the notch between the peaks closes up
+   * at twenty pixels and the curves go lumpy. The real blank is already here,
+   * already the right silhouette, and already measured in SHIELD_BOXES, so the
+   * only thing it needs is a different colour in its field.
+   *
+   * Borrowing the box matters as much as borrowing the picture: the number
+   * lands where a US route's number lands, because it is the same sign.
+   */
+  const source = design === 'scenic' ? 'us' : design;
+  const code = source.startsWith('st-') ? source.slice(3) : source;
   const available = SHIELD_IMAGES[code];
   if (!available) return null;
 
   const variant = length >= 3 && available.includes('wide') ? 'wide' : 'narrow';
-  return { code, variant, url: `${SHIELD_IMAGE_ROOT}/${code}-${variant}.png`, key: `${code}-${variant}` };
+  return {
+    code,
+    variant,
+    url: `${SHIELD_IMAGE_ROOT}/${code}-${variant}.png`,
+    key: `${code}-${variant}`,
+    tint: design === 'scenic' ? RECREATION_BROWN : null,
+  };
+}
+
+/**
+ * Repaint a blank's field without touching its outline.
+ *
+ * The blanks are a white field, a black outline and transparency outside. Only
+ * the field changes: keeping the outline is what stops a brown shield on a
+ * brown-green basemap dissolving into it, and it is what the real sign does.
+ *
+ * Falls back to the untouched bitmap if a canvas is not available, because a
+ * white scenic shield is a wrong colour and a missing one is a missing road.
+ */
+export function tintBlank(bitmap, colour) {
+  try {
+    const canvas = typeof OffscreenCanvas === 'function'
+      ? new OffscreenCanvas(bitmap.width, bitmap.height)
+      : Object.assign(document.createElement('canvas'), { width: bitmap.width, height: bitmap.height });
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return bitmap;
+    ctx.drawImage(bitmap, 0, 0);
+    const image = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
+    tintPixels(image.data, colour);
+    ctx.putImageData(image, 0, 0);
+    return image;
+  } catch {
+    return bitmap;
+  }
+}
+
+/**
+ * The recolouring itself, over a raw RGBA buffer.
+ *
+ * Separated from the canvas so it can be run against the real blank in a test
+ * rather than only in a browser - the question "does this actually come out
+ * brown, with its outline still there" is answerable from the pixels alone,
+ * and a canvas is only how they are obtained.
+ *
+ * Mutates in place, which is what putImageData wants back.
+ */
+export function tintPixels(data, colour) {
+  const [r, g, b] = [1, 3, 5].map((at) => parseInt(colour.slice(at, at + 2), 16));
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] < 8) continue;
+    /*
+     * Two things keep the outline black, and either one would do.
+     *
+     * The early-out skips pixels that are already dark. The blend weights by
+     * lightness, so a black pixel contributes none of the new colour even if
+     * it does reach here. Removing either alone changes nothing - measured,
+     * not assumed - and removing both paints the outline brown, which loses
+     * the shield's edge against a brown-green basemap.
+     *
+     * Both are kept because they say different things. The early-out is the
+     * intent: the outline is not ours to repaint. The blend is what makes the
+     * boundary between them smooth rather than a staircase, since the pixels
+     * in between are antialiasing and want partial colour.
+     */
+    const light = Math.min(data[i], data[i + 1], data[i + 2]) / 255;
+    if (light <= 0.02) continue;
+    data[i] = Math.round(data[i] * (1 - light) + r * light);
+    data[i + 1] = Math.round(data[i + 1] * (1 - light) + g * light);
+    data[i + 2] = Math.round(data[i + 2] * (1 - light) + b * light);
+  }
+  return data;
 }
 
 /** Whether this design is drawn from a blank rather than on a canvas. */
@@ -296,8 +389,8 @@ const COLOURS = {
   circle: { fill: '#ffffff', stroke: '#3d3225', text: '#1c1c1c' },
   default: { fill: '#fbf7ee', stroke: '#64513b', text: '#3a3026' },
   // The brown of a recreation sign, which is the whole point of both.
-  scenic: { fill: '#5f3a22', stroke: '#ffffff', text: '#ffffff' },
-  forest: { fill: '#5f3a22', stroke: '#ffffff', text: '#ffffff' },
+  scenic: { fill: RECREATION_BROWN, stroke: '#ffffff', text: '#ffffff' },
+  forest: { fill: RECREATION_BROWN, stroke: '#ffffff', text: '#ffffff' },
 };
 
 /**
@@ -724,8 +817,9 @@ export function rasterizeShield(design, length, { pixelRatio = 2 } = {}) {
     ctx.lineWidth = 1;
     ctx.stroke();
   } else if (design === 'scenic') {
-    // The US shield outline in brown: same shape, so a scenic route still
-    // reads as the route it is, and the colour says what kind.
+    // Only reached when the blank could not be fetched. The tinted blank is
+    // the real answer; this keeps a scenic road from losing its shield when
+    // the network does not cooperate.
     usRoutePath(ctx, width, HEIGHT);
     ctx.fillStyle = colours.fill;
     ctx.fill();
@@ -912,7 +1006,9 @@ export function shieldTextOffsetExpression(state = '', length = 2, shiftPx = 0, 
   return ['let', 'chosen', override,
     ['case',
       ['==', ['var', 'chosen'], 'forest'], ['literal', shift([0, -0.04], 'forest')],
-      ['==', ['var', 'chosen'], 'scenic'], ['literal', shift(national('us'), 'us')],
+      // Scenic is the US blank recoloured, so its number sits in the US
+      // blank's measured box rather than at a hand-picked offset.
+      ['==', ['var', 'chosen'], 'scenic'], ['literal', shift(shieldTextOffset('scenic', length), 'scenic')],
       byShield]];
 }
 
@@ -944,7 +1040,7 @@ export async function loadShieldBlank(map, id, { base = '', pixelRatio = BLANK_P
     // A style swap between the request and its answer would make this an
     // orphan; GL throws on a duplicate id, so check again on arrival.
     if (map.hasImage?.(id)) return true;
-    map.addImage(id, bitmap, { pixelRatio });
+    map.addImage(id, blank.tint ? tintBlank(bitmap, blank.tint) : bitmap, { pixelRatio });
     return true;
   } catch {
     // The drawn fallback covers this: a missing blank is a plainer shield, not

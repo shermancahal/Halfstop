@@ -682,8 +682,6 @@ function cacheDom() {
   dom.buildStamp = document.getElementById('build-stamp');
   dom.placeSearch = document.getElementById('place-search');
   dom.placeResults = document.getElementById('place-results');
-  dom.quickLayers = document.getElementById('quick-layers');
-  dom.quickFolders = document.getElementById('quick-folders');
 }
 
 /* ------------------------------------------------------------------ URL state */
@@ -730,8 +728,14 @@ function wirePanel() {
     if (event.key === 'Escape' && !dom.panel.hidden && isNarrow()) setPanelOpen(false);
   });
   wireSettingsMenu();
-  dom.quickLayers?.addEventListener('click', () => openTab('layers'));
-  dom.quickFolders?.addEventListener('click', () => openTab('folders'));
+  /*
+   * The floating Layers and Folders buttons are gone.
+   *
+   * They were a second way into two tabs that the panel's own tab strip
+   * already offers, sitting in the corner of the map and taking a strip of it
+   * for the privilege. One route to a thing is enough; the toggle opens the
+   * panel and the tabs do the rest.
+   */
   dom.waypointSearch?.addEventListener('input', (event) => {
     state.waypointQuery = event.target.value;
     state.waypointPage = 0;

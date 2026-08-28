@@ -24,7 +24,7 @@ import { inflateSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
-import { STATE_SHIELDS } from '../assets/js/lib/route-shields.js';
+import { STATE_SHIELDS, tintPixels, shieldBlankFor } from '../assets/js/lib/route-shields.js';
 import { SHIELD_BOXES } from '../assets/js/lib/shield-boxes.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -148,4 +148,57 @@ test('shields: the number is legible on its own blank', () => {
 
   assert.ok(checked.length > 40, `only ${checked.length} blanks were actually examined`);
   assert.deepEqual(failures, [], `numbers that would not be readable:\n  ${failures.join('\n  ')}`);
+});
+
+
+test('shields: the scenic blank comes out brown with its outline intact', () => {
+  /*
+   * Scenic is the US blank recoloured rather than a shield drawn from scratch,
+   * because the drawn one was recognisably the US outline and not much else -
+   * the notch between the peaks closes up at twenty pixels.
+   *
+   * Two things have to be true of the recolouring and neither is obvious from
+   * reading it: the field has to end up dark enough for white numerals, and
+   * the outline has to survive, or a brown shield dissolves into a brown-green
+   * basemap.
+   */
+  const blank = shieldBlankFor('scenic', 2);
+  assert.equal(blank.code, 'us', 'scenic has to borrow the US blank, not one of its own');
+  assert.ok(blank.tint, 'and has to ask for a tint');
+
+  const png = decode(path.join(SHIELDS, `${blank.key}.png`));
+  assert.ok(png, 'the US blank did not decode');
+
+  // Rebuild a flat RGBA buffer the way a canvas would hand one over.
+  const data = new Uint8ClampedArray(png.width * png.height * 4);
+  for (let y = 0; y < png.height; y += 1) {
+    for (let x = 0; x < png.width; x += 1) {
+      const [r, g, b, a] = png.at(x, y);
+      const i = (y * png.width + x) * 4;
+      data[i] = r; data[i + 1] = g; data[i + 2] = b; data[i + 3] = a;
+    }
+  }
+
+  const before = { field: 0, outline: 0 };
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] < 8) continue;
+    if (Math.min(data[i], data[i + 1], data[i + 2]) / 255 <= 0.02) before.outline += 1;
+    else before.field += 1;
+  }
+  assert.ok(before.field > 500 && before.outline > 100, 'the blank is not shaped as expected');
+
+  tintPixels(data, blank.tint);
+
+  const middle = ((Math.floor(png.height / 2)) * png.width + Math.floor(png.width / 2)) * 4;
+  const field = luminance([data[middle], data[middle + 1], data[middle + 2]]);
+  assert.ok(field < 120, `the number field came out at luminance ${Math.round(field)}, too light for white numerals`);
+
+  let outline = 0;
+  let transparent = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] < 8) { transparent += 1; continue; }
+    if (Math.min(data[i], data[i + 1], data[i + 2]) / 255 <= 0.02) outline += 1;
+  }
+  assert.equal(outline, before.outline, 'the outline was repainted along with the field');
+  assert.ok(transparent > 100, 'the area outside the shield stopped being transparent');
 });
