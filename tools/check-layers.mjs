@@ -341,6 +341,16 @@ async function probe(entry) {
         // token-gated probe fails from CI with a 403 that says nothing about
         // whether the endpoint works, which is worse than not probing at all.
         Referer: `${ORIGIN}/Map/`,
+        /*
+         * A candidate may ask for part of a file.
+         *
+         * PMTiles is one archive read a slice at a time, which is the whole
+         * reason it works from static hosting - and a probe that omits the
+         * Range header asks for the entire planet and times out. That is
+         * exactly what happened: "unreachable" said nothing about Protomaps
+         * and everything about the request.
+         */
+        ...(entry.range ? { Range: entry.range } : {}),
       },
       redirect: 'follow',
       // Thirty seconds, not ten. The USGS contour and transport services take

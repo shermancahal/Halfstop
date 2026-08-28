@@ -681,8 +681,9 @@
   {
     "id": "pm:pmtiles-header",
     "expect": "data",
-    "note": "Whether a PMTiles archive can be read from static hosting by a browser: the first bytes of Protomaps' public build, asked with a Range header. Three things have to be true at once - it answers a partial request, it sends CORS, and the bytes really are PMTiles v3 - and only the third is visible from the documentation.",
-    "find": "PMTiles|\\bPMT\\b",
+    "range": "bytes=0-16383",
+    "note": "The first 16kB of Protomaps' public build, asked as a partial request. The previous attempt omitted the Range header, which asked for the entire planet archive and timed out - reported as unreachable, which said nothing about Protomaps and everything about the request. Three things have to hold at once: a 206 comes back, CORS is sent, and the bytes begin with the PMTiles magic.",
+    "find": "PMTiles",
     "url": "https://demo-bucket.protomaps.com/v4.pmtiles"
   },
   {
@@ -693,10 +694,17 @@
     "url": "https://registry.npmjs.org/@protomaps/basemaps/latest"
   },
   {
-    "id": "pm:schema-fields",
+    "id": "pm:basemap-versions",
     "expect": "data",
-    "note": "The compiled style itself, read for the source-layer names it references. This answers the question that decides the whole port - whether roads carry a ref, and what the layer holding them is called - by reading what Protomaps actually ships rather than what a wiki says about it.",
-    "find": "\"source-layer\"\\s*:\\s*\"[a-z_]{2,20}\"|[\"']kind[\"']|[\"']ref[\"']|[\"']network[\"']",
-    "url": "https://unpkg.com/@protomaps/basemaps@5.0.0/dist/basemaps.json"
+    "note": "What versions of the basemap package exist, and what each one ships. Asking unpkg for 5.0.0 returned a 404 - a version I picked rather than read - so this asks the registry which versions are real before anything is fetched from one.",
+    "find": "\"(latest|[0-9]+\\\\.[0-9]+\\\\.[0-9]+)\"\\\\s*:",
+    "url": "https://registry.npmjs.org/@protomaps/basemaps"
+  },
+  {
+    "id": "pm:package-files",
+    "expect": "data",
+    "note": "The file list of whichever version is current, so the next probe asks for a path that exists instead of one that sounds right.",
+    "find": "\"(?:name|main|module|types|files)\"\\\\s*:\\\\s*(?:\"[^\"]{0,80}\"|\\\\[)",
+    "url": "https://unpkg.com/@protomaps/basemaps/package.json"
   }
 ]
