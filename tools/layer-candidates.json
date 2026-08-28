@@ -772,10 +772,10 @@
   },
   {
     "id": "pm:doc-pois-kinds",
-    "expect": "page",
-    "url": "https://docs.protomaps.com/basemaps/layers",
-    "find": "([\\s\\S]{260}\\bpeak\\b)",
-    "note": "Where a summit lives. Anchored inside id=\"pois\" this matched only 'attraction', and anchored inside id=\"places\" it matched the settlement kinds and no peak - so peak is documented somewhere neither window covered. Same treatment: print the surrounding text and read it, rather than guessing at a third section."
+    "expect": "data",
+    "url": "https://unpkg.com/@protomaps/basemaps@5.7.2/src/labels.ts",
+    "find": "([\\s\\S]{200}\"peak\")",
+    "note": "Which source-layer a summit label reads. Anchored searches of the documentation put peak in neither pois nor places, and the reason is that the page does not group kinds by layer at all. labels.ts is where Protomaps' own style draws them, so it has to name the layer."
   },
   {
     "id": "pm:doc-places-kinds",
@@ -786,16 +786,16 @@
   },
   {
     "id": "pm:doc-landuse-kinds",
-    "expect": "page",
-    "url": "https://docs.protomaps.com/basemaps/layers",
-    "find": "([\\s\\S]{260}national_park)",
-    "note": "Which layer a national park belongs to, read by printing the page around the value rather than by assuming where it is. The previous version anchored inside an id=\"landuse\" section and found nothing at all - not even 'park' - which says the kinds are not listed per layer the way that assumed. There is an id=\"kinds\" heading on the page, so one table for all of them is the likelier shape, and this shows it."
+    "expect": "data",
+    "url": "https://unpkg.com/@protomaps/basemaps@5.7.2/src/base_layers.ts",
+    "find": "([\\s\\S]{200}national_park)",
+    "note": "Which source-layer a national park is drawn from. The documentation page cannot answer this: its kinds section is one flat alphabetical list of every value across every layer, with no layer column - which is what the last probe's context dump showed. The style source has the association, because every layer there names its source-layer and its filter together."
   },
   {
     "id": "pm:doc-water-named",
-    "expect": "page",
-    "url": "https://docs.protomaps.com/basemaps/layers",
-    "find": "([\\s\\S]{260}\\briverbank\\b)",
-    "note": "Whether water features carry their names. The anchored version returned the water kinds but never the word 'name', which on a page documenting a layer's attributes is either a real absence or a sign the window was reading the wrong part of the page. Printing the context around a water kind settles which."
+    "expect": "data",
+    "url": "https://unpkg.com/@protomaps/basemaps@5.7.2/src/labels.ts",
+    "find": "\"source-layer\":\\s*\"([a-z_]{2,24})\"|sourceLayer:\\s*\"([a-z_]{2,24})\"",
+    "note": "Every source-layer Protomaps' own label style reads. Two label layers here - the names of lakes and rivers, and the names of summits - are dropped because Mapbox puts them in natural_label and this schema has no such layer. This says which layers do carry names, which is the same question asked without guessing at a section heading."
   }
 ]
