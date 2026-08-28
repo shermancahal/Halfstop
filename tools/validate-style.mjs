@@ -16,6 +16,7 @@ import { createRequire } from 'node:module';
 import { bywaysStyle, shieldLayerUpdates } from '../assets/js/lib/byways-style.js';
 import { runtimeLayers, runtimeSources } from '../assets/js/lib/runtime-layers.js';
 import { buildRasterStyle, styleHasGlyphs } from '../assets/js/lib/engine.js';
+import { OVERLAYS, STATE_GROUP } from '../assets/js/config.js';
 
 const require = createRequire(import.meta.url);
 
@@ -271,6 +272,40 @@ for (const [what, [value, spec]] of Object.entries(runtimeExpressions)) {
   }
 }
 
+/*
+ * Every fillBy actually picks its colour.
+ *
+ * The viewer builds one `match` per fillBy, and a `match` compares like with
+ * like. Object keys are strings, so a fillBy over a numeric column - the FAA
+ * grid's CEILING - compiled perfectly and evaluated to the fallback for every
+ * single feature. Nothing in a compile check can see that: the expression is
+ * valid, it just answers the wrong colour.
+ *
+ * So this evaluates it, against a feature carrying the value the service really
+ * sends, and insists on the colour the config asked for.
+ */
+const fillByOverlays = [...OVERLAYS, ...(STATE_GROUP?.overlays || STATE_GROUP || [])]
+  .filter((overlay) => overlay?.query?.fillBy);
+for (const overlay of fillByOverlays) {
+  const by = overlay.query.fillBy;
+  const colour = overlay.query.color;
+  const tint = ['match', ['coalesce', ['to-string', ['get', by.field]], ''],
+    ...Object.entries(by.colors).flatMap(([value, hex]) => [value, hex]), by.fallback || colour];
+  for (const [value, hex] of Object.entries(by.colors)) {
+    // The service sends a number as a number; JSON.parse gives it back as one
+    // when the key is numeric, and as the original string when it is not.
+    const raw = /^-?\d+(\.\d+)?$/.test(value) ? Number(value) : value;
+    const got = evaluate(tint, { properties: { [by.field]: raw } }, 'color');
+    const rgb = got && typeof got === 'object' ? got.toString() : String(got);
+    const want = expression.createExpression(hex, { type: 'color' });
+    const wantRgb = want.result === 'success'
+      ? want.value.evaluate({ zoom: 12 }, {}).toString() : hex;
+    if (rgb !== wantRgb) {
+      all.push(['fillBy', { message: `${overlay.id}: ${by.field}=${JSON.stringify(raw)} painted ${rgb}, expected ${wantRgb} (${hex})` }]);
+    }
+  }
+}
+
 if (all.length) {
   console.error(`\n${all.length} validation error(s):`);
   for (const [where, error] of all) console.error(`  [${where}] ${error.message}`);
@@ -279,4 +314,5 @@ if (all.length) {
 
 console.log(`Shields — 23-60 splits into ${evaluate(layerBy('road-shield-first').layout['text-field'], DUPLEX)} and ${evaluate(layerBy('road-shield-second').layout['text-field'], DUPLEX)}`);
 console.log(`Runtime paint — ${Object.keys(runtimeExpressions).length} overlay expressions compile`);
+console.log(`fillBy — ${fillByOverlays.length} layers pick the colour they asked for`);
 console.log('Valid.');

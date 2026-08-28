@@ -566,6 +566,55 @@ export const OVERLAYS = [
     attribution: 'Airspace © <a href="https://www.faa.gov/">FAA</a>',
   },
   {
+    id: 'faa-uas-grid',
+    legend: [
+      { color: '#B33A3A', label: '0 ft — authorisation needed' },
+      { color: '#C9704A', label: '100 ft' },
+      { color: '#C9A44A', label: '200 ft' },
+      { color: '#7FA84A', label: '300 ft' },
+      { color: '#4A8FA8', label: '400 ft' },
+    ],
+    group: 'Airspace',
+    name: 'Drone ceilings',
+    description: 'How high a drone may fly near an airport, in feet above ground. Source: FAA',
+    /*
+     * The UAS Facility Map: the grid LAANC reads when it approves a flight.
+     *
+     * A ceiling of 0 does not mean the sky is closed, it means nothing is
+     * pre-approved there and a request has to go to the FAA. That distinction
+     * is the whole point of the layer and it is in the legend rather than left
+     * to the colour.
+     *
+     * Outside controlled airspace there is no grid at all, which is not a
+     * failure - it is the answer. Reading it as one cost a round: a box drawn
+     * in open country east of Lexington came back empty and looked exactly
+     * like a dead service, until a count with no geometry filter returned
+     * 370,441 rows and a box over Blue Grass Airport returned a ceiling.
+     *
+     * Nothing here is a flight authorisation. It is the same grid the FAA
+     * publishes, drawn on a different map.
+     */
+    query: {
+      url: 'https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/FAA_UAS_FacilityMap_Data_V5/FeatureServer/0/query'
+        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
+        + '&spatialRel=esriSpatialRelIntersects&outFields=CEILING%2CUNIT%2CAPT1_NAME%2CAPT1_FAAID%2CAPT1_LAANC%2CAPT2_NAME%2CARPT_COUNT'
+        + '&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=1000&f=geojson',
+      // The grid is dense - a metro area is hundreds of cells - so it stays
+      // off the map until the view is small enough for the cells to read.
+      minzoom: 10,
+      color: '#4A8FA8',
+      label: 'CEILING',
+      fillBy: {
+        field: 'CEILING',
+        colors: { 0: '#B33A3A', 100: '#C9704A', 200: '#C9A44A', 300: '#7FA84A', 400: '#4A8FA8' },
+        fallback: '#6E8CA8',
+      },
+    },
+    opacity: 0.4,
+    enabled: false,
+    attribution: 'UAS facility map © <a href="https://www.faa.gov/">FAA</a>',
+  },
+  {
     id: 'faa-sectional',
     group: 'Airspace',
     name: 'VFR sectional',

@@ -512,8 +512,9 @@
   {
     "id": "canopy:mrlc-tile",
     "expect": "image",
-    "note": "A real GetMap over the Daniel Boone in eastern Kentucky, drawn the exact way the browser will draw it. A layer name in a capabilities list proves the name exists; only a tile with pixels in it proves the layer draws. Both of those questions have been answered wrong here by asking only the first.",
-    "url": "https://www.mrlc.gov/geoserver/mrlc_display/wms?service=WMS&version=1.3.0&request=GetMap&layers=mrlc_NLCD_Tree_Canopy&styles=&crs=EPSG:3857&bbox=-9361969.2,4495009.3,-9339705.3,4523072.3&width=256&height=256&format=image/png&transparent=true"
+    "note": "The lower-forty-eight canopy layer, by its real name, drawn the way the browser will draw it. The previous attempt used mrlc_NLCD_Tree_Canopy - a name that is genuinely in the capabilities list and still answers a GetMap with a ServiceExceptionReport. Appearing in a list and drawing pixels are different questions, which is the whole reason this probe exists rather than a name lookup.",
+    "find": "(?:ServiceException[^>]*>|<ServiceException[^>]*>)?\\s*([^<]{10,200})",
+    "url": "https://www.mrlc.gov/geoserver/mrlc_display/wms?service=WMS&version=1.3.0&request=GetMap&layers=nlcd_tcc_conus_2021_v2021-4&styles=&crs=EPSG:3857&bbox=-9361969.2,4495009.3,-9339705.3,4523072.3&width=256&height=256&format=image/png&transparent=true"
   },
   {
     "id": "faa:uasfm-layers",
@@ -535,5 +536,19 @@
     "note": "A tight box over Blue Grass Airport itself. The grid only exists under controlled airspace, and the previous box sat east of Lexington in open country where the correct answer really is nothing. Class C came back over that same box, so this asks the grid where the airport actually is.",
     "find": "\"(?:CEILING|APT1_NAME|APT1_LAANC)\"\\s*:\\s*(?:\"[^\"]{0,40}\"|\\d+)",
     "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/FAA_UAS_FacilityMap_Data_V5/FeatureServer/0/query?where=1%3D1&geometry=-84.68,37.94,-84.50,38.08&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=6&f=json"
+  },
+  {
+    "id": "canopy:mrlc-tile-2019",
+    "expect": "image",
+    "note": "The same request against an earlier year. If 2021 fails and 2019 draws, the problem is that one layer rather than the service, and the layer choice is a one-word change instead of another round of guessing.",
+    "find": "(?:ServiceException[^>]*>|<ServiceException[^>]*>)?\\s*([^<]{10,200})",
+    "url": "https://www.mrlc.gov/geoserver/mrlc_display/wms?service=WMS&version=1.3.0&request=GetMap&layers=nlcd_tcc_conus_2019_v2021-4&styles=&crs=EPSG:3857&bbox=-9361969.2,4495009.3,-9339705.3,4523072.3&width=256&height=256&format=image/png&transparent=true"
+  },
+  {
+    "id": "canopy:mrlc-why",
+    "expect": "data",
+    "note": "The failing request kept whole, so the ServiceException says in its own words what it objected to. The first failure was truncated to three hundred characters of XML preamble, which named the format of the complaint and not the complaint.",
+    "find": "<ServiceException[^>]*>\\s*([^<]{1,300})",
+    "url": "https://www.mrlc.gov/geoserver/mrlc_display/wms?service=WMS&version=1.3.0&request=GetMap&layers=mrlc_NLCD_Tree_Canopy&styles=&crs=EPSG:3857&bbox=-9361969.2,4495009.3,-9339705.3,4523072.3&width=256&height=256&format=image/png&transparent=true"
   }
 ]

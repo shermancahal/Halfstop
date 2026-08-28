@@ -4841,8 +4841,17 @@ function addQueryOverlay(overlay, opacity) {
   };
 
   const by = overlay.query.fillBy;
+  /*
+   * The keys are strings because JavaScript object keys always are.
+   *
+   * A `match` compares like with like: a label of "400" never matches an input
+   * of the number 400, so a fillBy over a numeric column - the FAA grid's
+   * CEILING in feet - would paint every cell the fallback colour and look for
+   * all the world like a colour scheme that had simply been chosen badly.
+   * Coercing the input is what makes the two sides comparable.
+   */
   const tint = by
-    ? ['match', ['coalesce', ['get', by.field], ''],
+    ? ['match', ['coalesce', ['to-string', ['get', by.field]], ''],
       ...Object.entries(by.colors).flatMap(([value, hex]) => [value, hex]), by.fallback || colour]
     : null;
 
