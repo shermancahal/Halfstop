@@ -8878,7 +8878,11 @@ function renderAccount() {
         }),
         el('button', {
           class: 'button button-ghost button-small', type: 'button', text: 'Sign out',
-          onclick: () => account.signOut(),
+          // `run` belongs to the signed-out form further down and is not in
+          // scope here; this branch has returned before it exists. signOut now
+          // swallows a failed server call and clears the device either way, so
+          // the only thing left to catch is the unexpected.
+          onclick: () => account.signOut().catch((error) => toast(error.message, { tone: 'error' })),
         }),
       ]),
     );
