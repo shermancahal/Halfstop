@@ -774,8 +774,8 @@
     "id": "pm:doc-pois-kinds",
     "expect": "page",
     "url": "https://docs.protomaps.com/basemaps/layers",
-    "find": "(?<=id=\"pois\"(?:(?!id=\")[\\s\\S]){0,8000})\\b(peak|volcano|saddle|station|hospital|school|attraction)\\b",
-    "note": "Whether a summit is a POI here. The layer list came back as earth, landcover, landuse, water, roads, transit, places, pois, boundaries, buildings - no physical_point and no natural layer at all, so the peak kind the previous probe found has to live in one of those. The search is anchored inside the pois section and stopped at the next heading, so a match cannot have come from the section after it."
+    "find": "([\\s\\S]{260}\\bpeak\\b)",
+    "note": "Where a summit lives. Anchored inside id=\"pois\" this matched only 'attraction', and anchored inside id=\"places\" it matched the settlement kinds and no peak - so peak is documented somewhere neither window covered. Same treatment: print the surrounding text and read it, rather than guessing at a third section."
   },
   {
     "id": "pm:doc-places-kinds",
@@ -788,14 +788,14 @@
     "id": "pm:doc-landuse-kinds",
     "expect": "page",
     "url": "https://docs.protomaps.com/basemaps/layers",
-    "find": "(?<=id=\"landuse\"(?:(?!id=\")[\\s\\S]){0,8000})\\b(national_park|protected_area|nature_reserve|forest|park|military)\\b",
-    "note": "Which layer a national park is drawn from. The Mapbox style paints landuse_overlay where class is national_park, and Protomaps has one landuse layer rather than a base and an overlay - so the kind exists, and this confirms landuse carries it."
+    "find": "([\\s\\S]{260}national_park)",
+    "note": "Which layer a national park belongs to, read by printing the page around the value rather than by assuming where it is. The previous version anchored inside an id=\"landuse\" section and found nothing at all - not even 'park' - which says the kinds are not listed per layer the way that assumed. There is an id=\"kinds\" heading on the page, so one table for all of them is the likelier shape, and this shows it."
   },
   {
     "id": "pm:doc-water-named",
     "expect": "page",
     "url": "https://docs.protomaps.com/basemaps/layers",
-    "find": "(?<=id=\"water\"(?:(?!id=\")[\\s\\S]){0,8000})\\b(ocean|lake|river|riverbank|reservoir|playa|name)\\b",
-    "note": "Whether the water layer carries the names of lakes and rivers or only their shapes. Mapbox puts water names in natural_label, which does not exist here; the two label layers that read it are dropped until this says where those names are."
+    "find": "([\\s\\S]{260}\\briverbank\\b)",
+    "note": "Whether water features carry their names. The anchored version returned the water kinds but never the word 'name', which on a page documenting a layer's attributes is either a real absence or a sign the window was reading the wrong part of the page. Printing the context around a water kind settles which."
   }
 ]

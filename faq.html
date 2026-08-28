@@ -152,35 +152,45 @@
         stays sharp when you rotate or zoom between levels.
       </p>
       <p>
-        The geometry it draws comes from Mapbox. That has two consequences.
-        Viewing it uses a Mapbox allowance, which is metered; and Mapbox reserve
+        Where that geometry comes from decides everything else. From Mapbox it has
+        two consequences: viewing it uses a metered allowance, and Mapbox reserve
         offline storage of their data to their own native toolkit, which this app
-        is not built on. <strong>So the map that looks the best is the one you
-        cannot take out of signal</strong> — which is the wrong way round for a
-        back-roads atlas.
+        is not built on. <strong>So the best-looking map was the one you could not
+        take out of signal</strong> — which is the wrong way round for a back-roads
+        atlas, and is what the section below is about fixing.
       </p>
 
-      <h3>What is being done about it</h3>
+      <h3>The second foundation</h3>
       <p>
-        The cartography is ours; only the geometry underneath is rented. The plan
-        is to move Byways Topo onto an OpenStreetMap-derived vector basemap we host
-        ourselves, distributed as a single archive that a browser can read a slice
-        of at a time. Same drawing, different foundation — no metered allowance,
-        and a map that can be downloaded like any other.
+        The cartography is ours; only the geometry underneath is rented. So Byways
+        Topo now knows how to draw from a second source: an OpenStreetMap-derived
+        vector basemap we host ourselves, distributed as a single archive the
+        browser reads a slice of at a time. Same drawing, different foundation — no
+        metered allowance, and a map that is a <em>file</em>, which is what makes
+        downloading a region a sentence that can mean something.
       </p>
       <p>
-        It will not be pixel-identical. The two sources describe the world with
-        different vocabularies, and some things Mapbox supplies ready-made — the
-        contour lines, and the hints that say which shape of shield a numbered road
-        wears — have to be rebuilt or sourced elsewhere. Where a difference is
-        visible, it will be noted here rather than quietly absorbed.
+        Two things came out better than expected. The road hierarchy survives
+        intact — the eleven weights that let you read this map at speed, from
+        interstate down to footpath. And the route shields stop guessing: Mapbox
+        describes a marker's shape and leaves the question of who numbered the road
+        to be worked out from wherever the map happens to be looking, which is
+        wrong within a few miles of a state line. The new source names the network
+        outright.
       </p>
       <p>
-        Mapbox is likely to stay available as an option for anyone who prefers it,
-        and if this app ever draws natively on the phone rather than in a web view,
-        that option could carry proper offline downloads too. The point of the
-        change is not to leave Mapbox behind — it is that the default should not
-        cost money to look at or stop working where there is no signal.
+        Some things are genuinely lost, and they are listed rather than absorbed.
+        There are no contour lines and no hillshade in the new source — both are
+        already available here as their own overlays. There is no surface field at
+        all, so the dashed <em>unpaved</em> marking cannot be drawn from it, which
+        is a real loss on a map that describes itself as tracks and surfaces. And
+        nothing marks a road carrying two route numbers, so a doubled road gets one
+        shield rather than two.
+      </p>
+      <p>
+        Mapbox stays available. The point of the change was never to leave it
+        behind — it is that the default should not cost money to look at, or stop
+        working where there is no signal.
       </p>
     </section>
 
