@@ -1115,7 +1115,24 @@ check('an area layer gets no road casing', shapes.casing, 'absent');
 // the layer type.
 const slider = page.locator('.layer-row', { hasText: /^Wildfire/ })
   .locator('xpath=following-sibling::*[1]').locator('input[type=range]');
-await slider.fill('30').catch(() => {});
+/*
+ * Driven through the element rather than through Playwright's fill().
+ *
+ * `fill()` on an input[type=range] does not reliably move it, and the call
+ * here was wrapped in a catch that swallowed the failure - so for as long as
+ * this check has existed it has been reading the opacity the layer was created
+ * with. It passed because that happened to be 0.27 and the assertion was
+ * "under 0.3". Hatching raised the starting value and the check finally failed,
+ * which is the first time it has said anything at all.
+ */
+await page.evaluate(() => {
+  const row = [...document.querySelectorAll('.layer-row')]
+    .find((element) => /^Wildfire/.test(element.textContent || ''));
+  const range = row?.nextElementSibling?.querySelector('input[type=range]');
+  if (!range) throw new Error('no opacity slider for Wildfire');
+  range.value = '30';
+  range.dispatchEvent(new Event('input', { bubbles: true }));
+});
 await page.waitForTimeout(300);
 const paints = await page.evaluate(() => {
   const map = window.__map;
@@ -1128,7 +1145,9 @@ const paints = await page.evaluate(() => {
 check('the fill is dimmed as a fill', paints.fill.includes('fill-opacity'), true);
 check('and never as a raster', paints.fill.includes('raster-opacity'), false);
 check('the outline is dimmed as a line', paints.line.includes('line-opacity'), true);
-check('and the slider actually moved it', paints.fillValue < 0.3, true);
+// The exact value the slider asks for - 30% through opacityPaint's fill
+// branch - so a layer left at its creation opacity cannot satisfy this.
+check('and the slider actually moved it', Number(paints.fillValue?.toFixed(3)), 0.135);
 
 // A raster basemap bakes its overlays into the style document, and a queried
 // overlay cannot be baked into anything. It has to be added on that path too,
