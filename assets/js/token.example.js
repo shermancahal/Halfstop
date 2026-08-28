@@ -48,3 +48,32 @@ window.ABMAP_MAPBOX_TOKEN_APP = '';
  */
 window.ABMAP_SUPABASE_URL = '';
 window.ABMAP_SUPABASE_KEY = '';
+
+/**
+ * The Protomaps archive Byways Topo draws from, when there is one.
+ *
+ * One `.pmtiles` file holding the whole basemap, read a slice at a time over
+ * HTTP range requests. Set it and Byways Topo draws from it — free to look at,
+ * and downloadable, because the whole map is one file. Leave it empty and
+ * Byways Topo draws from Mapbox exactly as before.
+ *
+ * Not a secret: it is a public URL on a public bucket. It lives here because
+ * it is deployment configuration rather than code, and it differs between a
+ * local checkout, the site and the app bundle.
+ *
+ * Whatever hosts it must send CORS headers and honour Range requests, or the
+ * browser cannot read a slice of it. See docs/protomaps.md.
+ */
+window.ABMAP_PROTOMAPS_ARCHIVE = '';
+
+/**
+ * How deep that archive goes. 15 is what the Protomaps daily builds reach, and
+ * what the app assumes when this is empty.
+ *
+ * Getting it wrong is not symmetrical: understating it costs detail, because
+ * the deepest tile is stretched past it, while overstating it asks for tiles
+ * the archive does not contain and draws blank ground. The app reads the
+ * archive's own header when it opens it and says so in the console if the two
+ * disagree, so this is checkable rather than a guess you have to live with.
+ */
+window.ABMAP_PROTOMAPS_MAXZOOM = '';

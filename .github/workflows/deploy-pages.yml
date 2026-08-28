@@ -89,17 +89,24 @@ jobs:
           MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          # Not a secret - a public URL on a public bucket - but a repository
+          # variable rather than a literal, because it differs between the site
+          # and the app bundle and should be changeable without a commit.
+          PROTOMAPS_ARCHIVE: ${{ vars.PROTOMAPS_ARCHIVE }}
+          PROTOMAPS_MAXZOOM: ${{ vars.PROTOMAPS_MAXZOOM }}
         run: |
           {
             printf "window.ABMAP_MAPBOX_TOKEN = '%s';\n" "$MAPBOX_TOKEN"
             printf "window.ABMAP_SUPABASE_URL = '%s';\n" "$SUPABASE_URL"
             printf "window.ABMAP_SUPABASE_KEY = '%s';\n" "$SUPABASE_KEY"
+            printf "window.ABMAP_PROTOMAPS_ARCHIVE = '%s';\n" "$PROTOMAPS_ARCHIVE"
+            printf "window.ABMAP_PROTOMAPS_MAXZOOM = '%s';\n" "$PROTOMAPS_MAXZOOM"
           } > assets/js/token.js
 
           # Every value, every time. Reporting the URL's length but not the
           # key's is how "where is the login button" became unanswerable from
           # the logs: accounts need both, and only one was ever printed.
-          echo "mapbox=${#MAPBOX_TOKEN} supabase_url=${#SUPABASE_URL} supabase_key=${#SUPABASE_KEY}"
+          echo "mapbox=${#MAPBOX_TOKEN} supabase_url=${#SUPABASE_URL} supabase_key=${#SUPABASE_KEY} protomaps=${#PROTOMAPS_ARCHIVE}"
           {
             echo "### Client config"
             if [ -n "$MAPBOX_TOKEN" ]; then

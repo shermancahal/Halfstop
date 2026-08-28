@@ -769,5 +769,33 @@
     "url": "https://docs.protomaps.com/basemaps/layers",
     "find": "\\b(shield_text|shield_text_length|network|duplex|concurren\\w*)\\b",
     "note": "Whether anything marks a road carrying two route numbers. Mapbox tags it in the shield value, which is what says the hyphen in '23-60' is a separator rather than part of a number; without an equivalent the split cannot run, because splitting on any hyphen would cut '21/2' and every hyphenated forest road in half. The pair of half-shields is dropped under Protomaps until this is answered."
+  },
+  {
+    "id": "pm:doc-pois-kinds",
+    "expect": "page",
+    "url": "https://docs.protomaps.com/basemaps/layers",
+    "find": "(?<=id=\"pois\"(?:(?!id=\")[\\s\\S]){0,8000})\\b(peak|volcano|saddle|station|hospital|school|attraction)\\b",
+    "note": "Whether a summit is a POI here. The layer list came back as earth, landcover, landuse, water, roads, transit, places, pois, boundaries, buildings - no physical_point and no natural layer at all, so the peak kind the previous probe found has to live in one of those. The search is anchored inside the pois section and stopped at the next heading, so a match cannot have come from the section after it."
+  },
+  {
+    "id": "pm:doc-places-kinds",
+    "expect": "page",
+    "url": "https://docs.protomaps.com/basemaps/layers",
+    "find": "(?<=id=\"places\"(?:(?!id=\")[\\s\\S]){0,8000})\\b(country|region|province|locality|neighbourhood|macrohood|borough|peak)\\b",
+    "note": "The other half of the same question, and the half that makes it an answer rather than a coincidence: if places carries countries and localities and no peak, then peak turning up under pois means something. One probe alone cannot tell 'it is here' from 'the window ran into the next section'."
+  },
+  {
+    "id": "pm:doc-landuse-kinds",
+    "expect": "page",
+    "url": "https://docs.protomaps.com/basemaps/layers",
+    "find": "(?<=id=\"landuse\"(?:(?!id=\")[\\s\\S]){0,8000})\\b(national_park|protected_area|nature_reserve|forest|park|military)\\b",
+    "note": "Which layer a national park is drawn from. The Mapbox style paints landuse_overlay where class is national_park, and Protomaps has one landuse layer rather than a base and an overlay - so the kind exists, and this confirms landuse carries it."
+  },
+  {
+    "id": "pm:doc-water-named",
+    "expect": "page",
+    "url": "https://docs.protomaps.com/basemaps/layers",
+    "find": "(?<=id=\"water\"(?:(?!id=\")[\\s\\S]){0,8000})\\b(ocean|lake|river|riverbank|reservoir|playa|name)\\b",
+    "note": "Whether the water layer carries the names of lakes and rivers or only their shapes. Mapbox puts water names in natural_label, which does not exist here; the two label layers that read it are dropped until this says where those names are."
   }
 ]

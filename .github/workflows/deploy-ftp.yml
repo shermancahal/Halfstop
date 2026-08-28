@@ -72,17 +72,21 @@ jobs:
           MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          PROTOMAPS_ARCHIVE: ${{ vars.PROTOMAPS_ARCHIVE }}
+          PROTOMAPS_MAXZOOM: ${{ vars.PROTOMAPS_MAXZOOM }}
         run: |
-          if [ -n "$MAPBOX_TOKEN" ] || [ -n "$SUPABASE_URL" ]; then
+          if [ -n "$MAPBOX_TOKEN" ] || [ -n "$SUPABASE_URL" ] || [ -n "$PROTOMAPS_ARCHIVE" ]; then
             {
               printf "window.ABMAP_MAPBOX_TOKEN = '%s';\n" "$MAPBOX_TOKEN"
               printf "window.ABMAP_SUPABASE_URL = '%s';\n" "$SUPABASE_URL"
               printf "window.ABMAP_SUPABASE_KEY = '%s';\n" "$SUPABASE_KEY"
+              printf "window.ABMAP_PROTOMAPS_ARCHIVE = '%s';\n" "$PROTOMAPS_ARCHIVE"
+              printf "window.ABMAP_PROTOMAPS_MAXZOOM = '%s';\n" "$PROTOMAPS_MAXZOOM"
             } > assets/js/token.js
             echo "Client config written: mapbox=${#MAPBOX_TOKEN} chars, supabase=${#SUPABASE_URL} chars"
             echo "skip=" >> "$GITHUB_OUTPUT"
           else
-            echo "No MAPBOX_TOKEN or SUPABASE_URL secret set."
+            echo "No MAPBOX_TOKEN, SUPABASE_URL or PROTOMAPS_ARCHIVE configured."
             echo "Leaving any token.js already on the server alone, rather than blanking it."
             echo "skip=assets/js/token.js" >> "$GITHUB_OUTPUT"
           fi
