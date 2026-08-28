@@ -137,6 +137,22 @@ function quadkey(z, x, y) {
  * horizontal now" and "the legend is a 1x1 pixel" are both things a byte count
  * cannot tell you.
  */
+/**
+ * Whether a body begins the way an image does.
+ *
+ * Content-type is what a server claims; these bytes are what it sent.
+ */
+function imageMagic(bytes) {
+  const view = new DataView(bytes);
+  if (view.byteLength < 12) return false;
+  const b = (i) => view.getUint8(i);
+  if (view.getUint32(0) === 0x89504e47) return true;                 // PNG
+  if (b(0) === 0xff && b(1) === 0xd8 && b(2) === 0xff) return true;  // JPEG
+  if (b(0) === 0x47 && b(1) === 0x49 && b(2) === 0x46) return true;  // GIF
+  if (view.getUint32(0) === 0x52494646 && view.getUint32(8) === 0x57454250) return true; // WebP
+  return false;
+}
+
 function pngSize(bytes) {
   const view = new DataView(bytes);
   if (view.byteLength < 24) return null;
@@ -177,6 +193,19 @@ function esriError(body) {
   const message = text.match(/"message"\s*:\s*"([^"]+)"/);
   const code = text.match(/"code"\s*:\s*(\d+)/);
   return detail?.[1] || message?.[1] || (code ? `code ${code[1]}` : 'unspecified');
+}
+
+/**
+ * A well-formed answer holding nothing.
+ *
+ * Only says yes when the body actually carries a features array and that array
+ * is empty - a capabilities document or a field list has no features at all and
+ * must not be called empty.
+ */
+function emptyFeatures(body) {
+  const text = String(body ?? '');
+  if (!/"features"\s*:\s*\[/.test(text)) return false;
+  return /"features"\s*:\s*\[\s*\]/.test(text);
 }
 
 function findIn(body, pattern) {
@@ -303,7 +332,12 @@ async function probe(entry) {
 
     // An error page is the failure that looks most like success: 200, a body,
     // and not one pixel of map in it.
-    const isImage = /image\//.test(type);
+    // A tile is a tile whatever the header says it is. ArcGIS tiled services
+    // hand back `application/octet-stream` for a perfectly good JPEG, and the
+    // FAA's VFR sectional was reported as "not an image" for exactly that
+    // reason - a real chart, failed on a header. Read the first bytes instead:
+    // PNG, JPEG, GIF and WebP all announce themselves there.
+    const isImage = /image\//.test(type) || imageMagic(body);
     const size = isImage ? pngSize(body) : null;
     const decoded = isImage ? '' : new TextDecoder().decode(body);
     const text = isImage ? '' : decoded.slice(0, 300).replace(/\s+/g, ' ').trim();
@@ -340,7 +374,16 @@ async function probe(entry) {
              * whole point of a health check is to name the dead ones, and it
              * was quietly certifying them.
              */
-            : esriError(decoded) ? `service error: ${esriError(decoded)}` : 'ok')
+            : esriError(decoded) ? `service error: ${esriError(decoded)}`
+            /*
+             * A query that answers with no features is the emptiest kind of
+             * pass. `"features":[]` satisfies any regex looking for envelope
+             * keys, and this file has already certified two layers that way -
+             * the FAA grid and Oregon's park status both came back 200, well
+             * formed and holding nothing. Existence, shape and returning data
+             * are three questions; only the third one puts a layer on a map.
+             */
+            : emptyFeatures(decoded) ? 'no features' : 'ok')
           : !isImage ? 'not an image'
           // A tile a browser is not allowed to read is a tile that does not
           // draw, however well it downloads from a script. Worth failing on:
@@ -374,7 +417,7 @@ if (asJSON) {
   console.log(JSON.stringify(results, null, 2));
 } else {
   const mark = {
-    ok: 'ok  ', blank: 'BLANK', failed: 'FAIL', 'not an image': 'FAIL', unreachable: 'DOWN',
+    ok: 'ok  ', blank: 'BLANK', failed: 'FAIL', 'not an image': 'FAIL', 'no features': 'NONE', unreachable: 'DOWN',
     'no CORS': 'CORS',
     // Snow depth in August is empty because there is no snow, not because the
     // service is wrong. Marked in the catalogue rather than guessed at here.

@@ -501,5 +501,39 @@
     "note": "The VFR sectional as a raster tile - the chart a pilot actually reads, and a better answer than a grid for anyone who knows how to read one. Asked as a tile because a tiled MapServer either serves one or does not.",
     "expect": "image",
     "url": "https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/VFR_Sectional/MapServer/tile/8/98/71"
+  },
+  {
+    "id": "canopy:mrlc-conus",
+    "expect": "data",
+    "note": "The same capabilities document, filtered to names carrying conus. The first pass returned the Alaska, Hawaii and Puerto Rico canopy layers and one bare mrlc_NLCD_Tree_Canopy, which is not enough to pick from - the lower forty-eight need a name of their own and guessing at service vocabulary is what this file exists to stop.",
+    "find": "<Name>[^<]*(?:conus|CONUS|Conus)[^<]*</Name>",
+    "url": "https://www.mrlc.gov/geoserver/mrlc_display/wms?service=WMS&version=1.3.0&request=GetCapabilities"
+  },
+  {
+    "id": "canopy:mrlc-tile",
+    "expect": "image",
+    "note": "A real GetMap over the Daniel Boone in eastern Kentucky, drawn the exact way the browser will draw it. A layer name in a capabilities list proves the name exists; only a tile with pixels in it proves the layer draws. Both of those questions have been answered wrong here by asking only the first.",
+    "url": "https://www.mrlc.gov/geoserver/mrlc_display/wms?service=WMS&version=1.3.0&request=GetMap&layers=mrlc_NLCD_Tree_Canopy&styles=&crs=EPSG:3857&bbox=-9361969.2,4495009.3,-9339705.3,4523072.3&width=256&height=256&format=image/png&transparent=true"
+  },
+  {
+    "id": "faa:uasfm-layers",
+    "expect": "data",
+    "note": "The FeatureServer's own layer list. Layer 0 advertised a CEILING column and then answered a box over Lexington with no features at all, so either the grid lives in another layer of this service or the whole thing is empty. A group layer answering nothing is exactly how the BLM lookup wasted an afternoon.",
+    "find": "\"(?:id|name)\"\\s*:\\s*(?:\"[^\"]{0,60}\"|\\d+)",
+    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/FAA_UAS_FacilityMap_Data_V5/FeatureServer?f=pjson"
+  },
+  {
+    "id": "faa:uasfm-count",
+    "expect": "data",
+    "note": "How many rows layer 0 holds with no geometry filter at all. This separates an empty layer from a box I drew in the wrong place - a distinction I have got wrong repeatedly, and one a count answers in a single request.",
+    "find": "\"count\"\\s*:\\s*\\d+",
+    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/FAA_UAS_FacilityMap_Data_V5/FeatureServer/0/query?where=1%3D1&returnCountOnly=true&f=json"
+  },
+  {
+    "id": "faa:uasfm-lex",
+    "expect": "data",
+    "note": "A tight box over Blue Grass Airport itself. The grid only exists under controlled airspace, and the previous box sat east of Lexington in open country where the correct answer really is nothing. Class C came back over that same box, so this asks the grid where the airport actually is.",
+    "find": "\"(?:CEILING|APT1_NAME|APT1_LAANC)\"\\s*:\\s*(?:\"[^\"]{0,40}\"|\\d+)",
+    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/FAA_UAS_FacilityMap_Data_V5/FeatureServer/0/query?where=1%3D1&geometry=-84.68,37.94,-84.50,38.08&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=6&f=json"
   }
 ]
