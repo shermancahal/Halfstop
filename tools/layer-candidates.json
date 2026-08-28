@@ -469,17 +469,9 @@
     "url": "https://gis.prd.state.or.us/arcgis/rest/services/Land_Ownership/LO_STATE_PARK_STATUS/FeatureServer/0/query?where=1%3D1&geometry=-124.6,41.9,-116.4,46.3&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=5&f=json"
   },
   {
-    "id": "canopy:mrlc-wms",
-    "note": "MRLC publishes NLCD through a GeoServer WMS. This asks what layers it advertises, because the tree canopy product's layer name is the one thing a raster source needs and guessing it is how three probes in this file have already failed.",
-    "expect": "data",
-    "find": "<Name>[^<]{0,60}</Name>",
-    "url": "https://www.mrlc.gov/geoserver/mrlc_display/wms?service=WMS&version=1.3.0&request=GetCapabilities"
-  },
-  {
-    "id": "canopy:agol-tcc",
-    "note": "The same question asked of ArcGIS Online, in case MRLC's own server is slow or unreachable from a browser. An ImageServer would be easier to consume than a WMS and would tile properly.",
-    "expect": "data",
-    "find": "\"(?:title|url|type)\"\\s*:\\s*\"[^\"]{0,110}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=12&sortField=numViews&sortOrder=desc&q=%28%22tree%20canopy%22%20OR%20NLCD%29%20AND%20%28type%3A%22Image%20Service%22%20OR%20type%3A%22Map%20Service%22%29"
+    "id": "canopy:tile",
+    "note": "The exact tile the layer now asks for, over the Cumberland Plateau where the basemap shows bare ground and the ground is forest. An ImageServer that needs a token answers 200 with JSON rather than a PNG, and a tile a browser may not read is a tile that does not draw - both of which this catches and neither of which is visible from the config.",
+    "expect": "image",
+    "url": "https://landscape10.arcgis.com/arcgis/rest/services/USA_NLCD_Tree_Canopy/ImageServer/exportImage?bbox=-9400000,4460000,-9380000,4480000&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image"
   }
 ]
