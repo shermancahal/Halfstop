@@ -384,9 +384,44 @@ const width = (base, top) => [
  * @param {string} token  A Mapbox public token.
  * @returns {object} A style-spec document.
  */
-export function bywaysStyle(token) {
-  if (!token) return null;
-  const key = encodeURIComponent(token);
+export function bywaysStyle(token, { schema = MAPBOX_SCHEMA } = {}) {
+  /*
+   * The schema is set before the layer builders run, and restored after.
+   *
+   * They are nullary functions called once each from the list below, so a
+   * module binding is enough - but leaving it set would make the next call
+   * depend on the last one, which is the kind of thing that works until two
+   * styles are built in one page. Restored in a finally so a throw cannot
+   * leave it pointing at the wrong schema either.
+   */
+  const previous = S;
+  S = schema;
+  try {
+    return buildStyle(token, schema);
+  } finally {
+    S = previous;
+  }
+}
+
+/**
+ * Drop the layers a schema cannot draw.
+ *
+ * A source-layer of null is how a schema says "this source has no contours".
+ * Left in, GL would ask for a source-layer named `null`, find nothing, and
+ * draw nothing - no error, no warning, just a map missing its contour lines
+ * and no indication why. Removing the layer is the same visual result with an
+ * honest cause, and it keeps the style valid.
+ */
+function drawable(layers) {
+  return layers.filter((layer) => {
+    if (layer.source === null || layer.source === undefined) return layer.type === 'background';
+    return !('source-layer' in layer) || Boolean(layer['source-layer']);
+  });
+}
+
+function buildStyle(token, schema) {
+  if (schema.id === 'mapbox' && !token) return null;
+  const key = encodeURIComponent(token || '');
   /*
    * Each tileset's own depth, not one number for both.
    *
@@ -420,13 +455,41 @@ export function bywaysStyle(token) {
     name: 'Byways Topo',
     // Glyphs and sprite are required for any symbol layer. A style with labels
     // and no glyphs URL does not fail visibly — the labels simply never appear.
-    glyphs: `https://api.mapbox.com/fonts/v1/mapbox/{fontstack}/{range}.pbf?access_token=${key}`,
-    sprite: `https://api.mapbox.com/styles/v1/mapbox/streets-v12/sprite?access_token=${key}`,
-    sources: {
-      composite: vector('mapbox.mapbox-streets-v8'),
-      terrain: vector('mapbox.mapbox-terrain-v2'),
-    },
-    layers: [
+    /*
+     * Glyphs are required for any symbol layer, and a style with labels and no
+     * glyphs URL does not fail visibly - the labels simply never appear.
+     *
+     * Protomaps publishes a font set for exactly this. No sprite: every image
+     * this style uses is a shield drawn on a canvas at runtime and registered
+     * by id, so there is nothing for a sprite sheet to supply.
+     */
+    glyphs: schema.id === 'mapbox'
+      ? `https://api.mapbox.com/fonts/v1/mapbox/{fontstack}/{range}.pbf?access_token=${key}`
+      : 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
+    ...(schema.id === 'mapbox'
+      ? { sprite: `https://api.mapbox.com/styles/v1/mapbox/streets-v12/sprite?access_token=${key}` }
+      : {}),
+    sources: schema.id === 'mapbox'
+      ? {
+        composite: vector('mapbox.mapbox-streets-v8'),
+        terrain: vector('mapbox.mapbox-terrain-v2'),
+      }
+      : {
+        /*
+         * One archive, read a slice at a time through the pmtiles protocol.
+         *
+         * The URL is a placeholder until the archive is hosted; what matters
+         * for now is the shape - a single file rather than a tile endpoint,
+         * which is what makes this downloadable and what the existing per-tile
+         * cache cannot handle.
+         */
+        [schema.source]: {
+          type: 'vector',
+          url: 'pmtiles://./tiles/byways.pmtiles',
+          attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        },
+      },
+    layers: drawable([
       ...groundLayers(),
       ...reliefLayers(),
       ...waterLayers(),
@@ -452,9 +515,12 @@ export function bywaysStyle(token) {
        */
       ...labelLayers(),
       ...shieldLayers(),
-    ],
-    attribution: '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> '
-      + '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    ]),
+    attribution: schema.id === 'mapbox'
+      ? '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> '
+        + '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+      : '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> '
+        + '· <a href="https://protomaps.com">Protomaps</a>',
   };
 }
 
