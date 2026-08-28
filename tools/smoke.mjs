@@ -31,6 +31,7 @@ import { createServer } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
+import { SHIELD_DESIGNS } from '../assets/js/lib/route-shields.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FIXTURE = path.join(ROOT, 'test', 'fixtures', 'smoke.gpx');
@@ -634,16 +635,26 @@ check('the shield layer is on the map at all', shields.exists, true);
  * registration returns; `us` and `interstate` come from PNG blanks and are
  * allowed to arrive late, so they are given a moment.
  */
-const baseImages = await page.evaluate(async () => {
+/*
+ * Enumerated from SHIELD_DESIGNS rather than from a list written out here.
+ *
+ * The list used to be a literal four names, so adding the brown scenic and
+ * forest designs left this check blind to precisely the two that were new -
+ * an enumeration that does not enumerate is the same failure as a find pattern
+ * that does not compile, and it passes just as quietly.
+ */
+const baseImages = await page.evaluate(async (designs) => {
   await new Promise((resolve) => setTimeout(resolve, 500));
   const have = new Set(window.__map.imageIds());
   const want = [];
-  for (const design of ['interstate', 'us', 'state', 'default']) {
+  for (const design of designs) {
     for (const length of [2, 3, 4]) want.push(`abmap-shield-${design}-${length}`);
   }
   return want.filter((id) => !have.has(id));
-});
+}, SHIELD_DESIGNS);
 check('no generic shield image is missing', baseImages, []);
+check('and that covers the ref-chosen designs too',
+  SHIELD_DESIGNS.includes('scenic') && SHIELD_DESIGNS.includes('forest'), true);
 check('Tennessee images are registered', shields.tennesseeImages.length > 0, true);
 check('and the layer asks for Tennessee, not the generic design',
   /st-TN/.test(shields.iconImage), true);
@@ -1712,6 +1723,17 @@ const profiles = await page.evaluate(async () => {
       centre: columns[mid],
       leftCrest: lowest(half, mid - 2),
       rightCrest: lowest(mid + 2, data.width - half),
+      // Widths at fixed heights rather than a function: this object is
+      // serialised on its way out of the page, and a method does not survive
+      // that crossing.
+      widths: [0.15, 0.5, 0.9].map((fraction) => {
+        const y = Math.min(data.height - 1, Math.max(0, Math.round(data.height * fraction)));
+        let count = 0;
+        for (let x = 0; x < data.width; x += 1) {
+          if (data.data[(y * data.width + x) * 4 + 3] > 40) count += 1;
+        }
+        return count / data.width;
+      }),
       footWidth: (() => {
         // How wide the shape still is near the bottom, as a fraction.
         const y = Math.round(data.height * 0.9);
@@ -1723,19 +1745,44 @@ const profiles = await page.evaluate(async () => {
       })(),
     };
   };
-  return { interstate: read('interstate'), us: read('us') };
+  return { interstate: read('interstate'), us: read('us'), forest: read('forest') };
 });
 
 const us = profiles.us;
 check('the US shield rises to a peak left of centre', us.leftCrest < us.centre - 2, true);
+
+/*
+ * The forest marker is a trapezoid, and the shape is most of its job.
+ *
+ * The real USFS sign carries "National Forest" in script across its foot,
+ * which is illegible at twenty pixels - so the silhouette has to say what the
+ * lettering would. Checked by measuring it, because the registration check
+ * above only asks whether an image exists: deleting the drawing branch left a
+ * rounded rectangle registered under the same name, and that check passed.
+ */
+{
+  const [top, middle, foot] = profiles.forest.widths;
+  check('the forest marker is wider at the top than the foot', top - foot > 0.08, true);
+  check('and tapers rather than stepping', top > middle && middle > foot, true);
+}
 check('and to another on the right', us.rightCrest < us.centre - 2, true);
 
 const inter = profiles.interstate;
 check('the interstate top is flat instead',
   Math.abs(inter.centre - Math.min(inter.leftCrest, inter.rightCrest)) <= 1, true);
 
-// Both narrow toward the foot rather than bottoming out square.
-for (const [name, shape] of Object.entries(profiles)) {
+/*
+ * Both national shields narrow toward the foot rather than bottoming out square.
+ *
+ * Named rather than looped over everything in `profiles`: this range was
+ * measured from the interstate and US silhouettes, and adding the forest
+ * trapezoid to that object enrolled it in a check written about two other
+ * shapes. It failed on a foot width of 0.78 - which is what the real USFS sign
+ * has, so the shape was right and the assertion was borrowed. The trapezoid
+ * has its own taper checks above.
+ */
+for (const name of ['interstate', 'us']) {
+  const shape = profiles[name];
   check(`the ${name} tapers`, shape.footWidth > 0.15 && shape.footWidth < 0.75, true);
 }
 

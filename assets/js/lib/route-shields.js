@@ -37,7 +37,26 @@ const MAX_LEN = 4;
  * state's own marker — which is how Michigan's county roads came to be drawn
  * on the M diamond that belongs to its state routes.
  */
-export const SHIELD_DESIGNS = ['interstate', 'us', 'state', 'circle', 'default'];
+export const SHIELD_DESIGNS = ['interstate', 'us', 'state', 'circle', 'default', 'scenic', 'forest'];
+
+/*
+ * Two designs chosen by the road's number rather than by Mapbox's `shield`.
+ *
+ * Every other design here is picked from what the tiles say a road is. These
+ * two cannot be: Mapbox has no idea a route is scenic, and a forest road
+ * arrives as an unclaimed number like any county road. Both are legible in the
+ * ref itself - "US 40 Scenic", "FSR 300" - so that is what selects them.
+ *
+ * `scenic` is knowingly an approximation. The real scenic byway marker is not
+ * a brown US shield; it is a separate sign entirely. But the brown reads as
+ * "scenic" instantly to anyone who has driven in America, and a recognisable
+ * approximation beats a correct sign nobody recognises at twenty pixels.
+ *
+ * `forest` is the USFS route marker, which is its own trapezoid and genuinely
+ * distinctive - the shape is half of why FSR 300 stopped being readable as a
+ * generic circle.
+ */
+export const REF_DESIGNS = ['scenic', 'forest'];
 
 /**
  * Where the real shield blanks live, and how a design maps onto one.
@@ -276,6 +295,9 @@ const COLOURS = {
   // deliberately not any state's own shape.
   circle: { fill: '#ffffff', stroke: '#3d3225', text: '#1c1c1c' },
   default: { fill: '#fbf7ee', stroke: '#64513b', text: '#3a3026' },
+  // The brown of a recreation sign, which is the whole point of both.
+  scenic: { fill: '#5f3a22', stroke: '#ffffff', text: '#ffffff' },
+  forest: { fill: '#5f3a22', stroke: '#ffffff', text: '#ffffff' },
 };
 
 /**
@@ -557,6 +579,31 @@ function coloradoDecoration(ctx, w, h) {
   ctx.restore();
 }
 
+/**
+ * The USFS route marker: a trapezoid, wider at the top than the bottom.
+ *
+ * Drawn rather than blanked because there is no blank for it, and it is worth
+ * drawing: the real sign carries "National Forest" across its foot in script,
+ * which is unreadable at this size, so the shape has to do that work alone.
+ * A trapezoid does - nothing else on the map is one.
+ */
+function forestPath(ctx, w, h) {
+  const inset = 1;
+  const shoulder = w * 0.11;
+  const radius = 2;
+  ctx.beginPath();
+  ctx.moveTo(inset + radius, inset);
+  ctx.lineTo(w - inset - radius, inset);
+  ctx.quadraticCurveTo(w - inset, inset, w - inset - radius * 0.4, inset + radius);
+  ctx.lineTo(w - inset - shoulder, h - inset - radius);
+  ctx.quadraticCurveTo(w - inset - shoulder, h - inset, w - inset - shoulder - radius, h - inset);
+  ctx.lineTo(inset + shoulder + radius, h - inset);
+  ctx.quadraticCurveTo(inset + shoulder, h - inset, inset + shoulder, h - inset - radius);
+  ctx.lineTo(inset + radius * 0.4, inset + radius);
+  ctx.quadraticCurveTo(inset, inset, inset + radius, inset);
+  ctx.closePath();
+}
+
 const SHAPE_PATHS = {
   diamond: diamondPath,
   circle: circlePath,
@@ -569,6 +616,7 @@ const SHAPE_PATHS = {
   'flag-co': (ctx, w, h) => roundedRect(ctx, 1, 1, w - 2, h - 2, 2),
   square: (ctx, w, h) => roundedRect(ctx, 1, 1.5, w - 2, h - 3, 1.5),
   shield: (ctx, w, h) => usRoutePath(ctx, w, h),
+  forest: forestPath,
 };
 
 /** The shapes the renderer can draw, so the table cannot name one it cannot. */
@@ -674,6 +722,22 @@ export function rasterizeShield(design, length, { pixelRatio = 2 } = {}) {
     // Thinner than the others on purpose: this shape is nearly all outline, and
     // a heavy one closes the notch between the peaks back up.
     ctx.lineWidth = 1;
+    ctx.stroke();
+  } else if (design === 'scenic') {
+    // The US shield outline in brown: same shape, so a scenic route still
+    // reads as the route it is, and the colour says what kind.
+    usRoutePath(ctx, width, HEIGHT);
+    ctx.fillStyle = colours.fill;
+    ctx.fill();
+    ctx.strokeStyle = colours.stroke;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  } else if (design === 'forest') {
+    forestPath(ctx, width, HEIGHT);
+    ctx.fillStyle = colours.fill;
+    ctx.fill();
+    ctx.strokeStyle = colours.stroke;
+    ctx.lineWidth = 1.2;
     ctx.stroke();
   } else if (design === 'circle') {
     // Round, and drawn to the shield's height rather than its width, so a
@@ -820,7 +884,7 @@ export function shieldTextSizeExpression(state = '', length = 2, refLength = nul
  *        offsets are in ems, and the em is a different size on every design,
  *        so the conversion has to happen per arm rather than once.
  */
-export function shieldTextOffsetExpression(state = '', length = 2, shiftPx = 0) {
+export function shieldTextOffsetExpression(state = '', length = 2, shiftPx = 0, { override = null } = {}) {
   const local = shieldTextOffset(stateDesign(state), length);
   // The interstate number clears its crown; the US shield's sits centre.
   const national = (design) => (design === 'interstate' ? [0, 0.18] : [0, 0.06]);
@@ -829,7 +893,7 @@ export function shieldTextOffsetExpression(state = '', length = 2, shiftPx = 0) 
     const size = design === LOCAL ? shieldTextSize(stateDesign(state), length) : NOMINAL_TEXT;
     return [Math.round((base[0] + shiftPx / size) * 100) / 100, base[1]];
   };
-  return [
+  const byShield = [
     'match', ['get', 'shield'],
     ...SHIELD_MATCH.flatMap((arm) => [
       arm.values,
@@ -837,6 +901,19 @@ export function shieldTextOffsetExpression(state = '', length = 2, shiftPx = 0) 
     ]),
     ['literal', shift(shieldTextOffset(UNCLAIMED, length), UNCLAIMED)],
   ];
+  if (!override) return byShield;
+
+  /*
+   * Both brown designs are drawn rather than blanked, so their numbers sit
+   * where the drawings put them. The scenic shield is the US outline and takes
+   * its offset; the forest trapezoid is narrower at the foot than the head, so
+   * its number rides slightly high to stay off the taper.
+   */
+  return ['let', 'chosen', override,
+    ['case',
+      ['==', ['var', 'chosen'], 'forest'], ['literal', shift([0, -0.04], 'forest')],
+      ['==', ['var', 'chosen'], 'scenic'], ['literal', shift(national('us'), 'us')],
+      byShield]];
 }
 
 /**
@@ -1094,7 +1171,7 @@ export function shieldImageIdFor(shield, reflen, state = '') {
   return shieldImageId(designForShield(shield, state), reflen);
 }
 
-export function shieldImageExpression(state = '', { length = null } = {}) {
+export function shieldImageExpression(state = '', { length = null, override = null } = {}) {
   // Interstates and US routes look the same in every state, so only the state
   // branch varies. Which state that is comes from where the map is looking
   // rather than from the road's own tags — the road data does not reliably
@@ -1102,16 +1179,28 @@ export function shieldImageExpression(state = '', { length = null } = {}) {
   // everywhere except within a few miles of a border.
   const local = stateDesign(state);
 
+  const byShield = [
+    'match', ['get', 'shield'],
+    ...SHIELD_MATCH.flatMap((arm) => [arm.values, arm.design === LOCAL ? local : arm.design]),
+    // Not `local`: a shield value the table does not list is a road nothing
+    // has claimed, and it gets the circle rather than the state's marker.
+    UNCLAIMED,
+  ];
+
   return [
     'concat',
     'abmap-shield-',
-    [
-      'match', ['get', 'shield'],
-      ...SHIELD_MATCH.flatMap((arm) => [arm.values, arm.design === LOCAL ? local : arm.design]),
-      // Not `local`: a shield value the table does not list is a road nothing
-      // has claimed, and it gets the circle rather than the state's marker.
-      UNCLAIMED,
-    ],
+    /*
+     * An override, when the number itself names the design.
+     *
+     * Scenic routes and forest roads are not distinguishable from the tiles -
+     * Mapbox does not know a byway is scenic, and a forest road arrives
+     * unclaimed like any county road - so the caller passes an expression that
+     * reads the ref. It answers '' for everything else, and the ordinary
+     * shield table decides those.
+     */
+    override ? ['let', 'chosen', override,
+      ['case', ['!=', ['var', 'chosen'], ''], ['var', 'chosen'], byShield]] : byShield,
     '-',
     // `length` lets a caller size the image from something other than the
     // road's own `reflen` — a shield carrying half of a concurrency is as wide
@@ -1126,16 +1215,23 @@ export function shieldImageExpression(state = '', { length = null } = {}) {
  * A dark-on-dark number is invisible, and several state markers are dark:
  * Arizona's black square, Idaho's black outline, South Carolina's blue disc.
  */
-export function shieldTextColour(state = '') {
+export function shieldTextColour(state = '', { override = null } = {}) {
   const entry = STATE_SHIELDS[String(state).trim().toUpperCase()];
   const localText = entry ? entry.fg : '#1c1c1c';
 
-  return [
+  const byShield = [
     'match', ['get', 'shield'],
     ['us-interstate', 'us-interstate-business', 'us-interstate-duplex', 'us-interstate-truck'], '#ffffff',
     ['us-state', 'us-state-duplex'], localText,
     localText,
   ];
+
+  // Both brown designs carry white numerals, and both are chosen by the same
+  // override that chose the image - so the colour has to consult it or a
+  // scenic shield gets its state's dark ink on brown.
+  if (!override) return byShield;
+  return ['let', 'chosen', override,
+    ['case', ['!=', ['var', 'chosen'], ''], COLOURS.scenic.text, byShield]];
 }
 
 /** The base-design colours, kept for callers that have no state in hand. */

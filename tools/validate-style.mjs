@@ -351,6 +351,51 @@ for (const overlay of fillByOverlays.filter((entry) => entry.query.fillBy.hatch)
   }
 }
 
+/*
+ * The brown shields go on the roads that asked for them, and nowhere else.
+ *
+ * These two designs are chosen by the ref rather than by Mapbox's `shield`,
+ * which means an ordinary road can be dragged into them by a sloppy rule -
+ * "Forest Hill Road" leading with FH, say. Evaluated against real refs in both
+ * directions: the ones that should be brown, and the ones that must not be.
+ */
+{
+  const shieldLayer = layerBy('road-shield');
+  const image = shieldLayer.layout['icon-image'];
+  const colour = shieldLayer.paint['text-color'];
+  const feature = (ref, shield = 'default') => ({ properties: { ref, shield, reflen: ref.length, class: 'primary' } });
+
+  const cases = [
+    /*
+     * The width suffix is the length of the text that ends up drawn, clamped
+     * to 2..4 - not the length of the ref. "Old 61 Scenic" draws "Old 61",
+     * which is six characters and so asks for the widest blank.
+     */
+    ['FSR 300', 'us-state', 'abmap-shield-forest-3', '#ffffff', 'a forest road gets the trapezoid and white numerals'],
+    ['NF-9', 'us-state', 'abmap-shield-forest-2', '#ffffff', 'and so does one signed across a hyphen'],
+    ['US 40 Scenic', 'us-highway', 'abmap-shield-scenic-2', '#ffffff', 'a scenic route gets the brown shield'],
+    ['Old 61 Scenic', 'default', 'abmap-shield-scenic-4', '#ffffff', 'even when its number is a name — Scenic is what decides'],
+    // The other direction, which is the half that catches an over-eager rule.
+    ['US 40', 'us-highway', 'abmap-shield-us-2', '#1c1c1c', 'a plain US route keeps the white US shield'],
+    ['CR 1230', 'default', 'abmap-shield-circle-4', '#1c1c1c', 'a county road is not a forest road'],
+    ['Forest Hill Road', 'default', 'abmap-shield-circle-4', '#1c1c1c', 'a road merely named Forest is not one either'],
+    ['FR Bend', 'default', 'abmap-shield-forest-4', '#ffffff', 'FR is a forest system whatever follows it'],
+  ];
+
+  for (const [ref, shield, wantImage, wantColour, why] of cases) {
+    const gotImage = evaluate(image, feature(ref, shield));
+    if (String(gotImage) !== wantImage) {
+      all.push(['ref-shields', { message: `"${ref}" drew ${gotImage}, expected ${wantImage} — ${why}` }]);
+    }
+    const gotColour = evaluate(colour, feature(ref, shield), 'color');
+    const want = expression.createExpression(wantColour, { type: 'color' });
+    const wantRGB = want.result === 'success' ? want.value.evaluate({ zoom: 12 }, {}).toString() : wantColour;
+    if (String(gotColour) !== wantRGB) {
+      all.push(['ref-shields', { message: `"${ref}" wrote ${gotColour}, expected ${wantRGB} — ${why}` }]);
+    }
+  }
+}
+
 if (all.length) {
   console.error(`\n${all.length} validation error(s):`);
   for (const [where, error] of all) console.error(`  [${where}] ${error.message}`);

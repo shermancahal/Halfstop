@@ -26,7 +26,7 @@
  */
 
 import {
-  shieldImageExpression, SHIELD_TEXT_COLOUR, shieldTextColour,
+  shieldImageExpression, shieldTextColour,
   shieldTextSizeExpression, shieldTextOffsetExpression, shieldDisplayWidth,
 } from './route-shields.js';
 
@@ -779,6 +779,48 @@ const PREFIXLESS = ['let', 'raw', RAW_REF,
  * the route's identity there rather than qualifying it, and a blanket rule
  * that dropped everything after a space would have eaten it.
  */
+/*
+ * The leading token, on its own, so two rules can read it.
+ *
+ * `PREFIXLESS` throws it away and `REF_DESIGN` needs to look at it, and
+ * recomputing the separator in two places is how the two would quietly come to
+ * disagree about where a ref splits.
+ */
+const SEPARATOR = ['let',
+  'space', ['index-of', ' ', RAW_REF],
+  'dash', ['index-of', '-', RAW_REF],
+  ['case',
+    ['<', ['var', 'space'], 0], ['var', 'dash'],
+    ['<', ['var', 'dash'], 0], ['var', 'space'],
+    ['min', ['var', 'space'], ['var', 'dash']]],
+];
+
+const HEAD = ['let', 'cut', SEPARATOR,
+  ['case', ['>', ['var', 'cut'], 0], ['slice', RAW_REF, 0, ['var', 'cut']], '']];
+
+/*
+ * Which of the two ref-chosen designs this road wants, or nothing.
+ *
+ * Read from the number because nothing else knows. Mapbox does not mark a
+ * route as scenic, and a forest road arrives as an unclaimed number
+ * indistinguishable from a county road - so "FSR 300" and "US 40 Scenic" are
+ * the only evidence there is, and they are good evidence.
+ *
+ * Forest first: a road could in principle be both, and the trapezoid says more
+ * about where you are than the brown does.
+ */
+const FOREST_SYSTEMS = ['FSR', 'FR', 'NF', 'FH', 'FDR', 'NFSR'];
+const SCENIC_SUFFIX = ' Scenic';
+const REF_DESIGN = ['case',
+  ['in', HEAD, ['literal', FOREST_SYSTEMS]], 'forest',
+  ['all',
+    // Guarded, because slicing from a negative start on a short ref is not a
+    // question worth asking of the expression evaluator.
+    ['>', ['length', RAW_REF], SCENIC_SUFFIX.length],
+    ['==', ['slice', RAW_REF, ['-', ['length', RAW_REF], SCENIC_SUFFIX.length]], SCENIC_SUFFIX]],
+  'scenic',
+  ''];
+
 const DESIGNATIONS = ['Scenic', 'Business', 'Alternate', 'Alt', 'Bypass', 'Byp',
   'Truck', 'Spur', 'Loop', 'Connector', 'Conn', 'Bus'];
 /*
@@ -850,11 +892,11 @@ export function shieldLayerUpdates(state = '') {
     layout: {
       // Sized from the number it is actually carrying, exactly as the layer
       // was built — half of a concurrency is as wide as its own half.
-      'icon-image': shieldImageExpression(state, { length }),
+      'icon-image': shieldImageExpression(state, { length, override: REF_DESIGN }),
       'text-size': shieldTextSizeExpression(state, 2, length),
-      'text-offset': shieldTextOffsetExpression(state, 2, shift),
+      'text-offset': shieldTextOffsetExpression(state, 2, shift, { override: REF_DESIGN }),
     },
-    paint: { 'text-color': shieldTextColour(state) },
+    paint: { 'text-color': shieldTextColour(state, { override: REF_DESIGN }) },
   }));
 }
 
@@ -902,14 +944,14 @@ function shieldLayers(state = '') {
         // tileset's own maxzoom has somewhere to go: 220 at z16 is 880 on
         // screen at z18, where 260 would have been over a thousand.
         'symbol-spacing': ['interpolate', ['linear'], ['zoom'], 6, 170, 14, 220],
-      'icon-image': shieldImageExpression(state, { length: ['length', text] }),
+      'icon-image': shieldImageExpression(state, { length: ['length', text], override: REF_DESIGN }),
       'icon-size': 1,
       'icon-offset': [shiftPx, 0],
       'icon-rotation-alignment': 'viewport',
       'text-field': text,
       'text-font': FONT_BOLD,
       'text-size': shieldTextSizeExpression(state, 2, ['length', text]),
-      'text-offset': shieldTextOffsetExpression(state, 2, shiftPx),
+      'text-offset': shieldTextOffsetExpression(state, 2, shiftPx, { override: REF_DESIGN }),
       'text-rotation-alignment': 'viewport',
       'text-anchor': 'center',
       'icon-allow-overlap': true,
@@ -920,7 +962,7 @@ function shieldLayers(state = '') {
       'icon-optional': false,
       'symbol-sort-key': SHIELD_ORDER,
     },
-    paint: { 'text-color': SHIELD_TEXT_COLOUR },
+    paint: { 'text-color': shieldTextColour(state, { override: REF_DESIGN }) },
   });
 
   // Half a shield's width each way, plus a pixel so the two do not touch.
@@ -960,7 +1002,7 @@ function shieldLayers(state = '') {
          * number floating in the middle of it. The concurrency layers have
          * always measured their own half; this now does the same.
          */
-        'icon-image': shieldImageExpression(state, { length: ['length', REF] }),
+        'icon-image': shieldImageExpression(state, { length: ['length', REF], override: REF_DESIGN }),
         // Constant, so the number's size and offset — which are fixed per
         // shield — cannot drift out of register with the marker they sit on.
         'icon-size': 1,
@@ -976,7 +1018,7 @@ function shieldLayers(state = '') {
         // in a circle built for "21" is the West Virginia secondary route that
         // ran outside its own shield.
         'text-size': shieldTextSizeExpression(state, 2, ['length', REF]),
-        'text-offset': shieldTextOffsetExpression(state),
+        'text-offset': shieldTextOffsetExpression(state, 2, 0, { override: REF_DESIGN }),
         'text-rotation-alignment': 'viewport',
         'text-anchor': 'center',
         /*
@@ -998,7 +1040,7 @@ function shieldLayers(state = '') {
         // An interstate marker outranks a county route when they land together.
         'symbol-sort-key': SHIELD_ORDER,
       },
-      paint: { 'text-color': SHIELD_TEXT_COLOUR },
+      paint: { 'text-color': shieldTextColour(state, { override: REF_DESIGN }) },
     },
     half('road-shield-first', FIRST_REF, -apart),
     half('road-shield-second', SECOND_REF, apart),
