@@ -1105,9 +1105,15 @@ const shapes = await page.evaluate(() => {
     casing: map.getLayer('overlay-wildfire--1') ? 'present' : 'absent',
   };
 });
-check('the fill draws polygons only', shapes.fill, '["==",["geometry-type"],"Polygon"]');
-check('the outline draws anything but a point', shapes.line, '["!=",["geometry-type"],"Point"]');
-check('and the dot draws points only', shapes.dot, '["==",["geometry-type"],"Point"]');
+// Multi-part variants included: geometry-type answers MultiPolygon for a
+// feature with more than one ring group, and an equality test dropped exactly
+// the features most likely to be a real park.
+check('the fill draws polygons, single or multi', shapes.fill,
+  '["in",["geometry-type"],["literal",["Polygon","MultiPolygon"]]]');
+check('the outline draws anything but a point', shapes.line,
+  '["!",["in",["geometry-type"],["literal",["Point","MultiPoint"]]]]');
+check('and the dot draws points only', shapes.dot,
+  '["in",["geometry-type"],["literal",["Point","MultiPoint"]]]');
 check('an area layer gets no road casing', shapes.casing, 'absent');
 
 // The slider is one control over two kinds of layer now. `raster-opacity` on a

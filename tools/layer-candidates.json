@@ -442,44 +442,30 @@
   },
   {
     "id": "data:nd-forest",
-    "note": "Reported as drawing nothing. Every check here so far asks whether a service exists and what shape it claims; none asks whether it hands back features for a real extent, which is the only question that distinguishes a dead layer from a live one nobody can see. This asks it, over ground where the thing should be.",
+    "note": "Asked across the whole state this time. The first attempt used a square I picked and came back empty, and an empty answer from a bad box looks exactly like an empty layer - a distinction this file has already got wrong twice. If the state itself holds nothing, the layer goes.",
     "expect": "data",
-    "find": "\"(?:type|features|NAME|Name|ParkName|AreaName|PROPNAME)\"\\s*:\\s*\"?[^\",\\[}]{0,40}",
-    "url": "https://services1.arcgis.com/GOcSXpzwBHyk2nog/arcgis/rest/services/NDGISHUB_State_Forest/FeatureServer/0/query?where=1%3D1&geometry=-100.9,46.7,-100.0,47.3&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson"
+    "find": "\"(?:NAME|Name|ParkName|AreaName|PROPNAME|DESCRIPTION|site_name)\"\\s*:\\s*\"[^\"]{0,44}\"",
+    "url": "https://services1.arcgis.com/GOcSXpzwBHyk2nog/arcgis/rest/services/NDGISHUB_State_Forest/FeatureServer/0/query?where=1%3D1&geometry=-104.1,45.9,-96.5,49.0&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=5&f=json"
   },
   {
     "id": "data:sd-parks",
-    "note": "Reported as drawing nothing. Every check here so far asks whether a service exists and what shape it claims; none asks whether it hands back features for a real extent, which is the only question that distinguishes a dead layer from a live one nobody can see. This asks it, over ground where the thing should be.",
+    "note": "Asked across the whole state this time. The first attempt used a square I picked and came back empty, and an empty answer from a bad box looks exactly like an empty layer - a distinction this file has already got wrong twice. If the state itself holds nothing, the layer goes.",
     "expect": "data",
-    "find": "\"(?:type|features|NAME|Name|ParkName|AreaName|PROPNAME)\"\\s*:\\s*\"?[^\",\\[}]{0,40}",
-    "url": "https://services2.arcgis.com/1sM9tpOC8N7GGkbw/arcgis/rest/services/South_Dakota_State_Parks/FeatureServer/0/query?where=1%3D1&geometry=-103.6,43.7,-103.0,44.2&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson"
-  },
-  {
-    "id": "data:mt-parks",
-    "note": "Reported as drawing nothing. Every check here so far asks whether a service exists and what shape it claims; none asks whether it hands back features for a real extent, which is the only question that distinguishes a dead layer from a live one nobody can see. This asks it, over ground where the thing should be.",
-    "expect": "data",
-    "find": "\"(?:type|features|NAME|Name|ParkName|AreaName|PROPNAME)\"\\s*:\\s*\"?[^\",\\[}]{0,40}",
-    "url": "https://services3.arcgis.com/Cdxz8r11hT0MGzg1/arcgis/rest/services/FWPLND_STATEPARKS/FeatureServer/0/query?where=1%3D1&geometry=-111.8,45.5,-110.9,46.2&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson"
-  },
-  {
-    "id": "data:or-parks",
-    "note": "Reported as drawing nothing. Every check here so far asks whether a service exists and what shape it claims; none asks whether it hands back features for a real extent, which is the only question that distinguishes a dead layer from a live one nobody can see. This asks it, over ground where the thing should be.",
-    "expect": "data",
-    "find": "\"(?:type|features|NAME|Name|ParkName|AreaName|PROPNAME)\"\\s*:\\s*\"?[^\",\\[}]{0,40}",
-    "url": "https://gis.prd.state.or.us/arcgis/rest/services/Land_Ownership/LO_STATE_PARK_STATUS/FeatureServer/0/query?where=1%3D1&geometry=-123.2,44.5,-122.2,45.3&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson"
+    "find": "\"(?:NAME|Name|ParkName|AreaName|PROPNAME|DESCRIPTION|site_name)\"\\s*:\\s*\"[^\"]{0,44}\"",
+    "url": "https://services2.arcgis.com/1sM9tpOC8N7GGkbw/arcgis/rest/services/South_Dakota_State_Parks/FeatureServer/0/query?where=1%3D1&geometry=-104.1,42.4,-96.4,45.95&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=5&f=json"
   },
   {
     "id": "data:wy-parks",
-    "note": "Reported as drawing nothing. Every check here so far asks whether a service exists and what shape it claims; none asks whether it hands back features for a real extent, which is the only question that distinguishes a dead layer from a live one nobody can see. This asks it, over ground where the thing should be.",
+    "note": "Asked across the whole state this time. The first attempt used a square I picked and came back empty, and an empty answer from a bad box looks exactly like an empty layer - a distinction this file has already got wrong twice. If the state itself holds nothing, the layer goes.",
     "expect": "data",
-    "find": "\"(?:type|features|NAME|Name|ParkName|AreaName|PROPNAME)\"\\s*:\\s*\"?[^\",\\[}]{0,40}",
-    "url": "https://services6.arcgis.com/cWzdqIyxbijuhPLw/arcgis/rest/services/StateParkBoundaries/FeatureServer/0/query?where=1%3D1&geometry=-110.9,42.9,-109.9,43.7&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson"
+    "find": "\"(?:NAME|Name|ParkName|AreaName|PROPNAME|DESCRIPTION|site_name)\"\\s*:\\s*\"[^\"]{0,44}\"",
+    "url": "https://services6.arcgis.com/cWzdqIyxbijuhPLw/arcgis/rest/services/StateParkBoundaries/FeatureServer/0/query?where=1%3D1&geometry=-111.1,40.9,-104.0,45.1&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=5&f=json"
   },
   {
-    "id": "data:co-cpw",
-    "note": "Reported as drawing nothing. Every check here so far asks whether a service exists and what shape it claims; none asks whether it hands back features for a real extent, which is the only question that distinguishes a dead layer from a live one nobody can see. This asks it, over ground where the thing should be.",
+    "id": "data:or-parks",
+    "note": "Asked across the whole state this time. The first attempt used a square I picked and came back empty, and an empty answer from a bad box looks exactly like an empty layer - a distinction this file has already got wrong twice. If the state itself holds nothing, the layer goes.",
     "expect": "data",
-    "find": "\"(?:type|features|NAME|Name|ParkName|AreaName|PROPNAME)\"\\s*:\\s*\"?[^\",\\[}]{0,40}",
-    "url": "https://services5.arcgis.com/ttNGmDvKQA7oeDQ3/arcgis/rest/services/CPWAdminData/FeatureServer/0/query?where=1%3D1&geometry=-105.9,39.4,-105.0,40.1&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson"
+    "find": "\"(?:NAME|Name|ParkName|AreaName|PROPNAME|DESCRIPTION|site_name)\"\\s*:\\s*\"[^\"]{0,44}\"",
+    "url": "https://gis.prd.state.or.us/arcgis/rest/services/Land_Ownership/LO_STATE_PARK_STATUS/FeatureServer/0/query?where=1%3D1&geometry=-124.6,41.9,-116.4,46.3&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=5&f=json"
   }
 ]

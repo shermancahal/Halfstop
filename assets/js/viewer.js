@@ -4861,8 +4861,15 @@ function addQueryOverlay(overlay, opacity) {
       id: fill,
       type: 'fill',
       source: fill,
-      // Only what a fill can draw. See the note on the circle layer below.
-      filter: ['==', ['geometry-type'], 'Polygon'],
+      /*
+       * Multi-part geometry counts.
+       *
+       * geometry-type answers MultiPolygon for a feature with more than one
+       * ring group, not Polygon, so an equality test drops exactly the
+       * features most likely to be a real park - Montana's Missouri Headwaters
+       * came back from the service as a MultiPolygon and drew no fill at all.
+       */
+      filter: ['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]],
       paint: hatch
         // Hatched, so layers stacked on one another stay separable. The
         // outline below is what states the boundary; this only states extent.
@@ -4903,7 +4910,7 @@ function addQueryOverlay(overlay, opacity) {
       id: casing,
       type: 'line',
       source: fill,
-      filter: ['==', ['geometry-type'], 'LineString'],
+      filter: ['in', ['geometry-type'], ['literal', ['LineString', 'MultiLineString']]],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
         'line-color': '#FFFDF7',
@@ -4920,7 +4927,7 @@ function addQueryOverlay(overlay, opacity) {
       type: 'line',
       source: fill,
       // A line draws a road and the edge of an area; over a point it is noise.
-      filter: ['!=', ['geometry-type'], 'Point'],
+      filter: ['!', ['in', ['geometry-type'], ['literal', ['Point', 'MultiPoint']]]],
       layout: (road || trail)
         ? { 'line-cap': trail ? 'butt' : 'round', 'line-join': 'round' }
         : {},
@@ -4967,7 +4974,7 @@ function addQueryOverlay(overlay, opacity) {
         id: dot,
         type: 'symbol',
         source: fill,
-        filter: ['==', ['geometry-type'], 'Point'],
+        filter: ['in', ['geometry-type'], ['literal', ['Point', 'MultiPoint']]],
         layout: {
           'icon-image': `nps-${icon}`,
           'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.55, 13, 0.85, 16, 1],
@@ -4981,7 +4988,7 @@ function addQueryOverlay(overlay, opacity) {
         id: dot,
         type: 'circle',
         source: fill,
-        filter: ['==', ['geometry-type'], 'Point'],
+        filter: ['in', ['geometry-type'], ['literal', ['Point', 'MultiPoint']]],
         paint: {
           'circle-color': colour,
           'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 2.5, 12, 5, 16, 7],
