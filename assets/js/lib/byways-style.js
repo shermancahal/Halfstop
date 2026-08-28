@@ -75,6 +75,17 @@ export const MAPBOX_SCHEMA = {
     ref: 'ref',
     refLength: 'reflen',
     shield: 'shield',
+    // A shape name — `circle-white`, `us-interstate` — so who numbered the
+    // road has to be inferred from where the map is looking.
+    shieldKind: 'shape',
+    // The number already stripped of its system, where the schema has one.
+    shieldText: null,
+    /*
+     * How a road carrying two route numbers is recognised. Mapbox marks it in
+     * the shield value, `us-highway-duplex`, which is the tag that says the
+     * hyphen in "23-60" is a separator rather than part of a number.
+     */
+    duplex: 'duplex',
     name: 'name',
     nameEn: 'name_en',
     surface: 'surface',
@@ -181,7 +192,17 @@ export const PROTOMAPS_SCHEMA = {
     // Not a shape but a network: US:I, US:US, US:KY. Richer than what it
     // replaces, and the reason the shield work mostly survives.
     shield: 'network',
+    // Not a shape but a network: US:I, US:US, US:KY. Read as such.
+    shieldKind: 'network',
     shieldText: 'shield_text',
+    /*
+     * Nothing in this schema marks a concurrency, so the split does not run
+     * and a road carrying two numbers gets one shield. Left null rather than
+     * guessed: the alternative is splitting on any hyphen, which would cut
+     * "21/2"-style secondary numbers and every hyphenated forest road in half.
+     * Whether shield_text encodes a concurrency at all is worth a probe.
+     */
+    duplex: null,
     name: 'name',
     nameEn: 'name:en',
     surface: null,
@@ -1086,10 +1107,24 @@ function labelLayers() {
  * number has, so "SR 61" was asking for a five-character shield that no state
  * publishes.
  */
-const RAW_REF = ['coalesce', ['get', 'ref'], ''];
-const PREFIXLESS = ['let', 'raw', RAW_REF,
-  'space', ['index-of', ' ', RAW_REF],
-  'dash', ['index-of', '-', RAW_REF],
+/*
+ * The raw route number, as the tiles carry it.
+ *
+ * Functions from here down, not constants. A constant is evaluated once at
+ * module load, with whatever schema is in force then - always the Mapbox one -
+ * and every expression built from it would silently read Mapbox field names
+ * out of Protomaps tiles. That failure draws a map with no shields on it and
+ * reports nothing.
+ *
+ * A schema that hands us the number already stripped of its system is used in
+ * preference: shield_text is Protomaps' own answer to the question the whole
+ * prefixless machinery below exists to answer, and it knows things we cannot
+ * infer from the string.
+ */
+const rawRef = () => ['coalesce', ['get', S.fields.shieldText || S.fields.ref], ''];
+const prefixless = () => ['let', 'raw', rawRef(),
+  'space', ['index-of', ' ', rawRef()],
+  'dash', ['index-of', '-', rawRef()],
   ['let', 'cut',
     // The first separator of either kind, ignoring the one that is absent.
     ['case',
@@ -1123,21 +1158,21 @@ const PREFIXLESS = ['let', 'raw', RAW_REF,
 /*
  * The leading token, on its own, so two rules can read it.
  *
- * `PREFIXLESS` throws it away and `REF_DESIGN` needs to look at it, and
+ * `prefixless` throws it away and `refDesign` needs to look at it, and
  * recomputing the separator in two places is how the two would quietly come to
  * disagree about where a ref splits.
  */
-const SEPARATOR = ['let',
-  'space', ['index-of', ' ', RAW_REF],
-  'dash', ['index-of', '-', RAW_REF],
+const separator = () => ['let',
+  'space', ['index-of', ' ', rawRef()],
+  'dash', ['index-of', '-', rawRef()],
   ['case',
     ['<', ['var', 'space'], 0], ['var', 'dash'],
     ['<', ['var', 'dash'], 0], ['var', 'space'],
     ['min', ['var', 'space'], ['var', 'dash']]],
 ];
 
-const HEAD = ['let', 'cut', SEPARATOR,
-  ['case', ['>', ['var', 'cut'], 0], ['slice', RAW_REF, 0, ['var', 'cut']], '']];
+const head = () => ['let', 'cut', separator(),
+  ['case', ['>', ['var', 'cut'], 0], ['slice', rawRef(), 0, ['var', 'cut']], '']];
 
 /*
  * Which of the two ref-chosen designs this road wants, or nothing.
@@ -1152,13 +1187,13 @@ const HEAD = ['let', 'cut', SEPARATOR,
  */
 const FOREST_SYSTEMS = ['FSR', 'FR', 'NF', 'FH', 'FDR', 'NFSR'];
 const SCENIC_SUFFIX = ' Scenic';
-const REF_DESIGN = ['case',
-  ['in', HEAD, ['literal', FOREST_SYSTEMS]], 'forest',
+const refDesign = () => ['case',
+  ['in', head(), ['literal', FOREST_SYSTEMS]], 'forest',
   ['all',
     // Guarded, because slicing from a negative start on a short ref is not a
     // question worth asking of the expression evaluator.
-    ['>', ['length', RAW_REF], SCENIC_SUFFIX.length],
-    ['==', ['slice', RAW_REF, ['-', ['length', RAW_REF], SCENIC_SUFFIX.length]], SCENIC_SUFFIX]],
+    ['>', ['length', rawRef()], SCENIC_SUFFIX.length],
+    ['==', ['slice', rawRef(), ['-', ['length', rawRef()], SCENIC_SUFFIX.length]], SCENIC_SUFFIX]],
   'scenic',
   ''];
 
@@ -1176,7 +1211,7 @@ const DESIGNATIONS = ['Scenic', 'Business', 'Alternate', 'Alt', 'Bypass', 'Byp',
  * underflowing, which cannot match a string beginning with a space, so short
  * refs fall through untouched.
  */
-const REF = ['let', 'stem', PREFIXLESS,
+const ref = () => ['let', 'stem', prefixless(),
   ['case',
     ...DESIGNATIONS.flatMap((word) => [
       ['==', ['slice', ['var', 'stem'], ['-', ['length', ['var', 'stem']], word.length + 1]], ` ${word}`],
@@ -1184,15 +1219,24 @@ const REF = ['let', 'stem', PREFIXLESS,
     ]),
     ['var', 'stem']],
 ];
-const REF_CUT = ['index-of', '-', REF];
-const IS_DUPLEX = ['all',
-  ['>', REF_CUT, 0],
-  ['in', 'duplex', ['coalesce', ['get', 'shield'], '']],
-];
-const FIRST_REF = ['slice', REF, 0, REF_CUT];
+const refCut = () => ['index-of', '-', ref()];
+/*
+ * Whether this feature carries two route numbers.
+ *
+ * Both halves have to be present to split: the duplex marker is the tag that
+ * says the hyphen is a separator rather than part of a number. A schema with
+ * no such marker answers false everywhere, and the pair of half-shields is
+ * dropped from the style rather than drawn empty.
+ */
+const canSplit = () => Boolean(S.fields.duplex);
+const isDuplex = () => (canSplit() ? ['all',
+  ['>', refCut(), 0],
+  ['in', S.fields.duplex, ['coalesce', ['get', S.fields.shield], '']],
+] : false);
+const firstRef = () => ['slice', ref(), 0, refCut()];
 // A three-way concurrency would leave "60-119" behind the first hyphen, so the
 // second shield stops at the next one.
-const SECOND_REF = ['let', 'rest', ['slice', REF, ['+', REF_CUT, 1]],
+const secondRef = () => ['let', 'rest', ['slice', ref(), ['+', refCut(), 1]],
   ['case',
     ['>', ['index-of', '-', ['var', 'rest']], 0],
     ['slice', ['var', 'rest'], 0, ['index-of', '-', ['var', 'rest']]],
@@ -1203,8 +1247,26 @@ const SECOND_REF = ['let', 'rest', ['slice', REF, ['+', REF_CUT, 1]],
 const shieldOrder = () => ['match', ['get', S.fields.roadClassField],
   R('motorway'), 1, R('trunk'), 2, R('primary'), 3, R('secondary'), 4, 5];
 
-/** Every shield layer's id, and how far off centre its number sits. */
-export const SHIELD_LAYERS = [
+/**
+ * How a shield expression should read the road's system under this schema.
+ *
+ * Empty for Mapbox, which names a shape and leaves the network to be inferred;
+ * the field name for Protomaps, which names the network outright.
+ */
+const shieldNetwork = () => (S.fields.shieldKind === 'network' ? S.fields.shield : '');
+
+/**
+ * Every shield layer's id, and how far off centre its number sits.
+ *
+ * A function, and only the layers this schema can actually draw. Where nothing
+ * marks a concurrency the two halves never match anything, and shipping them
+ * anyway would leave the runtime updating layers that are not in the style.
+ */
+export function shieldLayerSpecs() {
+  return SHIELD_LAYER_SPECS.slice(0, canSplit() ? 3 : 1);
+}
+
+const SHIELD_LAYER_SPECS = [
   /*
    * The plain shield measures the number it carries, like the halves below.
    *
@@ -1213,9 +1275,9 @@ export const SHIELD_LAYERS = [
    * "SR 61" would have gone on asking for a four-wide sign to hold two digits
    * every time the map crossed a state line.
    */
-  { id: 'road-shield', shift: 0, length: ['length', REF] },
-  { id: 'road-shield-first', shift: -(shieldDisplayWidth(2) / 2 + 1), length: ['length', FIRST_REF] },
-  { id: 'road-shield-second', shift: shieldDisplayWidth(2) / 2 + 1, length: ['length', SECOND_REF] },
+  { id: 'road-shield', shift: 0, get length() { return ['length', ref()]; } },
+  { id: 'road-shield-first', shift: -(shieldDisplayWidth(2) / 2 + 1), get length() { return ['length', firstRef()]; } },
+  { id: 'road-shield-second', shift: shieldDisplayWidth(2) / 2 + 1, get length() { return ['length', secondRef()]; } },
 ];
 
 /**
@@ -1227,18 +1289,32 @@ export const SHIELD_LAYERS = [
  * a caller updating only the plain one is how the halves came to keep the
  * previous state's marker after a border crossing.
  */
-export function shieldLayerUpdates(state = '') {
-  return SHIELD_LAYERS.map(({ id, shift, length }) => ({
-    id,
-    layout: {
-      // Sized from the number it is actually carrying, exactly as the layer
-      // was built — half of a concurrency is as wide as its own half.
-      'icon-image': shieldImageExpression(state, { length, override: REF_DESIGN }),
-      'text-size': shieldTextSizeExpression(state, 2, length),
-      'text-offset': shieldTextOffsetExpression(state, 2, shift, { override: REF_DESIGN }),
-    },
-    paint: { 'text-color': shieldTextColour(state, { override: REF_DESIGN }) },
-  }));
+export function shieldLayerUpdates(state = '', { schema = MAPBOX_SCHEMA } = {}) {
+  /*
+   * The schema has to be set here too, and it is the one place that is easy to
+   * miss: this runs at runtime, long after `bywaysStyle` returned and put the
+   * module binding back. Without this the border crossing would rewrite every
+   * shield layer with Mapbox field names, on a map drawing Protomaps tiles -
+   * and it would do it several minutes into a drive rather than at load.
+   */
+  const previous = S;
+  S = schema;
+  try {
+    const network = shieldNetwork();
+    return shieldLayerSpecs().map(({ id, shift, length }) => ({
+      id,
+      layout: {
+        // Sized from the number it is actually carrying, exactly as the layer
+        // was built — half of a concurrency is as wide as its own half.
+        'icon-image': shieldImageExpression(state, { length, override: refDesign(), network }),
+        'text-size': shieldTextSizeExpression(state, 2, length, { network }),
+        'text-offset': shieldTextOffsetExpression(state, 2, shift, { override: refDesign(), network }),
+      },
+      paint: { 'text-color': shieldTextColour(state, { override: refDesign(), network }) },
+    }));
+  } finally {
+    S = previous;
+  }
 }
 
 /**
@@ -1277,7 +1353,7 @@ function shieldLayers(state = '') {
     type: 'symbol',
     source: S.source,
     'source-layer': S.layers.road,
-    filter: ['all', ['has', 'ref'], onARoad, IS_DUPLEX],
+    filter: ['all', ['has', S.fields.shieldText || S.fields.ref], onARoad, isDuplex()],
     minzoom: 6,
     layout: {
       'symbol-placement': 'line',
@@ -1285,14 +1361,14 @@ function shieldLayers(state = '') {
         // tileset's own maxzoom has somewhere to go: 220 at z16 is 880 on
         // screen at z18, where 260 would have been over a thousand.
         'symbol-spacing': ['interpolate', ['linear'], ['zoom'], 6, 170, 14, 220],
-      'icon-image': shieldImageExpression(state, { length: ['length', text], override: REF_DESIGN }),
+      'icon-image': shieldImageExpression(state, { length: ['length', text], override: refDesign(), network: shieldNetwork() }),
       'icon-size': 1,
       'icon-offset': [shiftPx, 0],
       'icon-rotation-alignment': 'viewport',
       'text-field': text,
       'text-font': FONT_BOLD,
-      'text-size': shieldTextSizeExpression(state, 2, ['length', text]),
-      'text-offset': shieldTextOffsetExpression(state, 2, shiftPx, { override: REF_DESIGN }),
+      'text-size': shieldTextSizeExpression(state, 2, ['length', text], { network: shieldNetwork() }),
+      'text-offset': shieldTextOffsetExpression(state, 2, shiftPx, { override: refDesign(), network: shieldNetwork() }),
       'text-rotation-alignment': 'viewport',
       'text-anchor': 'center',
       'icon-allow-overlap': true,
@@ -1303,7 +1379,7 @@ function shieldLayers(state = '') {
       'icon-optional': false,
       'symbol-sort-key': shieldOrder(),
     },
-    paint: { 'text-color': shieldTextColour(state, { override: REF_DESIGN }) },
+    paint: { 'text-color': shieldTextColour(state, { override: refDesign(), network: shieldNetwork() }) },
   });
 
   // Half a shield's width each way, plus a pixel so the two do not touch.
@@ -1316,9 +1392,14 @@ function shieldLayers(state = '') {
       source: S.source,
       'source-layer': S.layers.road,
       filter: ['all',
-        ['has', 'ref'],
+        ['has', S.fields.shieldText || S.fields.ref],
         onARoad,
-        ['!', IS_DUPLEX],
+        /*
+         * Where nothing marks a concurrency this is `['!', false]`, so the
+         * plain shield draws every numbered road and the two halves below are
+         * not in the style at all.
+         */
+        ['!', isDuplex()],
       ],
       minzoom: 6,
       layout: {
@@ -1343,23 +1424,23 @@ function shieldLayers(state = '') {
          * number floating in the middle of it. The concurrency layers have
          * always measured their own half; this now does the same.
          */
-        'icon-image': shieldImageExpression(state, { length: ['length', REF], override: REF_DESIGN }),
+        'icon-image': shieldImageExpression(state, { length: ['length', ref()], override: refDesign(), network: shieldNetwork() }),
         // Constant, so the number's size and offset — which are fixed per
         // shield — cannot drift out of register with the marker they sit on.
         'icon-size': 1,
         'icon-rotation-alignment': 'viewport',
-        // The stripped number, not the raw ref — see REF above. This was the
+        // The stripped number, not the raw ref — see `ref` above. This was the
         // one place that read `ref` straight through, which is why a single
         // route drew "SR 61" while a concurrency drew bare numbers.
-        'text-field': REF,
+        'text-field': ref(),
         'text-font': FONT_BOLD,
         // Sized and placed per shield: a third of the blanks carry the state's
         // name across the top, and a number centred in the image lands on it.
         // Sized from the number, not from a default of two characters: "21/2"
         // in a circle built for "21" is the West Virginia secondary route that
         // ran outside its own shield.
-        'text-size': shieldTextSizeExpression(state, 2, ['length', REF]),
-        'text-offset': shieldTextOffsetExpression(state, 2, 0, { override: REF_DESIGN }),
+        'text-size': shieldTextSizeExpression(state, 2, ['length', ref()], { network: shieldNetwork() }),
+        'text-offset': shieldTextOffsetExpression(state, 2, 0, { override: refDesign(), network: shieldNetwork() }),
         'text-rotation-alignment': 'viewport',
         'text-anchor': 'center',
         /*
@@ -1381,9 +1462,11 @@ function shieldLayers(state = '') {
         // An interstate marker outranks a county route when they land together.
         'symbol-sort-key': shieldOrder(),
       },
-      paint: { 'text-color': shieldTextColour(state, { override: REF_DESIGN }) },
+      paint: { 'text-color': shieldTextColour(state, { override: refDesign(), network: shieldNetwork() }) },
     },
-    half('road-shield-first', FIRST_REF, -apart),
-    half('road-shield-second', SECOND_REF, apart),
+    ...(canSplit() ? [
+      half('road-shield-first', firstRef(), -apart),
+      half('road-shield-second', secondRef(), apart),
+    ] : []),
   ];
 }

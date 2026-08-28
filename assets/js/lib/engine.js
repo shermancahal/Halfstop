@@ -8,7 +8,7 @@
  */
 
 import { MAPBOX_TOKEN, MAP_ENGINE, PROTOMAPS_ARCHIVE, PROTOMAPS_MAXZOOM } from '../config.js';
-import { bywaysStyle, PROTOMAPS_SCHEMA } from './byways-style.js';
+import { bywaysStyle, PROTOMAPS_SCHEMA, MAPBOX_SCHEMA } from './byways-style.js';
 import { registerPMTilesProtocol } from './pmtiles.js';
 
 const MAPLIBRE_VERSION = '4.7.1';
@@ -262,6 +262,19 @@ export function overlayIdFromLayer(layerId = '') {
  *
  * @returns {{style: object|string, vector: boolean}}
  */
+/**
+ * The schema a basemap's style was built from.
+ *
+ * The runtime needs this: shield layers are rewritten when the map crosses
+ * into another state, and those rewrites are expressions over field names.
+ * Built against the wrong schema they read Mapbox's names out of Protomaps
+ * tiles — and they would do it several minutes into a drive rather than at
+ * load, which is the worst time for a map to lose its route numbers.
+ */
+export function schemaFor(basemap) {
+  return basemap?.custom === 'byways' && PROTOMAPS_ARCHIVE ? PROTOMAPS_SCHEMA : MAPBOX_SCHEMA;
+}
+
 export function styleFor(basemap, overlays = []) {
   /*
    * Byways Topo, drawn from whichever geometry is configured.

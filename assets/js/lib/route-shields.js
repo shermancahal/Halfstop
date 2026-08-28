@@ -942,7 +942,7 @@ export function shieldTextOffset(design, length) {
  * The nationals are drawn rather than loaded from a blank, so their numbers sit
  * where those drawings put them — the interstate's below its red crown.
  */
-export function shieldTextSizeExpression(state = '', length = 2, refLength = null) {
+export function shieldTextSizeExpression(state = '', length = 2, refLength = null, { network = '' } = {}) {
   /*
    * Sized from the number the road actually carries, when the caller can say.
    *
@@ -966,6 +966,7 @@ export function shieldTextSizeExpression(state = '', length = 2, refLength = nul
       at(2)];
   };
 
+  if (network) return networkArms(network, sized);
   return [
     'match', ['get', 'shield'],
     ...SHIELD_MATCH.flatMap((arm) => [arm.values, sized(arm.design)]),
@@ -978,7 +979,7 @@ export function shieldTextSizeExpression(state = '', length = 2, refLength = nul
  *        offsets are in ems, and the em is a different size on every design,
  *        so the conversion has to happen per arm rather than once.
  */
-export function shieldTextOffsetExpression(state = '', length = 2, shiftPx = 0, { override = null } = {}) {
+export function shieldTextOffsetExpression(state = '', length = 2, shiftPx = 0, { override = null, network = '' } = {}) {
   const local = shieldTextOffset(stateDesign(state), length);
   // The interstate number clears its crown; the US shield's sits centre.
   const national = (design) => (design === 'interstate' ? [0, 0.18] : [0, 0.06]);
@@ -987,7 +988,10 @@ export function shieldTextOffsetExpression(state = '', length = 2, shiftPx = 0, 
     const size = design === LOCAL ? shieldTextSize(stateDesign(state), length) : NOMINAL_TEXT;
     return [Math.round((base[0] + shiftPx / size) * 100) / 100, base[1]];
   };
-  const byShield = [
+  const placed = (design) => ['literal', design === UNCLAIMED
+    ? shift(shieldTextOffset(UNCLAIMED, length), UNCLAIMED)
+    : shift(design === LOCAL ? local : national(design), design)];
+  const byShield = network ? networkArms(network, placed) : [
     'match', ['get', 'shield'],
     ...SHIELD_MATCH.flatMap((arm) => [
       arm.values,
@@ -1204,6 +1208,32 @@ const LOCAL = Symbol('local state design');
  * refs covers it.
  */
 
+/*
+ * Which design a road wants, under a schema that names its *network* rather
+ * than a shape.
+ *
+ * Mapbox says what a marker looks like — `circle-white`, `rectangle-white` —
+ * and leaves who numbered the road to be inferred from wherever the map is
+ * looking. Protomaps says `US:I`, `US:US`, `US:KY`: the network itself, which
+ * is the question the shield is actually asking.
+ *
+ * The state arm still resolves to the design for the state under the viewport
+ * rather than the two letters in the value. That is a real thing left on the
+ * table — the network knows the answer exactly, and near a border the viewport
+ * does not — but every size, offset and colour below is computed per design,
+ * and reading the state per feature turns each of them into fifty-one arms.
+ * Worth doing; worth doing on its own, with the border case as its test.
+ */
+function networkArms(field, valueFor) {
+  const net = ['coalesce', ['get', field], ''];
+  return ['case',
+    ['==', net, 'US:I'], valueFor('interstate'),
+    ['==', net, 'US:US'], valueFor('us'),
+    // Any other US network is somebody's state or county route.
+    ['==', ['slice', net, 0, 3], 'US:'], valueFor(LOCAL),
+    valueFor(UNCLAIMED)];
+}
+
 const SHIELD_MATCH = [
   {
     design: 'interstate',
@@ -1267,7 +1297,7 @@ export function shieldImageIdFor(shield, reflen, state = '') {
   return shieldImageId(designForShield(shield, state), reflen);
 }
 
-export function shieldImageExpression(state = '', { length = null, override = null } = {}) {
+export function shieldImageExpression(state = '', { length = null, override = null, network = '' } = {}) {
   // Interstates and US routes look the same in every state, so only the state
   // branch varies. Which state that is comes from where the map is looking
   // rather than from the road's own tags — the road data does not reliably
@@ -1275,7 +1305,8 @@ export function shieldImageExpression(state = '', { length = null, override = nu
   // everywhere except within a few miles of a border.
   const local = stateDesign(state);
 
-  const byShield = [
+  const design = (name) => (name === LOCAL ? local : name);
+  const byShield = network ? networkArms(network, design) : [
     'match', ['get', 'shield'],
     ...SHIELD_MATCH.flatMap((arm) => [arm.values, arm.design === LOCAL ? local : arm.design]),
     // Not `local`: a shield value the table does not list is a road nothing
@@ -1302,6 +1333,12 @@ export function shieldImageExpression(state = '', { length = null, override = nu
     // road's own `reflen` — a shield carrying half of a concurrency is as wide
     // as its own half, not as the pair.
     ['to-string', ['max', MIN_LEN, ['min', MAX_LEN, length || ['coalesce', ['get', 'reflen'], MIN_LEN]]]],
+    /*
+     * `reflen` is Mapbox's; a schema without it must pass `length`. Every
+     * caller in this app does, and the fallback stays for the one that might
+     * not — under Protomaps it would resolve to the minimum width rather than
+     * to nothing, which is a narrow sign rather than a missing one.
+     */
   ];
 }
 
@@ -1311,11 +1348,13 @@ export function shieldImageExpression(state = '', { length = null, override = nu
  * A dark-on-dark number is invisible, and several state markers are dark:
  * Arizona's black square, Idaho's black outline, South Carolina's blue disc.
  */
-export function shieldTextColour(state = '', { override = null } = {}) {
+export function shieldTextColour(state = '', { override = null, network = '' } = {}) {
   const entry = STATE_SHIELDS[String(state).trim().toUpperCase()];
   const localText = entry ? entry.fg : '#1c1c1c';
 
-  const byShield = [
+  // White on the interstate's blue; the state's own ink on everything else,
+  // which is what the shape table below works out to as well.
+  const byShield = network ? networkArms(network, (design) => (design === 'interstate' ? '#ffffff' : localText)) : [
     'match', ['get', 'shield'],
     ['us-interstate', 'us-interstate-business', 'us-interstate-duplex', 'us-interstate-truck'], '#ffffff',
     ['us-state', 'us-state-duplex'], localText,

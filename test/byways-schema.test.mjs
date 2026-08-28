@@ -236,6 +236,35 @@ test('protomaps: the archive is addressed through the protocol', () => {
   assert.ok(!source.url, 'a TileJSON url would be a second code path in the protocol handler');
 });
 
+test('protomaps: no Mapbox field name survives into the Protomaps style', () => {
+  /*
+   * The check that catches a frozen constant, which is a mistake this file has
+   * now made four times.
+   *
+   * An expression written at module level is evaluated once, with whatever
+   * schema is in force then - always Mapbox - so it bakes Mapbox field names
+   * into every style built afterwards. The result validates, loads and draws;
+   * the labels and the shields are simply absent. Nothing structural can see
+   * it, because the layer is present and correct in every other respect.
+   *
+   * So the test is the direct one: these names exist only in Mapbox Streets,
+   * and none of them may appear anywhere in a style built for another schema.
+   */
+  const text = JSON.stringify(protomapsStyle());
+  const mapboxOnly = ['class', 'name_en', 'surface', 'reflen', 'shield', 'ele', 'index'];
+  const found = mapboxOnly.filter((field) => text.includes(`"${field}"`));
+  assert.deepEqual(found, [], 'a Mapbox field name reached the Protomaps style');
+});
+
+test('protomaps: the shield reads the network, and the number comes pre-stripped', () => {
+  const shield = protomapsStyle().layers.find((layer) => layer.id === 'road-shield');
+  const text = JSON.stringify(shield);
+  assert.ok(text.includes('"network"'), 'the shield design must come from the network field');
+  assert.ok(text.includes('"shield_text"'), 'and the number from shield_text, which is already stripped');
+  assert.ok(text.includes('US:I') && text.includes('US:US'),
+    'the interstate and US networks are what the design branches on');
+});
+
 test('protomaps: nothing is left pointing at Mapbox', () => {
   /*
    * The whole point of the archive is that looking at the map costs nothing
@@ -288,6 +317,15 @@ test('protomaps: what the schema cannot draw is dropped, and it is the expected 
      * visible. Whether the tiles carry surface after all is worth probing.
      */
     'road-unpaved',
+    /*
+     * The concurrency pair. Mapbox marks a road carrying two numbers in its
+     * shield value, and that marker is what says the hyphen in "23-60" is a
+     * separator rather than part of a number. Protomaps has no equivalent, so
+     * the split does not run and a doubled road gets one shield - rather than
+     * splitting on any hyphen, which would cut "21/2" and every hyphenated
+     * forest road in half.
+     */
+    'road-shield-first', 'road-shield-second',
   ].sort());
   const added = [...protomaps].filter((id) => !mapbox.has(id));
   assert.deepEqual(added, [], 'the Protomaps style is the same map, not a different one');

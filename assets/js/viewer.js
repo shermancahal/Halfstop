@@ -15,7 +15,7 @@ import {
 } from './config.js';
 import {
   loadEngine, buildRasterStyle, hasMapboxToken, mapboxToken, overlayParts, overlayIdFromLayer, overlayRows,
-  overlayLinks, styleFor, styleHasGlyphs, engineFor,
+  overlayLinks, styleFor, styleHasGlyphs, engineFor, schemaFor,
 } from './lib/engine.js';
 import { loadCatalog, findMap } from './lib/catalog.js';
 import { parseMapFile, linePositions } from './lib/parse.js';
@@ -1889,7 +1889,7 @@ function applyShieldState(code = state.shieldState) {
     // set on each is decided in byways-style.js beside the layers themselves —
     // updating only 'road-shield' left the halves showing the previous state's
     // marker after a border crossing.
-    for (const update of shieldLayerUpdates(code)) {
+    for (const update of shieldLayerUpdates(code, { schema: schemaFor(basemapById(state.basemapId)) })) {
       if (!state.map.getLayer(update.id)) continue;
       for (const [property, value] of Object.entries(update.layout)) {
         state.map.setLayoutProperty(update.id, property, value);
