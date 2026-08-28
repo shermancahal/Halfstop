@@ -483,3 +483,36 @@ test('registering twice does not stack two handlers on one scheme', () => {
   assert.equal(registerPMTilesProtocol(gl, { resolve: (u) => u }), true);
   assert.equal(gl.handlers.get('pmtiles'), first);
 });
+
+/*
+ * The archive's real depth is reported back.
+ *
+ * The style has to declare a maxzoom before anything has been fetched, and
+ * overstating it draws blank ground rather than raising anything. The header
+ * is the only place the true answer is written down, so it is handed to the
+ * caller the first time an archive opens.
+ */
+test('the header is reported once per archive, whatever else is asked of it', async () => {
+  const gl = fakeMapLibre();
+  const served = serve(buildArchive(SAMPLE));
+  const seen = [];
+  registerPMTilesProtocol(gl, {
+    fetch: served.fetch, resolve: (u) => u, onArchive: (url, header) => seen.push([url, header.maxZoom]),
+  });
+  const handler = gl.handlers.get('pmtiles');
+  await handler({ url: 'pmtiles://x.pmtiles/8/70/100' });
+  await handler({ url: 'pmtiles://x.pmtiles/8/70/101' });
+  // The report is fired off alongside the tile rather than awaited with it.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(seen, [['x.pmtiles', 12]]);
+});
+
+test('a callback that throws does not take the tile down with it', async () => {
+  const gl = fakeMapLibre();
+  const served = serve(buildArchive(SAMPLE));
+  registerPMTilesProtocol(gl, {
+    fetch: served.fetch, resolve: (u) => u, onArchive: () => { throw new Error('nope'); },
+  });
+  const response = await gl.handlers.get('pmtiles')({ url: 'pmtiles://x.pmtiles/8/70/100' });
+  assert.equal(text(new Uint8Array(response.data)), 'somewhere in Tennessee');
+});

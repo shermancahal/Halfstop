@@ -209,3 +209,165 @@ test('byways: the road hierarchy maps across, and says where it flattens', () =>
   assert.equal(distinct, 11, 'the road hierarchy has flattened; roads must read kind_detail, not kind');
   assert.equal(PROTOMAPS_SCHEMA.fields.roadClassField, 'kind_detail');
 });
+
+/* ------------------------------------------------------- the Protomaps map */
+
+const ARCHIVE = 'https://example.test/byways.pmtiles';
+const protomapsStyle = () => bywaysStyle('', { schema: PROTOMAPS_SCHEMA, archive: ARCHIVE, maxzoom: 15 });
+
+test('protomaps: no archive means no style, rather than a style of nothing', () => {
+  /*
+   * The same rule Mapbox-with-no-token follows, and for the same reason. A
+   * style built with nowhere to read from validates, loads, reports success
+   * and draws an empty parchment rectangle - the exact failure this file keeps
+   * being written to avoid. Null sends the caller to the raster fallback,
+   * which says out loud what it is showing instead.
+   */
+  assert.equal(bywaysStyle('', { schema: PROTOMAPS_SCHEMA }), null);
+  assert.equal(bywaysStyle('', { schema: PROTOMAPS_SCHEMA, archive: '' }), null);
+  assert.ok(protomapsStyle(), 'and an archive means there is one');
+});
+
+test('protomaps: the archive is addressed through the protocol', () => {
+  const source = protomapsStyle().sources[PROTOMAPS_SCHEMA.source];
+  assert.deepEqual(source.tiles, [`pmtiles://${ARCHIVE}/{z}/{x}/{y}`]);
+  assert.equal(source.maxzoom, 15);
+  assert.equal(source.type, 'vector');
+  assert.ok(!source.url, 'a TileJSON url would be a second code path in the protocol handler');
+});
+
+test('protomaps: nothing is left pointing at Mapbox', () => {
+  /*
+   * The whole point of the archive is that looking at the map costs nothing
+   * and works with no signal. One leftover Mapbox URL - a glyph range, a
+   * sprite, a tile template - would quietly restore both the bill and the
+   * dependency, and would do it invisibly, because the map would still draw.
+   */
+  const text = JSON.stringify(protomapsStyle());
+  assert.ok(!text.includes('mapbox'), 'the Protomaps style still mentions Mapbox somewhere');
+  assert.ok(!text.includes('access_token'), 'and still carries a token parameter');
+});
+
+test('protomaps: no layer is shipped with a source-layer the schema cannot supply', () => {
+  /*
+   * A source-layer of null is how the schema says "this source has no
+   * contours". Left in the style, GL asks for a source-layer named `null`,
+   * finds nothing, and draws nothing - no error, no warning, a map missing its
+   * contour lines with no indication why. Those layers are meant to be dropped
+   * before the style is handed over.
+   */
+  const style = protomapsStyle();
+  const named = new Set(Object.values(PROTOMAPS_SCHEMA.layers).filter(Boolean));
+  for (const layer of style.layers) {
+    if (layer.type === 'background') continue;
+    assert.ok(layer['source-layer'], `${layer.id} has no source-layer`);
+    assert.ok(named.has(layer['source-layer']),
+      `${layer.id} reads ${layer['source-layer']}, which the schema does not name`);
+    assert.ok(style.sources[layer.source], `${layer.id} reads a source the style does not declare`);
+  }
+});
+
+test('protomaps: what the schema cannot draw is dropped, and it is the expected list', () => {
+  /*
+   * Named rather than counted. "Seven fewer layers" passes just as happily if
+   * the seven are the road classes, and the two gaps that matter - relief and
+   * natural feature names - are ones we have answers for elsewhere: the USGS
+   * contour and hillshade overlays are already in the catalogue.
+   */
+  const mapbox = new Set(bywaysStyle('pk.snapshot').layers.map((layer) => layer.id));
+  const protomaps = new Set(protomapsStyle().layers.map((layer) => layer.id));
+  const dropped = [...mapbox].filter((id) => !protomaps.has(id));
+  assert.deepEqual(dropped.sort(), [
+    'contour', 'contour-index', 'contour-label', 'hillshade',
+    'label-summit', 'label-water', 'national-park',
+    /*
+     * The surface marking, which is the one that stings: "tracks and surfaces"
+     * is how this basemap describes itself. Protomaps' schema does not name a
+     * surface field, so the layer is dropped rather than drawn with a filter
+     * that matches nothing - the loss is real either way and this way it is
+     * visible. Whether the tiles carry surface after all is worth probing.
+     */
+    'road-unpaved',
+  ].sort());
+  const added = [...protomaps].filter((id) => !mapbox.has(id));
+  assert.deepEqual(added, [], 'the Protomaps style is the same map, not a different one');
+});
+
+test('protomaps: the road hierarchy keeps all eleven of its weights', () => {
+  /*
+   * This is the reason the port is worth doing at all. Protomaps' `kind` field
+   * has five values and would have collapsed motorway into trunk and primary
+   * into secondary - a US highway and a county road at the same weight. Roads
+   * read `kind_detail` instead, which carries the original OSM tag.
+   *
+   * Checked by counting the distinct line widths the road layers actually draw,
+   * not by counting the entries in the schema: a mapping with eleven names that
+   * all resolve to the same weight would pass the second and fail the map.
+   */
+  const style = protomapsStyle();
+  const widths = new Set(
+    style.layers
+      .filter((layer) => layer.id.startsWith('road-') && layer.type === 'line')
+      .map((layer) => JSON.stringify(layer.paint['line-width'])),
+  );
+  assert.ok(widths.size >= 11, `the road network draws ${widths.size} distinct widths, expected at least 11`);
+  assert.equal(new Set(Object.values(PROTOMAPS_SCHEMA.roadClasses)).size, 11);
+});
+
+test('protomaps: every road filter names a class the schema maps', () => {
+  /*
+   * A filter naming a value the tiles never carry is valid, compiles, and
+   * draws an empty road class. There is nothing to see and nothing to report -
+   * which is how `street` and `street_limited`, written out as Mapbox
+   * literals among ten correct schema reads, survived until this ran.
+   */
+  const known = new Set([
+    ...Object.values(PROTOMAPS_SCHEMA.roadClasses),
+    ...Object.values(PROTOMAPS_SCHEMA.roadLinks),
+  ]);
+  const field = PROTOMAPS_SCHEMA.fields.roadClassField;
+  const asked = new Set();
+  const walk = (node) => {
+    if (!Array.isArray(node)) return;
+    const reads = Array.isArray(node[1]) && node[1][0] === 'get' && node[1][1] === field;
+    if ((node[0] === 'match' || node[0] === '==') && reads) {
+      for (const value of node.slice(2).flat()) if (typeof value === 'string') asked.add(value);
+    }
+    for (const child of node) walk(child);
+  };
+  for (const layer of protomapsStyle().layers) {
+    if (layer['source-layer'] !== PROTOMAPS_SCHEMA.layers.road) continue;
+    walk(layer.filter);
+    for (const value of Object.values(layer.paint || {})) walk(value);
+    for (const value of Object.values(layer.layout || {})) walk(value);
+  }
+  assert.ok(asked.size > 0, 'no road filter reads the road class field at all');
+  assert.deepEqual([...asked].filter((value) => !known.has(value)), [],
+    'a road layer filters on a class the schema never maps');
+});
+
+test('byways: no road class is written inline', () => {
+  /*
+   * The third of these source checks, and the one that had to be written after
+   * the fact. The source-layer and field checks above both passed while seven
+   * road filters carried Mapbox class names spelled out - `street`,
+   * `street_limited`, `track`, `path` - because those are values rather than
+   * fields, and the output was correct against Mapbox either way.
+   *
+   * The reason it can only be checked here is the same as for the other two:
+   * over Mapbox geometry the literal and the schema read produce identical
+   * styles, so no test of behaviour can tell them apart.
+   */
+  const source = readFileSync(path.join(HERE, '..', 'assets', 'js', 'lib', 'byways-style.js'), 'utf8');
+  const roads = source
+    .slice(source.indexOf('function roadLayers'))
+    // The accessors themselves name a class, which is the point of them; so
+    // does `className === 'motorway'`, where the name is a key of ROAD_CLASSES
+    // rather than a value from the tiles.
+    .replace(/\bRL?\('[a-zA-Z]+'\)/g, 'R()')
+    .replace(/className === '[a-z_]+'/g, 'className === K');
+  const inline = [...roads.matchAll(/'(motorway|trunk|primary|secondary|tertiary|street|street_limited|track|path|pedestrian|service)(_link)?'/g)]
+    .map((match) => match[0]);
+  assert.deepEqual(inline, [],
+    'a road class is written inline below roadLayers; it must come from the schema');
+});

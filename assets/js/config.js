@@ -73,6 +73,39 @@ export const SUPABASE_URL = readGlobal('ABMAP_SUPABASE_URL');
 export const SUPABASE_KEY = readGlobal('ABMAP_SUPABASE_KEY');
 
 /**
+ * The Protomaps archive Byways Topo draws from, when there is one.
+ *
+ * One `.pmtiles` file holding the whole basemap, read a slice at a time over
+ * HTTP range requests. It is what makes the house map free to look at and
+ * possible to take offline: static bytes on a bucket rather than a metered
+ * tile service, and a file rather than a few hundred thousand URLs.
+ *
+ * Set it and Byways Topo draws from it. Leave it empty and Byways Topo falls
+ * back to Mapbox exactly as before, so this switch is the whole migration.
+ *
+ * It lives in assets/js/token.js with the other injected values, not because
+ * it is a secret - it is a public URL on a public bucket - but because it is
+ * deployment configuration rather than code, and it will differ between a
+ * local checkout, the site and the app bundle. See docs/protomaps.md for how
+ * to build one.
+ */
+export const PROTOMAPS_ARCHIVE = readGlobal('ABMAP_PROTOMAPS_ARCHIVE');
+
+/**
+ * How deep that archive goes.
+ *
+ * Stated here rather than read from the file because the style document is
+ * built before anything has been fetched. Getting it wrong is not symmetrical:
+ * understating it costs detail, because GL stretches the deepest tile it has,
+ * while overstating it asks for tiles the archive does not contain and draws
+ * blank ground. So the app reads the archive's own header once it opens it and
+ * warns when the two disagree, rather than trusting this number.
+ *
+ * 15 is what the Protomaps daily builds go to.
+ */
+export const PROTOMAPS_MAXZOOM = Number(readGlobal('ABMAP_PROTOMAPS_MAXZOOM')) || 15;
+
+/**
  * Rendering engine.
  *   'auto'     — Mapbox GL JS when a token is set, MapLibre GL otherwise
  *   'mapbox'   — force Mapbox GL JS (requires MAPBOX_TOKEN)
@@ -217,6 +250,17 @@ export const BASEMAPS = [
     custom: 'byways',
     group: 'Topographic',
     description: 'OSM rendered for the outdoors — tracks and surfaces.',
+    /*
+     * Which geometry it draws from is decided at style time, not here.
+     *
+     * With PROTOMAPS_ARCHIVE set it reads our own archive: free to look at,
+     * and downloadable, because the whole basemap is one file. Without one it
+     * reads Mapbox, as it always has. Without either it is the CyclOSM raster
+     * below, and the panel says so rather than pretending.
+     *
+     * Same cartography either way — the palette, the road hierarchy and the
+     * shields are this app's and are applied to whichever geometry arrives.
+     */
     tiles: [
       'https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
       'https://b.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
@@ -285,6 +329,33 @@ export const BASEMAPS = [
     tileSize: 256,
     maxzoom: 19,
     attribution: OSM_ATTRIBUTION,
+  },
+
+  /*
+   * The same map drawn from Mapbox geometry, for comparing the two side by
+   * side while the port settles.
+   *
+   * Editors only, and deliberately so: every view of it is metered, and the
+   * point of the Protomaps archive is that the default should not be. It stays
+   * because a difference you cannot see is a difference you cannot fix - and
+   * because if this app ever draws natively on the phone, Mapbox is where
+   * proper offline downloads would come from.
+   */
+  {
+    id: 'byways-topo-mapbox',
+    name: 'Byways Topo (Mapbox)',
+    custom: 'byways-mapbox',
+    audience: 'editors',
+    group: 'Topographic',
+    description: 'The house map drawn from Mapbox geometry, for comparison.',
+    tiles: [
+      'https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
+      'https://b.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
+      'https://c.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
+    ],
+    tileSize: 256,
+    maxzoom: 18,
+    attribution: `${OSM_ATTRIBUTION}, tiles by <a href="https://www.cyclosm.org/">CyclOSM</a>`,
   },
 
   /* ---- Vector styles: shown only when MAPBOX_TOKEN is set ---- */

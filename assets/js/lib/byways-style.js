@@ -100,6 +100,18 @@ export const MAPBOX_SCHEMA = {
     path: 'path',
     pedestrian: 'pedestrian',
   },
+  /*
+   * Slip roads, which are their own classes rather than a property of the road
+   * they serve. Named here because a schema that omitted them would draw every
+   * interchange in the country as two roads crossing.
+   */
+  roadLinks: {
+    motorway: 'motorway_link',
+    trunk: 'trunk_link',
+    primary: 'primary_link',
+    secondary: 'secondary_link',
+    tertiary: 'tertiary_link',
+  },
 };
 
 /**
@@ -206,6 +218,14 @@ export const PROTOMAPS_SCHEMA = {
     path: 'path',
     pedestrian: 'pedestrian',
   },
+  // The same OSM tags, since kind_detail is the OSM highway value.
+  roadLinks: {
+    motorway: 'motorway_link',
+    trunk: 'trunk_link',
+    primary: 'primary_link',
+    secondary: 'secondary_link',
+    tertiary: 'tertiary_link',
+  },
 };
 
 /*
@@ -302,7 +322,7 @@ const ROAD_CLASSES = {
  * tile and draws nothing for that label. Preferring the Latin name avoids most
  * of those before they happen.
  */
-const LABEL_NAME = ['coalesce', ['get', 'name_en'], ['get', 'name']];
+const labelName = () => ['coalesce', ['get', S.fields.nameEn], ['get', S.fields.name]];
 
 /*
  * Whether the road is unsealed.
@@ -314,10 +334,39 @@ const LABEL_NAME = ['coalesce', ['get', 'name_en'], ['get', 'name']];
  * not what it is made of. Severity is not in there at all; the Forest Service
  * MVUM overlay is where the legal and practical status of a forest road lives.
  */
-const UNPAVED = ['==', ['get', 'surface'], 'unpaved'];
+/*
+ * A function rather than a constant, because a constant is evaluated once at
+ * module load - with whatever schema happened to be in force then, which is
+ * always the Mapbox one. Three expressions here were written as constants and
+ * every one of them silently baked `name_en`, `surface` and `class` into the
+ * Protomaps style, where those fields do not exist. The style validated, the
+ * map drew, and the labels were simply gone.
+ */
+const unpaved = () => ['==', ['get', S.fields.surface], 'unpaved'];
+
+/** Whether this schema says anything at all about surfaces. */
+const hasSurface = () => Boolean(S.fields.surface);
+
+/*
+ * A road class, as the schema in force names it.
+ *
+ * Every filter below goes through this rather than writing the value out. The
+ * two vocabularies agree on more than they disagree on, which is exactly what
+ * makes writing the literal dangerous: `motorway` is right in both, so a
+ * hard-coded `street` sat unnoticed among them and would have matched nothing
+ * at all over Protomaps geometry - a whole class of road missing from the map
+ * with every other class present and correct.
+ */
+const R = (name) => S.roadClasses[name];
+
+/** The ramps belonging to a class, same reasoning. */
+const RL = (name) => S.roadLinks[name];
 
 /** Roads that are drawn solid, and so have something for a dash to sit on. */
-const SEALED_CLASSES = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'street', 'street_limited'];
+const sealedClasses = () => [
+  R('motorway'), R('trunk'), R('primary'), R('secondary'), R('tertiary'),
+  R('street'), R('streetLimited'),
+];
 
 const FONT = ['DIN Pro Regular', 'Arial Unicode MS Regular'];
 const FONT_BOLD = ['DIN Pro Bold', 'Arial Unicode MS Bold'];
@@ -336,11 +385,9 @@ const FONT_BOLD = ['DIN Pro Bold', 'Arial Unicode MS Bold'];
  */
 const LINK_SCALE = 0.55;
 
-const linkOf = (className) => `${className}_link`;
-
 /** Matches a road class and the ramps that belong to it. */
 const roadFilter = (className) => [
-  'match', ['get', S.fields.roadClassField], [className, linkOf(className)], true, false,
+  'match', ['get', S.fields.roadClassField], [R(className), RL(className)], true, false,
 ];
 
 /**
@@ -352,7 +399,7 @@ const roadFilter = (className) => [
  * ramp and mainline happens at each stop rather than around the whole curve.
  */
 const roadWidth = (className, base, top) => {
-  const isLink = ['==', ['get', S.fields.roadClassField], linkOf(className)];
+  const isLink = ['==', ['get', S.fields.roadClassField], RL(className)];
   const pick = (value) => ['case', isLink, value * LINK_SCALE, value];
   return [
     'interpolate', ['linear'], ['zoom'],
@@ -384,7 +431,7 @@ const width = (base, top) => [
  * @param {string} token  A Mapbox public token.
  * @returns {object} A style-spec document.
  */
-export function bywaysStyle(token, { schema = MAPBOX_SCHEMA } = {}) {
+export function bywaysStyle(token, { schema = MAPBOX_SCHEMA, archive = '', maxzoom = 0 } = {}) {
   /*
    * The schema is set before the layer builders run, and restored after.
    *
@@ -397,7 +444,7 @@ export function bywaysStyle(token, { schema = MAPBOX_SCHEMA } = {}) {
   const previous = S;
   S = schema;
   try {
-    return buildStyle(token, schema);
+    return buildStyle(token, schema, { archive, maxzoom });
   } finally {
     S = previous;
   }
@@ -419,8 +466,18 @@ function drawable(layers) {
   });
 }
 
-function buildStyle(token, schema) {
+function buildStyle(token, schema, { archive, maxzoom }) {
   if (schema.id === 'mapbox' && !token) return null;
+  /*
+   * A Protomaps style with no archive to read is a map of nothing.
+   *
+   * Returning null puts it in the same place as Mapbox with no token: the
+   * caller substitutes a raster basemap and says so. Building the style anyway
+   * would produce a document that validates, loads, reports success and draws
+   * an empty parchment rectangle, which is the failure this file keeps having
+   * to be defended against.
+   */
+  if (schema.id !== 'mapbox' && !archive) return null;
   const key = encodeURIComponent(token || '');
   /*
    * Each tileset's own depth, not one number for both.
@@ -483,9 +540,22 @@ function buildStyle(token, schema) {
          * which is what makes this downloadable and what the existing per-tile
          * cache cannot handle.
          */
+        /*
+         * Declared as a tile template rather than a TileJSON `url`, which is
+         * the form the reference reader uses.
+         *
+         * Both work, and this one has a property worth having: the protocol
+         * handler then only ever answers tile requests, so there is one code
+         * path rather than two and no negotiation before the map draws. The
+         * cost is that the zoom range has to be stated here instead of read
+         * from the archive - and an overstated maxzoom means blank tiles, so
+         * it is checked against the archive's own header at runtime.
+         */
         [schema.source]: {
           type: 'vector',
-          url: 'pmtiles://./tiles/byways.pmtiles',
+          tiles: [`pmtiles://${archive}/{z}/{x}/{y}`],
+          minzoom: 0,
+          maxzoom: maxzoom || 15,
           attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         },
       },
@@ -694,7 +764,7 @@ function roadLayers() {
     type: 'line',
     source: S.source,
     'source-layer': S.layers.road,
-    filter: ['match', ['get', S.fields.roadClassField], ['track', 'service'], true, false],
+    filter: ['match', ['get', S.fields.roadClassField], [R('track'), R('service')], true, false],
     minzoom: 11,
     layout: { 'line-cap': 'butt', 'line-join': 'round' },
     paint: {
@@ -710,7 +780,7 @@ function roadLayers() {
     type: 'line',
     source: S.source,
     'source-layer': S.layers.road,
-    filter: ['match', ['get', S.fields.roadClassField], ['path', 'pedestrian'], true, false],
+    filter: ['match', ['get', S.fields.roadClassField], [R('path'), R('pedestrian')], true, false],
     minzoom: 13,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
@@ -747,7 +817,7 @@ function roadLayers() {
     type: 'line',
     source: S.source,
     'source-layer': S.layers.road,
-    filter: ['match', ['get', S.fields.roadClassField], ['street', 'street_limited'], true, false],
+    filter: ['match', ['get', S.fields.roadClassField], [R('street'), R('streetLimited')], true, false],
     minzoom: 11,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
@@ -774,7 +844,7 @@ function roadLayers() {
     type: 'line',
     source: S.source,
     'source-layer': S.layers.road,
-    filter: ['match', ['get', S.fields.roadClassField], ['street', 'street_limited'], true, false],
+    filter: ['match', ['get', S.fields.roadClassField], [R('street'), R('streetLimited')], true, false],
     minzoom: 11,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
@@ -791,12 +861,17 @@ function roadLayers() {
    * and paths are left out: they are already dashed, and a second dash over the
    * first reads as neither.
    */
-  layers.push({
+  /*
+   * Skipped entirely where the schema has no surface field, rather than drawn
+   * with a filter that matches nothing. Both are invisible; only one of them
+   * is honest, and only one of them shows up when the styles are compared.
+   */
+  if (hasSurface()) layers.push({
     id: 'road-unpaved',
     type: 'line',
     source: S.source,
     'source-layer': S.layers.road,
-    filter: ['all', UNPAVED, ['match', ['get', S.fields.roadClassField], SEALED_CLASSES, true, false]],
+    filter: ['all', unpaved(), ['match', ['get', S.fields.roadClassField], sealedClasses(), true, false]],
     minzoom: 9,
     layout: { 'line-cap': 'butt', 'line-join': 'round' },
     paint: {
@@ -852,7 +927,7 @@ function labelLayers() {
       filter: ['match', ['get', S.fields.classField], ['lake', 'ocean', 'sea', 'river'], true, false],
       minzoom: 7,
       layout: {
-        'text-field': LABEL_NAME,
+        'text-field': labelName(),
         'text-font': FONT,
         'text-size': ['interpolate', ['linear'], ['zoom'], 7, 10, 14, 13],
         'text-max-width': 8,
@@ -871,7 +946,7 @@ function labelLayers() {
       filter: ['match', ['get', S.fields.classField], ['landform'], true, false],
       minzoom: 11,
       layout: {
-        'text-field': LABEL_NAME,
+        'text-field': labelName(),
         'text-font': FONT,
         'text-size': 11,
         'text-offset': [0, 0.6],
@@ -888,16 +963,28 @@ function labelLayers() {
       type: 'symbol',
       source: S.source,
       'source-layer': S.layers.road,
-      filter: ['match', ['get', S.fields.classField],
-        ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'street', 'track'], true, false],
+      /*
+       * Reads the road classification field, not the general one.
+       *
+       * These were the same field under Mapbox, where everything is `class`,
+       * so writing the wrong one cost nothing and looked correct. Protomaps
+       * classifies roads in `kind_detail` and everything else in `kind`, and
+       * this filter would have matched nothing at all - every road name gone
+       * from the map, with no error anywhere.
+       */
+      filter: ['match', ['get', S.fields.roadClassField],
+        [R('motorway'), R('trunk'), R('primary'), R('secondary'), R('tertiary'), R('street'), R('track')],
+        true, false],
       minzoom: 13,
       layout: {
         'symbol-placement': 'line',
         // The surface rides along with the name. A forest road's number tells
         // you nothing about whether you want to be on it; "unpaved" does.
-        'text-field': ['case',
-          ['all', UNPAVED, ['has', 'name']], ['concat', LABEL_NAME, ' \u00b7 unpaved'],
-          LABEL_NAME],
+        'text-field': hasSurface()
+          ? ['case',
+            ['all', unpaved(), ['has', 'name']], ['concat', labelName(), ' \u00b7 unpaved'],
+            labelName()]
+          : labelName(),
         'text-font': FONT,
         'text-size': ['interpolate', ['linear'], ['zoom'], 13, 9, 18, 12],
       },
@@ -916,15 +1003,15 @@ function labelLayers() {
       source: S.source,
       'source-layer': S.layers.road,
       filter: ['all',
-        ['match', ['get', S.fields.roadClassField], ['path', 'service'], true, false],
+        ['match', ['get', S.fields.roadClassField], [R('path'), R('service')], true, false],
         ['has', 'name'],
       ],
       minzoom: 14,
       layout: {
         'symbol-placement': 'line',
-        'text-field': ['case',
-          UNPAVED, ['concat', LABEL_NAME, ' \u00b7 unpaved'],
-          LABEL_NAME],
+        'text-field': hasSurface()
+          ? ['case', unpaved(), ['concat', labelName(), ' \u00b7 unpaved'], labelName()]
+          : labelName(),
         'text-font': FONT,
         'text-size': ['interpolate', ['linear'], ['zoom'], 14, 8.5, 18, 11],
       },
@@ -940,7 +1027,7 @@ function labelLayers() {
       source: S.source,
       'source-layer': S.layers.place,
       layout: {
-        'text-field': LABEL_NAME,
+        'text-field': labelName(),
         'text-font': FONT_BOLD,
         'text-size': [
           'interpolate', ['linear'], ['zoom'],
@@ -1113,8 +1200,8 @@ const SECOND_REF = ['let', 'rest', ['slice', REF, ['+', REF_CUT, 1]],
 ];
 
 // An interstate marker outranks a county route where they land together.
-const SHIELD_ORDER = ['match', ['get', S.fields.roadClassField],
-  'motorway', 1, 'trunk', 2, 'primary', 3, 'secondary', 4, 5];
+const shieldOrder = () => ['match', ['get', S.fields.roadClassField],
+  R('motorway'), 1, R('trunk'), 2, R('primary'), 3, R('secondary'), 4, 5];
 
 /** Every shield layer's id, and how far off centre its number sits. */
 export const SHIELD_LAYERS = [
@@ -1182,7 +1269,7 @@ function shieldLayers(state = '') {
    * z8, so the layer has nothing to draw before then anyway.
    */
   const onARoad = ['match', ['get', S.fields.roadClassField],
-    ['motorway', 'trunk', 'primary', 'secondary', 'tertiary'], true, false];
+    [R('motorway'), R('trunk'), R('primary'), R('secondary'), R('tertiary')], true, false];
 
   /** Half a concurrency: its own number, its own image, shifted off centre. */
   const half = (id, text, shiftPx) => ({
@@ -1214,7 +1301,7 @@ function shieldLayers(state = '') {
       'text-ignore-placement': false,
       'text-optional': false,
       'icon-optional': false,
-      'symbol-sort-key': SHIELD_ORDER,
+      'symbol-sort-key': shieldOrder(),
     },
     paint: { 'text-color': shieldTextColour(state, { override: REF_DESIGN }) },
   });
@@ -1292,7 +1379,7 @@ function shieldLayers(state = '') {
         'text-optional': false,
         'icon-optional': false,
         // An interstate marker outranks a county route when they land together.
-        'symbol-sort-key': SHIELD_ORDER,
+        'symbol-sort-key': shieldOrder(),
       },
       paint: { 'text-color': shieldTextColour(state, { override: REF_DESIGN }) },
     },

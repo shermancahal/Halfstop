@@ -13,7 +13,7 @@
  */
 
 import { createRequire } from 'node:module';
-import { bywaysStyle, shieldLayerUpdates } from '../assets/js/lib/byways-style.js';
+import { bywaysStyle, shieldLayerUpdates, PROTOMAPS_SCHEMA } from '../assets/js/lib/byways-style.js';
 import { runtimeLayers, runtimeSources } from '../assets/js/lib/runtime-layers.js';
 import { buildRasterStyle, styleHasGlyphs } from '../assets/js/lib/engine.js';
 import { OVERLAYS, STATE_GROUP } from '../assets/js/config.js';
@@ -75,6 +75,106 @@ console.log(`Runtime layers — ${runtimeLayers().length} added by the viewer`);
 const all = errors.map((error) => ['Byways Topo', error]);
 for (const [name, host] of hosts) {
   for (const error of validate(host)) all.push([name, error]);
+}
+
+/*
+ * The same cartography over Protomaps geometry.
+ *
+ * This is the half that has never been rendered by anybody, so it is the half
+ * a validator is worth most on. Three things are checked and they are
+ * different questions: that the document is valid at all, that no layer points
+ * at a source-layer the schema says does not exist, and that the road
+ * hierarchy came through with its eleven weights rather than collapsing.
+ *
+ * The third is the one that matters and the one a spec validator cannot see. A
+ * filter naming a class that never occurs in the tiles is perfectly valid and
+ * draws nothing; the difference between eleven road weights and five is the
+ * difference between an atlas you read at speed and one you squint at, and it
+ * would show up as "the map looks flat" rather than as an error.
+ */
+const protomaps = bywaysStyle('', {
+  schema: PROTOMAPS_SCHEMA,
+  archive: 'https://example.test/byways.pmtiles',
+  maxzoom: 15,
+});
+console.log(`Byways Topo (Protomaps) — ${protomaps.layers.length} layers, ${Object.keys(protomaps.sources).length} source`);
+
+for (const error of validate(withRuntime(protomaps, true))) all.push(['Protomaps', error]);
+
+const declared = new Set(Object.values(PROTOMAPS_SCHEMA.layers).filter(Boolean));
+for (const layer of protomaps.layers) {
+  if (layer.type === 'background') continue;
+  if (!protomaps.sources[layer.source]) {
+    all.push(['Protomaps', { message: `${layer.id} reads source ${layer.source}, which the style does not declare` }]);
+  }
+  const sourceLayer = layer['source-layer'];
+  if (!sourceLayer) {
+    all.push(['Protomaps', { message: `${layer.id} has no source-layer; it should have been dropped, not shipped blank` }]);
+  } else if (!declared.has(sourceLayer)) {
+    all.push(['Protomaps', { message: `${layer.id} reads source-layer ${sourceLayer}, which the schema does not name` }]);
+  }
+}
+
+/*
+ * Every road class the schema maps is actually asked for by some layer, and
+ * every class a layer asks for is one the schema maps.
+ *
+ * Both directions, because they catch opposite mistakes. A class in the schema
+ * that no layer draws is a road type that vanishes from the map; a class a
+ * layer draws that the schema never maps is a filter matching a value the
+ * tiles do not contain, which is the same vanishing with the blame in a
+ * different file.
+ */
+{
+  const mapped = new Set([
+    ...Object.values(PROTOMAPS_SCHEMA.roadClasses),
+    ...Object.values(PROTOMAPS_SCHEMA.roadLinks),
+  ]);
+  const asked = new Set();
+  const walk = (node) => {
+    if (!Array.isArray(node)) return;
+    const [head, field] = node;
+    const readsClass = Array.isArray(field)
+      && field[0] === 'get' && field[1] === PROTOMAPS_SCHEMA.fields.roadClassField;
+    if (head === 'match' && readsClass) {
+      for (const branch of node.slice(2)) {
+        for (const value of [branch].flat()) if (typeof value === 'string') asked.add(value);
+      }
+    }
+    for (const child of node) walk(child);
+  };
+  for (const layer of protomaps.layers) {
+    if (layer['source-layer'] !== PROTOMAPS_SCHEMA.layers.road) continue;
+    walk(layer.filter);
+    for (const value of Object.values(layer.paint || {})) walk(value);
+    for (const value of Object.values(layer.layout || {})) walk(value);
+  }
+  for (const value of mapped) {
+    if (!asked.has(value)) all.push(['Protomaps', { message: `no road layer draws "${value}", so that class is invisible` }]);
+  }
+  if (Object.keys(PROTOMAPS_SCHEMA.roadLinks).length !== 5) {
+    all.push(['Protomaps', { message: 'the ramp classes are not the five the road hierarchy has' }]);
+  }
+  for (const value of asked) {
+    if (!mapped.has(value)) all.push(['Protomaps', { message: `a road layer filters on "${value}", which the schema never maps — it will match nothing` }]);
+  }
+  const weights = new Set(Object.values(PROTOMAPS_SCHEMA.roadClasses));
+  if (weights.size !== 11) {
+    all.push(['Protomaps', { message: `the road hierarchy has ${weights.size} weights, not the eleven the map is drawn for` }]);
+  }
+}
+
+// And the archive is addressed through the protocol, not fetched as a tile.
+{
+  const source = protomaps.sources[PROTOMAPS_SCHEMA.source];
+  if (!source?.tiles?.[0]?.startsWith('pmtiles://')) {
+    all.push(['Protomaps', { message: `the archive is addressed as ${JSON.stringify(source?.tiles?.[0] ?? source?.url)}, which nothing will resolve` }]);
+  }
+}
+
+// An unconfigured archive is refused rather than built into a blank map.
+if (bywaysStyle('', { schema: PROTOMAPS_SCHEMA }) !== null) {
+  all.push(['Protomaps', { message: 'a style was built with no archive to read, which would load, succeed and draw nothing' }]);
 }
 
 /*

@@ -448,10 +448,16 @@ export function parseTileURL(url) {
  * since a map with one basemap missing still works.
  *
  * @param {object} gl  The `maplibregl` global.
- * @param {{fetch?: Function, resolve?: (url: string) => string}} [options]
+ * @param {object} [options]
+ * @param {Function} [options.fetch]
+ * @param {(url: string) => string} [options.resolve]
+ * @param {(url: string, header: object) => void} [options.onArchive]
+ *   Called once per archive, with its header, the first time one is opened.
+ *   The header is the only place the archive's real zoom range is written
+ *   down, and the style has to guess at it before any of this runs.
  * @returns {boolean} Whether the protocol was registered.
  */
-export function registerPMTilesProtocol(gl, { fetch: fetchImpl, resolve } = {}) {
+export function registerPMTilesProtocol(gl, { fetch: fetchImpl, resolve, onArchive } = {}) {
   if (!gl || typeof gl.addProtocol !== 'function') return false;
   if (gl.__abmapPMTiles) return true;
 
@@ -468,6 +474,11 @@ export function registerPMTilesProtocol(gl, { fetch: fetchImpl, resolve } = {}) 
     if (!archive) {
       archive = new PMTilesArchive(key, { fetch: fetchImpl });
       archives.set(key, archive);
+      if (onArchive) {
+        // Reported, never fatal: a bad callback must not take the tile down
+        // with it, and the tile is the part the map needs.
+        archive.header().then((header) => onArchive(key, header)).catch(() => {});
+      }
     }
     const bytes = await archive.tile(request.z, request.x, request.y);
     // An absent tile is empty, not an error: MapLibre draws nothing and keeps

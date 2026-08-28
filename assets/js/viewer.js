@@ -15,7 +15,7 @@ import {
 } from './config.js';
 import {
   loadEngine, buildRasterStyle, hasMapboxToken, mapboxToken, overlayParts, overlayIdFromLayer, overlayRows,
-  overlayLinks, styleFor, styleHasGlyphs,
+  overlayLinks, styleFor, styleHasGlyphs, engineFor,
 } from './lib/engine.js';
 import { loadCatalog, findMap } from './lib/catalog.js';
 import { parseMapFile, linePositions } from './lib/parse.js';
@@ -412,12 +412,22 @@ async function main() {
     }
   }
 
-  const { gl, engine } = await loadEngine();
-  state.gl = gl;
-  state.engine = engine;
-
+  /*
+   * The URL is read before the engine is loaded, because the basemap decides
+   * which engine to load.
+   *
+   * Protomaps and Mapbox cannot be drawn by the same library — one needs
+   * MapLibre's `addProtocol` to read a `.pmtiles` archive, the other is
+   * Mapbox's data and reserved to Mapbox's renderer — so "which engine" is
+   * downstream of "which map", and asking in the other order picks the engine
+   * before there is anything to pick it for.
+   */
   const initial = readURL();
   state.basemapId = initial.basemap || defaultBasemapId();
+
+  const { gl, engine } = await loadEngine(basemapById(state.basemapId));
+  state.gl = gl;
+  state.engine = engine;
   if (initial.overlays) {
     for (const [id, entry] of state.overlays) entry.visible = initial.overlays.includes(id);
   }
@@ -4835,8 +4845,31 @@ function layerBadge(entry) {
 }
 
 function setBasemap(id) {
-  state.basemapId = id;
   const basemap = basemapById(id);
+
+  /*
+   * Switching between the two vector families means switching GL libraries,
+   * and that cannot be done under a live map: the two define different `Map`
+   * classes, and every source, layer, marker and handler on screen belongs to
+   * the one that is loaded.
+   *
+   * So it reloads. That is cheap and lossless here — the camera lives in the
+   * URL hash and the basemap in a query parameter, both already written by
+   * this app — and it is honest, where tearing the map down and rebuilding it
+   * under a second library would work until one of the several hundred things
+   * attached to the old one did not.
+   *
+   * In practice almost nobody meets this: the Mapbox basemaps are editors-only.
+   */
+  const needed = engineFor(basemap);
+  if (needed && state.engine && needed !== state.engine) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('b', id);
+    window.location.assign(url.toString());
+    return;
+  }
+
+  state.basemapId = id;
   const next = styleFor(basemap, activeOverlays());
   state.basemapFallback = next.fallback || '';
 

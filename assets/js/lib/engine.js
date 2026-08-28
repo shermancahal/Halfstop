@@ -7,8 +7,9 @@
  * dropping a token into config.js, with no other code change.
  */
 
-import { MAPBOX_TOKEN, MAP_ENGINE } from '../config.js';
-import { bywaysStyle } from './byways-style.js';
+import { MAPBOX_TOKEN, MAP_ENGINE, PROTOMAPS_ARCHIVE, PROTOMAPS_MAXZOOM } from '../config.js';
+import { bywaysStyle, PROTOMAPS_SCHEMA } from './byways-style.js';
+import { registerPMTilesProtocol } from './pmtiles.js';
 
 const MAPLIBRE_VERSION = '4.7.1';
 const MAPBOX_VERSION = '3.7.0';
@@ -69,13 +70,76 @@ function loadScript(src) {
   });
 }
 
+/**
+ * The archive's own header against what the style claimed about it.
+ *
+ * PROTOMAPS_MAXZOOM has to be stated before anything is fetched, and the two
+ * ways of being wrong are not equal: understating it costs detail, overstating
+ * it draws blank ground past the archive's real depth. The archive knows the
+ * answer and says so the moment it is opened, so this compares them and names
+ * the fix — the alternative is a map that goes empty at one zoom level for
+ * reasons nothing reports.
+ */
+function warnAboutDepth(url, header) {
+  if (header.maxZoom < PROTOMAPS_MAXZOOM) {
+    console.warn(
+      `[maps] ${url} goes to zoom ${header.maxZoom}, but the style asks for ${PROTOMAPS_MAXZOOM}.`
+      + ` Past zoom ${header.maxZoom} the map will be blank. Set ABMAP_PROTOMAPS_MAXZOOM to ${header.maxZoom}.`,
+    );
+  } else if (header.maxZoom > PROTOMAPS_MAXZOOM) {
+    console.info(
+      `[maps] ${url} goes to zoom ${header.maxZoom}; the style stops at ${PROTOMAPS_MAXZOOM}`
+      + ` and stretches the last tile past it. Set ABMAP_PROTOMAPS_MAXZOOM to ${header.maxZoom} to use it all.`,
+    );
+  }
+}
+
 /** Overlays are raster layers named `overlay-<id>`; this is their draw order anchor. */
 export const OVERLAY_LAYER_PREFIX = 'overlay-';
 
-export function resolveEngineName() {
+/**
+ * Whether a basemap can only be drawn by one of the two engines.
+ *
+ * Two of them can, for opposite reasons.
+ *
+ * Protomaps needs MapLibre, because reading a `.pmtiles` archive means
+ * registering a URL scheme and `addProtocol` is a MapLibre API. Mapbox GL JS
+ * has no equivalent — `transformRequest` can rewrite a URL but cannot answer
+ * one with bytes — so this is a hard requirement rather than a preference.
+ *
+ * Mapbox needs Mapbox GL, and that one is a licensing line rather than a
+ * technical one. This style addresses everything by plain https URL, so
+ * MapLibre would render it perfectly well; Mapbox's terms reserve their tiles
+ * to their own renderer, and "it works" is not permission.
+ *
+ * Everything else — every raster basemap — draws identically on either, so
+ * this returns null and whatever is already loaded is used.
+ *
+ * @returns {'mapbox'|'maplibre'|null}
+ */
+export function engineFor(basemap) {
+  if (!basemap) return null;
+  if (typeof basemap.style === 'string' && basemap.style.startsWith('mapbox://')) return 'mapbox';
+  if (basemap.custom === 'byways-mapbox') return MAPBOX_TOKEN ? 'mapbox' : null;
+  if (basemap.custom === 'byways') {
+    if (PROTOMAPS_ARCHIVE) return 'maplibre';
+    return MAPBOX_TOKEN ? 'mapbox' : null;
+  }
+  return null;
+}
+
+/**
+ * Which engine to load.
+ *
+ * The basemap decides where it can: the two vector families cannot be drawn by
+ * the same library, so the choice has to follow the map rather than the
+ * configuration. Called with nothing it answers for the configuration alone,
+ * which is what the callers that only want to know "is there a token" mean.
+ */
+export function resolveEngineName(basemap) {
   if (MAP_ENGINE === 'mapbox') return 'mapbox';
   if (MAP_ENGINE === 'maplibre') return 'maplibre';
-  return MAPBOX_TOKEN ? 'mapbox' : 'maplibre';
+  return engineFor(basemap) || (MAPBOX_TOKEN ? 'mapbox' : 'maplibre');
 }
 
 export function hasMapboxToken() {
@@ -96,8 +160,8 @@ export function mapboxToken() {
  * Load the chosen GL library.
  * @returns {Promise<{gl: object, engine: 'mapbox'|'maplibre'}>}
  */
-export async function loadEngine() {
-  let engine = resolveEngineName();
+export async function loadEngine(basemap) {
+  let engine = resolveEngineName(basemap);
   if (engine === 'mapbox' && !hasMapboxToken()) {
     // Explicitly configured for Mapbox but no token: fail soft rather than
     // showing an empty map, since the open basemaps work perfectly well.
@@ -112,6 +176,16 @@ export async function loadEngine() {
   const gl = window[source.global];
   if (!gl) throw new Error(`The ${engine} library loaded but did not register itself.`);
   if (engine === 'mapbox') gl.accessToken = MAPBOX_TOKEN;
+  /*
+   * `pmtiles://` is registered whenever MapLibre is what loaded, whether or not
+   * an archive is configured. It costs one function call, and registering it
+   * lazily would mean the first Protomaps tile request arrived before the
+   * scheme existed - which GL reports as an unknown protocol somewhere deep in
+   * a worker, long after the useful stack has gone.
+   */
+  if (engine === 'maplibre') {
+    registerPMTilesProtocol(gl, { onArchive: warnAboutDepth });
+  }
   return { gl, engine };
 }
 
@@ -189,7 +263,26 @@ export function overlayIdFromLayer(layerId = '') {
  * @returns {{style: object|string, vector: boolean}}
  */
 export function styleFor(basemap, overlays = []) {
-  if (basemap?.custom === 'byways' && MAPBOX_TOKEN) {
+  /*
+   * Byways Topo, drawn from whichever geometry is configured.
+   *
+   * The archive wins where there is one: it is free to look at and it can be
+   * downloaded, which are the two things the Mapbox source cannot offer. The
+   * cartography is identical either way — same palette, same road hierarchy,
+   * same shields — because only the schema underneath changes.
+   */
+  if (basemap?.custom === 'byways' && PROTOMAPS_ARCHIVE) {
+    return {
+      style: bywaysStyle('', {
+        schema: PROTOMAPS_SCHEMA,
+        archive: PROTOMAPS_ARCHIVE,
+        maxzoom: PROTOMAPS_MAXZOOM,
+      }),
+      vector: true,
+      fallback: '',
+    };
+  }
+  if ((basemap?.custom === 'byways' || basemap?.custom === 'byways-mapbox') && MAPBOX_TOKEN) {
     return { style: bywaysStyle(MAPBOX_TOKEN), vector: true, fallback: '' };
   }
   if (basemap?.style && MAPBOX_TOKEN) {
@@ -208,7 +301,8 @@ export function styleFor(basemap, overlays = []) {
    * and had nothing to do with the style.
    */
   const fallback = basemap?.custom && !MAPBOX_TOKEN
-    ? 'Byways Topo renders from vector tiles and needs a Mapbox token.'
+    ? 'Byways Topo renders from vector tiles, and neither source is configured'
+      + ' — no Protomaps archive and no Mapbox token.'
       + ' Showing CyclOSM raster instead — different colours, and no route shields.'
     : '';
 
