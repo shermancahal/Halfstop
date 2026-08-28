@@ -308,7 +308,7 @@ test('protomaps: what the schema cannot draw is dropped, and it is the expected 
   const dropped = [...mapbox].filter((id) => !protomaps.has(id));
   assert.deepEqual(dropped.sort(), [
     'contour', 'contour-index', 'contour-label', 'hillshade',
-    'label-summit', 'label-water', 'national-park',
+    'label-summit', 'label-water',
     /*
      * The surface marking, which is the one that stings: "tracks and surfaces"
      * is how this basemap describes itself. Protomaps' schema does not name a
@@ -408,4 +408,35 @@ test('byways: no road class is written inline', () => {
     .map((match) => match[0]);
   assert.deepEqual(inline, [],
     'a road class is written inline below roadLayers; it must come from the schema');
+});
+
+test('protomaps: protected ground is drawn, and more of it than Mapbox names', () => {
+  /*
+   * Mapbox's landuse_overlay distinguishes exactly one kind of protected
+   * ground: national_park. Protomaps separates national_park, protected_area,
+   * nature_reserve and forest, and on a back-roads map the last two are most
+   * of the ground the roads are actually in — a national forest drawn as bare
+   * parchment is the map failing at its own subject.
+   *
+   * Read from Protomaps' own park layer, which names "source-layer": "landuse"
+   * and filters on kind. The documentation could not answer it: its kinds
+   * section is one flat alphabetical list with no layer column.
+   */
+  const park = protomapsStyle().layers.find((layer) => layer.id === 'national-park');
+  assert.ok(park, 'the park fill must be drawn under Protomaps too');
+  assert.equal(park['source-layer'], 'landuse');
+  const text = JSON.stringify(park.filter);
+  for (const kind of ['national_park', 'protected_area', 'nature_reserve', 'forest']) {
+    assert.ok(text.includes(kind), `${kind} is protected ground and must be drawn`);
+  }
+  assert.ok(text.includes('"kind"'), 'and it reads the schema\'s own classification field');
+});
+
+test('byways: the Mapbox park fill still draws exactly what it drew', () => {
+  // The one deliberate change to the Mapbox style in the whole port, and it is
+  // output-identical: `==` on one value became `match` on a list, so a schema
+  // naming four kinds can use the same expression. Pinned rather than trusted.
+  const park = bywaysStyle('pk.snapshot').layers.find((layer) => layer.id === 'national-park');
+  assert.equal(park['source-layer'], 'landuse_overlay');
+  assert.deepEqual(park.filter, ['match', ['get', 'class'], ['national_park'], true, false]);
 });

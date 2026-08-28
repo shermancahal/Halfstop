@@ -123,6 +123,8 @@ export const MAPBOX_SCHEMA = {
     secondary: 'secondary_link',
     tertiary: 'tertiary_link',
   },
+  /** Mapbox's landuse_overlay distinguishes exactly one kind of protected ground. */
+  protectedClasses: ['national_park'],
 };
 
 /**
@@ -158,8 +160,16 @@ export const PROTOMAPS_SCHEMA = {
   layers: {
     landcover: 'landcover',
     landuse: 'landuse',
-    // Protomaps has one landuse layer rather than a base and an overlay.
-    landuseOverlay: null,
+    /*
+     * One landuse layer rather than a base and an overlay, so both read it.
+     *
+     * Protomaps' own style draws parks from it - `id: "landuse_park"`,
+     * `"source-layer": "landuse"`, filtered on kind in national_park and the
+     * rest - which is where this was read from. The documentation could not
+     * answer it: its kinds section is one flat alphabetical list of every
+     * value across every layer, with no layer named anywhere in it.
+     */
+    landuseOverlay: 'landuse',
     water: 'water',
     // Rivers and coastline are the same layer here, told apart by `kind`.
     waterway: 'water',
@@ -239,6 +249,13 @@ export const PROTOMAPS_SCHEMA = {
     path: 'path',
     pedestrian: 'pedestrian',
   },
+  /*
+   * Four, where Mapbox has one. Confirmed as landuse kinds from Protomaps' own
+   * park layer; national forest and designated wilderness are most of the
+   * ground the roads on this map run through, and drawing only national parks
+   * would leave them as bare parchment.
+   */
+  protectedClasses: ['national_park', 'protected_area', 'nature_reserve', 'forest'],
   // The same OSM tags, since kind_detail is the OSM highway value.
   roadLinks: {
     motorway: 'motorway_link',
@@ -645,7 +662,15 @@ function groundLayers() {
       type: 'fill',
       source: S.source,
       'source-layer': S.layers.landuseOverlay,
-      filter: ['==', ['get', S.fields.classField], 'national_park'],
+      /*
+       * Every kind of protected ground this schema distinguishes, not just the
+       * one word Mapbox uses. Mapbox's landuse_overlay has a single
+       * national_park class; Protomaps separates national_park,
+       * protected_area, nature_reserve and forest, and drawing only the first
+       * would leave a wilderness or a national forest as bare parchment - on a
+       * back-roads map, the ground most of the roads are in.
+       */
+      filter: ['match', ['get', S.fields.classField], S.protectedClasses, true, false],
       paint: { 'fill-color': PALETTE.park, 'fill-opacity': 0.5 },
     },
     {

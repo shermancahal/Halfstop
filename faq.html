@@ -87,6 +87,13 @@
         downloaded by an overlapping region is not fetched twice.
       </p>
       <p>
+        Two things it will tell you that it could have glossed over. If part of a
+        region falls outside what the map covers, it says how much rather than
+        counting it as saved — that is the sort of reassurance there is no way to
+        check until there is no signal to check it with. And if you press Stop, it
+        stops there and keeps what it already had.
+      </p>
+      <p>
         Once a region is downloaded, the map draws from those tiles with no network
         at all. The figure under the region list is read from the browser rather
         than estimated, and is what decides whether the next download will fit.
@@ -94,12 +101,12 @@
 
       <h3>What cannot be downloaded here, and why</h3>
       <p>
-        <strong>Byways Topo, Mapbox Outdoors and Satellite Streets cannot be stored
-        offline by this app.</strong> They render from Mapbox vector tiles, and
-        Mapbox reserve offline storage to their own native mobile toolkit. This app
-        is Mapbox GL JS running in a web view, which is not that toolkit and has no
-        offline facility at all — so it says so rather than offering a button that
-        quietly downloads something else.
+        <strong>Anything drawing from Mapbox cannot be stored offline by this
+        app</strong> — Mapbox Outdoors, Satellite Streets, and Byways Topo when it
+        is reading Mapbox geometry. Mapbox reserve offline storage to their own
+        native mobile toolkit. This app is a web view, which is not that toolkit
+        and has no offline facility at all — so it says so rather than offering a
+        button that quietly downloads something else.
       </p>
       <p>
         Worth being exact, because it affects what a paid tier could offer:
@@ -110,7 +117,14 @@
         engineering, not a setting, and not something a paid plan alone unlocks.
       </p>
       <p>
-        Everything else can: USGS Topo and Imagery, the state aerial and lidar
+        <strong>Byways Topo drawing from our own archive can be.</strong> The
+        archive is one file rather than a service, so a download reads the region
+        out of it and keeps the pieces on the device — same regions, same counts,
+        same progress line as any other download. It is what the second foundation
+        below was for.
+      </p>
+      <p>
+        Everything else can too: USGS Topo and Imagery, the state aerial and lidar
         layers, BLM, the FAA layers and the rest. All of it is public data with no
         such condition attached.
       </p>

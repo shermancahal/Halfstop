@@ -73,12 +73,16 @@
    "source": "composite",
    "source-layer": "landuse_overlay",
    "filter": [
-    "==",
+    "match",
     [
      "get",
      "class"
     ],
-    "national_park"
+    [
+     "national_park"
+    ],
+    true,
+    false
    ],
    "paint": {
     "fill-color": "#93B487",

@@ -703,7 +703,7 @@
   {
     "id": "pm:package-files",
     "expect": "data",
-    "note": "The published file tree of @protomaps/basemaps 5.7.2, from unpkg's ?meta listing. Three attempts have now failed on paths and versions I invented rather than read - 5.0.0 did not exist, dist/basemaps.json did not exist, and the last find pattern did not compile. This asks the registry what is actually in the package and stops guessing.",
+    "note": "The published file tree of @protomaps/basemaps 5.7.2. Four paths have now been invented rather than read - 5.0.0, dist/basemaps.json, src/labels.ts twice - so before the next file in that package is fetched, this says which files are in it.",
     "find": "\"path\":\"[^\"]{0,80}\"",
     "url": "https://unpkg.com/@protomaps/basemaps@5.7.2/?meta"
   },
@@ -773,9 +773,9 @@
   {
     "id": "pm:doc-pois-kinds",
     "expect": "data",
-    "url": "https://unpkg.com/@protomaps/basemaps@5.7.2/src/labels.ts",
-    "find": "([\\s\\S]{200}\"peak\")",
-    "note": "Which source-layer a summit label reads. Anchored searches of the documentation put peak in neither pois nor places, and the reason is that the page does not group kinds by layer at all. labels.ts is where Protomaps' own style draws them, so it has to name the layer."
+    "url": "https://unpkg.com/@protomaps/basemaps@5.7.2/src/base_layers.ts",
+    "find": "([\\s\\S]{240}\"peak\")",
+    "note": "Which source-layer a summit label reads. src/labels.ts does not exist - a path I wrote rather than read, which is the fourth time this package has been guessed at - so this asks the file that does. The park question was answered from here in one line: id landuse_park, source-layer landuse, filter on kind."
   },
   {
     "id": "pm:doc-places-kinds",
@@ -794,8 +794,8 @@
   {
     "id": "pm:doc-water-named",
     "expect": "data",
-    "url": "https://unpkg.com/@protomaps/basemaps@5.7.2/src/labels.ts",
-    "find": "\"source-layer\":\\s*\"([a-z_]{2,24})\"|sourceLayer:\\s*\"([a-z_]{2,24})\"",
-    "note": "Every source-layer Protomaps' own label style reads. Two label layers here - the names of lakes and rivers, and the names of summits - are dropped because Mapbox puts them in natural_label and this schema has no such layer. This says which layers do carry names, which is the same question asked without guessing at a section heading."
+    "url": "https://unpkg.com/@protomaps/basemaps@5.7.2/src/base_layers.ts",
+    "find": "(id: \"[a-z_0-9]*label[a-z_0-9]*\",[\\s\\S]{0,220}?\"source-layer\": \"[a-z_]+\")",
+    "note": "Every label layer in Protomaps' own style, with the source-layer each reads. Two label layers here - the names of lakes and rivers, and the names of summits - are dropped because Mapbox puts them in natural_label and this schema has no such layer. Whatever draws those names in the default style has to name where it gets them."
   }
 ]
