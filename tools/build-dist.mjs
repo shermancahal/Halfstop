@@ -27,7 +27,7 @@ const DIST = path.join(ROOT, 'dist');
 const ZIP_NAME = 'american-byways-maps.zip';
 
 /** Everything the deployed site needs, and nothing else. */
-const INCLUDE_FILES = ['index.html', 'library.html', 'map.html'];
+const INCLUDE_FILES = ['index.html', 'map.html', 'faq.html'];
 
 /**
  * Root files copied through verbatim, without cache-busting.
@@ -253,9 +253,9 @@ WHAT TO UPLOAD
 --------------
 Everything in this folder, keeping the folder structure exactly as it is:
 
-  index.html        the map (the homepage)
-  library.html      the catalogue of published maps
-  map.html          redirect, so older /map.html links keep working
+  index.html        the homepage and the catalogue of published maps
+  map.html          the map viewer
+  faq.html          help, and the FAQ
   .htaccess         Apache settings (see notes inside; safe to delete)
   assets/           styles, scripts, icon
   data/             the published map files and catalog.json

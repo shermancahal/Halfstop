@@ -89,7 +89,8 @@ function thumbnail(record) {
 }
 
 function card(record) {
-  const viewerURL = `./?m=${encodeURIComponent(record.slug)}`;
+  // The viewer moved to map.html when the root became a real homepage.
+  const viewerURL = `map.html?m=${encodeURIComponent(record.slug)}`;
   const fileURL = record.path || `data/maps/${record.file}`;
   const stats = record.stats || {};
 
@@ -157,7 +158,7 @@ function render() {
       el('h3', { text: 'The library is empty' }),
       el('p', {
         html: 'Add a GaiaGPS export to <code>data/maps/</code> and run <code>npm run build</code> to publish it. '
-          + 'In the meantime, the <a href="./">map</a> will open files straight from your computer.',
+          + 'In the meantime, the <a href="map.html">map</a> will open files straight from your computer.',
       }),
     ]));
   } else if (!matches.length) {

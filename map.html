@@ -2,16 +2,240 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="refresh" content="0; url=./">
-<title>Redirecting to the map</title>
-<link rel="canonical" href="./">
-<script>
-  // The viewer moved to the site root when the map became the homepage.
-  // Preserve any ?m= / ?b= / #view state so old links keep working.
-  location.replace('./' + location.search + location.hash);
-</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover">
+<title>Map — American Byways GPS</title>
+<meta name="description" content="View published GPS tracks and waypoints on topo, satellite and street basemaps — or drop in your own GPX, KML or KMZ file.">
+<meta name="theme-color" content="#b4441f" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15120f" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="assets/img/mark.svg" type="image/svg+xml">
+<link rel="icon" href="assets/img/icon-192.png" sizes="192x192" type="image/png">
+<link rel="manifest" href="manifest.webmanifest">
+<!-- iOS ignores the manifest for "Add to Home Screen"; these three are what it
+     reads instead. apple-touch-icon must be a PNG with no transparency: Safari
+     composites anything transparent onto black. -->
+<link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Byways GPS">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="assets/css/site.css">
+<link rel="stylesheet" href="assets/css/viewer.css">
 </head>
 <body>
-<p>The map is now at <a href="./">the homepage</a>.</p>
+
+<div class="app">
+
+  <header class="site-header">
+    <div class="wrap" style="max-width:none">
+      <a class="brand" href="./">
+        <img class="brand-mark" src="assets/img/mark.svg" alt="" width="30" height="30">
+        <span class="brand-text">
+          <span class="brand-name" id="brand-name">American Byways GPS</span>
+          <span class="brand-parent" id="brand-parent">American Byways</span>
+        </span>
+      </a>
+      <nav class="nav">
+        <a href="./">Home</a>
+        <a href="map.html" class="is-active">Map</a>
+        <a href="faq.html">Help</a>
+      </nav>
+      <div class="settings-menu" id="settings-menu">
+        <button class="icon-button" id="settings-trigger" type="button"
+                title="Units and display" aria-label="Units and display"
+                aria-haspopup="dialog" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1v.2a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-2.8-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3.5 15a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.1-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 10.3 4.4a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7h.2a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.6 1.2Z"/></svg>
+        </button>
+        <div class="account-drop settings-drop" id="settings-panel" role="dialog" aria-label="Units and display" hidden></div>
+      </div>
+      <button class="icon-button" id="fit-button" type="button" title="Zoom to all loaded maps" aria-label="Zoom to all loaded maps">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V5a2 2 0 0 1 2-2h3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2h-3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/></svg>
+      </button>
+      <!--
+        Everything about taking the map away with you, in one place.
+        It used to be three: a download button here, a camera beside it, and an
+        "Offline regions" section buried at the foot of the Layers tab below
+        eleven basemaps and five overlay groups.
+      -->
+      <div class="settings-menu offline-menu" id="offline-menu">
+        <button class="icon-button" id="offline-trigger" type="button"
+                title="Take this map offline" aria-label="Take this map offline"
+                aria-haspopup="dialog" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
+        </button>
+        <div class="account-drop offline-drop" id="offline-panel" role="dialog" aria-label="Offline" hidden></div>
+      </div>
+      <button class="icon-button" id="share-button" type="button" title="Copy a link to this view" aria-label="Copy a link to this view">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4"/><path d="m15.4 6.5-6.8 4"/></svg>
+      </button>
+      <button class="icon-button" id="theme-toggle" type="button" aria-label="Toggle theme"></button>
+      <div class="account-menu" id="account-menu" hidden>
+        <button class="account-trigger" id="account-trigger" type="button"
+                aria-haspopup="dialog" aria-expanded="false">Sign in</button>
+        <div class="account-drop" id="account-panel" role="dialog" aria-label="Account" hidden></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-body">
+
+    <aside class="panel" id="panel" aria-label="Map controls">
+      <button class="panel-close" id="panel-close" type="button" aria-label="Close the panel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+      <!--
+        The name, for the screens the header cannot fit it on.
+        Measured at 402px: the header's visible children already come to 323px
+        with 120px of gaps inside a 370px content box, and the title needs 143
+        more. It cannot go up there without dropping the navigation — so it
+        lives here instead, where opening the menu shows it. Hidden above the
+        breakpoint, because the header carries it there.
+      -->
+      <p class="panel-brand" aria-hidden="true">
+        <img class="panel-brand-mark" src="assets/img/mark.svg" alt="" width="22" height="22">
+        <span id="panel-brand-name">American Byways GPS</span>
+      </p>
+      <div class="panel-tabs" role="tablist">
+        <button class="panel-tab" role="tab" data-tab="layers" aria-selected="true" aria-controls="tab-layers" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
+          Layers
+        </button>
+        <button class="panel-tab" role="tab" data-tab="folders" aria-selected="false" aria-controls="tab-folders" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h3.6a2 2 0 0 1 1.4.6L11.4 7H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
+          Folders
+        </button>
+        <button class="panel-tab" role="tab" data-tab="waypoints" aria-selected="false" aria-controls="tab-waypoints" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+          Waypoints
+        </button>
+        <button class="panel-tab" role="tab" data-tab="details" aria-selected="false" aria-controls="tab-details" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 16.5v-5"/><path d="M12 8h.01"/></svg>
+          Details
+        </button>
+      </div>
+
+      <div class="panel-scroll">
+
+        <div id="tab-layers" role="tabpanel">
+          <div class="panel-section">
+            <h2 class="panel-title">
+              <span>Map</span>
+            </h2>
+            <div id="basemap-list"></div>
+          </div>
+          <div class="panel-section">
+            <h2 class="panel-title">
+              <span>Layers</span>
+              <span class="count" id="overlay-count"></span>
+            </h2>
+            <p class="hint" style="margin:-4px 0 10px">These stack over the map above. Each has its own opacity.</p>
+            <div id="overlay-list"></div>
+          </div>
+        </div>
+
+        <div id="tab-folders" role="tabpanel" hidden>
+          <div class="panel-section">
+            <h2 class="panel-title">
+              <span>Your folders</span>
+              <span class="count" id="folder-totals"></span>
+            </h2>
+            <div class="folder-actions">
+              <button class="button button-secondary button-small" id="new-folder" type="button">New folder</button>
+              <button class="button button-secondary button-small" id="new-trip" type="button">New trip</button>
+              <button class="button button-ghost button-small" id="import-into-folder" type="button" hidden>Add from an open file…</button>
+            </div>
+            <div id="folder-list"></div>
+          </div>
+          <div class="panel-section">
+            <details class="files-block" id="files-block">
+              <summary class="files-summary">
+                <span>Open a file</span>
+                <span class="count" id="loaded-count"></span>
+              </summary>
+              <div class="dropzone" id="dropzone" role="button" tabindex="0">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
+                <b>Drop a file, or click to choose</b>
+                GPX · KML · KMZ · GeoJSON
+              </div>
+              <input type="file" id="file-input" multiple accept=".gpx,.kml,.kmz,.geojson,.json" hidden>
+              <label class="drop-target-label" for="drop-target">When a file opens</label>
+              <select id="drop-target" class="drop-target"></select>
+              <div id="loaded-list"></div>
+              <div id="catalog-list" hidden></div>
+            </details>
+            <p class="hint" id="folder-storage-note" style="margin-top:12px">
+              Folders are saved in this browser only — they are not uploaded, and they will not
+              follow you to another device. Export a folder as GPX to keep or move it.
+            </p>
+          </div>
+        </div>
+
+        <div id="tab-waypoints" role="tabpanel" hidden>
+          <div class="panel-section">
+            <h2 class="panel-title">
+              <span>All waypoints</span>
+              <span class="count" id="waypoint-count"></span>
+            </h2>
+            <div class="search-field" style="margin-bottom:9px">
+              <label class="visually-hidden" for="waypoint-search">Search waypoints</label>
+              <input type="search" id="waypoint-search" placeholder="Search by name or note…" autocomplete="off">
+            </div>
+            <label class="visually-hidden" for="waypoint-folder">Filter by folder</label>
+            <select id="waypoint-folder" class="drop-target" style="margin-bottom:11px"></select>
+            <div id="waypoint-list"></div>
+          </div>
+        </div>
+
+        <div id="tab-details" role="tabpanel" hidden>
+          <div id="details-body"></div>
+        </div>
+
+        <p class="build-stamp" id="build-stamp" hidden></p>
+
+      </div>
+    </aside>
+
+    <div class="map-surface">
+      <div id="map"></div>
+      <div class="import-ask" id="import-ask" hidden></div>
+      <button class="icon-button panel-toggle" id="panel-toggle" type="button" aria-label="Toggle the controls panel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
+      </button>
+
+      <!--
+        Search sits on the map rather than in a menu: it is a way of getting
+        somewhere, and everything else that moves the map is out here too.
+      -->
+      <div class="map-search" id="map-search">
+        <label class="visually-hidden" for="place-search">Search for a place</label>
+        <svg class="map-search-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.4-3.4"/></svg>
+        <input type="search" id="place-search" placeholder="Search towns, parks, campgrounds…" autocomplete="off" enterkeyhint="search">
+        <div class="map-search-results" id="place-results" role="listbox" hidden></div>
+      </div>
+
+      <div class="map-loading" id="map-status" hidden>
+        <span class="spinner"></span>
+        <span id="map-status-text">Loading…</span>
+      </div>
+      <div class="toast-stack" id="toasts"></div>
+      <div class="drop-overlay">Drop to open</div>
+    </div>
+
+  </div>
+</div>
+
+<noscript>
+  <p style="padding:40px;text-align:center">The map viewer needs JavaScript. The published files are still downloadable from the <a href="./">home page</a>.</p>
+</noscript>
+
+<!-- Mapbox token, kept out of git. Copy assets/js/token.example.js to token.js. -->
+<script src="assets/js/token.js"></script>
+<!--
+  Which build this page is. Written by tools/build-dist.mjs and cache-busted
+  like every other asset, so a page served from a stale cache carries the old
+  value while build.json — fetched fresh — carries the new one. That difference
+  is the only reliable way the app can tell it is out of date.
+-->
+<script src="assets/js/build.js"></script>
+<script type="module" src="assets/js/viewer.js"></script>
 </body>
 </html>

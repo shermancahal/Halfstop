@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Help &amp; FAQ — American Byways GPS</title>
+<meta name="description" content="How the map works: layers, offline downloads, what the data means and where it comes from.">
+<meta property="og:title" content="American Byways Maps">
+<meta property="og:description" content="Field maps, tracks and waypoints from the road — viewable in the browser, downloadable as GPX, KML or GeoJSON.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#b4441f" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15120f" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="assets/img/mark.svg" type="image/svg+xml">
+<link rel="icon" href="assets/img/icon-192.png" sizes="192x192" type="image/png">
+<link rel="manifest" href="manifest.webmanifest">
+<!-- iOS ignores the manifest for "Add to Home Screen"; these three are what it
+     reads instead. apple-touch-icon must be a PNG with no transparency: Safari
+     composites anything transparent onto black. -->
+<link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Byways GPS">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="./">
+      <img class="brand-mark" src="assets/img/mark.svg" alt="" width="30" height="30">
+      <span class="brand-text">
+        <span class="brand-name" id="brand-name">American Byways GPS</span>
+        <span class="brand-parent" id="brand-parent">American Byways</span>
+      </span>
+    </a>
+    <nav class="nav">
+      <a href="./">Home</a>
+      <a href="map.html">Map</a>
+      <a href="faq.html" class="is-active">Help</a>
+    </nav>
+    <button class="icon-button" id="theme-toggle" type="button" aria-label="Toggle theme"></button>
+  </div>
+</header>
+
+<main>
+
+  <section class="hero hero-compact">
+    <div class="wrap">
+      <div class="hero-inner">
+        <span class="eyebrow">Help</span>
+        <h1>How the map works</h1>
+        <p class="lede">
+          What each part of the app does, what the data behind it means, and the
+          limits worth knowing before you rely on it somewhere with no signal.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap faq-wrap">
+
+    <section class="faq-section" id="offline" data-editable="offline">
+      <h2>Taking the map offline</h2>
+
+      <h3>On this screen</h3>
+      <p>
+        Saves the area you are currently looking at as a named region. It records
+        the bounding box, a zoom range and which basemap was showing — it does not
+        fetch anything yet. Think of it as marking the ground you care about.
+      </p>
+
+      <h3>Map regions</h3>
+      <p>
+        The regions you have marked. Each one shows how much ground it covers, how
+        many tiles that works out to at the zoom range you chose, and roughly how
+        much space they will take. Widen or narrow the zoom range and the numbers
+        move with it — a region at zoom 14 costs about sixteen times what the same
+        region costs at zoom 12.
+      </p>
+
+      <h3>Download for offline</h3>
+      <p>
+        Fetches the tiles and keeps them on the device. It stores the basemap you
+        have selected plus any layers switched on over it, and the panel names what
+        it is about to store before you press it. A tile that has already been
+        downloaded by an overlapping region is not fetched twice.
+      </p>
+      <p>
+        Once a region is downloaded, the map draws from those tiles with no network
+        at all. The figure under the region list is read from the browser rather
+        than estimated, and is what decides whether the next download will fit.
+      </p>
+
+      <h3>What cannot be downloaded, and why</h3>
+      <p>
+        <strong>Byways Topo, Mapbox Outdoors and Satellite Streets cannot be stored
+        offline.</strong> They render from Mapbox vector tiles, and Mapbox reserve
+        offline storage to their own native SDK — this app is Mapbox GL JS running
+        in a web view, which is not that SDK. The app will say so rather than
+        offering a button that quietly downloads something else.
+      </p>
+      <p>
+        Everything else can: USGS Topo and Imagery, the state aerial and lidar
+        layers, BLM, the FAA layers and the rest. All of it is public data with no
+        such condition attached.
+      </p>
+      <p>
+        The OpenStreetMap community tile servers are also left alone. Nothing
+        forbids downloading from them, but their usage policy asks bulk downloaders
+        to run their own servers, and filling a phone from a volunteer-funded
+        service is what it asks people not to do.
+      </p>
+
+      <h3>Save as a picture</h3>
+      <p>
+        The one export that always works. It costs no tiles, needs no account and
+        no network, and on a phone in a canyon it is often the whole answer. On a
+        phone it offers Save to Files alongside Messages and AirDrop.
+      </p>
+    </section>
+
+    <section class="faq-section" id="layers" data-editable="layers">
+      <h2>Layers and what they mean</h2>
+
+      <h3>The map underneath, and the layers over it</h3>
+      <p>
+        One basemap is drawn at a time; layers stack over it, each with its own
+        opacity. A layer switched on for one state stays on when you leave that
+        state and comes back when you return — it is simply not drawn or listed
+        while you are elsewhere.
+      </p>
+
+      <h3>Zoom floors</h3>
+      <p>
+        Some layers only load past a certain zoom, and say so with an amber
+        <em>zoom in to 10</em> badge rather than appearing broken. The floor is not
+        fussiness: these services answer a fixed number of features per request, and
+        a request covering too much ground comes back truncated. On a layer about
+        where you may not fly a drone, a silently missing cell reads as open
+        airspace, which is the wrong way to be wrong.
+      </p>
+
+      <h3>Where the data comes from</h3>
+      <p>
+        Every layer names its source in its own description. They are agency
+        services read live, not copies — so a layer reflects what that agency
+        publishes today, including its gaps.
+      </p>
+      <p>
+        <strong>The agency's own map is the authority.</strong> A published service
+        can lag the map an agency prints, a gate can close the week after a dataset
+        is refreshed, and a boundary drawn at one scale is not a survey. Use this to
+        plan and to orient; check with the managing office before relying on it for
+        access.
+      </p>
+
+      <h3>Not responding</h3>
+      <p>
+        A red badge means that layer's service is not answering. Some are known to
+        be intermittent — the FAA's drone layers sit behind a request quota shared
+        with every other consumer of that service, and it is regularly exceeded by
+        people who are not us. The layer keeps whatever it last drew rather than
+        blanking.
+      </p>
+    </section>
+
+    <section class="faq-section" id="drones" data-editable="drones">
+      <h2>The drone layers</h2>
+      <p>
+        <strong>Nothing here is a flight authorisation.</strong> It is the FAA's own
+        data drawn on a different map, and it can be out of date.
+      </p>
+
+      <h3>Drone ceilings</h3>
+      <p>
+        The UAS Facility Map: the grid LAANC reads when it approves a flight. The
+        number is how high LAANC will grant that authorisation <em>instantly</em> —
+        not a speed limit for the sky. Every cell on the grid is inside controlled
+        airspace, and a Part 107 flight there needs authorisation whatever the cell
+        says. A ceiling of 0 does not mean the airspace is closed; it means nothing
+        is pre-approved and the request goes to further coordination or FAA
+        DroneZone instead.
+      </p>
+      <p>
+        Outside controlled airspace there is no grid at all. That is Class G, where
+        no authorisation is needed — an absent cell is an answer, not a gap.
+      </p>
+
+      <h3>Restrictions and advisories</h3>
+      <p>
+        Red is do-not-fly; amber is permitted with permission or with care.
+        <strong>These are standing and scheduled restrictions only.</strong>
+        Same-day temporary flight restrictions — wildfires, VIP movements — are
+        NOTAMs, and they are not in this layer. The card links to the FAA's current
+        list; check it before you fly.
+      </p>
+      <p>
+        Military operating areas are deliberately left out. They do not restrict
+        civilian flight and are generally based well above where a drone flies, so
+        drawing them would fill the screen with warnings that do not apply.
+      </p>
+    </section>
+
+    <section class="faq-section" id="account" data-editable="account">
+      <h2>Accounts and your own files</h2>
+      <p>
+        Everything you save — folders, waypoints, notes, imported files — lives in
+        your browser by default and needs no account. Signing in syncs those folders
+        between devices; signing out leaves them on the device, because clearing
+        them would look like data loss.
+      </p>
+      <p>
+        Exports are GPX by default, which is what Garmin, Gaia, AllTrails and every
+        handheld will import. GeoJSON is offered alongside it for anything that
+        wants the full properties.
+      </p>
+    </section>
+
+  </div>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>A project of <span id="parent-name-footer">American Byways</span>.</p>
+    <ul class="footer-links">
+      <li><a href="./">Home</a></li>
+      <li><a href="map.html">Map</a></li>
+    </ul>
+  </div>
+</footer>
+
+<script src="assets/js/token.js"></script>
+<!--
+  build.js sets ABMAP_BUILD, and registerServiceWorker treats its absence as
+  "this page was never built" and UNREGISTERS the worker. Without this line the
+  homepage silently tore down offline support for the whole site every time
+  somebody opened it - which was already true of the old library page, and
+  became much more consequential when that page became the homepage.
+-->
+<script src="assets/js/build.js"></script>
+<script type="module" src="assets/js/faq.js"></script>
+</body>
+</html>

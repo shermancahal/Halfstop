@@ -98,6 +98,15 @@ const external = process.env.SMOKE_URL;
 const hosted = external ? null : await serveFreshBuild();
 const URL_UNDER_TEST = external || hosted.url;
 
+/*
+ * The viewer lives at map.html now that the root is a real homepage.
+ *
+ * Named once rather than spelled out at each navigation: three of these
+ * pointed at the root and would have loaded a landing page while asking it
+ * about layer rows.
+ */
+const MAP_URL = new URL('map.html', URL_UNDER_TEST).href;
+
 const GL = `class E{constructor(){this._h={}}on(e,a,b){const f=b||a;
 if(typeof a==='string'){(this._h[e+':'+a]||=[]).push(f)}else{(this._h[e]||=[]).push(f)}return this}
 once(e,f){const g=(a)=>{this.off(e,g);f(a)};return this.on(e,g)}
@@ -542,7 +551,7 @@ await page.route('**/*', async (route) => {
   return route.fulfill({ status: 200, contentType: 'application/javascript', body: GL });
 });
 
-await page.goto(URL_UNDER_TEST, { waitUntil: 'networkidle' });
+await page.goto(MAP_URL, { waitUntil: 'networkidle' });
 
 /*
  * Open a layer group without toggling it.
@@ -854,7 +863,7 @@ check('while every state row says which state it is',
 console.log('\nThe panel waits to be asked, and opens on Layers');
 {
   const fresh = await context.newPage();
-  await fresh.goto(hosted.url, { waitUntil: 'networkidle' });
+  await fresh.goto(MAP_URL, { waitUntil: 'networkidle' });
   await fresh.waitForTimeout(900);
   check('it starts closed', await fresh.locator('#panel').isHidden(), true);
   check('and the way to open it is on screen', await fresh.locator('#panel-toggle').isVisible(), true);
@@ -2950,7 +2959,7 @@ if (!external) {
   });
   const offlinePage = await offlineContext.newPage();
   await offlinePage.addInitScript(GL);
-  await offlinePage.goto(URL_UNDER_TEST, { waitUntil: 'load' });
+  await offlinePage.goto(MAP_URL, { waitUntil: 'load' });
 
   /*
    * Polled to a deadline rather than sampled once, for two reasons that both
@@ -3066,9 +3075,31 @@ if (!external) {
     check('and the layer panel built itself from the cached catalogue',
       await offlinePage.locator('.layer-row').count() > 0, true);
 
-    await offlinePage.goto(new URL('library.html', URL_UNDER_TEST).href, { waitUntil: 'load' });
-    check('and so does the library, which was never visited online',
+    /*
+     * The homepage carries the catalogue now that the viewer has moved to
+     * map.html, and the help page is new. Both have to survive offline for the
+     * same reason the map does: a precache is only worth having if it covers
+     * the pages somebody reaches for.
+     */
+    await offlinePage.goto(new URL('./', URL_UNDER_TEST).href, { waitUntil: 'load' });
+    check('and so does the homepage, which was never visited online',
       await offlinePage.locator('#catalog-grid').count(), 1);
+
+    /*
+     * Deliberately after the homepage, because the order is the test.
+     *
+     * Visiting the homepage used to tear the worker down: it registers one,
+     * and registerServiceWorker unregisters when ABMAP_BUILD is missing -
+     * which it was, because only the map page loaded build.js. Every cache
+     * went with it and the next navigation died. Reordering these two made it
+     * pass and would have shipped a homepage that switched off offline mode
+     * for the whole site.
+     */
+    await offlinePage.goto(new URL('faq.html', URL_UNDER_TEST).href, { waitUntil: 'load' });
+    check('and the help page, still reachable after the homepage has loaded',
+      await offlinePage.locator('.faq-section').count() > 0, true);
+    check('and the caches the homepage could have torn down are still there',
+      await offlinePage.evaluate(async () => (await caches.keys()).some((n) => /^abmap-\d|^abmap-[a-f0-9]/.test(n))), true);
   } catch (error) {
     // A navigation that cannot be served offline throws rather than returning
     // a page, and an uncaught throw here would take every check after it with

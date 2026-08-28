@@ -18,6 +18,16 @@ export const SITE = {
   // Shown in the footer and in file attributions.
   copyrightHolder: 'American Byways',
   contactEmail: '',
+  /*
+   * Who may edit page content in place.
+   *
+   * A convenience for the browser, not a permission. The pencil is hidden for
+   * everyone else, and hiding a button is not security - what actually decides
+   * whether a save is accepted is the row-level policy on the Supabase table,
+   * which checks the signed-in user's own email server-side. Anybody can edit
+   * this array in their devtools; nobody can make the database take their row.
+   */
+  editors: ['shermancahal@gmail.com'],
 };
 
 /**

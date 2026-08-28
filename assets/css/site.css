@@ -380,3 +380,43 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
   .nav a { padding: 7px 8px; font-size: .85rem; }
   .brand-parent { display: none; }
 }
+
+
+/* ==========================================================================
+   Help page — prose, and editing it in place
+   ========================================================================== */
+
+.hero-compact { padding-bottom: 8px; }
+.faq-wrap { padding-bottom: 56px; }
+.faq-section {
+  position: relative; max-width: 68ch; margin: 0 auto 40px;
+  padding-top: 26px; border-top: 1px solid var(--line);
+}
+.faq-section:first-of-type { border-top: 0; }
+.faq-section h2 { font-size: 1.32rem; margin: 0 0 14px; }
+.faq-section h3 {
+  font-size: .96rem; margin: 24px 0 6px;
+  letter-spacing: .01em; color: var(--ink);
+}
+.faq-section p { margin: 0 0 11px; line-height: 1.62; color: var(--ink-2); }
+.faq-section strong { color: var(--ink); }
+
+/* The pencil sits in the section's own top-right rather than beside the
+   heading, so a two-line heading does not push it out of reach. */
+.faq-edit {
+  position: absolute; top: 22px; right: 0;
+  width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: 1px solid transparent; border-radius: 50%;
+  color: var(--ink-3); cursor: pointer;
+}
+.faq-edit:hover { background: var(--paper-3); color: var(--ink); border-color: var(--line); }
+.faq-edit svg { width: 15px; height: 15px; }
+
+/* Editing state, marked clearly: an editable region that looks identical to a
+   read-only one is how somebody types into a page they meant to be reading. */
+.faq-body.is-editing {
+  outline: 2px solid var(--clay); outline-offset: 8px; border-radius: var(--radius-sm);
+  background: var(--paper-2);
+}
+.faq-editbar { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+.faq-status { font-size: .82rem; color: var(--ink-3); }
