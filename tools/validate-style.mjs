@@ -185,7 +185,7 @@ for (const layer of protomaps.layers) {
     ...PROTOMAPS_SCHEMA.protectedClasses || [],
     ...PROTOMAPS_SCHEMA.waterClasses || [],
     ...PROTOMAPS_SCHEMA.summitClasses || [],
-    ...PROTOMAPS_SCHEMA.placeClasses || [],
+    ...Object.values(PROTOMAPS_SCHEMA.place || {}).flat(),
   ]);
   const field = PROTOMAPS_SCHEMA.fields.classField;
   const asked = new Map();

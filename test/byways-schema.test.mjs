@@ -456,3 +456,77 @@ test('protomaps: named water is labelled, from the water features themselves', (
   assert.ok(!text.includes('playa'), 'a dry lake bed labelled as water is worse than not labelling it');
   assert.ok(text.includes('"has"'), 'and only where there is a name — most water carries none');
 });
+
+test('protomaps: no layer filters on a class the schema never names', () => {
+  /*
+   * The general form of the road check, which found seven values and stopped
+   * at roads because roads were where the work was. Every other layer
+   * classifies through the same field, and three more were still spelling out
+   * Mapbox's vocabulary when this was widened: the landcover ramp, the landuse
+   * fill and the place-label sizing.
+   *
+   * The consequence is not an error. It is a uniform green country with every
+   * town's name in the same small type - which looks like a palette decision,
+   * and is why this needs a check rather than a look.
+   *
+   * What it cannot do, said plainly because the name suggests otherwise: it
+   * reads the schema for both sides, so it catches a literal written inline
+   * that the schema does not name, and it cannot catch the schema naming the
+   * wrong value. Changing `locality` to `settlement` in the schema passes this
+   * test and draws nothing. Only reading Protomaps' own style settles that,
+   * which is what the pm: probes in tools/layer-candidates.json are for.
+   */
+  const known = new Set([
+    ...Object.values(PROTOMAPS_SCHEMA.landcover || {}).flat(),
+    ...Object.values(PROTOMAPS_SCHEMA.landuse || {}).flat(),
+    ...Object.values(PROTOMAPS_SCHEMA.place || {}).flat(),
+    ...PROTOMAPS_SCHEMA.protectedClasses,
+    ...PROTOMAPS_SCHEMA.waterClasses,
+    ...PROTOMAPS_SCHEMA.summitClasses,
+  ]);
+  const field = PROTOMAPS_SCHEMA.fields.classField;
+  const strays = [];
+  const walk = (node, id) => {
+    if (!Array.isArray(node)) return;
+    const reads = Array.isArray(node[1]) && node[1][0] === 'get' && node[1][1] === field;
+    if ((node[0] === 'match' || node[0] === '==') && reads) {
+      for (const value of node.slice(2).flat()) {
+        // Colours sit in the same arms as the values they answer for.
+        if (typeof value === 'string' && !value.startsWith('#') && !known.has(value)) {
+          strays.push(`${id}: ${value}`);
+        }
+      }
+    }
+    for (const child of node) walk(child, id);
+  };
+  for (const layer of protomapsStyle().layers) {
+    if (layer['source-layer'] === PROTOMAPS_SCHEMA.layers.road) continue;
+    walk(layer.filter, layer.id);
+    for (const value of Object.values(layer.paint || {})) walk(value, layer.id);
+    for (const value of Object.values(layer.layout || {})) walk(value, layer.id);
+  }
+  assert.deepEqual(strays, [], 'a layer filters on a value the tiles do not carry');
+});
+
+test('byways: a role a schema has no values for draws no arm', () => {
+  /*
+   * Three of the seven ground-cover roles exist only in Protomaps: cropland,
+   * bare rock and cities. Mapbox has no values for them, and the alternative to
+   * omitting the arm is an empty match branch — which the spec rejects — or a
+   * branch listing a value the tiles never carry, which is valid and dead.
+   *
+   * Checked in both directions, because "the arm is missing" and "the arm is
+   * there" are the two halves of one claim.
+   */
+  const colourOf = (style) => JSON.stringify(
+    style.layers.find((layer) => layer.id === 'landcover').paint['fill-color'],
+  );
+  const mapbox = colourOf(bywaysStyle('pk.snapshot'));
+  const protomaps = colourOf(protomapsStyle());
+
+  assert.ok(!mapbox.includes('urban_area'), 'Mapbox has no urban_area, so it must not name one');
+  assert.ok(!mapbox.includes('farmland'), 'nor farmland');
+  assert.ok(protomaps.includes('urban_area'), 'Protomaps does, so it must');
+  assert.ok(protomaps.includes('farmland'), 'and cropland is not forest green');
+  assert.ok(protomaps.includes('barren'), 'nor is bare rock');
+});

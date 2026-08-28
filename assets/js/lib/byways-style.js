@@ -159,6 +159,14 @@ export const MAPBOX_SCHEMA = {
     scrub: ['scrub'],
     sand: ['sand'],
   },
+  /*
+   * A town, as opposed to everything else with a name on it.
+   *
+   * The only distinction this map draws among place labels: a settlement gets
+   * bigger type than a district or a region, because on a road atlas the towns
+   * are what you navigate by.
+   */
+  place: { settlement: ['settlement'] },
   /** Named water worth a label. Mapbox's natural_label vocabulary. */
   waterClasses: ['lake', 'ocean', 'sea', 'river'],
   /** And the one class that covers peaks, ridges and passes. */
@@ -343,6 +351,13 @@ export const PROTOMAPS_SCHEMA = {
   waterClasses: ['ocean', 'lake', 'river', 'riverbank', 'reservoir'],
   // Nothing to filter while summitLabel is null; the layer is dropped anyway.
   summitClasses: [],
+  /*
+   * Protomaps calls a town a locality - read from its places_locality layer,
+   * which filters on exactly that and carries `capital` and `sort_key`
+   * alongside. Its other place kinds are country, region, province,
+   * neighbourhood and macrohood, none of which are towns.
+   */
+  place: { settlement: ['locality'] },
   // The same OSM tags, since kind_detail is the OSM highway value.
   roadLinks: {
     motorway: 'motorway_link',
@@ -1197,10 +1212,19 @@ function labelLayers() {
       layout: {
         'text-field': labelName(),
         'text-font': FONT_BOLD,
+        /*
+         * Towns bigger than everything else, at both ends of the ramp.
+         *
+         * Written through the schema because the value differs: Mapbox calls a
+         * town a settlement and Protomaps calls it a locality, and a literal
+         * here would have drawn every place name in the country at the smaller
+         * size - a state capital and a crossroads in the same type, which
+         * reads as a design decision rather than as a filter matching nothing.
+         */
         'text-size': [
           'interpolate', ['linear'], ['zoom'],
-          4, ['match', ['get', S.fields.classField], 'settlement', 11, 9],
-          12, ['match', ['get', S.fields.classField], 'settlement', 16, 12],
+          4, byKind('place', [[['settlement'], 11]], 9),
+          12, byKind('place', [[['settlement'], 16]], 12),
         ],
         'text-max-width': 7,
       },
