@@ -476,24 +476,30 @@
     "url": "https://www.mrlc.gov/geoserver/mrlc_display/wms?service=WMS&version=1.3.0&request=GetCapabilities"
   },
   {
-    "id": "faa:uasfm",
-    "note": "The UAS Facility Map grid - the altitudes LAANC authorisations are granted against, which is the practical question a drone asks: may I fly here, and how high. Searched rather than guessed at a hostname, because the last endpoint guessed at in this file answered 499 Token Required.",
+    "id": "faa:uasfm-fields",
+    "note": "The grid's own field list. A ceiling in feet is the whole point of this layer and the column holding it has to be read rather than guessed - guessing a field name has been wrong four times in this file.",
     "expect": "data",
-    "find": "\"(?:title|url|type)\"\\s*:\\s*\"[^\"]{0,130}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=12&sortField=numViews&sortOrder=desc&q=%28%22UAS%20Facility%20Map%22%20OR%20UASFM%29%20AND%20%28type%3A%22Feature%20Service%22%20OR%20type%3A%22Map%20Service%22%29"
+    "find": "\"(?:name|alias|geometryType)\"\\s*:\\s*\"[^\"]{0,50}\"",
+    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/FAA_UAS_FacilityMap_Data_V5/FeatureServer/0?f=pjson"
   },
   {
-    "id": "faa:restrictions",
-    "note": "National security UAS flight restrictions - the places where the answer is no regardless of altitude. A grid that says 400 feet is misleading over a prohibited area.",
+    "id": "faa:uasfm-data",
+    "note": "Real grid cells over central Kentucky, with values. This is the check the Living Atlas canopy layer failed: a service can exist, advertise fields and still answer a browser with 499 Token Required.",
     "expect": "data",
-    "find": "\"(?:title|url|type)\"\\s*:\\s*\"[^\"]{0,130}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=12&sortField=numViews&sortOrder=desc&q=%28%22UAS%20Flight%20Restrictions%22%20OR%20%22national%20security%20UAS%22%29%20AND%20%28type%3A%22Feature%20Service%22%20OR%20type%3A%22Map%20Service%22%29"
+    "find": "\"[A-Z_]{2,20}\"\\s*:\\s*(?:\"[^\"]{0,40}\"|\\d+)",
+    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/FAA_UAS_FacilityMap_Data_V5/FeatureServer/0/query?where=1%3D1&geometry=-84.4,37.7,-83.9,38.1&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=6&f=json"
   },
   {
-    "id": "faa:airspace",
-    "note": "Class airspace, so the grid has context. A ceiling means little without knowing whether the ground under it is class B, C, D or open.",
+    "id": "faa:airspace-data",
+    "note": "Class airspace over the same ground. A ceiling means little without knowing whether the sky above is class B, C, D or open.",
     "expect": "data",
-    "find": "\"(?:title|url|type)\"\\s*:\\s*\"[^\"]{0,130}\"",
-    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=12&sortField=numViews&sortOrder=desc&q=FAA%20AND%20%28airspace%20OR%20%22class%20airspace%22%29%20AND%20%28type%3A%22Feature%20Service%22%20OR%20type%3A%22Map%20Service%22%29"
+    "find": "\"[A-Z_]{2,20}\"\\s*:\\s*(?:\"[^\"]{0,40}\"|\\d+)",
+    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Class_Airspace/FeatureServer/0/query?where=1%3D1&geometry=-84.4,37.7,-83.9,38.1&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=6&f=json"
+  },
+  {
+    "id": "faa:vfr-tile",
+    "note": "The VFR sectional as a raster tile - the chart a pilot actually reads, and a better answer than a grid for anyone who knows how to read one. Asked as a tile because a tiled MapServer either serves one or does not.",
+    "expect": "image",
+    "url": "https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/VFR_Sectional/MapServer/tile/8/98/71"
   }
 ]
