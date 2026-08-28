@@ -120,7 +120,7 @@ the file has, a note if the file has more than the style uses.
 
 ## What the port gains and what it loses
 
-Gains, both larger than expected:
+Gains, all three larger than expected:
 
 - **The road hierarchy survives intact.** Protomaps' `kind` has five values and
   would have collapsed motorway into trunk and primary into secondary. Roads
@@ -131,22 +131,30 @@ Gains, both larger than expected:
   within a few miles of a state line. Protomaps names the *network*: `US:I`,
   `US:US`, `US:KY`. The design is chosen from that, and `shield_text` supplies
   the number already stripped of its system.
+- **More ground is distinguished.** Mapbox's landuse overlay knows one kind of
+  protected land; Protomaps separates national park, protected area, nature
+  reserve and forest — which on a back-roads map is most of the ground the
+  roads are actually in. Its landcover also separates cropland, bare rock and
+  built-up areas, none of which Mapbox distinguishes here.
 
-Losses, each of which drops a layer rather than drawing it empty:
+Losses. Each drops a layer rather than drawing it empty, and each is confirmed
+absent rather than assumed:
 
-| Layer | Why | Where the answer is |
-| --- | --- | --- |
-| `contour`, `contour-index`, `contour-label` | No contour layer in the schema | The USGS contour overlay, already in the catalogue |
-| `hillshade` | No hillshade layer | Terrain relief is already its own overlay |
-| `label-water`, `label-summit` | Not established which layer carries natural-feature names | Probe `pm:doc-physical` |
-| `national-park` | One landuse layer here rather than a base and an overlay; the right `kind` value is unconfirmed | Probe `pm:doc-protected` |
-| `road-unpaved` | No surface field named in the schema | Probe `pm:doc-surface` |
-| `road-shield-first`, `road-shield-second` | Nothing marks a road carrying two route numbers, and splitting on any hyphen would cut "21/2" in half | Probe `pm:doc-concurrency` |
+| Layer | Why |
+| --- | --- |
+| `contour`, `contour-index`, `contour-label` | No contour layer in the schema. The USGS contour overlay, already in the catalogue, is the answer |
+| `hillshade` | No hillshade layer. Terrain relief is already its own overlay |
+| `road-unpaved` | No surface field anywhere in the schema — confirmed, not assumed. This is the one that stings: "tracks and surfaces" is how this basemap describes itself |
+| `road-shield-first`, `road-shield-second` | Nothing marks a road carrying two route numbers. Splitting on any hyphen would cut "21/2" and every hyphenated forest road in half |
+| `label-summit` | `peak` is a documented kind but which layer carries it is not published in a form that says so. Null until it is read rather than guessed |
 
-The probes are in `tools/layer-candidates.json` and run from the **Check map
-layers** workflow with `only: pm:doc`. Every one of these gaps is a layer that
-would otherwise have been shipped drawing nothing, which is the failure mode
-this whole seam exists to make visible.
+Everything else came back: the parks, the water names, the ground cover, the
+place labels, the whole road network and the shields.
+
+The probes that established all of this are in `tools/layer-candidates.json`
+and run from the **Check map layers** workflow with `only: pm:`. Every gap
+above is a layer that would otherwise have shipped drawing nothing, which is
+the failure this seam exists to make visible.
 
 ## Still to do
 
@@ -158,3 +166,8 @@ this whole seam exists to make visible.
   size, offset and colour is computed per design, so reading the state per
   feature turns each into fifty-one arms — worth doing on its own, with a
   border crossing as its test.
+- **Summit labels.** One probe away: which layer carries `peak`.
+- **Place ranking.** Protomaps gives each place a `sort_key` and a `min_zoom`,
+  and a `capital` flag. This map currently draws towns bigger than everything
+  else and stops there; those three fields would let it thin the labels
+  properly at low zoom instead.
