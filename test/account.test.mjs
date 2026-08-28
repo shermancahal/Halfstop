@@ -35,6 +35,7 @@ function fakeClient({ session = null, signOutError = null } = {}) {
       onAuthStateChange() { return { data: { subscription: { unsubscribe() {} } } }; },
       async signUp(options) { calls.push(['signUp', options]); return { data: { session: null }, error: null }; },
       async signInWithOtp(options) { calls.push(['signInWithOtp', options]); return { error: null }; },
+      async signInWithOAuth(options) { calls.push(['signInWithOAuth', options]); return { error: null }; },
       async signOut() {
         calls.push(['signOut']);
         if (signOutError) throw new Error(signOutError);
@@ -130,4 +131,39 @@ test('account: signing out clears the device even when the server refuses', asyn
   await account.signOut();
   assert.equal(account.user, null);
   assert.equal(account.status, 'signed-out');
+});
+
+
+test('account: a provider sign-in says where to come back to', async () => {
+  /*
+   * The reason these exist is that there is no emailed link to break. They
+   * still depend on the redirect allow list, which is the same setting that
+   * broke the email flow - so the address they send is worth pinning.
+   */
+  const client = fakeClient();
+  const account = new Account(folders, { client: async () => client, configured: () => true });
+  withHash('#access_token=stale');
+
+  await account.signInWithProvider('apple');
+  await account.signInWithProvider('google');
+
+  assert.deepEqual(client.calls.map(([name, options]) => [name, options.provider, options.options.redirectTo]), [
+    ['signInWithOAuth', 'apple', 'https://shermancahal.github.io/Map/?m=x'],
+    ['signInWithOAuth', 'google', 'https://shermancahal.github.io/Map/?m=x'],
+  ]);
+});
+
+test('account: a provider refusal is reported rather than swallowed', async () => {
+  /*
+   * A successful call navigates away, so anything that returns is a refusal -
+   * a provider not enabled in the dashboard being the likely one. Returning
+   * quietly would leave a button that appears to do nothing, which is the
+   * exact complaint that started this.
+   */
+  const client = fakeClient();
+  client.auth.signInWithOAuth = async () => ({ error: { message: 'provider is not enabled' } });
+  const account = new Account(folders, { client: async () => client, configured: () => true });
+  withHash('');
+
+  await assert.rejects(() => account.signInWithProvider('apple'), /provider is not enabled/);
 });

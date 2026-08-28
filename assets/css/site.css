@@ -420,3 +420,10 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 }
 .faq-editbar { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
 .faq-status { font-size: .82rem; color: var(--ink-3); }
+
+
+/* The divider between the provider buttons and the email form: a quiet label,
+   not a rule, because the form below it is already visually separate. */
+.account-or {
+  margin: 12px 0 8px; text-align: center; font-size: .78rem; color: var(--ink-3);
+}

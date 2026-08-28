@@ -207,8 +207,17 @@
    */
   (function () {
     var search = new URLSearchParams(location.search);
-    var carries = ['m', 'b', 'o', 'u'].some(function (key) { return search.has(key); });
-    if (carries || /^#(view|-?\d)/.test(location.hash)) {
+    /*
+     * `code` and `error` are here because an auth return can land on the root.
+     *
+     * A provider round trip, or an emailed link, comes back to whatever
+     * address the project has in its allow list - and if that is the bare
+     * site, the session arrives on a page that does not load the accounts
+     * code and is never exchanged. It looks exactly like signing in doing
+     * nothing. Carried through to the map, where something is listening.
+     */
+    var carries = ['m', 'b', 'o', 'u', 'code', 'error'].some(function (key) { return search.has(key); });
+    if (carries || /^#(view|-?\d)/.test(location.hash) || /access_token=|[#&]error=/.test(location.hash)) {
       location.replace('map.html' + location.search + location.hash);
     }
   }());

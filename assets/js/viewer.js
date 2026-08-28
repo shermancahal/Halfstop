@@ -9019,8 +9019,31 @@ function renderAccount() {
     }),
   ];
 
+  /*
+   * Apple and Google first, and above the form rather than under it.
+   *
+   * Not decoration: the emailed link is the part that has broken repeatedly,
+   * and a provider round trip has no link to lose. Putting them first offers
+   * the route most likely to work before the one that needs an inbox.
+   *
+   * `run` is not used here - it insists on an email address, and the whole
+   * point of these is that you do not type one.
+   */
+  const provider = (id, label) => el('button', {
+    class: 'button button-secondary button-small', type: 'button', text: label,
+    onclick: async () => {
+      try {
+        await account.signInWithProvider(id);
+      } catch (error) {
+        toast(error.message, { tone: 'error', timeout: 10000 });
+      }
+    },
+  });
+
   dom.account.append(
     el('p', { class: 'hint', style: 'margin-bottom:10px', text: 'Sign in to keep your folders across devices.' }),
+    el('div', { class: 'account-actions' }, [provider('apple', 'Continue with Apple'), provider('google', 'Continue with Google')]),
+    el('p', { class: 'hint account-or', text: 'or with an email address' }),
     email,
     password,
     el('div', { class: 'account-actions' }, buttons),

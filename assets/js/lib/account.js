@@ -185,6 +185,32 @@ export class Account extends EventTarget {
     return true;
   }
 
+  /**
+   * Sign in through Apple or Google instead of an emailed link.
+   *
+   * The reason this exists is that there is no link to break. Every problem
+   * with the email flow so far has been about where a message lands - a
+   * redirect the project does not allow, a host that is not this one, a link
+   * opened on a different device - and none of those apply to a provider
+   * round trip that comes straight back.
+   *
+   * Two things it does not solve, said here so they are not discovered later:
+   * the redirect still has to be in the project's allow list, exactly as the
+   * email one does; and inside the app the return address is the web view's
+   * own origin rather than this site, which needs a deep link set up before it
+   * will work there. On the web it works as soon as the provider is enabled.
+   */
+  async signInWithProvider(provider) {
+    const client = await this.getClient();
+    const { error } = await client.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: returnTo() },
+    });
+    // Success navigates away, so anything that returns here is a refusal.
+    if (error) throw new Error(error.message);
+    return true;
+  }
+
   /** Passwordless: Supabase emails a one-time link back to this page. */
   async signInWithLink(email) {
     const client = await this.getClient();
