@@ -132,6 +132,33 @@ export const MAPBOX_SCHEMA = {
   },
   /** Mapbox's landuse_overlay distinguishes exactly one kind of protected ground. */
   protectedClasses: ['national_park'],
+  /*
+   * Ground cover, by what it is rather than by what it is called.
+   *
+   * A role maps onto the values a schema uses for it, and a role with no
+   * values draws no arm at all - which is how one style serves two
+   * vocabularies of different sizes. Mapbox distinguishes four kinds of cover
+   * this map cares about; Protomaps distinguishes seven, and painting its
+   * cropland and its cities in forest green because they fell through to the
+   * fallback is the kind of wrong that looks deliberate.
+   */
+  landcover: {
+    wood: ['wood'],
+    scrub: ['scrub'],
+    grass: ['grass'],
+    snow: ['snow'],
+    crop: [],
+    barren: [],
+    urban: [],
+  },
+  /** And the same for landuse polygons, which are a different layer. */
+  landuse: {
+    park: ['park'],
+    grass: ['grass'],
+    wood: ['wood'],
+    scrub: ['scrub'],
+    sand: ['sand'],
+  },
   /** Named water worth a label. Mapbox's natural_label vocabulary. */
   waterClasses: ['lake', 'ocean', 'sea', 'river'],
   /** And the one class that covers peaks, ridges and passes. */
@@ -281,6 +308,32 @@ export const PROTOMAPS_SCHEMA = {
    * would leave them as bare parchment.
    */
   protectedClasses: ['national_park', 'protected_area', 'nature_reserve', 'forest'],
+  /*
+   * Read from Protomaps' own landcover ramp, which matches on grassland,
+   * barren, urban_area, farmland, glacier and scrub and lets forest fall
+   * through as the default. Seven roles filled where Mapbox fills four.
+   */
+  landcover: {
+    wood: ['forest'],
+    scrub: ['scrub'],
+    grass: ['grassland'],
+    snow: ['glacier'],
+    crop: ['farmland'],
+    barren: ['barren'],
+    urban: ['urban_area'],
+  },
+  /*
+   * And its landuse kinds, from the same file. Protomaps carries both `grass`
+   * and `grassland` on this layer and both `wood` and `scrub`, so most roles
+   * gain a synonym rather than changing.
+   */
+  landuse: {
+    park: ['park', 'village_green', 'playground', 'recreation_ground', 'golf_course'],
+    grass: ['grass', 'grassland'],
+    wood: ['wood'],
+    scrub: ['scrub'],
+    sand: ['sand', 'beach'],
+  },
   /*
    * Protomaps' water kinds, read from the schema documentation: ocean, lake,
    * river, riverbank, reservoir and playa. Riverbank and reservoir are named
@@ -433,6 +486,35 @@ const R = (name) => S.roadClasses[name];
 
 /** The ramps belonging to a class, same reasoning. */
 const RL = (name) => S.roadLinks[name];
+
+/**
+ * The values this schema uses for a set of roles, in order, skipping the roles
+ * it has no values for.
+ *
+ * @param {string} group  `landcover` or `landuse`.
+ * @param {string[]} roles
+ * @returns {string[]}
+ */
+const kinds = (group, roles) => roles.flatMap((role) => S[group][role] || []);
+
+/**
+ * A `match` over a classification, built from roles rather than values.
+ *
+ * @param {string} group
+ * @param {Array<[string[], *]>} arms  Roles, and what they resolve to.
+ * @param {*} fallback
+ */
+const byKind = (group, arms, fallback) => [
+  'match', ['get', S.fields.classField],
+  ...arms.flatMap(([roles, value]) => {
+    const values = kinds(group, roles);
+    // A role this schema has no values for produces no arm. An empty match arm
+    // is a spec error, and an arm listing a value the tiles never carry is
+    // worse - it is valid, and it is dead.
+    return values.length ? [values.length === 1 ? values[0] : values, value] : [];
+  }),
+  fallback,
+];
 
 /** Roads that are drawn solid, and so have something for a dash to sit on. */
 const sealedClasses = () => [
@@ -677,14 +759,18 @@ function groundLayers() {
       source: S.source,
       'source-layer': S.layers.landcover,
       paint: {
-        'fill-color': [
-          'match', ['get', S.fields.classField],
-          'wood', PALETTE.forestDeep,
-          'scrub', PALETTE.forest,
-          'grass', PALETTE.park,
-          'snow', PALETTE.snow,
-          PALETTE.forest,
-        ],
+        'fill-color': byKind('landcover', [
+          [['wood'], PALETTE.forestDeep],
+          [['scrub'], PALETTE.forest],
+          [['grass'], PALETTE.park],
+          [['snow'], PALETTE.snow],
+          // The three a schema may not have. Cropland is pale open ground on an
+          // atlas, bare rock paler still, and a city is the wicker tone the
+          // built-up areas already use - none of them are forest green.
+          [['crop'], PALETTE.landPale],
+          [['barren'], PALETTE.landAlt],
+          [['urban'], PALETTE.urban],
+        ], PALETTE.forest),
         // Fades in rather than switching on, so zooming out does not produce a
         // hard edge where the source's maxzoom stops.
         'fill-opacity': ['interpolate', ['linear'], ['zoom'], 4, 0.5, 10, 0.85],
@@ -712,14 +798,13 @@ function groundLayers() {
       type: 'fill',
       source: S.source,
       'source-layer': S.layers.landuse,
-      filter: ['match', ['get', S.fields.classField], ['park', 'grass', 'wood', 'scrub', 'sand'], true, false],
+      filter: ['match', ['get', S.fields.classField],
+        kinds('landuse', ['park', 'grass', 'wood', 'scrub', 'sand']), true, false],
       paint: {
-        'fill-color': [
-          'match', ['get', S.fields.classField],
-          'sand', PALETTE.landAlt,
-          'wood', PALETTE.forestDeep,
-          PALETTE.park,
-        ],
+        'fill-color': byKind('landuse', [
+          [['sand'], PALETTE.landAlt],
+          [['wood'], PALETTE.forestDeep],
+        ], PALETTE.park),
         'fill-opacity': 0.7,
       },
     },

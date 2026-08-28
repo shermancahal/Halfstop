@@ -180,8 +180,8 @@ for (const layer of protomaps.layers) {
  */
 {
   const known = new Set([
-    ...PROTOMAPS_SCHEMA.landcoverClasses || [],
-    ...PROTOMAPS_SCHEMA.landuseClasses || [],
+    ...Object.values(PROTOMAPS_SCHEMA.landcover || {}).flat(),
+    ...Object.values(PROTOMAPS_SCHEMA.landuse || {}).flat(),
     ...PROTOMAPS_SCHEMA.protectedClasses || [],
     ...PROTOMAPS_SCHEMA.waterClasses || [],
     ...PROTOMAPS_SCHEMA.summitClasses || [],
