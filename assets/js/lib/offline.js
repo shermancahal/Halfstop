@@ -496,7 +496,21 @@ export class OfflineStore extends EventTarget {
  * everything else, so a new state layer is downloadable the day it is added
  * and nobody has to remember to permit it.
  */
-const NO_CACHE_HOSTS = [/(^|\.)mapbox\.com$/i, /(^|\.)tiles\.mapbox\.com$/i];
+const NO_CACHE_HOSTS = [
+  /(^|\.)mapbox\.com$/i,
+  /(^|\.)tiles\.mapbox\.com$/i,
+  /*
+   * The OpenStreetMap community tile servers, for a different reason.
+   *
+   * Nothing licenses these away, but they are volunteer-funded and their usage
+   * policy asks bulk downloaders to run their own. Pulling four thousand tiles
+   * off tile-cyclosm.openstreetmap.fr to fill somebody's phone is exactly what
+   * it asks people not to do, and "we were allowed to" is not the same as "we
+   * should".
+   */
+  /(^|\.)openstreetmap\.(org|fr|de)$/i,
+  /(^|\.)tile\.osm\.org$/i,
+];
 
 export function mayCacheTiles(template) {
   try {

@@ -11,6 +11,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import { BASEMAPS } from '../assets/js/config.js';
 import {
   MAX_ZOOM, TILE_BUDGET, OfflineStore,
   normalizeBounds, crossesAntimeridian, tileRange, countTiles,
@@ -365,6 +366,15 @@ test('offline: Mapbox tiles are not ours to keep', () => {
   assert.equal(mayCacheTiles('https://basemap.nationalmap.gov/arcgis/x/tile/{z}/{y}/{x}'), true);
   assert.equal(mayCacheTiles('https://gis.blm.gov/arcgis/x/MapServer/tile/{z}/{y}/{x}'), true);
 
+  /*
+   * The OSM community servers are excluded for a different reason: nothing
+   * forbids it, but their usage policy asks bulk downloaders to run their own,
+   * and pulling four thousand tiles to fill a phone is what it asks people not
+   * to do.
+   */
+  assert.equal(mayCacheTiles('https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png'), false);
+  assert.equal(mayCacheTiles('https://tile.openstreetmap.org/{z}/{x}/{y}.png'), false);
+
   // Not a host that merely contains the word.
   assert.equal(mayCacheTiles('https://mapbox.com.example.org/{z}/{x}/{y}.png'), true);
   assert.equal(mayCacheTiles('http://insecure.example.gov/{z}/{x}/{y}.png'), false);
@@ -446,4 +456,36 @@ test('offline: cancelling stops the download where it stands', async () => {
   const result = await downloadTiles(urls, { caches: store, concurrency: 1, signal: controller.signal });
   assert.equal(result.cancelled, true);
   assert.ok(result.done < urls.length, 'it stopped rather than running to the end');
+});
+
+
+test('offline: a vector basemap has no raster stand-in to download', () => {
+  /*
+   * Byways Topo renders from Mapbox vector tiles when there is a token. Its
+   * `tiles` array is CyclOSM - a no-token fallback, the same idea drawn by
+   * somebody else - so a downloader reading `tiles` would have fetched a
+   * different map from the one on screen and gone offline showing it.
+   *
+   * The viewer refuses on `style || custom === 'byways'`. This pins the fact
+   * that makes the refusal necessary: the fallback tiles exist, and are not
+   * the same map. If Byways Topo ever gains cacheable tiles that ARE its own
+   * rendering, this fails and the refusal should be revisited - which is the
+   * point of testing the reason rather than the rule.
+   */
+  const byways = BASEMAPS.find((entry) => entry.custom === 'byways');
+  assert.ok(byways, 'Byways Topo is gone, so this test is about nothing');
+  assert.ok((byways.tiles || []).length > 0, 'the fallback tiles are what made this dangerous');
+  assert.equal((byways.tiles || []).some(mayCacheTiles), false,
+    'the fallback is a community OSM server and must not be bulk-downloaded either');
+});
+
+test('offline: every basemap offering a download offers its own map', () => {
+  // A raster basemap draws from the same tiles it would store; a vector one
+  // does not, and is the case the refusal exists for.
+  for (const basemap of BASEMAPS) {
+    const rendersVector = Boolean(basemap.style || basemap.custom === 'byways');
+    if (!rendersVector) continue;
+    assert.equal((basemap.tiles || []).some(mayCacheTiles), false,
+      `${basemap.id} renders from vector tiles but has cacheable rasters, which would download a different map`);
+  }
 });

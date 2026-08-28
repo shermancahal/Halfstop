@@ -67,7 +67,7 @@ import { registerServiceWorker, applyServiceWorkerUpdate } from './lib/pwa.js';
 import {
   OfflineStore, MAX_ZOOM as OFFLINE_MAX_ZOOM, TILE_BUDGET,
   mayCacheTiles, tileURLsFor, downloadTiles, clearTiles,
-  measureRegion, buildManifest, regionsToGeoJSON, formatBytes as formatTileBytes,
+  measureRegion, regionsToGeoJSON, formatBytes as formatTileBytes,
 } from './lib/offline.js';
 import {
   putPhoto, photoURL, deletePhoto, pruneUnreferenced, fetchLinkedPhoto, formatBytes, PHOTO_TYPES,
@@ -4233,11 +4233,6 @@ function currentTileKind() {
   return basemapById(state.basemapId)?.style ? 'vector' : 'raster';
 }
 
-/** The style a downloader would be pointed at for the current basemap. */
-function currentStyleURL() {
-  const basemap = basemapById(state.basemapId);
-  return basemap?.style || (basemap?.tiles || [])[0] || '';
-}
 
 function regionBoundsLabel({ west, south, east, north }) {
   const ns = (value) => `${Math.abs(value).toFixed(2)}°${value >= 0 ? 'N' : 'S'}`;
@@ -4331,15 +4326,19 @@ function renderOfflineTab() {
           toast(`Saved “${region.name}” from the current view.`);
         },
       }),
-      regions.length ? el('button', {
-        class: 'button button-ghost button-small', type: 'button',
-        text: 'Export for the app',
-        onclick: () => {
-          const manifest = buildManifest(regions, { styleURL: currentStyleURL(), kind, app: SITE.name });
-          downloadText('offline-regions.json', JSON.stringify(manifest, null, 2));
-          toast(`Exported ${regions.length} region${regions.length === 1 ? '' : 's'}.`);
-        },
-      }) : null,
+      /*
+       * "Export for the app" is gone, and it never worked.
+       *
+       * It wrote a JSON manifest shaped for the native Mapbox SDK's offline
+       * API. This app is Mapbox GL JS in a webview, not that SDK - there was
+       * no importer on the iOS side and no way to feed the file back in. It
+       * was a button producing an artefact nothing consumed, which is worse
+       * than a missing feature: it implied a workflow that did not exist.
+       *
+       * The region download below is the real thing now, and it works in the
+       * app for the same reason it works here - the tiles go into a cache the
+       * service worker reads.
+       */
     ]),
   );
 
@@ -4485,19 +4484,42 @@ function regionRow(region, kind) {
  */
 function downloadRow(region) {
   const basemap = basemapById(state.basemapId);
-  const templates = (basemap?.tiles || []).filter(mayCacheTiles);
+  /*
+   * A basemap that renders from a vector style cannot be downloaded, and its
+   * `tiles` are not a substitute for it.
+   *
+   * Byways Topo draws from Mapbox vector tiles when there is a token. Its
+   * `tiles` array is CyclOSM - a no-token fallback, the same idea drawn by
+   * somebody else - so downloading "Byways Topo" fetched a different map from
+   * the one on screen and would have gone offline showing it. That is worse
+   * than refusing: a download that quietly substitutes another cartographer's
+   * rendering is a download you cannot trust in a canyon.
+   *
+   * Mapbox's own tiles are excluded on licensing grounds and CyclOSM's on
+   * courtesy, so there is nothing left to fetch for this basemap either way.
+   */
+  const rendersVector = Boolean(basemap?.style || basemap?.custom === 'byways');
+  const templates = rendersVector ? [] : (basemap?.tiles || []).filter(mayCacheTiles);
+
+  // Whatever is switched on over it, so the download matches the map you are
+  // actually looking at rather than the ground under it.
+  const overlayTemplates = activeOverlays()
+    .flatMap((overlay) => overlay.tiles || [])
+    .filter(mayCacheTiles);
+
   const row = el('div', { class: 'region-download' });
 
   if (!globalThis.caches) {
     row.append(el('p', { class: 'source-note', text: 'This browser cannot store map tiles offline.' }));
     return row;
   }
-  if (!templates.length) {
+  if (!templates.length && !overlayTemplates.length) {
     row.append(el('p', {
       class: 'source-note',
-      text: basemap?.style
-        ? `${basemap.name} cannot be stored offline — Mapbox allow that only through their own SDK. `
-          + 'Switch to USGS Topo, Byways Topo or an aerial layer and the download below will work.'
+      text: rendersVector
+        ? `${basemap.name} draws from vector tiles, which cannot be stored offline — `
+          + 'Mapbox allow that only through their own SDK. Switch to USGS Topo, an aerial '
+          + 'or another raster map, and this region will download.'
         : 'This basemap cannot be stored offline.',
     }));
     return row;
@@ -4505,6 +4527,16 @@ function downloadRow(region) {
 
   const status = el('p', { class: 'source-note', text: '' });
   let controller = null;
+
+  // What is about to be fetched, named, because "download" over a map you did
+  // not realise was switched on is a surprise on a metered connection.
+  const covering = [
+    templates.length ? basemap.name : null,
+    overlayTemplates.length
+      ? `${activeOverlays().filter((o) => (o.tiles || []).some(mayCacheTiles)).length} layer(s) on top`
+      : null,
+  ].filter(Boolean).join(' + ');
+  row.append(el('p', { class: 'source-note', text: `Will store: ${covering}.` }));
 
   const button = el('button', {
     class: 'button button-secondary button-small', type: 'button',
@@ -4518,7 +4550,7 @@ function downloadRow(region) {
       for (let zoom = region.minZoom + 1; zoom <= region.maxZoom; zoom += 1) {
         tiers.push({ zoom, boxes: [region.bounds] });
       }
-      const urls = tileURLsFor(tiers, templates, tileURL);
+      const urls = tileURLsFor(tiers, [...templates, ...overlayTemplates], tileURL);
       status.textContent = `0 of ${urls.length.toLocaleString()}…`;
 
       try {
