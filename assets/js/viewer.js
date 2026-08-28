@@ -5830,8 +5830,57 @@ const MAP_FEATURE_KINDS = {
   airport_label: { source: 'Airport', field: 'class' },
 };
 
+/**
+ * A rendered feature from one of our own queried overlays.
+ *
+ * The identify card was built to read Mapbox's source layers - water, road,
+ * landuse - and everything else fell out of it. So every layer converted from
+ * a raster to features became clickable in principle and silent in practice:
+ * Colorado's facilities, Wyoming's parks, North Carolina's trails, Kentucky's
+ * byways. A tap on a byway reported the basemap road beneath it because the
+ * byway itself was never a candidate.
+ *
+ * The name comes from whatever the layer draws its label from, so it is the
+ * same string on the map and in the card, and the rows are the columns the
+ * query already asks for - minus the plumbing no reader wants.
+ */
+const PLUMBING = /^(objectid|globalid|fid|shape|se_anno|created_|last_edited|\w*_index|\w*_pk|\w*_sidx)/i;
+
+function describeOverlayFeature(feature) {
+  const overlayId = overlayIdFromLayer(feature.layer?.id || '');
+  if (!overlayId) return null;
+  const overlay = OVERLAYS.find((entry) => entry.id === overlayId);
+  if (!overlay) return null;
+
+  const properties = feature.properties || {};
+  const labelField = overlay.query?.label;
+  const named = labelField ? properties[labelField] : '';
+  const name = named || properties.NAME || properties.Name || properties.name || overlay.name;
+
+  const rows = [];
+  for (const [key, value] of Object.entries(properties)) {
+    if (rows.length >= 5) break;
+    if (key === labelField || PLUMBING.test(key)) continue;
+    if (value === null || value === undefined || value === '') continue;
+    const label = key.replace(/_/g, ' ').toLowerCase().replace(/^./, (first) => first.toUpperCase());
+    rows.push([label, humaniseValue(value)]);
+  }
+
+  return {
+    source: overlay.name,
+    designation: String(name),
+    attributes: null,
+    rows,
+  };
+}
+
 /** One rendered basemap feature as an identify group, or null if it says nothing. */
 function describeMapFeature(feature) {
+  // Ours first: an overlay feature has no Mapbox source layer and would
+  // otherwise be dropped by the table below.
+  const own = describeOverlayFeature(feature);
+  if (own) return own;
+
   const kind = MAP_FEATURE_KINDS[feature.sourceLayer];
   if (!kind) return null;
 

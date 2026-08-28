@@ -434,31 +434,52 @@
     "url": "https://services.arcgis.com/njFNhDsUCentVYJW/arcgis/rest/services/State_Park_Forest_Recreation_Maintained_Roads/FeatureServer/0/query?where=1%3D1&geometry=-79.5,39.0,-78.5,39.7&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson"
   },
   {
-    "id": "shield:md-40-townhill",
-    "note": "Scenic US 40 over Town Hill. The last three probes put the point on farm tracks and one of them - the I-68 control - came back with no features at all, which says the coordinates were wrong rather than the data missing. Six kilometres of radius rather than nine hundred metres, and fifty results rather than twenty-five.",
-    "expect": "data",
-    "find": "\"(?:ref|shield|reflen)\"\\s*:\\s*\"?[^\",}]{0,40}\"?",
-    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-78.45,39.657.json?radius=6000&limit=50&dedupe=false&layers=road&access_token={token}"
-  },
-  {
-    "id": "shield:md-40-sideling",
-    "note": "The same route over Sideling Hill, far enough east to be a genuinely separate sample.",
-    "expect": "data",
-    "find": "\"(?:ref|shield|reflen)\"\\s*:\\s*\"?[^\",}]{0,40}\"?",
-    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-78.30,39.700.json?radius=6000&limit=50&dedupe=false&layers=road&access_token={token}"
-  },
-  {
-    "id": "shield:md-40-cumberland",
-    "note": "West towards Cumberland, where US 40 and I-68 run together - so whatever shield the interstate carries appears beside whatever the scenic route carries, in one answer.",
-    "expect": "data",
-    "find": "\"(?:ref|shield|reflen)\"\\s*:\\s*\"?[^\",}]{0,40}\"?",
-    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-78.72,39.652.json?radius=6000&limit=50&dedupe=false&layers=road&access_token={token}"
-  },
-  {
     "id": "vec:ky-byway-name",
     "note": "RT_DESCR reads NADA TUNNEL RD+FORESTRY RD - a road description, not a byway name, and not something to draw along a line. The service also carries SC_ROUTE and SC_SEQ, and SC on a scenic byways layer is worth reading before assuming. This asks for those values.",
     "expect": "data",
     "find": "\"(?:SC_ROUTE|SC_SEQ|DESC_OF_ROUTE|ROAD|RT_DESCR)\"\\s*:\\s*\"[^\"]{0,60}\"",
     "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Scenic_Byways_WGS84WM/MapServer/0/query?where=1%3D1&outFields=SC_ROUTE%2CSC_SEQ%2CDESC_OF_ROUTE%2CROAD%2CRT_DESCR&returnGeometry=false&resultRecordCount=10&f=json"
+  },
+  {
+    "id": "data:nd-forest",
+    "note": "Reported as drawing nothing. Every check here so far asks whether a service exists and what shape it claims; none asks whether it hands back features for a real extent, which is the only question that distinguishes a dead layer from a live one nobody can see. This asks it, over ground where the thing should be.",
+    "expect": "data",
+    "find": "\"(?:type|features|NAME|Name|ParkName|AreaName|PROPNAME)\"\\s*:\\s*\"?[^\",\\[}]{0,40}",
+    "url": "https://services1.arcgis.com/GOcSXpzwBHyk2nog/arcgis/rest/services/NDGISHUB_State_Forest/FeatureServer/0/query?where=1%3D1&geometry=-100.9,46.7,-100.0,47.3&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson"
+  },
+  {
+    "id": "data:sd-parks",
+    "note": "Reported as drawing nothing. Every check here so far asks whether a service exists and what shape it claims; none asks whether it hands back features for a real extent, which is the only question that distinguishes a dead layer from a live one nobody can see. This asks it, over ground where the thing should be.",
+    "expect": "data",
+    "find": "\"(?:type|features|NAME|Name|ParkName|AreaName|PROPNAME)\"\\s*:\\s*\"?[^\",\\[}]{0,40}",
+    "url": "https://services2.arcgis.com/1sM9tpOC8N7GGkbw/arcgis/rest/services/South_Dakota_State_Parks/FeatureServer/0/query?where=1%3D1&geometry=-103.6,43.7,-103.0,44.2&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson"
+  },
+  {
+    "id": "data:mt-parks",
+    "note": "Reported as drawing nothing. Every check here so far asks whether a service exists and what shape it claims; none asks whether it hands back features for a real extent, which is the only question that distinguishes a dead layer from a live one nobody can see. This asks it, over ground where the thing should be.",
+    "expect": "data",
+    "find": "\"(?:type|features|NAME|Name|ParkName|AreaName|PROPNAME)\"\\s*:\\s*\"?[^\",\\[}]{0,40}",
+    "url": "https://services3.arcgis.com/Cdxz8r11hT0MGzg1/arcgis/rest/services/FWPLND_STATEPARKS/FeatureServer/0/query?where=1%3D1&geometry=-111.8,45.5,-110.9,46.2&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson"
+  },
+  {
+    "id": "data:or-parks",
+    "note": "Reported as drawing nothing. Every check here so far asks whether a service exists and what shape it claims; none asks whether it hands back features for a real extent, which is the only question that distinguishes a dead layer from a live one nobody can see. This asks it, over ground where the thing should be.",
+    "expect": "data",
+    "find": "\"(?:type|features|NAME|Name|ParkName|AreaName|PROPNAME)\"\\s*:\\s*\"?[^\",\\[}]{0,40}",
+    "url": "https://gis.prd.state.or.us/arcgis/rest/services/Land_Ownership/LO_STATE_PARK_STATUS/FeatureServer/0/query?where=1%3D1&geometry=-123.2,44.5,-122.2,45.3&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson"
+  },
+  {
+    "id": "data:wy-parks",
+    "note": "Reported as drawing nothing. Every check here so far asks whether a service exists and what shape it claims; none asks whether it hands back features for a real extent, which is the only question that distinguishes a dead layer from a live one nobody can see. This asks it, over ground where the thing should be.",
+    "expect": "data",
+    "find": "\"(?:type|features|NAME|Name|ParkName|AreaName|PROPNAME)\"\\s*:\\s*\"?[^\",\\[}]{0,40}",
+    "url": "https://services6.arcgis.com/cWzdqIyxbijuhPLw/arcgis/rest/services/StateParkBoundaries/FeatureServer/0/query?where=1%3D1&geometry=-110.9,42.9,-109.9,43.7&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson"
+  },
+  {
+    "id": "data:co-cpw",
+    "note": "Reported as drawing nothing. Every check here so far asks whether a service exists and what shape it claims; none asks whether it hands back features for a real extent, which is the only question that distinguishes a dead layer from a live one nobody can see. This asks it, over ground where the thing should be.",
+    "expect": "data",
+    "find": "\"(?:type|features|NAME|Name|ParkName|AreaName|PROPNAME)\"\\s*:\\s*\"?[^\",\\[}]{0,40}",
+    "url": "https://services5.arcgis.com/ttNGmDvKQA7oeDQ3/arcgis/rest/services/CPWAdminData/FeatureServer/0/query?where=1%3D1&geometry=-105.9,39.4,-105.0,40.1&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson"
   }
 ]

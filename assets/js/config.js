@@ -1218,34 +1218,6 @@ export const OVERLAYS = [
     attribution: 'Routes and closures © <a href="https://parksandrecreation.idaho.gov/">Idaho Parks and Recreation</a>',
   },
   {
-  /*
-   * The thing the closure sweep concluded did not exist.
-   *
-   * That sweep found one maintained closure layer, in USFS Region 6, and a
-   * throwaway service per fire everywhere else - so closures were written off
-   * as unwireable. Idaho keeps one, and it sits at index 127 of a service that
-   * was nearly deleted for having no layer zero. A route you may legally drive
-   * and an order that shut it last week are two different facts.
-   */
-    legend: [{ color: '#C62828', label: 'Route: Emergency route closures' }],
-    id: 'id-closures',
-    states: ['ID'],
-    name: 'Emergency route closures',
-    description: 'Routes Idaho has closed - the order, not the road.',
-    query: {
-      url: 'https://services1.arcgis.com/CNPdEkvnGl65jCX8/arcgis/rest/services/Idaho_Recreation_Trails/FeatureServer/127/query'
-        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
-        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
-        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
-      minzoom: 7,
-      road: true,
-      color: '#C62828',
-    },
-    opacity: 0.55,
-    enabled: false,
-    attribution: 'Routes and closures © <a href="https://parksandrecreation.idaho.gov/">Idaho Parks and Recreation</a>',
-  },
-  {
     legend: [{ color: '#EF6C00', label: 'Area: Area restrictions' }],
     id: 'id-restrictions',
     states: ['ID'],
@@ -1632,25 +1604,6 @@ export const OVERLAYS = [
     opacity: 0.55,
     enabled: false,
     attribution: 'Wildlife management areas \u00a9 <a href=\"https://tpwd.texas.gov/\">Texas Parks and Wildlife</a>',
-  },
-  {
-    legend: [{ color: '#6D4C41', label: 'Route: State park trails' }],
-    id: 'wa-trails',
-    states: ['WA'],
-    name: 'State park trails',
-    description: 'Washington State Parks trails.',
-    query: {
-      url: 'https://services5.arcgis.com/4LKAHwqnBooVDUlX/arcgis/rest/services/Trails/FeatureServer/0/query'
-        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
-        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
-        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson',
-      minzoom: 7,
-      road: true,
-      color: '#6D4C41',
-    },
-    opacity: 0.55,
-    enabled: false,
-    attribution: 'Trails \u00a9 <a href=\"https://parks.wa.gov/\">Washington State Parks</a>',
   },
   {
     legend: [{ color: '#C62828', label: 'Site: State parks' }],
