@@ -446,5 +446,26 @@
     "expect": "data",
     "find": "\"[A-Z_]{2,14}\"\\s*:\\s*\"[^\"]{0,44}\"",
     "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Scenic_Byways_WGS84WM/MapServer/0/query?where=1%3D1&geometry=-84.3,37.6,-83.4,38.0&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=4&f=json"
+  },
+  {
+    "id": "shield:md-scenic-40-east",
+    "note": "Scenic US 40 near Sideling Hill. It draws as a circle reading '40 Scenic', which means two things at once: the shield value is not one this app maps to the US design, and the ref carries a suffix the prefix-stripper does not touch.",
+    "expect": "data",
+    "find": "\"(?:ref|shield|shield_text_color|reflen|class|name)\"\\s*:\\s*\"?[^\",}]{0,40}\"?",
+    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-78.42,39.68.json?radius=900&limit=25&dedupe=false&layers=road&access_token={token}"
+  },
+  {
+    "id": "shield:md-scenic-40-west",
+    "note": "The same route west of Cumberland, because one sample is one sample and a shield rule written from a single feature is how the SR prefix problem arrived in the first place.",
+    "expect": "data",
+    "find": "\"(?:ref|shield|shield_text_color|reflen|class|name)\"\\s*:\\s*\"?[^\",}]{0,40}\"?",
+    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-78.86,39.66.json?radius=900&limit=25&dedupe=false&layers=road&access_token={token}"
+  },
+  {
+    "id": "shield:md-i68",
+    "note": "I-68 alongside it, as a control. If the interstate reports a shield this app already knows and the scenic route does not, the difference is the answer.",
+    "expect": "data",
+    "find": "\"(?:ref|shield|shield_text_color|reflen|class|name)\"\\s*:\\s*\"?[^\",}]{0,40}\"?",
+    "url": "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/-78.60,39.65.json?radius=700&limit=25&dedupe=false&layers=road&access_token={token}"
   }
 ]
