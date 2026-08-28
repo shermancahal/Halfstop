@@ -4765,6 +4765,27 @@ function addQueryOverlay(overlay, opacity) {
 
   if (overlay.query.points) { addPointOverlay(overlay, fill); return; }
 
+  /*
+   * A layer that carries a designation is coloured by it.
+   *
+   * Ohio publishes every parcel it manages in one layer with a division on
+   * each - forestry, parks, wildlife, natural areas - and drawing them all one
+   * colour throws away the only thing that separates a state forest from a
+   * nature preserve. Soft flat colours suit that better than a hatch, which is
+   * what a land-status map does and why it was asked for.
+   *
+   * Declared out here because the fill, the outline and the label all read it.
+   * It was declared inside the fill block first, which threw a ReferenceError
+   * in the outline below and emptied the whole overlay - the second time an
+   * exception in this function has done that.
+   */
+  const by = overlay.query.fillBy;
+  const tint = by
+    ? ['match', ['coalesce', ['get', by.field], ''],
+      ...Object.entries(by.colors).flatMap(([value, hex]) => [value, hex]), by.fallback || colour]
+    : null;
+
+
   if (!state.map.getSource(fill)) {
     state.map.addSource(fill, {
       type: 'geojson',
@@ -4774,20 +4795,6 @@ function addQueryOverlay(overlay, opacity) {
   }
   if (!state.map.getLayer(fill)) {
     const [, amount] = opacityPaint('fill', opacity);
-    /*
-     * A layer that carries a designation is coloured by it.
-     *
-     * Ohio publishes every parcel it manages in one layer with a division on
-     * each - forestry, parks, wildlife, natural areas - and drawing them all
-     * one colour throws away the only thing that distinguishes a state forest
-     * from a nature preserve. Soft flat colours read better here than a hatch,
-     * which is what a land-status map does and why it was asked for.
-     */
-    const by = overlay.query.fillBy;
-    const tint = by
-      ? ['match', ['coalesce', ['get', by.field], ''],
-        ...Object.entries(by.colors).flatMap(([value, hex]) => [value, hex]), by.fallback || colour]
-      : null;
     const hatch = tint ? null : hatchPattern(colour);
     state.map.addLayer({
       id: fill,
