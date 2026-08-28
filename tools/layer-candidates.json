@@ -734,5 +734,40 @@
     "note": "Whether Protomaps tiles carry kind_detail, holding the original OSM highway value. This is the difference between eleven road weights and five, and so between an atlas you can read at speed and one you squint at. What has been confirmed so far is only what Protomaps' own default style reads, which is not the same as what the tiles contain - the schema documentation is where that distinction is published.",
     "find": "kind_detail",
     "url": "https://docs.protomaps.com/basemaps/layers"
+  },
+  {
+    "id": "pm:doc-layer-names",
+    "expect": "page",
+    "url": "https://docs.protomaps.com/basemaps/layers",
+    "find": "id=\"[a-z_]{3,20}\"",
+    "note": "Every layer and attribute the Protomaps tile schema documents, read off the heading anchors. The schema in byways-style.js names seven source-layers and marks three as absent; two of those three - the natural-feature names and the surface field - are gaps the map can feel, and this is where whether they exist is actually published rather than inferred from what the default style happens to draw."
+  },
+  {
+    "id": "pm:doc-surface",
+    "expect": "page",
+    "url": "https://docs.protomaps.com/basemaps/layers",
+    "find": "\\b(surface|smoothness|unpaved|kind_detail|network|shield_text|ref)\\b",
+    "note": "Whether the roads layer carries a surface field. Byways Topo describes itself as 'tracks and surfaces' and the unpaved marking is dropped entirely under the Protomaps schema because nothing names one. If it is there, that layer comes back; if it is not, the gap is real and should be stated in the FAQ rather than quietly absorbed."
+  },
+  {
+    "id": "pm:doc-protected",
+    "expect": "page",
+    "url": "https://docs.protomaps.com/basemaps/layers",
+    "find": "\\b(national_park|protected_area|nature_reserve|wilderness|forest|military|park|recreation_ground)\\b",
+    "note": "What Protomaps calls a national park. The Mapbox style paints landuse_overlay where class is national_park, and that layer is dropped under Protomaps because the schema has one landuse layer rather than a base and an overlay. Getting the kind value right brings the parks back, which matters on a back-roads map more than most fills."
+  },
+  {
+    "id": "pm:doc-physical",
+    "expect": "page",
+    "url": "https://docs.protomaps.com/basemaps/layers",
+    "find": "\\b(physical_point|physical_line|peak|volcano|lake|ocean|sea|river|bay|strait)\\b",
+    "note": "Where the names of lakes, rivers and summits live. Mapbox puts them in natural_label; the Protomaps schema marks that null with a note saying it was not established whether they are in places or pois, which is exactly the guess this file exists to avoid making. Two label layers are dropped until this comes back."
+  },
+  {
+    "id": "pm:doc-concurrency",
+    "expect": "page",
+    "url": "https://docs.protomaps.com/basemaps/layers",
+    "find": "\\b(shield_text|shield_text_length|network|duplex|concurren\\w*)\\b",
+    "note": "Whether anything marks a road carrying two route numbers. Mapbox tags it in the shield value, which is what says the hyphen in '23-60' is a separator rather than part of a number; without an equivalent the split cannot run, because splitting on any hyphen would cut '21/2' and every hyphenated forest road in half. The pair of half-shields is dropped under Protomaps until this is answered."
   }
 ]
