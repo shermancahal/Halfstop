@@ -677,5 +677,26 @@
     "find": "\"name\"\\s*:\\s*\"[A-Z_]{2,24}\"",
     "note": "Special use airspace's own columns, printed on their own so they are readable. MOAs are in this service and have to come out - they do not restrict civilian flight and sit above 1,000 AGL - and the filter needs the real column name. The last attempt guessed LOCAL_TYPE and TYPE_CODE from a sibling service and got 'outFields is invalid'.",
     "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Special_Use_Airspace/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "pm:pmtiles-header",
+    "expect": "data",
+    "note": "Whether a PMTiles archive can be read from static hosting by a browser: the first bytes of Protomaps' public build, asked with a Range header. Three things have to be true at once - it answers a partial request, it sends CORS, and the bytes really are PMTiles v3 - and only the third is visible from the documentation.",
+    "find": "PMTiles|\\bPMT\\b",
+    "url": "https://demo-bucket.protomaps.com/v4.pmtiles"
+  },
+  {
+    "id": "pm:basemap-styles",
+    "expect": "data",
+    "note": "Protomaps' own style package, which is where the layer names and field names live. The port hinges on these: Byways Topo reads Mapbox Streets v8 source-layers and fields, and every one of them has to map onto something here or the cartography cannot be reproduced.",
+    "find": "\"(?:name|version|main)\"\\s*:\\s*\"[^\"]{0,60}\"",
+    "url": "https://registry.npmjs.org/@protomaps/basemaps/latest"
+  },
+  {
+    "id": "pm:schema-fields",
+    "expect": "data",
+    "note": "The compiled style itself, read for the source-layer names it references. This answers the question that decides the whole port - whether roads carry a ref, and what the layer holding them is called - by reading what Protomaps actually ships rather than what a wiki says about it.",
+    "find": "\"source-layer\"\\s*:\\s*\"[a-z_]{2,20}\"|[\"']kind[\"']|[\"']ref[\"']|[\"']network[\"']",
+    "url": "https://unpkg.com/@protomaps/basemaps@5.0.0/dist/basemaps.json"
   }
 ]

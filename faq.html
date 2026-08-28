@@ -120,6 +120,59 @@
       </p>
     </section>
 
+    <section class="faq-section" id="basemaps" data-editable="basemaps">
+      <h2>Why some maps download and some do not</h2>
+      <p>
+        There are two kinds of basemap here, and the difference decides what you
+        can take with you.
+      </p>
+
+      <h3>Picture maps</h3>
+      <p>
+        USGS Topo, the aerial imagery, the state lidar hillshades. These arrive as
+        finished pictures — the agency drew them, and the app places them. They are
+        public data, they cost nothing to use, and they can be stored on your
+        device. Everything you can download is one of these.
+      </p>
+
+      <h3>Drawn maps</h3>
+      <p>
+        Byways Topo is drawn in the browser: the palette, the road hierarchy, the
+        route shields and the labels are all this app's, applied to raw geometry
+        streamed in as you pan. That is why it looks the way it does and why it
+        stays sharp when you rotate or zoom between levels.
+      </p>
+      <p>
+        The geometry it draws comes from Mapbox. That has two consequences.
+        Viewing it uses a Mapbox allowance, which is metered; and Mapbox reserve
+        offline storage of their data to their own native toolkit, which this app
+        is not built on. <strong>So the map that looks the best is the one you
+        cannot take out of signal</strong> — which is the wrong way round for a
+        back-roads atlas.
+      </p>
+
+      <h3>What is being done about it</h3>
+      <p>
+        The cartography is ours; only the geometry underneath is rented. The plan
+        is to move Byways Topo onto an OpenStreetMap-derived vector basemap we host
+        ourselves, distributed as a single archive that a browser can read a slice
+        of at a time. Same drawing, different foundation — no metered allowance,
+        and a map that can be downloaded like any other.
+      </p>
+      <p>
+        It will not be pixel-identical. The two sources describe the world with
+        different vocabularies, and some things Mapbox supplies ready-made — the
+        contour lines, and the hints that say which shape of shield a numbered road
+        wears — have to be rebuilt or sourced elsewhere. Where a difference is
+        visible, it will be noted here rather than quietly absorbed.
+      </p>
+      <p>
+        Mapbox is likely to stay available as an option for anyone who prefers it.
+        The point is that the default should not cost money to look at or stop
+        working where there is no signal.
+      </p>
+    </section>
+
     <section class="faq-section" id="layers" data-editable="layers">
       <h2>Layers and what they mean</h2>
 
