@@ -30,6 +30,66 @@ import {
   shieldTextSizeExpression, shieldTextOffsetExpression, shieldDisplayWidth,
 } from './route-shields.js';
 
+/* ------------------------------------------------------------------ schema */
+
+/**
+ * Where this style expects to find things in the tiles it is drawn over.
+ *
+ * The cartography here is ours; the geometry is rented. Byways Topo has always
+ * read Mapbox Streets v8 directly - `source-layer: 'road'`, `['get','class']`
+ * with Mapbox's own class values - which is fine while there is one source and
+ * becomes twenty-five scattered assumptions the moment there are two.
+ *
+ * Protomaps, which is the source that can be self-hosted and downloaded,
+ * describes the same world with a different vocabulary. Its layers are earth,
+ * landcover, landuse, roads, water, buildings, boundaries, pois and places -
+ * read off the published package rather than guessed - and it has no contour
+ * layer at all, which is a real gap rather than a renaming.
+ *
+ * So the names live here, in one object, and the style reads them. This commit
+ * changes nothing about what is drawn: the Mapbox schema below is the same set
+ * of strings that were inline, and a snapshot test compares the whole
+ * generated style against what it produced before to prove it.
+ */
+export const MAPBOX_SCHEMA = {
+  id: 'mapbox',
+  source: 'composite',
+  reliefSource: 'terrain',
+  layers: {
+    landcover: 'landcover',
+    landuse: 'landuse',
+    landuseOverlay: 'landuse_overlay',
+    water: 'water',
+    waterway: 'waterway',
+    road: 'road',
+    place: 'place_label',
+    natural: 'natural_label',
+    boundary: 'admin',
+    contour: 'contour',
+    hillshade: 'hillshade',
+  },
+  fields: {
+    roadClass: 'class',
+    ref: 'ref',
+    refLength: 'reflen',
+    shield: 'shield',
+    name: 'name',
+    nameEn: 'name_en',
+    surface: 'surface',
+    elevation: 'ele',
+  },
+};
+
+/*
+ * The schema in force while a style is being built.
+ *
+ * A module-level binding rather than an argument threaded through thirty
+ * functions: every layer builder here is a nullary function called once, in
+ * order, from one place. When the Protomaps schema arrives this becomes what
+ * `bywaysStyle` sets before it calls them.
+ */
+let S = MAPBOX_SCHEMA;
+
 /* ------------------------------------------------------------------ palette */
 
 export const PALETTE = {
@@ -279,7 +339,7 @@ function groundLayers() {
       id: 'landcover',
       type: 'fill',
       source: 'composite',
-      'source-layer': 'landcover',
+      'source-layer': S.layers.landcover,
       paint: {
         'fill-color': [
           'match', ['get', 'class'],
@@ -299,7 +359,7 @@ function groundLayers() {
       id: 'national-park',
       type: 'fill',
       source: 'composite',
-      'source-layer': 'landuse_overlay',
+      'source-layer': S.layers.landuseOverlay,
       filter: ['==', ['get', 'class'], 'national_park'],
       paint: { 'fill-color': PALETTE.park, 'fill-opacity': 0.5 },
     },
@@ -307,7 +367,7 @@ function groundLayers() {
       id: 'landuse',
       type: 'fill',
       source: 'composite',
-      'source-layer': 'landuse',
+      'source-layer': S.layers.landuse,
       filter: ['match', ['get', 'class'], ['park', 'grass', 'wood', 'scrub', 'sand'], true, false],
       paint: {
         'fill-color': [
@@ -330,7 +390,7 @@ function reliefLayers() {
       id: 'hillshade',
       type: 'fill',
       source: 'terrain',
-      'source-layer': 'hillshade',
+      'source-layer': S.layers.hillshade,
       paint: {
         'fill-color': PALETTE.hillshade,
         // Terrain-v2 ships six shadow classes; only the darker ones earn their
@@ -349,7 +409,7 @@ function reliefLayers() {
       id: 'contour',
       type: 'line',
       source: 'terrain',
-      'source-layer': 'contour',
+      'source-layer': S.layers.contour,
       filter: ['!=', ['get', 'index'], 5],
       minzoom: 10,
       paint: {
@@ -362,7 +422,7 @@ function reliefLayers() {
       id: 'contour-index',
       type: 'line',
       source: 'terrain',
-      'source-layer': 'contour',
+      'source-layer': S.layers.contour,
       filter: ['==', ['get', 'index'], 5],
       minzoom: 9,
       paint: {
@@ -375,7 +435,7 @@ function reliefLayers() {
       id: 'contour-label',
       type: 'symbol',
       source: 'terrain',
-      'source-layer': 'contour',
+      'source-layer': S.layers.contour,
       filter: ['==', ['get', 'index'], 5],
       minzoom: 13,
       layout: {
@@ -402,14 +462,14 @@ function waterLayers() {
       id: 'water',
       type: 'fill',
       source: 'composite',
-      'source-layer': 'water',
+      'source-layer': S.layers.water,
       paint: { 'fill-color': PALETTE.water },
     },
     {
       id: 'waterway',
       type: 'line',
       source: 'composite',
-      'source-layer': 'waterway',
+      'source-layer': S.layers.waterway,
       minzoom: 8,
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
@@ -439,7 +499,7 @@ function roadLayers() {
     id: 'road-track',
     type: 'line',
     source: 'composite',
-    'source-layer': 'road',
+    'source-layer': S.layers.road,
     filter: ['match', ['get', 'class'], ['track', 'service'], true, false],
     minzoom: 11,
     layout: { 'line-cap': 'butt', 'line-join': 'round' },
@@ -455,7 +515,7 @@ function roadLayers() {
     id: 'road-path',
     type: 'line',
     source: 'composite',
-    'source-layer': 'road',
+    'source-layer': S.layers.road,
     filter: ['match', ['get', 'class'], ['path', 'pedestrian'], true, false],
     minzoom: 13,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
@@ -471,7 +531,7 @@ function roadLayers() {
       id: `road-${className}-casing`,
       type: 'line',
       source: 'composite',
-      'source-layer': 'road',
+      'source-layer': S.layers.road,
       filter: roadFilter(className),
       minzoom: className === 'motorway' ? 4 : className === 'trunk' ? 5 : 8,
       layout: { 'line-cap': 'round', 'line-join': 'round' },
@@ -492,7 +552,7 @@ function roadLayers() {
     id: 'road-street-casing',
     type: 'line',
     source: 'composite',
-    'source-layer': 'road',
+    'source-layer': S.layers.road,
     filter: ['match', ['get', 'class'], ['street', 'street_limited'], true, false],
     minzoom: 11,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
@@ -507,7 +567,7 @@ function roadLayers() {
       id: `road-${className}`,
       type: 'line',
       source: 'composite',
-      'source-layer': 'road',
+      'source-layer': S.layers.road,
       filter: roadFilter(className),
       minzoom: className === 'motorway' ? 4 : className === 'trunk' ? 5 : 8,
       layout: { 'line-cap': 'round', 'line-join': 'round' },
@@ -519,7 +579,7 @@ function roadLayers() {
     id: 'road-street',
     type: 'line',
     source: 'composite',
-    'source-layer': 'road',
+    'source-layer': S.layers.road,
     filter: ['match', ['get', 'class'], ['street', 'street_limited'], true, false],
     minzoom: 11,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
@@ -541,7 +601,7 @@ function roadLayers() {
     id: 'road-unpaved',
     type: 'line',
     source: 'composite',
-    'source-layer': 'road',
+    'source-layer': S.layers.road,
     filter: ['all', UNPAVED, ['match', ['get', 'class'], SEALED_CLASSES, true, false]],
     minzoom: 9,
     layout: { 'line-cap': 'butt', 'line-join': 'round' },
@@ -564,7 +624,7 @@ function boundaryLayers() {
       id: 'boundary-state',
       type: 'line',
       source: 'composite',
-      'source-layer': 'admin',
+      'source-layer': S.layers.boundary,
       filter: ['all', ['==', ['get', 'admin_level'], 1], ['==', ['get', 'maritime'], 'false']],
       paint: {
         'line-color': PALETTE.boundary,
@@ -576,7 +636,7 @@ function boundaryLayers() {
       id: 'boundary-country',
       type: 'line',
       source: 'composite',
-      'source-layer': 'admin',
+      'source-layer': S.layers.boundary,
       filter: ['all', ['<=', ['get', 'admin_level'], 0], ['==', ['get', 'maritime'], 'false']],
       paint: {
         'line-color': PALETTE.boundary,
@@ -594,7 +654,7 @@ function labelLayers() {
       id: 'label-water',
       type: 'symbol',
       source: 'composite',
-      'source-layer': 'natural_label',
+      'source-layer': S.layers.natural,
       filter: ['match', ['get', 'class'], ['lake', 'ocean', 'sea', 'river'], true, false],
       minzoom: 7,
       layout: {
@@ -613,7 +673,7 @@ function labelLayers() {
       id: 'label-summit',
       type: 'symbol',
       source: 'composite',
-      'source-layer': 'natural_label',
+      'source-layer': S.layers.natural,
       filter: ['match', ['get', 'class'], ['landform'], true, false],
       minzoom: 11,
       layout: {
@@ -633,7 +693,7 @@ function labelLayers() {
       id: 'label-road',
       type: 'symbol',
       source: 'composite',
-      'source-layer': 'road',
+      'source-layer': S.layers.road,
       filter: ['match', ['get', 'class'],
         ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'street', 'track'], true, false],
       minzoom: 13,
@@ -660,7 +720,7 @@ function labelLayers() {
       id: 'label-trail',
       type: 'symbol',
       source: 'composite',
-      'source-layer': 'road',
+      'source-layer': S.layers.road,
       filter: ['all',
         ['match', ['get', 'class'], ['path', 'service'], true, false],
         ['has', 'name'],
@@ -684,7 +744,7 @@ function labelLayers() {
       id: 'label-place',
       type: 'symbol',
       source: 'composite',
-      'source-layer': 'place_label',
+      'source-layer': S.layers.place,
       layout: {
         'text-field': LABEL_NAME,
         'text-font': FONT_BOLD,
@@ -935,7 +995,7 @@ function shieldLayers(state = '') {
     id,
     type: 'symbol',
     source: 'composite',
-    'source-layer': 'road',
+    'source-layer': S.layers.road,
     filter: ['all', ['has', 'ref'], onARoad, IS_DUPLEX],
     minzoom: 6,
     layout: {
@@ -973,7 +1033,7 @@ function shieldLayers(state = '') {
       id: 'road-shield',
       type: 'symbol',
       source: 'composite',
-      'source-layer': 'road',
+      'source-layer': S.layers.road,
       filter: ['all',
         ['has', 'ref'],
         onARoad,
