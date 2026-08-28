@@ -13,6 +13,14 @@ name: Check map layers
 
 on:
   workflow_dispatch:
+    inputs:
+      only:
+        description: >-
+          Probe only candidates whose id contains this text. A full run prints
+          a hundred lines and the answer is usually one of them; reading the
+          rest is how a result gets missed.
+        required: false
+        type: string
   schedule:
     # Weekly, on Monday morning UTC. Often enough to catch a service that has
     # moved, rare enough not to be a load on anyone.
@@ -43,6 +51,9 @@ jobs:
           node-version: '20'
 
       - name: The catalogue
+        # Skipped when a focused run was asked for: the question is about one
+        # candidate, and the catalogue is eighty lines in front of the answer.
+        if: ${{ !inputs.only }}
         run: node tools/check-layers.mjs
         env:
           MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
@@ -51,7 +62,7 @@ jobs:
         # A staging area for services whose URL cannot be confirmed from
         # documentation. Nothing here is shipped until it comes back with an
         # image on it.
-        run: node tools/check-layers.mjs --candidates
+        run: node tools/check-layers.mjs --candidates ${{ inputs.only && format('--only {0}', inputs.only) || '' }}
         env:
           # Some candidates are token-gated — the geocoder the shields depend on
           # for one — and without this they are skipped rather than checked.
