@@ -434,38 +434,38 @@
     "url": "https://services.arcgis.com/njFNhDsUCentVYJW/arcgis/rest/services/State_Park_Forest_Recreation_Maintained_Roads/FeatureServer/0/query?where=1%3D1&geometry=-79.5,39.0,-78.5,39.7&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=600&f=geojson"
   },
   {
-    "id": "vec:oh-layers",
-    "note": "Ohio's ODNR Lands is a picture we cannot restyle, label or click. This asks what sublayers it has - and in particular whether a field tells a state forest from a nature preserve, which is the line asked for on the map.",
+    "id": "vec:oh-fields",
+    "note": "The field list for Ohio's lands. Labels need a name column and the line asked for between a state forest and a nature preserve needs a designation column - and the last probe guessed at both and matched neither, which is not evidence of absence.",
     "expect": "data",
-    "find": "\"(?:name|geometryType|id)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
-    "url": "https://gis.ohiodnr.gov/arcgis/rest/services/OIT_Services/ODNR_ODNR_Lands_External/MapServer?f=pjson"
+    "find": "\"(?:name|alias|geometryType)\"\\s*:\\s*\"[^\"]{0,50}\"",
+    "url": "https://gis.ohiodnr.gov/arcgis/rest/services/OIT_Services/ODNR_ODNR_Lands_External/MapServer/0?f=pjson"
   },
   {
-    "id": "vec:oh-query",
-    "note": "Whether the same service will hand over features instead of pixels. If it will, Ohio becomes ours to draw: soft fills, a hatch, one label per parcel rather than six, and a tap that answers.",
+    "id": "vec:oh-values",
+    "note": "Four real Ohio parcels with every attribute, so the designation column is read rather than inferred from a column name.",
     "expect": "data",
-    "find": "\"(?:type|NAME|Name|NAME1|AREA_NAME|PROPERTY|UNIT_TYPE|LABEL|BYWAY|Trail_Name|TRAILNAME)\"\\s*:\\s*\"?[^\",\\[}]{0,50}",
-    "url": "https://gis.ohiodnr.gov/arcgis/rest/services/OIT_Services/ODNR_ODNR_Lands_External/MapServer/0/query?where=1%3D1&geometry=-82.7,39.3,-82.3,39.7&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.001&resultRecordCount=8&f=geojson"
+    "find": "\"[A-Za-z_]{2,30}\"\\s*:\\s*\"[^\"]{0,44}\"",
+    "url": "https://gis.ohiodnr.gov/arcgis/rest/services/OIT_Services/ODNR_ODNR_Lands_External/MapServer/0/query?where=1%3D1&geometry=-82.7,39.3,-82.3,39.7&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&outSR=4326&resultRecordCount=4&f=json"
   },
   {
-    "id": "vec:ky-byways",
-    "note": "Clicking a scenic byway reports a basemap road because the byway is a raster with nothing under the tap. As vectors the name can sit along the line, which is the better of the two options asked about.",
+    "id": "vec:ky-byway-fields",
+    "note": "Which column holds a byway's name. It is what would sit along the line, and what a tap should report instead of the road underneath.",
     "expect": "data",
-    "find": "\"(?:type|NAME|Name|NAME1|AREA_NAME|PROPERTY|UNIT_TYPE|LABEL|BYWAY|Trail_Name|TRAILNAME)\"\\s*:\\s*\"?[^\",\\[}]{0,50}",
-    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Scenic_Byways_WGS84WM/MapServer/0/query?where=1%3D1&geometry=-84.3,37.6,-83.5,38.1&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.001&resultRecordCount=8&f=geojson"
+    "find": "\"(?:name|alias|geometryType)\"\\s*:\\s*\"[^\"]{0,50}\"",
+    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Scenic_Byways_WGS84WM/MapServer/0?f=pjson"
   },
   {
-    "id": "vec:ky-forests",
-    "note": "The forest boundaries as features, so the name can be drawn once per forest rather than repeated by the agency's own label engine.",
+    "id": "vec:ky-forest-fields",
+    "note": "The same for Kentucky's forests.",
     "expect": "data",
-    "find": "\"(?:type|NAME|Name|NAME1|AREA_NAME|PROPERTY|UNIT_TYPE|LABEL|BYWAY|Trail_Name|TRAILNAME)\"\\s*:\\s*\"?[^\",\\[}]{0,50}",
-    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_StateForests_WGS84WM/MapServer/1/query?where=1%3D1&geometry=-84.3,37.6,-83.5,38.1&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.001&resultRecordCount=8&f=geojson"
+    "find": "\"(?:name|alias|geometryType)\"\\s*:\\s*\"[^\"]{0,50}\"",
+    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_StateForests_WGS84WM/MapServer/1?f=pjson"
   },
   {
-    "id": "vec:ky-trails-layers",
-    "note": "The trails service splits by use - federal ATV, motorcycle, horse, hiking, state park - and the ids are what a per-use style needs. The dashed and solid lines asked about are the agency's own symbology and will go when we draw them ourselves.",
+    "id": "vec:ky-forest-query",
+    "note": "Asked again over eastern Kentucky. The first attempt returned an empty collection and that was the bbox, not the layer - a distinction worth making explicitly, since an empty answer reads exactly like a dead one.",
     "expect": "data",
-    "find": "\"(?:name|geometryType|id)\"\\s*:\\s*\"?[^\",}]{0,60}\"?",
-    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Recreational_Trails_WGS84WM/MapServer?f=pjson"
+    "find": "\"[A-Za-z_]{2,30}\"\\s*:\\s*\"[^\"]{0,44}\"",
+    "url": "https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_StateForests_WGS84WM/MapServer/1/query?where=1%3D1&geometry=-84.6,36.6,-83.0,37.7&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&outSR=4326&resultRecordCount=4&f=json"
   }
 ]
