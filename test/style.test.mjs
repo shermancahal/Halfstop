@@ -16,7 +16,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildRasterStyle, overlayParts, overlayIdFromLayer, styleFor } from '../assets/js/lib/engine.js';
+import { buildRasterStyle, overlayParts, overlayIdFromLayer, overlayRows, styleFor } from '../assets/js/lib/engine.js';
 import {
   BASEMAPS, OVERLAYS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN, STATE_NAMES, STATE_GROUP,
 } from '../assets/js/config.js';
@@ -247,6 +247,62 @@ test('config: a queried overlay carries a bbox placeholder and a floor', () => {
       `${overlay.id} would query the whole country at once`);
     assert.ok(!overlay.tiles, `${overlay.id} cannot be both queried and tiled`);
   }
+});
+
+test('style: a named column is a column the query actually asks for', () => {
+  /*
+   * A label for a field the request never fetches is a row that never appears.
+   *
+   * Nothing else can catch it: the config is valid, the panel is correct, and
+   * the row is simply always absent - which reads as a service that stopped
+   * publishing the column rather than as a typo three lines away in the same
+   * object.
+   */
+  for (const overlay of OVERLAYS.filter((o) => o.query?.fields)) {
+    const outFields = decodeURIComponent(
+      overlay.query.url.match(/outFields=([^&]*)/)?.[1] || '',
+    ).split(',').map((name) => name.trim());
+    assert.ok(outFields.length > 0, `${overlay.id} names columns but fetches none`);
+    for (const key of Object.keys(overlay.query.fields)) {
+      assert.ok(outFields.includes(key) || outFields.includes('*'),
+        `${overlay.id} labels ${key} but never asks the service for it`);
+    }
+  }
+});
+
+test('style: a coded column reads as words, not as digits', () => {
+  const fields = {
+    CEILING: { label: 'Ceiling', suffix: ' ft AGL', values: { 0: '0 ft — no instant approval' } },
+    APT1_NAME: { label: 'Airport' },
+    APT1_LAANC: { label: 'LAANC', values: { 1: 'Airport participates', 0: 'Airport does not participate' } },
+    HIDDEN: { label: 'Hidden', values: { 7: '' } },
+  };
+
+  // What this pins: `values` beats `suffix`, the declared order is the read
+  // order, and a blank drops its row. (Not the number/text key question - a
+  // JavaScript property lookup coerces the key by itself, so that one cannot
+  // fail here the way it failed in the Mapbox expression.)
+  assert.deepEqual(
+    overlayRows(fields, { CEILING: 0, APT1_NAME: 'Blue Grass', APT1_LAANC: 1 }),
+    [['Ceiling', '0 ft — no instant approval'],
+      ['Airport', 'Blue Grass'],
+      ['LAANC', 'Airport participates']],
+  );
+
+  // A value with no entry in the table falls through to the suffix.
+  assert.deepEqual(
+    overlayRows(fields, { CEILING: 400, APT1_LAANC: 0 }),
+    [['Ceiling', '400 ft AGL'], ['LAANC', 'Airport does not participate']],
+  );
+
+  // Declared order, not the order the service happened to serialise them.
+  assert.deepEqual(
+    overlayRows(fields, { APT1_NAME: 'Yeager', CEILING: 200 }).map(([label]) => label),
+    ['Ceiling', 'Airport'],
+  );
+
+  // Absent, empty and deliberately blanked all leave the panel alone.
+  assert.deepEqual(overlayRows(fields, { APT1_NAME: '', CEILING: null, HIDDEN: 7 }), []);
 });
 
 test('style: a combined overlay contributes one layer per source', () => {

@@ -561,126 +561,113 @@ export const OVERLAYS = [
     attribution: 'Canopy © <a href="https://www.mrlc.gov/">MRLC</a> / NLCD',
   },
   {
-    id: 'faa-airspace',
-    legend: [
-      { color: '#2C5FA8', label: 'Class B' },
-      { color: '#B0347F', label: 'Class C' },
-      { color: '#4A79C4', label: 'Class D' },
-      { color: '#C77FA8', label: 'Class E' },
-    ],
-    group: 'Airspace',
-    name: 'Controlled airspace',
-    description: 'Class B, C, D and E airspace with its floor and ceiling. Source: FAA',
-    /*
-     * Why the FAA's own org and not the Living Atlas copy.
-     *
-     * Esri republishes most of this, and the republished canopy layer answered
-     * a browser with 499 Token Required after advertising its fields quite
-     * happily. services6.arcgis.com/ssFJjBXIUyZDrSYZ is the FAA's account;
-     * this exact query was run against it and came back with Blue Grass
-     * Airport's Class C, its ceiling and its floor.
-     *
-     * The colours are the sectional's own: blue for B and D, magenta for C and
-     * E. Anyone who reads charts already knows what they mean, and anyone who
-     * does not is better served by the panel than by a colour I invented.
-     *
-     * Expect this to be intermittent, and not because of anything here. The
-     * FAA's ArcGIS Online org has a shared per-minute request quota and it is
-     * already being exceeded by its other consumers - a probe run of three
-     * requests came back "API calls quota exceeded (6138 request units)!
-     * maximum allowed request units (6000) per Minute". That arrives as a 200
-     * with an error object, which the refresh already tells apart from an
-     * empty view, so the layer badges itself as not responding and keeps
-     * whatever it last drew rather than blanking. The VFR sectional is a
-     * cached tile service on a different host and is not subject to it.
-     */
-    query: {
-      url: 'https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Class_Airspace/FeatureServer/0/query'
-        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
-        + '&spatialRel=esriSpatialRelIntersects&outFields=NAME%2CCLASS%2CLOCAL_TYPE%2CUPPER_VAL%2CUPPER_UOM%2CUPPER_CODE%2CLOWER_VAL%2CLOWER_UOM%2CLOWER_CODE%2CCITY%2CSTATE'
-        + '&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=300&f=geojson',
-      minzoom: 7,
-      color: '#B0347F',
-      label: 'NAME',
-      fillBy: {
-        field: 'CLASS',
-        colors: { B: '#2C5FA8', C: '#B0347F', D: '#4A79C4', E: '#C77FA8' },
-        fallback: '#8C7BA8',
-      },
-    },
-    opacity: 0.35,
-    enabled: false,
-    attribution: 'Airspace © <a href="https://www.faa.gov/">FAA</a>',
-  },
-  {
     id: 'faa-uas-grid',
     legend: [
-      { color: '#B33A3A', label: '0 ft — authorisation needed' },
-      { color: '#C9704A', label: '100 ft' },
-      { color: '#C9A44A', label: '200 ft' },
-      { color: '#7FA84A', label: '300 ft' },
-      { color: '#4A8FA8', label: '400 ft' },
+      { color: '#B33A3A', label: '0 ft — no instant approval' },
+      { color: '#C9704A', label: 'up to 100 ft' },
+      { color: '#C9A44A', label: 'up to 200 ft' },
+      { color: '#7FA84A', label: 'up to 300 ft' },
+      { color: '#4A8FA8', label: 'up to 400 ft' },
     ],
+    /*
+     * What the number is, stated in the panel, because getting it wrong is
+     * easy and consequential.
+     *
+     * It is not a speed limit for the sky. Every cell on this grid is inside
+     * controlled airspace, and inside controlled airspace a Part 107 flight
+     * needs authorisation regardless of what the cell says. The number is how
+     * high LAANC will grant that authorisation instantly. Zero does not mean
+     * the airspace is closed - it means nothing there is pre-approved and the
+     * request goes the slow way instead.
+     *
+     * The first draft of this legend read "0 ft — authorisation needed",
+     * which implied the other four values do not need one. They do.
+     */
+    legendNote: 'Authorisation is required anywhere this grid appears. The ceiling is how '
+      + 'high LAANC grants it instantly; 0 means the request goes to further coordination '
+      + 'or FAA DroneZone instead. Not a flight authorisation — check before you fly.',
     group: 'Airspace',
     name: 'Drone ceilings',
-    description: 'How high a drone may fly near an airport, in feet above ground. Source: FAA',
+    description: 'How high LAANC instantly approves a drone flight, in feet above ground. Source: FAA',
     /*
      * The UAS Facility Map: the grid LAANC reads when it approves a flight.
      *
-     * A ceiling of 0 does not mean the sky is closed, it means nothing is
-     * pre-approved there and a request has to go to the FAA. That distinction
-     * is the whole point of the layer and it is in the legend rather than left
-     * to the colour.
-     *
      * Outside controlled airspace there is no grid at all, which is not a
-     * failure - it is the answer. Reading it as one cost a round: a box drawn
-     * in open country east of Lexington came back empty and looked exactly
-     * like a dead service, until a count with no geometry filter returned
-     * 370,441 rows and a box over Blue Grass Airport returned a ceiling.
+     * failure - it is the answer, and it means Class G where you need no
+     * authorisation. Reading its absence as a broken layer cost a round: a box
+     * drawn in open country east of Lexington came back empty and looked
+     * exactly like a dead service, until a count with no geometry filter
+     * returned 370,441 rows and a box over Blue Grass Airport returned a
+     * ceiling.
      *
-     * Nothing here is a flight authorisation. It is the same grid the FAA
-     * publishes, drawn on a different map.
+     * Expect it to be intermittent, and not because of anything here. The
+     * FAA's ArcGIS Online org has a shared per-minute request quota already
+     * being exceeded by its other consumers - a three-request probe run came
+     * back "API calls quota exceeded (6138 request units)! maximum allowed
+     * request units (6000) per Minute". That arrives as a 200 with an error
+     * object, which the refresh tells apart from an empty view, so the layer
+     * badges itself as not responding and keeps what it last drew.
      */
     query: {
       url: 'https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/FAA_UAS_FacilityMap_Data_V5/FeatureServer/0/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
-        + '&spatialRel=esriSpatialRelIntersects&outFields=CEILING%2CUNIT%2CAPT1_NAME%2CAPT1_FAAID%2CAPT1_LAANC%2CAPT2_NAME%2CARPT_COUNT'
+        + '&spatialRel=esriSpatialRelIntersects&outFields=CEILING%2CAPT1_NAME%2CAPT1_FAAID%2CAPT1_LAANC%2CAPT2_NAME%2CARPT_COUNT'
         + '&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=1000&f=geojson',
       // The grid is dense - a metro area is hundreds of cells - so it stays
       // off the map until the view is small enough for the cells to read.
       minzoom: 10,
       color: '#4A8FA8',
       label: 'CEILING',
+      /*
+       * The order these are declared is the order the panel reads them, and
+       * the coded columns are spelled out rather than printed as 1 and 0.
+       *
+       * APT1_LAANC is whether that airport takes LAANC requests at all. It is
+       * a separate question from the ceiling: an airport outside LAANC sends
+       * every request to DroneZone however high its grid says.
+       *
+       * UNIT is dropped. It reads FT for every row in the service, and a
+       * column that never varies is a row in the panel that never informs.
+       */
+      fields: {
+        CEILING: {
+          label: 'Ceiling',
+          suffix: ' ft AGL',
+          values: { 0: '0 ft — no instant approval' },
+        },
+        APT1_NAME: { label: 'Airport' },
+        APT1_FAAID: { label: 'FAA ID' },
+        APT1_LAANC: {
+          label: 'LAANC',
+          values: { 1: 'Airport participates', 0: 'Airport does not participate' },
+        },
+        APT2_NAME: { label: 'Also under' },
+        ARPT_COUNT: { label: 'Airports covering' },
+      },
+      /*
+       * Every 50-foot step, not only the hundreds.
+       *
+       * Version 5 of the grid publishes 50-foot increments, so a map covering
+       * only 0/100/200/300/400 would send 50, 150, 250 and 350 to the fallback
+       * colour - which is exactly the failure fillBy already had once, silent
+       * and looking like a colour scheme rather than a bug. A step that never
+       * occurs costs nothing; one that is missing costs a wrong colour.
+       */
       fillBy: {
         field: 'CEILING',
-        colors: { 0: '#B33A3A', 100: '#C9704A', 200: '#C9A44A', 300: '#7FA84A', 400: '#4A8FA8' },
+        colors: {
+          0: '#B33A3A',
+          50: '#C1573F', 100: '#C9704A',
+          150: '#C98A4A', 200: '#C9A44A',
+          250: '#A3A64A', 300: '#7FA84A',
+          350: '#5E9B7A', 400: '#4A8FA8',
+        },
         fallback: '#6E8CA8',
       },
     },
     opacity: 0.4,
     enabled: false,
     attribution: 'UAS facility map © <a href="https://www.faa.gov/">FAA</a>',
-  },
-  {
-    id: 'faa-sectional',
-    group: 'Airspace',
-    name: 'VFR sectional',
-    description: 'The aeronautical chart pilots fly from, drawn over the map. Source: FAA',
-    /*
-     * A cached tile service, so it is fast and behaves like a basemap.
-     *
-     * It hands the tiles back as application/octet-stream rather than
-     * image/jpeg, which is a lie the browser ignores and the layer checker did
-     * not - it reported a perfectly good JPEG as "not an image" until the check
-     * started reading the first bytes instead of the header.
-     */
-    tiles: ['https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/VFR_Sectional/MapServer/tile/{z}/{y}/{x}'],
-    tileSize: 256,
-    minzoom: 4,
-    maxzoom: 11,
-    opacity: 0.8,
-    enabled: false,
-    attribution: 'Sectional © <a href="https://www.faa.gov/">FAA</a>',
   },
   {
     id: 'usgs-transport',

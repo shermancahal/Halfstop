@@ -14,8 +14,8 @@ import {
   DEFAULT_VIEW, DEFAULT_UNITS, TRACK_COLORS, STATE_NAMES, STATE_GROUP,
 } from './config.js';
 import {
-  loadEngine, buildRasterStyle, hasMapboxToken, mapboxToken, overlayParts, overlayIdFromLayer, styleFor,
-  styleHasGlyphs,
+  loadEngine, buildRasterStyle, hasMapboxToken, mapboxToken, overlayParts, overlayIdFromLayer, overlayRows,
+  styleFor, styleHasGlyphs,
 } from './lib/engine.js';
 import { loadCatalog, findMap } from './lib/catalog.js';
 import { parseMapFile, linePositions } from './lib/parse.js';
@@ -5874,12 +5874,18 @@ function describeOverlayFeature(feature) {
   const name = named || properties.NAME || properties.Name || properties.name || overlay.name;
 
   const rows = [];
-  for (const [key, value] of Object.entries(properties)) {
-    if (rows.length >= 5) break;
-    if (key === labelField || PLUMBING.test(key)) continue;
-    if (value === null || value === undefined || value === '') continue;
-    const label = key.replace(/_/g, ' ').toLowerCase().replace(/^./, (first) => first.toUpperCase());
-    rows.push([label, humaniseValue(value)]);
+  // A layer may name its own columns; see overlayRows.
+  const fields = overlay.query?.fields;
+  if (fields) {
+    rows.push(...overlayRows(fields, properties, humaniseValue));
+  } else {
+    for (const [key, value] of Object.entries(properties)) {
+      if (rows.length >= 5) break;
+      if (key === labelField || PLUMBING.test(key)) continue;
+      if (value === null || value === undefined || value === '') continue;
+      const label = key.replace(/_/g, ' ').toLowerCase().replace(/^./, (first) => first.toUpperCase());
+      rows.push([label, humaniseValue(value)]);
+    }
   }
 
   return {

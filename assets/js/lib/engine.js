@@ -280,3 +280,44 @@ export function buildRasterStyle(basemap, overlays = []) {
 /** Whether a style can carry text at all — i.e. whether it declares glyphs. */
 export const styleHasGlyphs = (style) => typeof style?.glyphs === 'string' && style.glyphs.length > 0;
 
+
+/**
+ * The identify rows for one overlay feature, in the order the catalogue asked.
+ *
+ * A layer may name its own columns. Falling back on the column name works
+ * while the column is called LANDS_NAME and stops working when it is called
+ * APT1_LAANC, which becomes "Apt1 laanc" and tells a reader nothing they did
+ * not already not know.
+ *
+ * `fields` is declarative rather than a set of formatter functions - a value
+ * table survives being read, diffed and cached in a way a closure does not:
+ *
+ *   { CEILING: { label: 'Ceiling', suffix: ' ft AGL', values: { 0: 'None' } } }
+ *
+ * `values` wins over `suffix`, so a coded column can spell out the cases that
+ * mean something and leave the rest to be printed plainly. A field with no
+ * value on this feature is left out entirely rather than shown empty, and a
+ * `values` entry of '' drops a row the catalogue would rather not show.
+ *
+ * @param {object} fields   the catalogue's `query.fields`
+ * @param {object} properties the feature's properties
+ * @param {(value: unknown) => string} humanise how a bare value is printed
+ * @returns {Array<[string, string]>} label/value pairs
+ */
+export function overlayRows(fields, properties = {}, humanise = String) {
+  const rows = [];
+  for (const [key, spec] of Object.entries(fields || {})) {
+    const value = properties[key];
+    if (value === null || value === undefined || value === '') continue;
+    // String(value) is explicit rather than load-bearing - JavaScript coerces
+    // a property key to text on its own, so { 0: ... } is found by 0 as well
+    // as by "0". Worth writing out only because the same table is fed to a
+    // Mapbox `match` elsewhere, where the coercion does not happen and the
+    // mismatch painted every ceiling the fallback colour.
+    const coded = spec?.values && Object.hasOwn(spec.values, String(value));
+    const text = coded ? spec.values[String(value)] : `${humanise(value)}${spec?.suffix || ''}`;
+    if (text === '' || text === null || text === undefined) continue;
+    rows.push([spec?.label || key, String(text)]);
+  }
+  return rows;
+}
