@@ -467,5 +467,19 @@
     "expect": "data",
     "find": "\"(?:NAME|Name|ParkName|AreaName|PROPNAME|DESCRIPTION|site_name)\"\\s*:\\s*\"[^\"]{0,44}\"",
     "url": "https://gis.prd.state.or.us/arcgis/rest/services/Land_Ownership/LO_STATE_PARK_STATUS/FeatureServer/0/query?where=1%3D1&geometry=-124.6,41.9,-116.4,46.3&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=5&f=json"
+  },
+  {
+    "id": "canopy:mrlc-wms",
+    "note": "MRLC publishes NLCD through a GeoServer WMS. This asks what layers it advertises, because the tree canopy product's layer name is the one thing a raster source needs and guessing it is how three probes in this file have already failed.",
+    "expect": "data",
+    "find": "<Name>[^<]{0,60}</Name>",
+    "url": "https://www.mrlc.gov/geoserver/mrlc_display/wms?service=WMS&version=1.3.0&request=GetCapabilities"
+  },
+  {
+    "id": "canopy:agol-tcc",
+    "note": "The same question asked of ArcGIS Online, in case MRLC's own server is slow or unreachable from a browser. An ImageServer would be easier to consume than a WMS and would tile properly.",
+    "expect": "data",
+    "find": "\"(?:title|url|type)\"\\s*:\\s*\"[^\"]{0,110}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=12&sortField=numViews&sortOrder=desc&q=%28%22tree%20canopy%22%20OR%20NLCD%29%20AND%20%28type%3A%22Image%20Service%22%20OR%20type%3A%22Map%20Service%22%29"
   }
 ]
