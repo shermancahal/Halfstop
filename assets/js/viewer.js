@@ -11,7 +11,7 @@
 
 import {
   SITE, BASEMAPS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN, OVERLAYS,
-  DEFAULT_VIEW, DEFAULT_UNITS, TRACK_COLORS, STATE_NAMES, STATE_GROUP,
+  DEFAULT_VIEW, DEFAULT_UNITS, TRACK_COLORS, STATE_NAMES, STATE_GROUP, PROTOMAPS_ARCHIVE,
 } from './config.js';
 import {
   loadEngine, buildRasterStyle, hasMapboxToken, mapboxToken, overlayParts, overlayIdFromLayer, overlayRows,
@@ -40,6 +40,8 @@ import {
   shieldImageIdFor, loadShieldBlank, shieldImageId, hasShieldBlank,
 } from './lib/route-shields.js';
 import { shieldLayerUpdates, PALETTE } from './lib/byways-style.js';
+import { PMTilesArchive } from './lib/pmtiles.js';
+import { openTileStore } from './lib/pmtiles-store.js';
 import { previewFor, swatchSVG, tileURL } from './lib/preview.js';
 import { Account, isConfigured as accountsAvailable } from './lib/account.js';
 import {
@@ -67,7 +69,7 @@ import { registerServiceWorker, applyServiceWorkerUpdate } from './lib/pwa.js';
 import { mayEdit } from './lib/editable.js';
 import {
   OfflineStore, MAX_ZOOM as OFFLINE_MAX_ZOOM, TILE_BUDGET,
-  mayCacheTiles, tileURLsFor, downloadTiles, clearTiles,
+  mayCacheTiles, tileURLsFor, downloadTiles, clearTiles, tileKeysFor, downloadArchiveTiles,
   measureRegion, regionsToGeoJSON, formatBytes as formatTileBytes,
 } from './lib/offline.js';
 import {
@@ -4416,7 +4418,13 @@ function renderOfflineTab() {
     class: 'button button-ghost button-small', type: 'button',
     text: 'Delete downloaded tiles',
     onclick: async () => {
+      /*
+       * Both stores. The raster tiles live in the Cache API and the archive
+       * tiles in IndexedDB, and a Delete button that empties one of them is
+       * how a phone stays full after somebody has cleared it.
+       */
       await clearTiles();
+      await (await openTileStore()).clear();
       toast('Downloaded tiles removed.');
       renderOfflineTab();
     },
@@ -4530,8 +4538,20 @@ function downloadRow(region) {
    * Mapbox's own tiles are excluded on licensing grounds and CyclOSM's on
    * courtesy, so there is nothing left to fetch for this basemap either way.
    */
-  const rendersVector = Boolean(basemap?.style || basemap?.custom === 'byways');
+  const rendersVector = Boolean(basemap?.style || basemap?.custom === 'byways' || basemap?.custom === 'byways-mapbox');
   const templates = rendersVector ? [] : (basemap?.tiles || []).filter(mayCacheTiles);
+
+  /*
+   * Except when it draws from our own archive, which is the whole reason for
+   * having one.
+   *
+   * An archive has no tile URLs to cache - it is one file read by byte range -
+   * so this download goes through a different path entirely, reading the
+   * region out of the archive and keeping the tile bodies. Same regions, same
+   * counts, same progress line; a person watching should not be able to tell
+   * which one is running.
+   */
+  const archiveURL = basemap?.custom === 'byways' && PROTOMAPS_ARCHIVE ? PROTOMAPS_ARCHIVE : '';
 
   // Whatever is switched on over it, so the download matches the map you are
   // actually looking at rather than the ground under it.
@@ -4545,7 +4565,7 @@ function downloadRow(region) {
     row.append(el('p', { class: 'source-note', text: 'This browser cannot store map tiles offline.' }));
     return row;
   }
-  if (!templates.length && !overlayTemplates.length) {
+  if (!templates.length && !overlayTemplates.length && !archiveURL) {
     row.append(el('p', {
       class: 'source-note',
       text: rendersVector
@@ -4563,7 +4583,7 @@ function downloadRow(region) {
   // What is about to be fetched, named, because "download" over a map you did
   // not realise was switched on is a surprise on a metered connection.
   const covering = [
-    templates.length ? basemap.name : null,
+    templates.length || archiveURL ? basemap.name : null,
     overlayTemplates.length
       ? `${activeOverlays().filter((o) => (o.tiles || []).some(mayCacheTiles)).length} layer(s) on top`
       : null,
@@ -4583,16 +4603,41 @@ function downloadRow(region) {
         tiers.push({ zoom, boxes: [region.bounds] });
       }
       const urls = tileURLsFor(tiers, [...templates, ...overlayTemplates], tileURL);
-      status.textContent = `0 of ${urls.length.toLocaleString()}…`;
+      const archiveTiles = archiveURL ? tileKeysFor(tiers) : [];
+      const total = urls.length + archiveTiles.length;
+      status.textContent = `0 of ${total.toLocaleString()}…`;
+
+      const progress = (offset) => (done, failed) => {
+        status.textContent = `${(offset + done).toLocaleString()} of ${total.toLocaleString()}`
+          + `${failed ? ` · ${failed.toLocaleString()} unavailable` : ''}`;
+      };
 
       try {
-        const result = await downloadTiles(urls, {
-          signal: controller.signal,
-          onProgress: (done, failed, total) => {
-            status.textContent = `${done.toLocaleString()} of ${total.toLocaleString()}`
-              + `${failed ? ` · ${failed.toLocaleString()} unavailable` : ''}`;
-          },
-        });
+        const result = archiveTiles.length
+          ? await downloadArchiveTiles(archiveTiles, {
+            archive: new PMTilesArchive(new URL(archiveURL, document.baseURI).href),
+            store: await openTileStore(),
+            name: new URL(archiveURL, document.baseURI).href,
+            signal: controller.signal,
+            onProgress: progress(0),
+          })
+          : { done: 0, failed: 0, cancelled: false };
+
+        /*
+         * The overlays on top, which are ordinary raster tiles whichever
+         * basemap is underneath. Skipped when the archive run was stopped:
+         * carrying on downloading after somebody pressed Stop is the one thing
+         * a Stop button must not do.
+         */
+        const overlays = urls.length && !result.cancelled
+          ? await downloadTiles(urls, {
+            signal: controller.signal,
+            onProgress: progress(result.done),
+          })
+          : { done: 0, failed: 0, cancelled: false };
+        result.done += overlays.done;
+        result.failed += overlays.failed;
+        result.cancelled = result.cancelled || overlays.cancelled;
         /*
          * Said differently depending on what happened, because "done" over a
          * download that skipped a fifth of its tiles is the kind of reassurance
@@ -4603,6 +4648,15 @@ function downloadRow(region) {
         } else if (result.failed) {
           status.textContent = `${result.done.toLocaleString()} saved, `
             + `${result.failed.toLocaleString()} not available from the service.`;
+        } else if (result.absent) {
+          /*
+           * Said separately from a failure, because it is not one. A region
+           * drawn over the edge of an archive asks for tiles that do not
+           * exist, and calling those unavailable reads as something broken
+           * rather than as ground the map does not cover.
+           */
+          status.textContent = `${result.done.toLocaleString()} tiles saved. `
+            + `${result.absent.toLocaleString()} of this region is outside the map's coverage.`;
         } else {
           status.textContent = `${result.done.toLocaleString()} tiles saved. This region works offline.`;
         }

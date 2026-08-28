@@ -26,6 +26,8 @@
  */
 
 /** The magic at the head of every archive, and the only version this reads. */
+import { tileKey } from './pmtiles-store.js';
+
 export const PMTILES_MAGIC = 'PMTiles';
 export const PMTILES_VERSION = 3;
 export const HEADER_BYTES = 127;
@@ -418,6 +420,17 @@ export class PMTilesArchive {
   }
 }
 
+/**
+ * A standalone ArrayBuffer for a view that may be a window onto a larger one.
+ *
+ * A tile sliced out of the 16kB header read carries that whole buffer with it,
+ * and handing it to MapLibre — or to IndexedDB — takes the sixteen kilobytes
+ * along for a three-hundred-byte tile.
+ */
+function bufferOf(bytes) {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+}
+
 /** `pmtiles://<archive>/{z}/{x}/{y}`, which is the only shape we ask for. */
 const TILE_URL = /^pmtiles:\/\/(.+)\/(\d+)\/(\d+)\/(\d+)$/;
 
@@ -451,13 +464,17 @@ export function parseTileURL(url) {
  * @param {object} [options]
  * @param {Function} [options.fetch]
  * @param {(url: string) => string} [options.resolve]
+ * @param {object} [options.store]
+ *   Where downloaded tiles are kept, from `pmtiles-store.js`. Consulted before
+ *   the archive is touched at all — which is the point: offline, the header
+ *   read that every network path begins with is exactly what would fail.
  * @param {(url: string, header: object) => void} [options.onArchive]
  *   Called once per archive, with its header, the first time one is opened.
  *   The header is the only place the archive's real zoom range is written
  *   down, and the style has to guess at it before any of this runs.
  * @returns {boolean} Whether the protocol was registered.
  */
-export function registerPMTilesProtocol(gl, { fetch: fetchImpl, resolve, onArchive } = {}) {
+export function registerPMTilesProtocol(gl, { fetch: fetchImpl, resolve, onArchive, store } = {}) {
   if (!gl || typeof gl.addProtocol !== 'function') return false;
   if (gl.__abmapPMTiles) return true;
 
@@ -470,6 +487,20 @@ export function registerPMTilesProtocol(gl, { fetch: fetchImpl, resolve, onArchi
     const request = parseTileURL(params.url);
     if (!request) throw new Error(`not a pmtiles tile URL: ${params.url}`);
     const key = absolute(request.archive);
+
+    /*
+     * The store first, and before anything reaches for the network.
+     *
+     * Order is the whole of it. Asking the archive and falling back to the
+     * store would work online and fail in exactly the place this feature
+     * exists for: every network read starts with the header, and offline that
+     * is the request that hangs.
+     */
+    if (store) {
+      const saved = await store.get(tileKey(key, request.z, request.x, request.y));
+      if (saved) return { data: bufferOf(saved) };
+    }
+
     let archive = archives.get(key);
     if (!archive) {
       archive = new PMTilesArchive(key, { fetch: fetchImpl });
@@ -484,7 +515,7 @@ export function registerPMTilesProtocol(gl, { fetch: fetchImpl, resolve, onArchi
     // An absent tile is empty, not an error: MapLibre draws nothing and keeps
     // going, which is what "the archive stops at the state line" should look
     // like.
-    return { data: bytes ? bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) : new ArrayBuffer(0) };
+    return { data: bytes ? bufferOf(bytes) : new ArrayBuffer(0) };
   });
 
   gl.__abmapPMTiles = archives;

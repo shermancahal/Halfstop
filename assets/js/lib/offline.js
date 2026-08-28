@@ -608,6 +608,90 @@ export async function downloadTiles(urls, {
   return { done, failed, cancelled: Boolean(signal?.aborted) };
 }
 
+/**
+ * Every tile a region needs, as z/x/y keys rather than URLs.
+ *
+ * The archive counterpart of `tileURLsFor`. An archive has no per-tile URLs —
+ * it is one file read by byte range — so what a download enumerates is the
+ * tiles themselves, which is what the region planner was counting all along.
+ *
+ * @param {Array<{zoom: number, boxes: object[]}>} tiers from `tieredPlan`
+ * @returns {Array<{z: number, x: number, y: number}>}
+ */
+export function tileKeysFor(tiers) {
+  const seen = new Set();
+  const tiles = [];
+  for (const tier of tiers || []) {
+    for (const box of tier.boxes || []) {
+      for (const part of spans(box)) {
+        const range = tileRange(part, tier.zoom);
+        if (!range) continue;
+        for (let x = range.minX; x <= range.maxX; x += 1) {
+          for (let y = range.minY; y <= range.maxY; y += 1) {
+            const key = `${tier.zoom}/${x}/${y}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            tiles.push({ z: tier.zoom, x, y });
+          }
+        }
+      }
+    }
+  }
+  return tiles;
+}
+
+/**
+ * Read a region out of an archive and keep it.
+ *
+ * Deliberately the same shape as `downloadTiles`: same concurrency, same
+ * tolerance of individual failures, same progress signature, same return. The
+ * two differ only in where a tile comes from and where it goes, and a person
+ * watching the progress line should not be able to tell which one is running.
+ *
+ * A tile the archive does not hold is not a failure. An archive covering one
+ * state genuinely has nothing outside it, and a region drawn slightly over the
+ * edge would otherwise report thousands of "unavailable" tiles for having
+ * asked a reasonable question.
+ *
+ * @param {Array<{z:number,x:number,y:number}>} tiles from `tileKeysFor`
+ * @param {{archive: object, store: object, name: string}} where
+ * @returns {Promise<{done: number, failed: number, absent: number, cancelled: boolean}>}
+ */
+export async function downloadArchiveTiles(tiles, {
+  archive, store, name, concurrency = 6, onProgress, signal,
+} = {}) {
+  if (!archive || !store) throw new Error('This map has no archive to download from.');
+  let done = 0;
+  let failed = 0;
+  let absent = 0;
+  let index = 0;
+
+  const worker = async () => {
+    while (index < tiles.length) {
+      if (signal?.aborted) return;
+      const { z, x, y } = tiles[index];
+      index += 1;
+      const key = `${name}|${z}/${x}/${y}`;
+      try {
+        if (await store.has(key)) { done += 1; onProgress?.(done, failed, tiles.length); continue; }
+        const bytes = await archive.tile(z, x, y);
+        if (bytes) {
+          await store.put(key, bytes);
+          done += 1;
+        } else {
+          absent += 1;
+        }
+      } catch {
+        failed += 1;
+      }
+      onProgress?.(done, failed, tiles.length);
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.max(1, concurrency) }, worker));
+  return { done, failed, absent, cancelled: Boolean(signal?.aborted) };
+}
+
 /** Drop every tile a cache holds. */
 export async function clearTiles(cacheName = 'abmap-tiles-v1', store = globalThis.caches) {
   if (!store?.delete) return false;

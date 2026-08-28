@@ -10,6 +10,7 @@
 import { MAPBOX_TOKEN, MAP_ENGINE, PROTOMAPS_ARCHIVE, PROTOMAPS_MAXZOOM } from '../config.js';
 import { bywaysStyle, PROTOMAPS_SCHEMA, MAPBOX_SCHEMA } from './byways-style.js';
 import { registerPMTilesProtocol } from './pmtiles.js';
+import { openTileStore } from './pmtiles-store.js';
 
 const MAPLIBRE_VERSION = '4.7.1';
 const MAPBOX_VERSION = '3.7.0';
@@ -184,7 +185,15 @@ export async function loadEngine(basemap) {
    * a worker, long after the useful stack has gone.
    */
   if (engine === 'maplibre') {
-    registerPMTilesProtocol(gl, { onArchive: warnAboutDepth });
+    /*
+     * The store is opened before the protocol is registered, not inside it.
+     *
+     * The handler has to answer synchronously enough to serve the first tile,
+     * and a downloaded region is only useful if it is consulted from the very
+     * first request - the one that happens before anything has established
+     * whether there is a network at all.
+     */
+    registerPMTilesProtocol(gl, { onArchive: warnAboutDepth, store: await openTileStore() });
   }
   return { gl, engine };
 }

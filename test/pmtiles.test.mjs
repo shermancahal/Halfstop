@@ -23,6 +23,11 @@ import {
   tileId, readVarint, decodeDirectory, findEntry, parseHeader, parseTileURL,
   decompress, registerPMTilesProtocol,
 } from '../assets/js/lib/pmtiles.js';
+import { memoryTileStore, tileKey } from '../assets/js/lib/pmtiles-store.js';
+import { tileKeysFor, downloadArchiveTiles, countTiles } from '../assets/js/lib/offline.js';
+
+// The Cherokee National Forest, roughly — the same box the offline tests use.
+const SMOKIES = { west: -84.5, south: 35.4, east: -83.6, north: 36.0 };
 
 /* ----------------------------------------------------------------- writing */
 
@@ -515,4 +520,129 @@ test('a callback that throws does not take the tile down with it', async () => {
   });
   const response = await gl.handlers.get('pmtiles')({ url: 'pmtiles://x.pmtiles/8/70/100' });
   assert.equal(text(new Uint8Array(response.data)), 'somewhere in Tennessee');
+});
+
+/* ------------------------------------------------------------- offline */
+
+/*
+ * The store is consulted before anything reaches for the network.
+ *
+ * Order is the whole of this feature. Asking the archive and falling back to
+ * the store would pass every test that runs with a working fetch and fail in
+ * exactly the situation it exists for: every network read begins with the
+ * header, and offline that is the request that hangs. So the fetch here is one
+ * that throws — which is what "no signal" looks like from inside — and a tile
+ * still has to come back.
+ */
+test('a stored tile is served with no network at all', async () => {
+  const gl = fakeMapLibre();
+  const store = memoryTileStore();
+  await store.put(tileKey('x.pmtiles', 8, 70, 100), body('saved earlier'));
+
+  registerPMTilesProtocol(gl, {
+    fetch: () => { throw new Error('the network is down'); },
+    resolve: (u) => u,
+    store,
+  });
+  const response = await gl.handlers.get('pmtiles')({ url: 'pmtiles://x.pmtiles/8/70/100' });
+  assert.equal(text(new Uint8Array(response.data)), 'saved earlier');
+});
+
+test('a tile that was not downloaded still goes to the archive', async () => {
+  const gl = fakeMapLibre();
+  const served = serve(buildArchive(SAMPLE));
+  registerPMTilesProtocol(gl, { fetch: served.fetch, resolve: (u) => u, store: memoryTileStore() });
+  const response = await gl.handlers.get('pmtiles')({ url: 'pmtiles://x.pmtiles/8/70/100' });
+  assert.equal(text(new Uint8Array(response.data)), 'somewhere in Tennessee');
+});
+
+test('the key names the archive, so two archives do not overwrite each other', async () => {
+  const store = memoryTileStore();
+  await store.put(tileKey('a.pmtiles', 8, 70, 100), body('from A'));
+  await store.put(tileKey('b.pmtiles', 8, 70, 100), body('from B'));
+  assert.equal(text(await store.get(tileKey('a.pmtiles', 8, 70, 100))), 'from A');
+  assert.equal(text(await store.get(tileKey('b.pmtiles', 8, 70, 100))), 'from B');
+  assert.equal(await store.count(), 2);
+});
+
+test('downloading a region fills the store, and a second run refetches nothing', async () => {
+  const served = serve(buildArchive(SAMPLE));
+  const archive = new PMTilesArchive('https://example.test/x.pmtiles', served);
+  const store = memoryTileStore();
+  const tiles = [
+    { z: 8, x: 70, y: 100 }, { z: 8, x: 70, y: 101 }, { z: 8, x: 71, y: 100 },
+    // Inside the archive's zoom range, outside its coverage.
+    { z: 8, x: 70, y: 102 },
+  ];
+
+  const first = await downloadArchiveTiles(tiles, { archive, store, name: 'x.pmtiles', concurrency: 2 });
+  assert.equal(first.done, 3);
+  assert.equal(first.absent, 1, 'a tile the archive does not hold is absent, not failed');
+  assert.equal(first.failed, 0);
+  assert.equal(await store.count(), 3);
+
+  const before = served.calls.length;
+  const second = await downloadArchiveTiles(tiles, { archive, store, name: 'x.pmtiles' });
+  assert.equal(second.done, 3);
+  assert.equal(
+    served.calls.length - before, 0,
+    'the stored tiles cost no requests, and the miss costs none either'
+    + ' — the directory saying it is not there is already in memory',
+  );
+});
+
+test('a download reports what it stored rather than what it was asked for', async () => {
+  /*
+   * The distinction that gets found out on a mountain. A region drawn slightly
+   * over the edge of an archive asks for tiles that do not exist, and reporting
+   * those as saved is the kind of reassurance there is no way to check until
+   * there is no signal to check it with.
+   */
+  const served = serve(buildArchive(SAMPLE));
+  const archive = new PMTilesArchive('https://example.test/x.pmtiles', served);
+  const store = memoryTileStore();
+  const outside = Array.from({ length: 5 }, (unused, i) => ({ z: 8, x: 200, y: 100 + i }));
+  const result = await downloadArchiveTiles(outside, { archive, store, name: 'x.pmtiles' });
+  assert.equal(result.done, 0);
+  assert.equal(result.absent, 5);
+  assert.equal(await store.count(), 0);
+});
+
+test('a download can be stopped, and keeps what it already had', async () => {
+  const served = serve(buildArchive(SAMPLE));
+  const archive = new PMTilesArchive('https://example.test/x.pmtiles', served);
+  const store = memoryTileStore();
+  const controller = new AbortController();
+  const tiles = [{ z: 8, x: 70, y: 100 }, { z: 8, x: 70, y: 101 }, { z: 8, x: 71, y: 100 }];
+
+  const result = await downloadArchiveTiles(tiles, {
+    archive, store, name: 'x.pmtiles', concurrency: 1,
+    onProgress: () => controller.abort(),
+    signal: controller.signal,
+  });
+  assert.equal(result.cancelled, true);
+  assert.equal(result.done, 1, 'the one that finished before the stop is kept');
+  assert.equal(await store.count(), 1);
+});
+
+test('the region planner and the archive downloader count the same tiles', () => {
+  /*
+   * The number on the button and the number in the loop have to be the one
+   * number. They are computed by different code — countTiles from the bounds,
+   * tileKeysFor by walking them — and a person deciding whether a download will
+   * finish before they leave is reading the first while the second runs.
+   */
+  const tiers = [10, 11].map((zoom) => ({ zoom, boxes: [SMOKIES] }));
+  const tiles = tileKeysFor(tiers);
+  const counted = tiers.reduce((sum, tier) => sum + countTiles(tier.boxes[0], tier.zoom, tier.zoom), 0);
+  assert.equal(tiles.length, counted);
+  assert.ok(tiles.length > 0);
+});
+
+test('overlapping tiers are downloaded once, not once per tier', () => {
+  const tiles = tileKeysFor([
+    { zoom: 10, boxes: [SMOKIES] },
+    { zoom: 10, boxes: [SMOKIES] },
+  ]);
+  assert.equal(tiles.length, tileKeysFor([{ zoom: 10, boxes: [SMOKIES] }]).length);
 });
