@@ -1241,17 +1241,60 @@ await page.click('#offline-trigger');
 await page.waitForTimeout(300);
 check('the offline menu holds the export and the picture', await page.evaluate(() => Boolean(
   document.getElementById('download-button') && document.getElementById('snapshot-button'))), true);
-const exported = await page.evaluate(() => {
+/*
+ * Both formats, because they are for different readers.
+ *
+ * The default is GPX - the thing a handheld, Gaia or AllTrails will actually
+ * import - and GeoJSON stays for a map that wants the full properties. This
+ * check reads the bytes of each rather than trusting the button label: the
+ * export quietly changing format is exactly the kind of thing that is only
+ * noticed by the person whose device will not open the file.
+ */
+const grab = async (buttonId) => page.evaluate(async (id) => {
   let captured = null;
   const original = URL.createObjectURL;
   URL.createObjectURL = (blob) => { captured = blob; return original.call(URL, blob); };
-  document.getElementById('download-button').click();
+  document.getElementById(id).click();
+  // saveBlob is async now: it asks about sharing before it falls back to an
+  // anchor, so the blob does not exist yet on the line after the click.
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  URL.createObjectURL = original;
+  return captured ? captured.text() : null;
+}, buttonId);
+
+const gpx = await grab('download-button');
+check('the default export is GPX', /<gpx[\s>]/.test(gpx || ''), true);
+
+const geo = await page.evaluate(async () => {
+  const button = [...document.querySelectorAll('button')].find((b) => /GeoJSON/i.test(b.textContent));
+  if (!button) return null;
+  let captured = null;
+  const original = URL.createObjectURL;
+  URL.createObjectURL = (blob) => { captured = blob; return original.call(URL, blob); };
+  button.click();
+  await new Promise((resolve) => setTimeout(resolve, 150));
   URL.createObjectURL = original;
   return captured ? captured.text() : null;
 });
-const parsed = exported ? JSON.parse(exported) : { features: [] };
-check('saved waypoints are in the file',
+const parsed = geo ? JSON.parse(geo) : { features: [] };
+check('GeoJSON is still there for a map to read',
   parsed.features.some((f) => /Smoke folder/.test(f.properties?.source || '')), true);
+
+/*
+ * The two files describe the same map.
+ *
+ * Checked against each other rather than against a name written in here: a
+ * literal would only prove the fixture is what this file thinks it is, and
+ * would keep passing if GPX quietly stopped carrying waypoints. Every point
+ * the GeoJSON names has to be named in the GPX too.
+ */
+const pointNames = parsed.features
+  .filter((f) => /Point/.test(f.geometry?.type || '') && f.properties?.name)
+  .map((f) => f.properties.name);
+check('there is a point to compare', pointNames.length > 0, true);
+check('and every one of them is in the GPX',
+  pointNames.every((name) => (gpx || '').includes(name)), true);
+check('as an actual waypoint element', /<wpt[\s>]/.test(gpx || ''), true);
 
 console.log('\nUnits are chosen, applied and remembered');
 await page.click('#settings-trigger');
@@ -1861,7 +1904,7 @@ for (const name of ['Forest roads (MVUM)', 'BLM routes']) {
 await page.waitForTimeout(700);
 
 const tools = page.locator('.map-tool');
-check('there are two map tools under the zoom controls', await tools.count(), 2);
+check('there are three map tools under the zoom controls', await tools.count(), 3);
 // Inspecting is what you do repeatedly — every road you consider driving —
 // so the tap does that by default and the button is lit to say so. A mode
 // with no visible state is a trap.

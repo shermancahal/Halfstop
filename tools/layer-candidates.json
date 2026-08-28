@@ -598,8 +598,8 @@
     "id": "rest:uas-nsufr",
     "expect": "data",
     "find": "\"[A-Z_a-z]{2,24}\"\\s*:\\s*(?:\"[^\"]{1,50}\"|\\d+)",
-    "note": "National security UAS flight restrictions - the standing no-drone areas over certain federal sites. Asked over a wide box across Kentucky and Tennessee rather than a square I picked, because an empty answer from a bad box has been read as a dead layer three times in this file.",
-    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Part_Time_National_Security_UAS_Flight_Restrictions/FeatureServer/0/query?where=1%3D1&geometry=-89.6,36.4,-81.9,39.2&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=5&f=json"
+    "note": "National security UAS flight restrictions, asked across the country rather than across Kentucky and Tennessee. The regional box came back with no features, which for a layer covering a few dozen federal sites nationally is the expected answer from the wrong window - not evidence of an empty service. If the country holds nothing, the layer goes.",
+    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Part_Time_National_Security_UAS_Flight_Restrictions/FeatureServer/0/query?where=1%3D1&geometry=-125,24,-66,49&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=5&f=json"
   },
   {
     "id": "rest:stadiums",

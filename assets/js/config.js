@@ -561,6 +561,83 @@ export const OVERLAYS = [
     attribution: 'Canopy © <a href="https://www.mrlc.gov/">MRLC</a> / NLCD',
   },
   {
+    id: 'faa-restrictions',
+    legend: [
+      { color: '#8E44AD', label: 'Special use airspace' },
+      { color: '#C0392B', label: 'National defence' },
+      { color: '#D97A2B', label: 'Stadium' },
+    ],
+    /*
+     * Standing and scheduled restrictions - not the hour-by-hour kind.
+     *
+     * Worth being exact, because the difference is the whole safety argument.
+     * These three services carry restrictions that exist on a schedule or
+     * permanently: special use airspace, national defence areas, and stadiums
+     * (which close a three-mile circle around game time). The genuinely
+     * temporary ones - a wildfire, a VIP movement, something that appeared
+     * this morning - are NOTAMs, and they live at tfr.faa.gov, which answers
+     * 31kB of good JSON and sends no CORS header. A browser may not read it.
+     *
+     * So this layer does not claim to show today's TFRs, the note says so, and
+     * the card carries a link to the list that does. Drawing three services
+     * and calling the result "TFRs" would be the most dangerous thing on this
+     * map: a pilot who checked it and saw nothing would have been told the sky
+     * was clear by a layer that never had the answer.
+     */
+    legendNote: 'Standing and scheduled restrictions only. Same-day TFRs — fires, VIP '
+      + 'movements — are NOTAMs and are not in this layer; use the link on any feature to '
+      + 'check the current list before you fly.',
+    group: 'Airspace',
+    name: 'Flight restrictions',
+    description: 'Special use airspace, national defence areas and stadiums. Source: FAA',
+    query: {
+      /*
+       * One layer over three services, using the sublayer machinery Kentucky's
+       * trails already use. The placeholder happens to take a service name
+       * rather than a numeric id, which needs no code: all three sit on the
+       * same host behind the same query shape, and merging them puts the kind
+       * of restriction in a column where one match expression can colour it.
+       */
+      url: 'https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/{layer}/FeatureServer/0/query'
+        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
+        + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
+        + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=300&f=geojson',
+      uses: [
+        { layer: 'Special_Use_Airspace', use: 'Special use' },
+        { layer: 'National_Defense_Airspace_TFR_Areas', use: 'National defence' },
+        { layer: 'Stadiums', use: 'Stadium' },
+      ],
+      minzoom: 7,
+      color: '#8E44AD',
+      label: 'NAME',
+      fields: {
+        use: { label: 'Restriction' },
+        LOCAL_TYPE: { label: 'Type' },
+        UPPER_VAL: { label: 'Ceiling', suffix: ' ft' },
+        LOWER_VAL: { label: 'Floor', suffix: ' ft' },
+        WKHR_CODE: { label: 'Hours' },
+        WKHR_RMK: { label: 'Hours note' },
+        CITY: { label: 'City' },
+      },
+      links: [
+        { label: 'Current TFRs', href: 'https://tfr.faa.gov/tfr2/list.html' },
+        { label: 'B4UFLY', href: 'https://www.faa.gov/uas/getting_started/b4ufly' },
+      ],
+      fillBy: {
+        field: 'use',
+        colors: {
+          'Special use': '#8E44AD',
+          'National defence': '#C0392B',
+          Stadium: '#D97A2B',
+        },
+        fallback: '#7D6E8C',
+      },
+    },
+    opacity: 0.4,
+    enabled: false,
+    attribution: 'Restrictions © <a href="https://www.faa.gov/">FAA</a>',
+  },
+  {
     id: 'faa-uas-grid',
     legend: [
       { color: '#B33A3A', label: '0 ft — no instant approval' },
@@ -611,7 +688,7 @@ export const OVERLAYS = [
     query: {
       url: 'https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/FAA_UAS_FacilityMap_Data_V5/FeatureServer/0/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
-        + '&spatialRel=esriSpatialRelIntersects&outFields=CEILING%2CAPT1_NAME%2CAPT1_FAAID%2CAPT1_LAANC%2CAPT2_NAME%2CARPT_COUNT'
+        + '&spatialRel=esriSpatialRelIntersects&outFields=CEILING%2CAPT1_NAME%2CAPT1_FAAID%2CAPT1_LAANC%2CAPT2_NAME'
         + '&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=1000&f=geojson',
       // The grid is dense - a metro area is hundreds of cells - so it stays
       // off the map until the view is small enough for the cells to read.
@@ -642,7 +719,6 @@ export const OVERLAYS = [
           values: { 1: 'Airport participates', 0: 'Airport does not participate' },
         },
         APT2_NAME: { label: 'Also under' },
-        ARPT_COUNT: { label: 'Airports covering' },
       },
       /*
        * Every 50-foot step, not only the hundreds.

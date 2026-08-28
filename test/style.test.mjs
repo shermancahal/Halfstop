@@ -22,6 +22,7 @@ import {
 } from '../assets/js/config.js';
 import { bywaysStyle, PALETTE, shieldLayerUpdates } from '../assets/js/lib/byways-style.js';
 import { previewFor, tileFor, tileURL, swatchSVG } from '../assets/js/lib/preview.js';
+import { saveBlob } from '../assets/js/lib/ui.js';
 import {
   shieldTextOffset, shieldTextSize, shieldDisplayWidth, shieldBlankFor,
   SHIELD_SCALE, BLANK_PIXEL_RATIO, MIN_TEXT,
@@ -337,6 +338,62 @@ test('style: a link with a hole in it is not shipped', () => {
     'https://example.gov/a?id=a%20b%26c',
   );
   assert.deepEqual(overlayLinks([links[3]], {}), []);
+});
+
+test('ui: a file goes out by whichever route the browser has', async () => {
+  /*
+   * The reason this exists: an iOS WKWebView - which is what the app is -
+   * ignores the download attribute, so "Save as a picture" clicked, did
+   * nothing, and reported success. Share is the route that works there.
+   */
+  const blob = new Blob(['x'], { type: 'image/png' });
+  const original = { share: navigator.share, canShare: navigator.canShare, File: globalThis.File };
+  const restore = () => {
+    navigator.share = original.share;
+    navigator.canShare = original.canShare;
+    globalThis.File = original.File;
+  };
+
+  try {
+    let shared = null;
+    navigator.canShare = () => true;
+    navigator.share = async (data) => { shared = data; };
+    assert.equal(await saveBlob(blob, 'map.png'), 'shared');
+    assert.equal(shared.files[0].name, 'map.png');
+
+    // Cancelling is not a failure, and must not fall through to a download
+    // the person just declined.
+    navigator.share = async () => { const error = new Error('no'); error.name = 'AbortError'; throw error; };
+    assert.equal(await saveBlob(blob, 'map.png'), 'cancelled');
+
+    /*
+     * No share support at all falls back to the anchor.
+     *
+     * Node has no DOM, so the anchor is built against the smallest stub that
+     * can record what the real one would have been handed - which is the point
+     * of the assertion: the fallback has to set `download` to the filename,
+     * and a click that navigates instead of downloading is the bug this whole
+     * function exists to route around.
+     */
+    let clicked = null;
+    const node = () => ({
+      attrs: {}, className: '', dataset: {},
+      setAttribute(key, value) { this.attrs[key] = value; },
+      addEventListener() {}, append() {}, remove() {},
+      click() { clicked = this; },
+    });
+    globalThis.document = { createElement: node, body: { append() {} }, createTextNode: () => ({}) };
+    globalThis.URL.createObjectURL = () => 'blob:x';
+    globalThis.URL.revokeObjectURL = () => {};
+
+    navigator.canShare = () => false;
+    assert.equal(await saveBlob(blob, 'map.png'), 'downloaded');
+    assert.equal(clicked?.attrs.download, 'map.png', 'the fallback has to actually ask for a download');
+    assert.equal(clicked?.attrs.href, 'blob:x', 'and to point at the blob it was given');
+  } finally {
+    restore();
+    delete globalThis.document;
+  }
 });
 
 test('style: a combined overlay contributes one layer per source', () => {

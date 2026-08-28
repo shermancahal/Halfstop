@@ -23,7 +23,7 @@ import {
   boundsAreValid, cumulativeDistances, formatDistance, formatDuration, formatElevation,
   formatTemperature, geojsonBounds, mergeBounds, padBounds,
 } from './lib/geo.js';
-import { el, escapeHTML, createToaster, downloadText, initTheme, formatDate } from './lib/ui.js';
+import { el, escapeHTML, createToaster, downloadText, saveBlob, initTheme, formatDate } from './lib/ui.js';
 import { icons } from './lib/icons.js';
 import {
   FolderStore, FOLDER_COLORS, readTrip, tripStanding, localDay,
@@ -469,6 +469,23 @@ async function main() {
           const centre = state.map.getCenter();
           showDropPin([centre.lng, centre.lat]);
         },
+      }));
+
+      /*
+       * The camera on the map, not three taps into a tab.
+       *
+       * It was in the offline panel, which is where you go to plan a download
+       * - not where you are when the map in front of you is worth keeping.
+       * Taking a picture is the one export that needs no account, no network
+       * and no tiles, and on a phone in a canyon it is often the whole answer,
+       * so it belongs where the map is.
+       */
+      group.append(el('button', {
+        class: 'map-tool', type: 'button',
+        title: 'Save this view as a picture',
+        'aria-label': 'Save this view as a picture',
+        html: icons.camera,
+        onclick: saveMapImage,
       }));
 
       return group;
@@ -4250,11 +4267,16 @@ function renderOfflineTab() {
         title: 'Save this view as an image — uses no map data',
         onclick: saveMapImage,
       }, 'snapshot-button'),
+      labelledButton(icons.download, 'Export GPX', {
+        tone: 'ghost',
+        title: 'Everything on the map, in the format Garmin, Gaia and AllTrails import',
+        onclick: () => downloadVisible(),
+      }, 'download-button'),
       labelledButton(icons.download, 'Export GeoJSON', {
         tone: 'ghost',
-        title: 'Download everything on the map as GeoJSON',
-        onclick: downloadVisible,
-      }, 'download-button'),
+        title: 'The same features with their full properties, for another map to read',
+        onclick: () => downloadVisible(true),
+      }),
     ]),
     el('h3', { class: 'offline-heading', text: 'Map regions' }),
     el('p', {
@@ -5319,7 +5341,7 @@ function briefly(text, ms = 4000) {
  * The name carries the place and the zoom, because a folder of screenshots
  * called map-1.png through map-9.png is not a record of anything.
  */
-function saveMapImage() {
+async function saveMapImage() {
   const canvas = state.map?.getCanvas?.();
   if (!canvas) return;
 
@@ -5340,18 +5362,23 @@ function saveMapImage() {
      * between a picture of the map and a picture of the map as it was.
      */
     state.map.triggerRepaint?.();
-    const url = canvas.toDataURL('image/png');
-    if (!url || url.length < 2000) {
-      // A blank buffer comes back as a valid but tiny data URL rather than as
-      // an error, so length is the only signal that the capture failed.
+    const blob = await new Promise((resolve) => {
+      // toBlob rather than toDataURL: the same pixels without building a
+      // base64 string of them first, which on a retina phone is several
+      // megabytes of text held in memory for no reason.
+      if (canvas.toBlob) canvas.toBlob(resolve, 'image/png');
+      else resolve(null);
+    });
+    if (!blob || blob.size < 2000) {
+      // A blank buffer comes back as a valid but tiny image rather than as an
+      // error, so size is the only signal that the capture failed.
       briefly('The map could not be captured on this device.');
       return;
     }
 
-    const link = el('a', { href: url, download: `${stamp}.png` });
-    document.body.append(link);
-    link.click();
-    link.remove();
+    const how = await saveBlob(blob, `${stamp}.png`);
+    if (how === 'shared') briefly('Picture ready to share.');
+    else if (how === 'downloaded') briefly('Picture saved.');
   } catch {
     // A cross-origin tile taints the canvas and makes toDataURL throw. Every
     // source in the catalogue is checked for CORS by tools/check-layers.mjs
@@ -5916,14 +5943,26 @@ function describeOverlayFeature(feature) {
 
   const properties = feature.properties || {};
   const labelField = overlay.query?.label;
-  const named = labelField ? properties[labelField] : '';
-  const name = named || properties.NAME || properties.Name || properties.name || overlay.name;
+  const fieldSpecs = overlay.query?.fields;
+  /*
+   * The heading does not repeat what the rows already say.
+   *
+   * The drone grid labels its cells with the ceiling, so the card read
+   * "DRONE CEILINGS / 150" above a row reading "Ceiling  150 ft AGL" - the
+   * same number twice, the second time with its units and the first time
+   * looking like the name of something. A label field that is also spelled
+   * out below is not a heading.
+   *
+   * And no fallback to the layer's own name: `source` above it is already the
+   * layer's name, so that path only ever produced the title twice.
+   */
+  const named = (labelField && !fieldSpecs?.[labelField]) ? properties[labelField] : '';
+  const name = named || properties.NAME || properties.Name || properties.name || '';
 
   const rows = [];
   // A layer may name its own columns; see overlayRows.
-  const fields = overlay.query?.fields;
-  if (fields) {
-    rows.push(...overlayRows(fields, properties, humaniseValue));
+  if (fieldSpecs) {
+    rows.push(...overlayRows(fieldSpecs, properties, humaniseValue));
   } else {
     for (const [key, value] of Object.entries(properties)) {
       if (rows.length >= 5) break;
@@ -9272,7 +9311,7 @@ async function shareView() {
  * Every feature is stamped with where it came from, because a merged file with
  * no provenance is hard to take apart again.
  */
-function downloadVisible() {
+async function downloadVisible(asGeoJSON = false) {
   const features = [];
 
   for (const entry of state.documents.values()) {
@@ -9293,9 +9332,29 @@ function downloadVisible() {
     toast('Nothing on the map to export yet.', { tone: 'error' });
     return;
   }
-  downloadText('american-byways-maps.geojson',
-    JSON.stringify({ type: 'FeatureCollection', features }, null, 2), 'application/geo+json');
-  toast(`Exported ${features.length} feature${features.length === 1 ? '' : 's'}.`, { tone: 'ok' });
+  const geojson = { type: 'FeatureCollection', features };
+  const count = `${features.length} feature${features.length === 1 ? '' : 's'}`;
+
+  /*
+   * GPX by default, GeoJSON when asked for.
+   *
+   * A .geojson file is the right format for another map to read and the wrong
+   * one to hand a person: nothing on a phone opens it, and the honest reaction
+   * to downloading one is to wonder what it was for. GPX is the format Garmin,
+   * Gaia, AllTrails and every handheld already import, which makes the export
+   * the start of something rather than a file in a downloads folder.
+   *
+   * GeoJSON stays, because it carries properties GPX has nowhere to put and
+   * because anything already built on it should keep working.
+   */
+  if (asGeoJSON) {
+    await downloadText('american-byways-maps.geojson', JSON.stringify(geojson, null, 2), 'application/geo+json');
+    toast(`Exported ${count} as GeoJSON.`, { tone: 'ok' });
+    return;
+  }
+  const how = await downloadText('american-byways-maps.gpx',
+    toGPX(geojson, { name: 'American Byways' }), 'application/gpx+xml');
+  if (how !== 'cancelled') toast(`Exported ${count} as GPX.`, { tone: 'ok' });
 }
 
 /* ------------------------------------------------------------------ */

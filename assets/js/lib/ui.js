@@ -111,12 +111,48 @@ export function createToaster(container) {
 
 /** Trigger a client-side file download from a string. */
 export function downloadText(filename, text, type = 'application/json') {
-  const url = URL.createObjectURL(new Blob([text], { type }));
+  return saveBlob(new Blob([text], { type }), filename);
+}
+
+/**
+ * Get a file to the person, by whichever route this browser actually has.
+ *
+ * `<a download>` is the desktop answer and is not available everywhere: an iOS
+ * WKWebView - which is what the app is - ignores the attribute, so the click
+ * either does nothing or navigates away from the map. That made "Save as a
+ * picture" a button that silently failed on the one device most likely to be
+ * used to take the picture.
+ *
+ * The Web Share API is the route that works there, and it is better than a
+ * download on a phone anyway: it offers Save to Files alongside Messages and
+ * AirDrop. So share first when the browser will take this file, and fall back
+ * to the anchor everywhere else.
+ *
+ * Returns how it went, because the caller has to say something truthful
+ * afterwards and "shared", "downloaded" and "cancelled" are three outcomes.
+ *
+ * @returns {Promise<'shared'|'downloaded'|'cancelled'>}
+ */
+export async function saveBlob(blob, filename) {
+  const file = typeof File === 'function' ? new File([blob], filename, { type: blob.type }) : null;
+  if (file && navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file] });
+      return 'shared';
+    } catch (error) {
+      // AbortError is the person tapping Cancel, which is not a failure and
+      // must not fall through to a download they did not ask for.
+      if (error?.name === 'AbortError') return 'cancelled';
+    }
+  }
+
+  const url = URL.createObjectURL(blob);
   const link = el('a', { href: url, download: filename });
   document.body.append(link);
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return 'downloaded';
 }
 
 export function formatDate(value) {
