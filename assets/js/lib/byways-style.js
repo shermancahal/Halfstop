@@ -736,7 +736,7 @@ function labelLayers() {
  * publishes.
  */
 const RAW_REF = ['coalesce', ['get', 'ref'], ''];
-const REF = ['let', 'raw', RAW_REF, 'cut', ['index-of', ' ', RAW_REF],
+const PREFIXLESS = ['let', 'raw', RAW_REF, 'cut', ['index-of', ' ', RAW_REF],
   ['case',
     ['all',
       ['>', ['var', 'cut'], 0],
@@ -744,6 +744,42 @@ const REF = ['let', 'raw', RAW_REF, 'cut', ['index-of', ' ', RAW_REF],
       ['>', ['length', ['var', 'raw']], ['+', ['var', 'cut'], 1]]],
     ['slice', ['var', 'raw'], ['+', ['var', 'cut'], 1]],
     ['var', 'raw']],
+];
+
+/*
+ * The designation that rides on a banner, not in the shield.
+ *
+ * "US 40 Scenic" loses its US to the rule above and keeps the Scenic, so the
+ * shield read "40 Scenic". On the road that word is a separate plate bolted
+ * above the marker; the marker itself says 40. Business, Alternate, Bypass,
+ * Truck and Spur all work the same way, which is why this is a list rather
+ * than a special case for one road in Maryland.
+ *
+ * Only a known designation is cut. "Old 61" keeps its Old - the word carries
+ * the route's identity there rather than qualifying it, and a blanket rule
+ * that dropped everything after a space would have eaten it.
+ */
+const DESIGNATIONS = ['Scenic', 'Business', 'Alternate', 'Alt', 'Bypass', 'Byp',
+  'Truck', 'Spur', 'Loop', 'Connector', 'Conn', 'Bus'];
+/*
+ * Tested against the end of the string, not the tail after the first space.
+ *
+ * The first attempt cut at the first gap, which works for "40 Scenic" and
+ * fails for "Old 61 Scenic" - there the tail is "61 Scenic", not a designation,
+ * so nothing was stripped. Checking each designation against the ending gets
+ * both, and leaves "80 East" alone because a direction is not a designation.
+ *
+ * A stem shorter than the word being tested slices from the end rather than
+ * underflowing, which cannot match a string beginning with a space, so short
+ * refs fall through untouched.
+ */
+const REF = ['let', 'stem', PREFIXLESS,
+  ['case',
+    ...DESIGNATIONS.flatMap((word) => [
+      ['==', ['slice', ['var', 'stem'], ['-', ['length', ['var', 'stem']], word.length + 1]], ` ${word}`],
+      ['slice', ['var', 'stem'], 0, ['-', ['length', ['var', 'stem']], word.length + 1]],
+    ]),
+    ['var', 'stem']],
 ];
 const REF_CUT = ['index-of', '-', REF];
 const IS_DUPLEX = ['all',

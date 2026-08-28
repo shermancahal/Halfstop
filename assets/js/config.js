@@ -1353,9 +1353,12 @@ export const OVERLAYS = [
      * The name rides along the line, which is the option asked for over a key.
      *
      * Tapping the raster reported Nada Tunnel Rd - the basemap road underneath,
-     * because a picture has nothing under it to hit. RT_DESCR is the label for
-     * now; the field list ran past the probe's match cap, so a probe reads real
-     * records to see whether something better carries the byway's own name.
+     * because a picture has nothing under it to hit.
+     *
+     * The label is ROAD, which is the byway's own name: Cumberland Cultural
+     * Heritage Highway, Great River Road, Cordell Hull. RT_DESCR was the first
+     * guess and it holds a road description - NADA TUNNEL RD+FORESTRY RD -
+     * which is the name of the pavement, not of the byway running over it.
      */
     legend: [{ color: '#8D6E63', label: 'Route: Scenic byways' }],
     id: 'ky-byways',
@@ -1365,12 +1368,12 @@ export const OVERLAYS = [
     query: {
       url: 'https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Scenic_Byways_WGS84WM/MapServer/0/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
-        + '&spatialRel=esriSpatialRelIntersects&outFields=RT_DESCR%2CRT_PREFIX%2CRT_NUMBER%2CMILES%2CGOV_LEVEL%2CCNTY_NAME%2COBJECTID&returnGeometry=true'
+        + '&spatialRel=esriSpatialRelIntersects&outFields=ROAD%2CDESC_OF_ROUTE%2CRT_DESCR%2CMILES%2CCNTY_NAME%2COBJECTID&returnGeometry=true'
         + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=400&f=geojson',
       minzoom: 7,
       road: true,
       color: '#8D6E63',
-      label: 'RT_DESCR',
+      label: 'ROAD',
     },
     opacity: 0.55,
     enabled: false,

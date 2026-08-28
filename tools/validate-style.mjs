@@ -131,6 +131,20 @@ const REFS = [
   ['Loop 1', 'Loop 1', 'a road named across two words keeps both — that is a name, not a system'],
   ['Old 61', 'Old 61', 'which is why the rule stops at two characters and not three'],
   ['SR', 'SR', 'a prefix with nothing after it is all there is, so it stays'],
+  /*
+   * The banner designations. On the road these are a separate plate above the
+   * marker and the marker itself carries only the number, so the shield drops
+   * them - and "Old 61" is here to hold the line between a designation that
+   * qualifies a route and a word that is part of its name.
+   */
+  ['US 40 Scenic', '40', 'the scenic designation rides on a banner, not in the shield'],
+  ['US 68 Business', '68', 'and so does business'],
+  ['US 50 Alternate', '50', 'and alternate'],
+  ['SR 26 Bypass', '26', 'and bypass'],
+  ['US 61 Truck', '61', 'and truck'],
+  ['Old 61 Scenic', 'Old 61', 'the suffix goes and the Old stays, because it is part of the name'],
+  ['US 40 Spur', '40', 'and spur'],
+  ['KY 80 East', '80 East', 'the prefix goes as always; the direction stays, not being a designation'],
   ['', '', 'and nothing is nothing'],
 ];
 for (const [ref, want, why] of REFS) {

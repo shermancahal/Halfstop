@@ -4779,6 +4779,24 @@ function addQueryOverlay(overlay, opacity) {
    * in the outline below and emptied the whole overlay - the second time an
    * exception in this function has done that.
    */
+  /*
+   * Each part added on its own, because a throw here used to cost all of them.
+   *
+   * Five layers go on one source in sequence. Three separate faults today - an
+   * unfiltered circle, a casing width the spec rejects, a const declared below
+   * its use - each threw part-way through and left the overlay half built or
+   * empty, with nothing on screen and nothing in the log to say which. The
+   * layer that fails is the layer that is missing now, and it says so.
+   */
+  const addPart = (what, spec, beforeId) => {
+    if (state.map.getLayer(spec.id)) return;
+    try {
+      state.map.addLayer(spec, beforeId);
+    } catch (error) {
+      console.warn(`[overlay ${overlay.id}] the ${what} did not draw:`, error?.message || error);
+    }
+  };
+
   const by = overlay.query.fillBy;
   const tint = by
     ? ['match', ['coalesce', ['get', by.field], ''],
@@ -4796,7 +4814,7 @@ function addQueryOverlay(overlay, opacity) {
   if (!state.map.getLayer(fill)) {
     const [, amount] = opacityPaint('fill', opacity);
     const hatch = tint ? null : hatchPattern(colour);
-    state.map.addLayer({
+    addPart('fill', {
       id: fill,
       type: 'fill',
       source: fill,
@@ -4837,7 +4855,7 @@ function addQueryOverlay(overlay, opacity) {
 
   if (road && !state.map.getLayer(casing)) {
     const [, amount] = opacityPaint('line', opacity);
-    state.map.addLayer({
+    addPart('road casing', {
       id: casing,
       type: 'line',
       source: fill,
@@ -4853,7 +4871,7 @@ function addQueryOverlay(overlay, opacity) {
 
   if (!state.map.getLayer(line)) {
     const [, amount] = opacityPaint('line', opacity);
-    state.map.addLayer({
+    addPart('outline', {
       id: line,
       type: 'line',
       source: fill,
@@ -4895,7 +4913,7 @@ function addQueryOverlay(overlay, opacity) {
     const icon = overlay.query.icon;
     if (icon) {
       registerNPSImages(state.map);
-      state.map.addLayer({
+      addPart('site pin', {
         id: dot,
         type: 'symbol',
         source: fill,
@@ -4909,7 +4927,7 @@ function addQueryOverlay(overlay, opacity) {
         paint: { 'icon-opacity': amount },
       }, firstDataLayerId());
     } else {
-      state.map.addLayer({
+      addPart('dot', {
         id: dot,
         type: 'circle',
         source: fill,
@@ -4940,7 +4958,7 @@ function addQueryOverlay(overlay, opacity) {
    */
   if (overlay.query.label && !state.map.getLayer(label)) {
     const [, amount] = opacityPaint('line', opacity);
-    state.map.addLayer({
+    addPart('name', {
       id: label,
       type: 'symbol',
       source: fill,
