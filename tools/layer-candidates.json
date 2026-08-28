@@ -474,5 +474,26 @@
     "expect": "data",
     "find": "<Name>[^<]*(?:[Tt]ree|[Cc]anopy|TCC|tcc)[^<]*</Name>",
     "url": "https://www.mrlc.gov/geoserver/mrlc_display/wms?service=WMS&version=1.3.0&request=GetCapabilities"
+  },
+  {
+    "id": "faa:uasfm",
+    "note": "The UAS Facility Map grid - the altitudes LAANC authorisations are granted against, which is the practical question a drone asks: may I fly here, and how high. Searched rather than guessed at a hostname, because the last endpoint guessed at in this file answered 499 Token Required.",
+    "expect": "data",
+    "find": "\"(?:title|url|type)\"\\s*:\\s*\"[^\"]{0,130}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=12&sortField=numViews&sortOrder=desc&q=%28%22UAS%20Facility%20Map%22%20OR%20UASFM%29%20AND%20%28type%3A%22Feature%20Service%22%20OR%20type%3A%22Map%20Service%22%29"
+  },
+  {
+    "id": "faa:restrictions",
+    "note": "National security UAS flight restrictions - the places where the answer is no regardless of altitude. A grid that says 400 feet is misleading over a prohibited area.",
+    "expect": "data",
+    "find": "\"(?:title|url|type)\"\\s*:\\s*\"[^\"]{0,130}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=12&sortField=numViews&sortOrder=desc&q=%28%22UAS%20Flight%20Restrictions%22%20OR%20%22national%20security%20UAS%22%29%20AND%20%28type%3A%22Feature%20Service%22%20OR%20type%3A%22Map%20Service%22%29"
+  },
+  {
+    "id": "faa:airspace",
+    "note": "Class airspace, so the grid has context. A ceiling means little without knowing whether the ground under it is class B, C, D or open.",
+    "expect": "data",
+    "find": "\"(?:title|url|type)\"\\s*:\\s*\"[^\"]{0,130}\"",
+    "url": "https://www.arcgis.com/sharing/rest/search?f=json&num=12&sortField=numViews&sortOrder=desc&q=FAA%20AND%20%28airspace%20OR%20%22class%20airspace%22%29%20AND%20%28type%3A%22Feature%20Service%22%20OR%20type%3A%22Map%20Service%22%29"
   }
 ]
