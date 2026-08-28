@@ -534,22 +534,22 @@
   {
     "id": "link:faa-dronezone",
     "expect": "page",
-    "note": "FAA DroneZone, where an authorisation LAANC cannot grant instantly is applied for. Checked as a page rather than as data: a link is navigated to, so no CORS header is involved, and demanding one would fail every link that works.",
     "find": "(?i)<title[^>]*>([^<]{3,120})</title>",
+    "note": "FAA DroneZone, where an authorisation LAANC cannot grant instantly is applied for. Re-asked: the first run used an inline (?i), which JavaScript does not support, and the checker returned the compile error as though it were a match - so the page was certified by a check that never ran.",
     "url": "https://faadronezone-access.faa.gov/"
   },
   {
     "id": "link:faa-laanc",
     "expect": "page",
-    "note": "The FAA's own list of approved LAANC suppliers. Linking to the list rather than to one company: the list is the FAA's, it stays current without us, and it does not put this app in the position of recommending a vendor.",
     "find": "(?i)<title[^>]*>([^<]{3,120})</title>",
+    "note": "The FAA's own list of approved LAANC suppliers. Linking to the list rather than to one company: it stays current without us and does not put this app in the position of recommending a vendor.",
     "url": "https://www.faa.gov/uas/programs_partnerships/data_exchange"
   },
   {
     "id": "link:faa-b4ufly",
     "expect": "page",
-    "note": "B4UFLY, which is the app most drone pilots already have.",
     "find": "(?i)<title[^>]*>([^<]{3,120})</title>",
+    "note": "B4UFLY, which is the app most drone pilots already have.",
     "url": "https://www.faa.gov/uas/getting_started/b4ufly"
   },
   {
@@ -561,9 +561,9 @@
   },
   {
     "id": "tfr:faa-list",
-    "expect": "page",
-    "note": "The FAA's TFR site, to see whether the list is machine-readable at all. TFRs are the one airspace fact that changes by the hour - a stadium, a fire, a VIP movement - and a drone map without them is confident about the wrong thing.",
-    "find": "(?i)(NOTAM|TFR|Temporary Flight Restriction)",
+    "expect": "data",
+    "find": "\"(?:notam_id|type|facility|state|description|creation|Notam)\"\\s*:\\s*\"?[^\",]{0,50}",
+    "note": "The FAA's TFR list, which answered 31kB of JSON last run behind a find pattern that could not compile. This reads the shape: what a TFR row is called and whether it carries anything a map can place. CORS is the open question - it reported none, and without it the browser cannot read this however good the data is.",
     "url": "https://tfr.faa.gov/tfrapi/exportTfrList"
   },
   {
@@ -574,10 +574,17 @@
     "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services?f=pjson"
   },
   {
-    "id": "tfr:aeronav",
+    "id": "tfr:faa-org",
     "expect": "data",
-    "note": "A second candidate host for the same thing. The FAA runs more than one ArcGIS org and the TFR layer is not necessarily on the one that carries the UAS grid.",
-    "find": "\"name\"\\s*:\\s*\"[^\"]{0,60}\"",
-    "url": "https://services.arcgis.com/ue9rwulIoeLEI9bj/arcgis/rest/services?f=pjson"
+    "find": "\"name\"\\s*:\\s*\"[^\"]*(?:[Tt][Ff][Rr]|[Rr]estriction|[Ss]tadium|[Ss]pecial_?[Uu]se|SUA|[Nn]otam)[^\"]*\"",
+    "note": "The FAA's own ArcGIS org, filtered to names that could be a temporary restriction. The unfiltered list is alphabetical and the printer stops at forty, which got as far as ILSSystemNew - so anything under T was never in the answer. The same mistake the canopy search made an hour ago.",
+    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services?f=pjson"
+  },
+  {
+    "id": "faa:adhp-fields",
+    "expect": "data",
+    "find": "\"(?:name|alias)\"\\s*:\\s*\"[^\"]{0,40}\"",
+    "note": "The airport/heliport layer's columns, to answer whether the FAA publishes a contact for a facility at all. Asked rather than assumed: the answer decides whether a contact row is possible, and if it is not, saying so is the deliverable.",
+    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/ADHP/FeatureServer/0?f=pjson"
   }
 ]

@@ -208,12 +208,35 @@ function emptyFeatures(body) {
   return /"features"\s*:\s*\[\s*\]/.test(text);
 }
 
+/*
+ * A pattern that does not compile is a check that did not run.
+ *
+ * This used to return the error message as though it were a match, and a
+ * non-empty array reads as "the body said what it should" everywhere it is
+ * consulted. Three probes passed that way in one run - JavaScript has no
+ * inline `(?i)`, so every pattern written with one silently certified its
+ * page. A broken pattern now fails loudly instead, which is the only useful
+ * thing a broken check can do.
+ *
+ * Leading (?i) is also honoured rather than rejected, since it is the form
+ * everyone writes and translating it is one line.
+ */
 function findIn(body, pattern) {
+  const inline = String(pattern).match(/^\(\?([ims]+)\)([\s\S]*)$/);
+  const flags = `g${inline ? inline[1] : ''}`;
+  const source = inline ? inline[2] : String(pattern);
+  const matches = String(body).matchAll(new RegExp(source, flags));
+  return [...new Set([...matches].map((match) => (match[1] ?? match[0]).trim()))].slice(0, 40);
+}
+
+/** Whether a candidate's find pattern compiles at all. */
+function findFails(pattern) {
+  if (!pattern) return null;
   try {
-    const matches = String(body).matchAll(new RegExp(pattern, 'g'));
-    return [...new Set([...matches].map((match) => (match[1] ?? match[0]).trim()))].slice(0, 40);
+    findIn('', pattern);
+    return null;
   } catch (error) {
-    return [`bad find pattern: ${error.message}`];
+    return error.message;
   }
 }
 
@@ -374,7 +397,8 @@ async function probe(entry) {
          * has to say.
          */
         : entry.expect === 'page'
-          ? (bytes < EMPTY_BYTES ? 'blank'
+          ? (findFails(entry.find) ? `bad find pattern: ${findFails(entry.find)}`
+            : bytes < EMPTY_BYTES ? 'blank'
             : (entry.find && !findIn(decoded, entry.find).length) ? 'page did not say it' : 'ok')
         : entry.expect === 'data'
           ? (!response.headers.get('access-control-allow-origin') ? 'no CORS'
@@ -408,7 +432,9 @@ async function probe(entry) {
       text,
       size,
       cors: response.headers.get('access-control-allow-origin') || '',
-      names: isImage ? [] : (entry.find ? findIn(decoded, entry.find) : layerNames(decoded)),
+      names: isImage ? []
+        : entry.find ? (findFails(entry.find) ? [`bad find pattern: ${findFails(entry.find)}`] : findIn(decoded, entry.find))
+        : layerNames(decoded),
     };
   } catch (error) {
     return { ...entry, url, verdict: 'unreachable', text: String(error.message || error) };
