@@ -12,6 +12,9 @@
  * deploy. A cache-first service worker would make that state permanent instead
  * of ten minutes long. So:
  *
+ *   .pmtiles archives    not touched. Read by byte range, and caching those
+ *                         either raises on every tile or silently stores the
+ *                         whole archive. See the note beside the rule.
  *   HTML and build.json   network first, always. The cache is a fallback for
  *                         when there is no network, never a shortcut when
  *                         there is one.
@@ -184,6 +187,36 @@ self.addEventListener('fetch', (event) => {
   if (!url.href.startsWith(self.registration.scope)) return;
 
   const path = url.pathname;
+
+  /*
+   * The map archive, which this worker must not touch at all.
+   *
+   * A .pmtiles file is read by byte range - a 16kB header, then a few hundred
+   * bytes per tile - and the catch-all below would try to cache each of those
+   * slices. What actually happens then depends on the host, and neither answer
+   * is one to want:
+   *
+   *   a host that honours Range   `cache.put` rejects a 206, so every single
+   *                               tile read raises an unhandled rejection
+   *                               inside the worker. Reads still work.
+   *   a host that ignores it      the whole archive comes back 200, and the
+   *                               whole archive is written into the app cache
+   *                               - hundreds of megabytes, silently, to be
+   *                               thrown away again on the next build.
+   *
+   * The second is the one worth preventing, and it is the one that leaves no
+   * trace until a phone is full. (An earlier version of this note claimed a
+   * cached slice would be returned for a request about a different offset,
+   * because `cache.match` ignores Range. It cannot: the put that would have
+   * stored that slice is the one that rejects. Removing this line and watching
+   * the tests still pass is what corrected it.)
+   *
+   * The browser's own HTTP cache handles ranges properly and needs no help.
+   * Offline is unaffected: a downloaded region is served from the tile store
+   * in IndexedDB before the archive is reached for at all - see
+   * assets/js/lib/pmtiles.js.
+   */
+  if (path.endsWith('.pmtiles')) return;
 
   // build.json is how the running page discovers it is out of date. Serving it
   // from a cache would make the staleness check report the staleness it caused.

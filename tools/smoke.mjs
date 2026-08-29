@@ -31,7 +31,9 @@ import { createServer } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
+import { mkdir } from 'node:fs/promises';
 import { SHIELD_DESIGNS } from '../assets/js/lib/route-shields.js';
+import { buildArchive } from '../test/helpers/pmtiles-writer.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FIXTURE = path.join(ROOT, 'test', 'fixtures', 'smoke.gpx');
@@ -48,6 +50,21 @@ const MIME = {
   '.png': 'image/png',
   '.txt': 'text/plain; charset=utf-8',
 };
+
+/*
+ * A few hundred tiles over east Tennessee, deep enough to need a leaf
+ * directory. Built here rather than fetched, so this needs no network.
+ */
+const SAMPLE_TILES = new Map();
+for (let z = 6; z <= 12; z += 1) {
+  const scale = 2 ** (z - 6);
+  for (let x = 17 * scale; x < 17 * scale + Math.min(4, scale * 2); x += 1) {
+    for (let y = 25 * scale; y < 25 * scale + Math.min(4, scale * 2); y += 1) {
+      SAMPLE_TILES.set(`${z}/${x}/${y}`, new TextEncoder().encode(`tile ${z}/${x}/${y}`.padEnd(48, ' ')));
+    }
+  }
+}
+const SAMPLE_ARCHIVE = buildArchive(SAMPLE_TILES, { leaves: true });
 
 /**
  * Build dist and serve it under /Map/, the subpath GitHub Pages uses, so the
@@ -73,6 +90,20 @@ async function serveFreshBuild() {
   await writeFile(path.join(dist, 'assets', 'js', 'token.js'),
     "window.ABMAP_MAPBOX_TOKEN = 'pk.smoke.notarealtoken';\n");
 
+  /*
+   * A small archive on the site, where a real one would be.
+   *
+   * Placed after the build rather than in the source tree, exactly as the
+   * deploy does it, so it is not in the service worker's precache list - a
+   * ninety-megabyte precache entry would be its own disaster. What it is here
+   * to catch is the worker touching it at all: the Cache API rejects a 206 and
+   * ignores Range on lookup, so an intercepted archive fails on every read or,
+   * worse, returns the header where a tile was asked for.
+   */
+  await mkdir(path.join(dist, 'tiles'), { recursive: true });
+  await writeFile(path.join(dist, 'tiles', 'byways.pmtiles'), Buffer.from(SAMPLE_ARCHIVE));
+  await writeFile(path.join(dist, 'tiles', 'byways-no-range.pmtiles'), Buffer.from(SAMPLE_ARCHIVE));
+
   const server = createServer(async (request, response) => {
     let name = decodeURIComponent(new URL(request.url, 'http://x').pathname);
     name = name.startsWith('/Map/') ? name.slice(5) : name.replace(/^\//, '');
@@ -81,8 +112,38 @@ async function serveFreshBuild() {
     if (!file.startsWith(dist)) return response.writeHead(403).end();
     try {
       const body = await readFile(file);
+      const type = MIME[path.extname(file).toLowerCase()] || 'application/octet-stream';
+      /*
+       * Range requests, because one file here is read by byte range and
+       * nothing else in this suite would notice if that stopped working.
+       *
+       * A server that answers 200 with the whole file for every request is
+       * what most static fixtures are, and under one the archive reader still
+       * works - it cuts the slice itself. Which means the service worker
+       * mangling ranges, the thing the check below exists for, would be
+       * invisible. So this behaves like a real host.
+       */
+      /*
+       * One path is served whole whatever is asked of it, on purpose. Plenty
+       * of static hosts behave that way, the archive reader copes by slicing
+       * client-side, and it is the case where a worker caching the response
+       * would write the entire archive into the app cache.
+       */
+      const asked = name.includes('no-range') ? null : /bytes=(\d+)-(\d*)/.exec(request.headers.range || '');
+      if (asked) {
+        const start = Number(asked[1]);
+        const end = Math.min(asked[2] ? Number(asked[2]) : body.length - 1, body.length - 1);
+        const slice = body.subarray(start, end + 1);
+        return response.writeHead(206, {
+          'Content-Type': type,
+          'Content-Range': `bytes ${start}-${end}/${body.length}`,
+          'Accept-Ranges': 'bytes',
+          'Cache-Control': 'no-store',
+        }).end(slice);
+      }
       response.writeHead(200, {
-        'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream',
+        'Content-Type': type,
+        'Accept-Ranges': 'bytes',
         'Cache-Control': 'no-store',
       }).end(body);
     } catch {
@@ -2937,6 +2998,103 @@ check('while a wide header keeps the title and the menu does not repeat it',
  * offline pack is loaded.
  */
 if (!external) {
+/*
+ * The archive is read through the worker without being mangled by it.
+ *
+ * This reads a real tile out of a real archive over HTTP, from inside a page
+ * that has an activated service worker - which is the whole configuration the
+ * bug lives in. The worker used to fall through to its cache-first catch-all
+ * for anything it did not recognise, and for a file read by byte range that is
+ * wrong twice: `cache.put` rejects a 206, and `cache.match` ignores Range, so
+ * a cached slice comes back for a request about a different offset. The second
+ * failure is the dangerous one - it returns bytes rather than an error, and
+ * the reader decodes the header where it expected a tile.
+ *
+ * Reading two different tiles is what makes that visible. One tile passes even
+ * when every range answer is the same sixteen kilobytes.
+ */
+{
+  console.log('\nThe map archive is read by range, not through the cache');
+  /*
+   * Its own context, for two reasons. The main one blocks service workers on
+   * purpose, and a worker in control is half of what is under test here. And
+   * the third-party stubbing is load-bearing rather than tidiness: the map
+   * library is fetched from a CDN, a failed load rejects inside the viewer's
+   * init, and the worker is registered from the end of that init - so without
+   * it this reports "no worker" and points at the wrong thing entirely.
+   */
+  const archiveContext = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await archiveContext.route('**/*', (route) => {
+    const target = route.request().url();
+    if (target.startsWith(new URL(URL_UNDER_TEST).origin)) return route.continue();
+    if (route.request().resourceType() === 'image') {
+      return route.fulfill({ status: 200, contentType: 'image/png', body: PIXEL });
+    }
+    if (/\.css($|\?)/.test(target)) return route.fulfill({ status: 200, contentType: 'text/css', body: '' });
+    return route.fulfill({ status: 200, contentType: 'application/javascript', body: GL });
+  });
+  const archivePage = await archiveContext.newPage();
+  await archivePage.addInitScript(GL);
+  await archivePage.goto(MAP_URL, { waitUntil: 'load' });
+  for (let i = 0; i < 60; i += 1) {
+    const state = await archivePage.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.active?.state || 'none');
+    if (state === 'activated') break;
+    await archivePage.waitForTimeout(100);
+  }
+  check('a worker is in control', await archivePage.evaluate(
+    async () => (await navigator.serviceWorker.getRegistration())?.active?.state || 'none',
+  ), 'activated');
+
+  const read = await archivePage.evaluate(async () => {
+    const { PMTilesArchive } = await import('./assets/js/lib/pmtiles.js');
+    const archive = new PMTilesArchive('./tiles/byways.pmtiles');
+    const decode = async (z, x, y) => {
+      const bytes = await archive.tile(z, x, y);
+      return bytes ? new TextDecoder().decode(bytes).trim() : null;
+    };
+    try {
+      return {
+        header: (await archive.header()).maxZoom,
+        first: await decode(12, 1088, 1600),
+        second: await decode(12, 1089, 1601),
+        absent: await decode(12, 1200, 1600),
+      };
+    } catch (error) {
+      return { error: error.message };
+    }
+  });
+  check('the header reads', read.header, 12);
+  check('a tile reads', read.first, 'tile 12/1088/1600');
+  check('and a different tile is a different tile', read.second, 'tile 12/1089/1601');
+  check('while ground the archive does not cover is absent', read.absent, null);
+  if (read.error) console.log(`        ${read.error}`);
+
+  /*
+   * And from a host that ignores Range, which is the case that has a cost.
+   *
+   * Under one of those the whole archive comes back 200 to every request, and
+   * a worker that caches what it serves writes the entire file into the app
+   * cache - silently, and again on the next build. Reading works either way,
+   * so the read is not the check: what is in the cache afterwards is.
+   */
+  const whole = await archivePage.evaluate(async () => {
+    const { PMTilesArchive } = await import('./assets/js/lib/pmtiles.js');
+    const archive = new PMTilesArchive('./tiles/byways-no-range.pmtiles');
+    const bytes = await archive.tile(12, 1088, 1600);
+    const stored = await Promise.all((await caches.keys()).map(async (name) => (
+      await (await caches.open(name)).match('./tiles/byways-no-range.pmtiles') ? name : null
+    )));
+    return {
+      tile: bytes ? new TextDecoder().decode(bytes).trim() : null,
+      cachedIn: stored.filter(Boolean),
+    };
+  });
+  check('a host that ignores Range still yields the tile', whole.tile, 'tile 12/1088/1600');
+  check('and the archive was not written into the app cache', whole.cachedIn.length, 0);
+  if (whole.cachedIn.length) console.log(`        found in ${whole.cachedIn.join(', ')}`);
+  await archiveContext.close();
+}
+
   console.log('\nThe app comes back with no network');
   const offlineContext = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   /*
