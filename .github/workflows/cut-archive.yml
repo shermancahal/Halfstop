@@ -1,0 +1,83 @@
+name: Cut a map archive
+
+# Hands back a .pmtiles file to put on a bucket.
+#
+# The deploy workflow can cut one and publish it with the site, which is the
+# short way and is capped by the 1 GB Pages site. Past that the archive belongs
+# on R2 or S3 — and getting one to upload otherwise means installing Go tooling
+# and reading a hundred gigabytes of planet by byte range from a laptop.
+#
+# So this does the cutting here and leaves the result as a run artifact to
+# download. It publishes nothing and touches no deployment.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bbox:
+        description: 'minlon,minlat,maxlon,maxlat — e.g. -89.6,34.9,-77.7,40.7 for the Appalachians'
+        required: true
+        type: string
+      maxzoom:
+        description: 'How deep. Each level is four times the one below; 13 shows every road this map draws, 15 is for house numbers.'
+        required: false
+        default: '13'
+        type: string
+      planet:
+        description: 'Which planet build to cut from. Left empty, the most recent one that answers is used.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  cut:
+    name: Cut it
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cut the archive
+        id: cut
+        env:
+          BBOX: ${{ inputs.bbox }}
+          ZOOM: ${{ inputs.maxzoom }}
+          PLANET: ${{ inputs.planet }}
+          OUT: byways.pmtiles
+          # An artifact is not a Pages site, so the ceiling here is what
+          # Actions will store rather than what Pages will serve.
+          LIMIT: '4000000000'
+        run: sh tools/cut-archive.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: byways-pmtiles
+          path: byways.pmtiles
+          # Long enough to notice the run and download it, short enough that a
+          # few hundred megabytes are not kept around for a month.
+          retention-days: 7
+          compression-level: 0
+
+      - name: What to do with it
+        env:
+          BYTES: ${{ steps.cut.outputs.bytes }}
+          DEPTH: ${{ steps.cut.outputs.maxzoom }}
+        run: |
+          {
+            echo "### byways.pmtiles"
+            echo ""
+            echo "\`${{ inputs.bbox }}\` to zoom ${DEPTH} — $((BYTES / 1024 / 1024)) MB, cut from \`${{ steps.cut.outputs.planet }}\`."
+            echo ""
+            echo "Download it from **Artifacts** at the bottom of this run, then:"
+            echo ""
+            echo "1. Upload it to your bucket."
+            echo "2. \`npm run check:archive -- https://<bucket>/byways.pmtiles\` — it asks the host"
+            echo "   whether it honours Range and sends CORS, and reads a real tile back."
+            echo "3. Set the repository variables \`PROTOMAPS_ARCHIVE\` to that URL and"
+            echo "   \`PROTOMAPS_MAXZOOM\` to \`${DEPTH}\`."
+            echo ""
+            echo "\`PROTOMAPS_ARCHIVE\` wins over the extract the deploy cuts, so setting it"
+            echo "also stops the site carrying its own copy."
+            echo ""
+            echo "See \`docs/protomaps.md\` for the bucket and CORS settings."
+          } >> "$GITHUB_STEP_SUMMARY"

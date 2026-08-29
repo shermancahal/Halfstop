@@ -167,71 +167,18 @@ jobs:
           BBOX: ${{ steps.plan.outputs.bbox }}
           ZOOM: ${{ steps.plan.outputs.zoom }}
           PLANET: ${{ vars.PROTOMAPS_PLANET_URL }}
-          CACHED: ${{ steps.archive-cache.outputs.cache-hit }}
+          OUT: tiles/byways.pmtiles
+          # A published Pages site is capped at 1 GB and the rest of the site
+          # needs room. Past this the archive belongs on a bucket, which is
+          # what cut-archive.yml is for.
+          LIMIT: '800000000'
         run: |
           set -euo pipefail
-
-          if [ "$CACHED" = "true" ] && [ -s tiles/byways.pmtiles ]; then
-            echo "Reusing the cached extract."
-          else
-            mkdir -p tiles
-
-            # The release asset is found by asking which assets exist, not by
-            # composing a filename. Their naming carries the version, so
-            # /latest/download/<name> cannot be written down in advance, and a
-            # guessed name fails as a 404 that reads like the tool being gone.
-            ASSET=$(curl -fsSL https://api.github.com/repos/protomaps/go-pmtiles/releases/latest \
-              | jq -r '.assets[] | select(.name | test("[Ll]inux_x86_64\\.tar\\.gz$")) | .browser_download_url' \
-              | head -1)
-            if [ -z "$ASSET" ]; then
-              echo "::error::No Linux x86_64 asset in the latest go-pmtiles release. Assets available:"
-              curl -fsSL https://api.github.com/repos/protomaps/go-pmtiles/releases/latest | jq -r '.assets[].name'
-              exit 1
-            fi
-            echo "pmtiles: $ASSET"
-            curl -fsSL "$ASSET" | tar xz pmtiles
-
-            # Which daily planet build to cut from, discovered rather than
-            # guessed: today's may not have finished, and the last date I could
-            # have written into this file is already wrong.
-            if [ -z "$PLANET" ]; then
-              for back in $(seq 0 14); do
-                DAY=$(date -u -d "-${back} day" +%Y%m%d)
-                TRY="https://build.protomaps.com/${DAY}.pmtiles"
-                if curl -fsI --max-time 30 "$TRY" >/dev/null 2>&1; then PLANET="$TRY"; break; fi
-              done
-            fi
-            if [ -z "$PLANET" ]; then
-              echo "::error::No daily build answered under https://build.protomaps.com/ for the last 15 days."
-              echo "::error::Set the PROTOMAPS_PLANET_URL variable to the archive to cut from."
-              exit 1
-            fi
-            echo "planet: $PLANET"
-
-            # Reads the planet by byte range rather than downloading it, which
-            # is the same property that makes the result usable in a browser.
-            ./pmtiles extract "$PLANET" tiles/byways.pmtiles --bbox="$BBOX" --maxzoom="$ZOOM"
-          fi
-
-          BYTES=$(stat -c%s tiles/byways.pmtiles)
-          echo "archive: $((BYTES / 1024 / 1024)) MB"
-          if [ "$BYTES" -gt 800000000 ]; then
-            echo "::error::The extract is $((BYTES / 1024 / 1024)) MB. A published Pages site is capped at 1 GB,"
-            echo "::error::and the rest of the site needs room. Narrow PROTOMAPS_BBOX or lower PROTOMAPS_MAXZOOM,"
-            echo "::error::or host it on a bucket and set PROTOMAPS_ARCHIVE to its URL instead."
-            exit 1
-          fi
-
-          # The depth the file actually has, not the one that was asked for.
-          # Overstating it draws blank ground past the archive's real limit,
-          # and an extract can come back shallower than requested.
-          DEPTH=$(./pmtiles show tiles/byways.pmtiles 2>/dev/null | grep -oiE 'max[ _]?zoom:? *[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
+          sh tools/cut-archive.sh
           echo "url=./tiles/byways.pmtiles" >> "$GITHUB_OUTPUT"
-          echo "maxzoom=${DEPTH:-$ZOOM}" >> "$GITHUB_OUTPUT"
           {
             echo "### Map archive"
-            echo "- Cut from \`$PLANET\`"
-            echo "- \`$BBOX\` to zoom ${DEPTH:-$ZOOM} — $((BYTES / 1024 / 1024)) MB, published at \`tiles/byways.pmtiles\`"
+            echo "- \`${{ steps.plan.outputs.bbox }}\` published at \`tiles/byways.pmtiles\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Say so if the archive was wanted and did not arrive

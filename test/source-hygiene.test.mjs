@@ -169,6 +169,35 @@ test('the published artifact is the built site, not the repository', async () =>
   assert.deepEqual(uploads, ['./dist'], 'Pages must publish ./dist');
 });
 
+test('both workflows cut the map archive with the same script', async () => {
+  /*
+   * Two workflows need a Protomaps extract and they need it identically: the
+   * deploy publishes one with the site, and cut-archive.yml hands one back to
+   * put on a bucket. Forty lines of shell copied between them is forty lines
+   * to fix twice, and the half that gets missed is whichever one is not being
+   * looked at when the next thing about it turns out to be wrong.
+   *
+   * Three values in that script are discovered at run time rather than written
+   * down — the pmtiles release asset, the planet build, the archive's real
+   * depth — and every one of them has already been guessed wrong once. That is
+   * exactly the knowledge that must not exist in two places.
+   */
+  const dir = '.github/workflows';
+  const cutting = [];
+  const calling = [];
+
+  for (const name of await readdir(dir)) {
+    if (!/\.ya?ml$/.test(name)) continue;
+    const text = await readFile(path.join(dir, name), 'utf8');
+    if (/pmtiles extract|go-pmtiles\/releases/.test(text)) cutting.push(name);
+    if (/tools\/cut-archive\.sh/.test(text)) calling.push(name);
+  }
+
+  assert.deepEqual(cutting, [],
+    `these cut an archive inline instead of calling tools/cut-archive.sh: ${cutting.join(', ')}`);
+  assert.deepEqual(calling.sort(), ['cut-archive.yml', 'deploy-pages.yml']);
+});
+
 test('no reverse-geocode URL combines a limit with several types', async () => {
   /*
    * Mapbox answers that combination with a 422 and this message:
