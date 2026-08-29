@@ -1,0 +1,52 @@
+name: Check a map archive
+
+# Asks a hosted .pmtiles file whether a browser can actually read it.
+#
+# Three things have to be true of whatever serves one, and a host that fails
+# any of them produces a blank map rather than an error: Range requests, CORS,
+# and gzip rather than brotli or zstd. None of that is visible from looking at
+# the file, and all three are cheap to ask about.
+#
+# The same check runs locally as `npm run check:archive -- <url>`. It is here
+# so that setting up a bucket needs nothing installed: paste the URL, read the
+# answer.
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'The .pmtiles URL — e.g. https://pub-xxxx.r2.dev/byways.pmtiles'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Ask the host
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # No install: the checker is written against the reader in this repo and
+      # that has no dependencies, which is the point of having written it out.
+      - name: Check it
+        id: check
+        run: |
+          set -o pipefail
+          node tools/check-archive.mjs "${{ inputs.url }}" 2>&1 | tee report.txt
+
+      - name: Put the answer in the summary
+        if: always()
+        run: |
+          {
+            echo "### ${{ inputs.url }}"
+            echo ""
+            echo '```'
+            cat report.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
