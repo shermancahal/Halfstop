@@ -122,9 +122,35 @@ jobs:
           REBUILD: ${{ vars.PROTOMAPS_REBUILD }}
         run: |
           set -euo pipefail
-          # A configured URL wins, and no bbox means nothing to cut.
-          if [ -n "$CONFIGURED" ] || [ -z "$BBOX" ]; then
+
+          # Says which of the three states it is in, every time.
+          #
+          # This step used to decide in silence, and the report that came back
+          # was "Protomaps added to GitHub but I don't see the change" - which
+          # is unanswerable from a run where the only trace is a skipped step.
+          # The three reasons are different problems with different fixes and
+          # the log should name the one that applies.
+          if [ -n "$CONFIGURED" ]; then
             echo "wanted=" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Map archive"
+              echo "- Not cut here: \`PROTOMAPS_ARCHIVE\` is set, so the site reads it from there."
+              echo "- It points at \`${CONFIGURED}\`."
+              echo "- Clear that variable to have the deploy cut and publish its own."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [ -z "$BBOX" ]; then
+            echo "wanted=" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Map archive"
+              echo "- **None.** Byways Topo will draw from Mapbox — metered, and no offline downloads."
+              echo "- Set the repository *variable* \`PROTOMAPS_BBOX\` to \`minlon,minlat,maxlon,maxlat\`"
+              echo "  and the deploy will cut an extract and publish it with the site."
+              echo "- Settings → Secrets and variables → Actions → **Variables**. Not Secrets:"
+              echo "  a secret is unreadable to the workflow's \`vars\` context, so setting it there"
+              echo "  looks done and changes nothing."
+            } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           ZOOM="${MAXZOOM:-13}"
