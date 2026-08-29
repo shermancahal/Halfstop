@@ -530,3 +530,33 @@ test('byways: a role a schema has no values for draws no arm', () => {
   assert.ok(protomaps.includes('farmland'), 'and cropland is not forest green');
   assert.ok(protomaps.includes('barren'), 'nor is bare rock');
 });
+
+test('byways: the basemap row says which foundation it is actually on', async () => {
+  /*
+   * Byways Topo looks broadly the same on all three of its foundations, which
+   * is the point of the seam and also the problem: from the map you cannot
+   * tell which one is live. Its own description does not help — "OSM rendered
+   * for the outdoors" is true of Mapbox Streets, of our archive and of
+   * CyclOSM, since all three are OpenStreetMap underneath.
+   *
+   * The attribution line does say, honestly, in the corner, to a reader who
+   * knows that "© Mapbox" means the archive is not configured. That is not the
+   * same as telling them.
+   */
+  const { sourceNameFor } = await import('../assets/js/lib/engine.js');
+  const byways = { custom: 'byways' };
+  const mapbox = { custom: 'byways-mapbox' };
+
+  assert.match(sourceNameFor(byways, { archive: 'https://x/y.pmtiles', token: 'pk.x' }), /Protomaps/);
+  assert.match(sourceNameFor(byways, { archive: '', token: 'pk.x' }), /Mapbox/);
+  assert.match(sourceNameFor(byways, { archive: '', token: '' }), /CyclOSM/);
+
+  // The Mapbox twin says Mapbox whatever the archive is set to — it is the
+  // comparison, so it never follows the switch.
+  assert.match(sourceNameFor(mapbox, { archive: 'https://x/y.pmtiles', token: 'pk.x' }), /Mapbox/);
+
+  // And a basemap with one source says nothing, rather than a sentence that
+  // would be on every row in the list.
+  assert.equal(sourceNameFor({ id: 'usgs-topo' }, { archive: 'https://x/y.pmtiles', token: 'pk.x' }), '');
+  assert.equal(sourceNameFor(null), '');
+});

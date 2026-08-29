@@ -15,7 +15,7 @@ import {
 } from './config.js';
 import {
   loadEngine, buildRasterStyle, hasMapboxToken, mapboxToken, overlayParts, overlayIdFromLayer, overlayRows,
-  overlayLinks, styleFor, styleHasGlyphs, engineFor, schemaFor,
+  overlayLinks, styleFor, styleHasGlyphs, engineFor, schemaFor, sourceNameFor,
 } from './lib/engine.js';
 import { loadCatalog, findMap } from './lib/catalog.js';
 import { parseMapFile, linePositions } from './lib/parse.js';
@@ -4683,7 +4683,17 @@ function downloadRow(region) {
  * fold away behind (i) rather than being deleted.
  */
 function layerRow({ entry, selected, control, preview = false }) {
-  const description = entry.description || '';
+  /*
+   * Byways Topo says which foundation it is on.
+   *
+   * Its own description is true of all three - "OSM rendered for the outdoors"
+   * describes Mapbox Streets, our Protomaps archive and CyclOSM equally, since
+   * all three are OpenStreetMap underneath - so it cannot tell you which one
+   * you are looking at, and the difference decides whether the map costs money
+   * and whether it can be downloaded.
+   */
+  const source = sourceNameFor(entry);
+  const description = [entry.description || '', source].filter(Boolean).join(' ');
   const key = Array.isArray(entry.legend) && entry.legend.length ? entry.legend : null;
 
   // A continuous ramp — temperature, wind speed, cloud cover — has no list of

@@ -284,6 +284,29 @@ export function schemaFor(basemap) {
   return basemap?.custom === 'byways' && PROTOMAPS_ARCHIVE ? PROTOMAPS_SCHEMA : MAPBOX_SCHEMA;
 }
 
+/**
+ * Which geometry a basemap is drawing from, right now, in words.
+ *
+ * Byways Topo has three possible foundations and looks broadly the same on all
+ * of them, which is the point of the seam and also the problem: from the map
+ * itself you cannot tell which one is live. The attribution line says so
+ * honestly but says it in the corner, in six point type, to a reader who has
+ * to know that "© Mapbox" means the archive is not configured.
+ *
+ * The two sources are arguments so all three answers can be tested. They are
+ * read from config at import time otherwise, and a module-level constant is
+ * not something a test can vary - which would leave the two branches that do
+ * not happen to be configured untested, and those are the interesting ones.
+ *
+ * @returns {string} Empty for a basemap that has only one source.
+ */
+export function sourceNameFor(basemap, { archive = PROTOMAPS_ARCHIVE, token = MAPBOX_TOKEN } = {}) {
+  if (basemap?.custom !== 'byways' && basemap?.custom !== 'byways-mapbox') return '';
+  if (basemap.custom === 'byways' && archive) return 'Drawing from our own Protomaps archive.';
+  if (token) return 'Drawing from Mapbox — metered, and cannot be taken offline.';
+  return 'Neither source is configured, so this is the CyclOSM raster instead.';
+}
+
 export function styleFor(basemap, overlays = []) {
   /*
    * Byways Topo, drawn from whichever geometry is configured.
