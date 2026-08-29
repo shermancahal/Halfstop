@@ -59,10 +59,53 @@ than an error:
    ground.
 
 Cloudflare R2, Backblaze B2 and S3 all satisfy these with the right bucket
-settings. GitHub Pages does not: a 100 MB per-file limit and a soft 1 GB
-repository limit rule out anything larger than a couple of states.
+settings.
 
-## Setting one up, start to finish
+**So does GitHub Pages**, which is worth knowing because it means an archive
+can be tried with no account and no bill. Measured rather than assumed: a
+request for a slice from the middle of a deployed file comes back `206`, the
+right length, from the right offset, with `Access-Control-Allow-Origin: *`.
+(The probes are `pages:range` and `pages:range-tail` in
+`tools/layer-candidates.json`. Two of them, because a host can answer 206 to
+`bytes=0-N` by truncating the response it was going to send anyway — the second
+asks for a slice that is not the head of the file.)
+
+An earlier version of this document said Pages was ruled out by a 100 MB
+per-file limit. That is a limit on files in *git*, and an archive published
+this way never goes near git — it is cut during the build and added to the
+Pages artifact. The real ceiling is the 1 GB published site.
+
+## The short way: publish it with the site
+
+Before standing up a bucket, it is worth finding out whether you like the map.
+The deploy workflow can cut an extract and publish it alongside the site, and
+then there is nothing external at all.
+
+Try a coverage without committing to it — Actions → **Publish to GitHub Pages**
+→ **Run workflow**, and fill in:
+
+    bbox      -85.0,35.0,-82.0,37.0
+    maxzoom   12
+
+To make it the standing arrangement, set repository **variables** instead:
+`PROTOMAPS_BBOX` and `PROTOMAPS_MAXZOOM`. The extract is cached between
+deploys, keyed on the bbox and the zoom, so only the first one pays for it;
+bump a `PROTOMAPS_REBUILD` variable to force a fresh cut from a newer planet
+build.
+
+The run reports what it cut, from which planet build, and how large it came
+out, in the job summary. It refuses above 800 MB, which leaves room under the
+1 GB site limit for the site.
+
+`PROTOMAPS_ARCHIVE` always wins where it is set. A bucket is a deliberate
+choice and is never replaced by a test extract.
+
+**What this is not.** A published Pages site is capped at 1 GB and every deploy
+re-uploads the whole thing, so this is right for a region and wrong for a
+continent. When the coverage outgrows it, the rest of this document is the
+answer, and switching is one variable.
+
+## Setting one up on a bucket, start to finish
 
 ### 1. Decide the coverage first
 
