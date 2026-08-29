@@ -17,10 +17,33 @@
  *                         there is one.
  *   ?v=-stamped assets    cache first. The URL changes whenever the bytes do,
  *                         so a hit is by definition the right bytes.
+ *   unstamped scripts     network first, cache fallback. See below.
  *   published map data    network first, cache fallback. Small, and a stale
  *                         catalogue disagreeing with the files beside it is
  *                         its own confusing bug.
  *   everything else       cache first, filled from the network on a miss.
+ *
+ * The third rule is the one that had to be learned. Only files a page *names*
+ * get a `?v=` — the stylesheet and the entry script — so every ES module the
+ * entry script imports is requested by its path on disk, unstamped, and used
+ * to fall under "everything else". Which meant that after a deploy, while the
+ * previous worker was still in control:
+ *
+ *     map.html          network first  ->  new
+ *     viewer.js?v=NEW   not in the old cache under that URL  ->  new
+ *     lib/engine.js     cache first, hit in the OLD cache    ->  OLD
+ *
+ * A new entry script importing a name a stale module does not export is a link
+ * error. Nothing in the graph evaluates, nothing is caught, and the page
+ * renders exactly as much as its HTML alone describes: headings, and empty
+ * space under them. That was reported from a phone as "nothing works or
+ * shows", and it is the same class of bug the HTML rule above exists for — one
+ * cached file pinning the bundle at a version that no longer matches.
+ *
+ * So an unstamped script is treated like the HTML that names it. It costs a
+ * conditional request per module while online, which is the price of the
+ * cache never being able to disagree with the page it is serving.
+ * tools/check-upgrade.mjs reproduces the failure and holds this shut.
  *
  * Cross-origin requests are passed straight through, untouched. Basemap tiles
  * and imagery belong to Mapbox, USGS, Esri and NOAA; caching them here would be
@@ -173,6 +196,20 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (/\/data\/.*\.(json|geojson|gpx|kml|kmz)$/.test(path)) {
+    event.respondWith(networkFirst(request));
+    return;
+  }
+
+  /*
+   * Scripts the page did not name, and so could not stamp.
+   *
+   * Every module `viewer.js` imports arrives here, along with build.js and
+   * token.js. None of their URLs change when their contents do, so a cache hit
+   * is not evidence of anything — see the header. Network first, with the
+   * cache still answering when there is no network, which is what keeps the
+   * app working offline.
+   */
+  if (/\.m?js$/.test(path) && !url.searchParams.has('v')) {
     event.respondWith(networkFirst(request));
     return;
   }

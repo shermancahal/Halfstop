@@ -18,7 +18,8 @@
     "validate:style": "node tools/validate-style.mjs",
     "smoke": "node tools/smoke.mjs",
     "check:layers": "node tools/check-layers.mjs",
-    "check:archive": "node tools/check-archive.mjs"
+    "check:archive": "node tools/check-archive.mjs",
+    "check:upgrade": "node tools/check-upgrade.mjs"
   },
   "license": "UNLICENSED",
   "devDependencies": {
