@@ -834,5 +834,28 @@
     "url": "https://shermancahal.github.io/Map/assets/js/config.js",
     "find": "([\\s\\S]{8})",
     "note": "The same question asked for a slice from the middle of the file rather than the start. A host can answer 206 for bytes=0-N by truncating the response it was going to send anyway and still have no real range support - which would look like success on the first probe and fail on every tile after the first. The bytes returned here must not be the head of the file."
+  },
+  {
+    "id": "pages:archive",
+    "expect": "data",
+    "range": "bytes=0-127",
+    "url": "https://shermancahal.github.io/Map/tiles/byways.pmtiles",
+    "find": "(PMTiles)",
+    "note": "The archive as the site actually serves it. The deploy going green says a file was uploaded; this says a browser can read it - a 206, the PMTiles magic in the first bytes, and CORS. Deployed and works are different claims and only one of them is worth making."
+  },
+  {
+    "id": "pages:archive-tile",
+    "expect": "data",
+    "range": "bytes=200000-200127",
+    "url": "https://shermancahal.github.io/Map/tiles/byways.pmtiles",
+    "find": "([\\s\\S]{8})",
+    "note": "A slice from inside the tile data rather than the header, because reading tiles is the whole point and a host that truncates a bytes=0-N response would pass the probe above without supporting ranges at all."
+  },
+  {
+    "id": "pages:archive-config",
+    "expect": "data",
+    "url": "https://shermancahal.github.io/Map/assets/js/token.js",
+    "find": "ABMAP_PROTOMAPS_ARCHIVE = '([^']*)'",
+    "note": "What the deployed site is configured to read. The archive can be present and the config still empty, in which case Byways Topo goes on drawing from Mapbox and the extract is a file nobody asks for."
   }
 ]
