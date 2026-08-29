@@ -818,5 +818,21 @@
     "url": "https://unpkg.com/@protomaps/basemaps@5.7.2/src/base_layers.ts",
     "find": "(id: \"places_[a-z_]+\",[\\s\\S]{0,500})",
     "note": "How Protomaps distinguishes a city from a hamlet. The place label here sizes text by whether the class is Mapbox's 'settlement', a value this schema does not have - so every place name from a state capital to a crossroads would be drawn at the same small size. The confirmed kinds are country, region, province, locality, neighbourhood and macrohood; what is needed is which of those is a town and how its importance is ranked."
+  },
+  {
+    "id": "pages:range",
+    "expect": "data",
+    "range": "bytes=0-120",
+    "url": "https://shermancahal.github.io/Map/assets/js/config.js",
+    "find": "(Site configuration)",
+    "note": "Whether GitHub Pages honours a Range request and sends CORS. If it does, a small .pmtiles extract can ship inside the Pages deploy and Protomaps can be tested with no bucket, no credentials and no bill - which is currently the only thing standing between the finished port and looking at it. The report prints the status and the CORS column, and a 206 with an allow-origin is the whole answer. Asked of a file already deployed rather than of a new one, so it costs nothing to ask."
+  },
+  {
+    "id": "pages:range-tail",
+    "expect": "data",
+    "range": "bytes=2000-2120",
+    "url": "https://shermancahal.github.io/Map/assets/js/config.js",
+    "find": "([\\s\\S]{8})",
+    "note": "The same question asked for a slice from the middle of the file rather than the start. A host can answer 206 for bytes=0-N by truncating the response it was going to send anyway and still have no real range support - which would look like success on the first probe and fail on every tile after the first. The bytes returned here must not be the head of the file."
   }
 ]
