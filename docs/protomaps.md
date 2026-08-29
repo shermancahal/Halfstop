@@ -23,24 +23,22 @@ The cartography is unchanged. Only the schema underneath differs, and the style
 reads its layer and field names from one object per source — see
 `MAPBOX_SCHEMA` and `PROTOMAPS_SCHEMA` in `assets/js/lib/byways-style.js`.
 
-## Turning it on
+## The switch
 
-Set one value:
+One value decides everything:
 
 ```js
 // assets/js/token.js
 window.ABMAP_PROTOMAPS_ARCHIVE = 'https://tiles.example.com/byways.pmtiles';
-window.ABMAP_PROTOMAPS_MAXZOOM = '15';
+window.ABMAP_PROTOMAPS_MAXZOOM = '13';
 ```
 
-In CI these come from repository **variables** (not secrets — the URL is
-public) named `PROTOMAPS_ARCHIVE` and `PROTOMAPS_MAXZOOM`. Both deploy
-workflows write them into `token.js` alongside the Mapbox and Supabase values.
+Set, and Byways Topo draws from the archive and the app loads MapLibre. Empty,
+and Byways Topo draws from Mapbox and the app loads Mapbox GL, exactly as
+before. **Byways Topo (Mapbox)** stays in the basemap list either way, visible
+to editors only, so the two can be compared side by side.
 
-With it set, Byways Topo draws from the archive and the app loads MapLibre.
-With it empty, Byways Topo draws from Mapbox and the app loads Mapbox GL,
-exactly as before. **Byways Topo (Mapbox)** stays in the basemap list either
-way, visible to editors only, so the two can be compared side by side.
+Getting a URL to put there is the eight steps below.
 
 ## What has to be true of the host
 
@@ -64,45 +62,115 @@ Cloudflare R2, Backblaze B2 and S3 all satisfy these with the right bucket
 settings. GitHub Pages does not: a 100 MB per-file limit and a soft 1 GB
 repository limit rule out anything larger than a couple of states.
 
-## Building one
+## Setting one up, start to finish
 
-The archive is an extract of an OpenStreetMap-derived planet build. Protomaps
-publish a daily one; `pmtiles` cuts a region out of it without downloading the
-whole thing, because the format is designed to be read remotely.
+### 1. Decide the coverage first
+
+It is the only part of this that costs money, and zoom is the expensive axis —
+each level holds four times as many tiles as the one below it. Cut something
+small, look at the size, then decide whether more depth or more ground is worth
+it. Starting with the whole country at maximum depth is an hour of waiting to
+find out you did not want it.
+
+A reasonable first cut is the ground this map was built for — Tennessee,
+Kentucky, West Virginia and their neighbours:
+
+    --bbox=-89.6,34.9,-77.7,40.7 --maxzoom=13
+
+As an order of magnitude at maxzoom 15: a single state is tens of megabytes,
+the Appalachians a few hundred, the lower forty-eight several gigabytes. Every
+level below that divides those by four. The honest question is what depth the
+map is actually read at, not how much ground it covers — z13 shows every road
+this atlas draws; z15 is for reading house numbers.
+
+### 2. Install the extract tool
 
 ```sh
-# The extract tool. Also available as a static binary from the releases page.
-go install github.com/protomaps/go-pmtiles@latest
+brew install protomaps/tap/pmtiles      # macOS
+# or a static binary from github.com/protomaps/go-pmtiles/releases
+# or: go install github.com/protomaps/go-pmtiles@latest
 
-# A bounding box, at the depth the style declares.
+pmtiles extract --help                  # confirm the flags on your version
+```
+
+### 3. Cut the extract
+
+The source is Protomaps' daily planet build. **Check
+[docs.protomaps.com](https://docs.protomaps.com) for the current URL** — the
+builds are dated, and the one below will be stale by the time you read it.
+
+```sh
 pmtiles extract \
-  https://build.protomaps.com/20240101.pmtiles \
+  https://build.protomaps.com/20260801.pmtiles \
   byways.pmtiles \
   --bbox=-89.6,34.9,-77.7,40.7 \
-  --maxzoom=15
+  --maxzoom=13
 ```
 
-Rough sizes at maxzoom 15: a single state is tens of megabytes, the
-Appalachians a few hundred, the lower forty-eight several gigabytes. Zoom is
-the expensive axis — each level is four times the one below it — so the honest
-question is what depth the map is actually read at rather than how much ground
-it covers.
-
-Then check it, before pointing the site at it:
+It reads the remote planet file by byte range rather than downloading it, which
+is the same property that makes the result usable from a browser.
 
 ```sh
-npm run check:archive -- https://tiles.example.com/byways.pmtiles
+pmtiles show byways.pmtiles      # zoom range, bounds, compression, size
 ```
 
-That asks the three questions above of the host itself — whether it honoured
-the `Range` header, what CORS it sent, what the archive is compressed with —
-reads the zoom range and bounds out of the header, and then reads an actual
-tile from the middle of the archive's own declared coverage, because a
-perfectly well-formed header can sit on a file whose directories do not
-decompress. It prints the two config lines to paste, with the maxzoom the file
-really has.
+### 4. Create the bucket
 
-There is a local archive to try it against, which needs no network and no
+**Cloudflare R2** is the one to pick, and the reason is egress: a tile archive
+is read far more than it is written, and R2 does not charge for reading. S3 and
+Backblaze B2 both work and both bill for it.
+
+1. Cloudflare dashboard → **R2** → **Create bucket** (`byways-tiles`)
+2. Upload `byways.pmtiles`
+3. **Settings → Public access** — either enable the `r2.dev` development URL,
+   which is fine for evaluating and is rate-limited and discouraged for
+   production, or connect a custom domain such as `tiles.americanbyways.com`
+
+### 5. Add the CORS policy
+
+Bucket → **Settings → CORS policy**:
+
+```json
+[
+  {
+    "AllowedOrigins": [
+      "https://shermancahal.github.io",
+      "capacitor://localhost",
+      "https://localhost",
+      "http://localhost:8000"
+    ],
+    "AllowedMethods": ["GET", "HEAD"],
+    "AllowedHeaders": ["range", "if-match"],
+    "ExposeHeaders": ["etag", "content-range", "content-length"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+The two `localhost` origins are for the iOS and Android shell. A Capacitor
+webview loads from `capacitor://localhost` or `https://localhost`, not from the
+site's domain — the same reason the app needs its own unrestricted Mapbox
+token. The last one is `npm start`.
+
+### 6. Check it before wiring anything up
+
+```sh
+npm run check:archive -- https://<your-bucket>/byways.pmtiles
+```
+
+This is the step that saves the afternoon. It asks the host the three questions
+in the section above — did it honour the `Range` header, what CORS did it send,
+what is the archive compressed with — reads the zoom range and bounds out of
+the header, and then reads a real tile from the middle of the archive's own
+declared coverage, because a perfectly well-formed header can sit on a file
+whose directories do not decompress. Then it prints the two config lines to
+paste, with the maxzoom the file actually has rather than the one you assumed.
+
+Every failure names itself and names the fix: no CORS, ignored ranges, the
+wrong compression, a header describing a different file from the one attached
+to it.
+
+There is a local archive to try the checker against, needing no network and no
 bucket:
 
 ```sh
@@ -110,13 +178,71 @@ node tools/serve-archive.mjs &
 npm run check:archive -- http://127.0.0.1:8788/byways.pmtiles
 ```
 
-It takes `--ignore-range` and `--no-cors` so each of the three failures can be
-seen being reported rather than taken on trust.
+It takes `--ignore-range` and `--no-cors` so each failure can be watched being
+reported rather than taken on trust.
 
-Overstating `ABMAP_PROTOMAPS_MAXZOOM` draws blank ground past the archive's
-real depth. The app reads the header when it opens the archive and says so in
-the console when the two disagree — a warning if the style asks for more than
-the file has, a note if the file has more than the style uses.
+### 7. Wire it up
+
+Locally, in `assets/js/token.js` — gitignored, so it is yours alone:
+
+```js
+window.ABMAP_PROTOMAPS_ARCHIVE = 'https://<bucket>/byways.pmtiles';
+window.ABMAP_PROTOMAPS_MAXZOOM = '13';   // whatever check:archive printed
+```
+
+In production, on GitHub: **Settings → Secrets and variables → Actions →
+Variables** — the *Variables* tab, not Secrets, because a public bucket URL is
+not a secret and treating it as one only makes it harder to see what is
+deployed. **New repository variable**, twice:
+
+| Name | Value |
+| --- | --- |
+| `PROTOMAPS_ARCHIVE` | `https://<bucket>/byways.pmtiles` |
+| `PROTOMAPS_MAXZOOM` | `13` |
+
+Both deploy workflows already read these into `token.js` alongside the Mapbox
+and Supabase values.
+
+### 8. Deploy, and look at it
+
+Push anything, or re-run the deploy workflow, so `token.js` is regenerated.
+Then open the map. Byways Topo is drawing from the archive.
+
+Worth looking at specifically, because these are the things that were rebuilt
+rather than carried over:
+
+- **Road weights.** Interstate down to footpath, eleven of them. If the map
+  looks flat, `kind_detail` is not arriving.
+- **Route shields.** The right shape for the right system, and the state's own
+  marker on a state route — read from the network now rather than inferred
+  from where the map is looking, so they should be right near a border.
+- **Protected ground.** National forest and wilderness filled, not just
+  national parks.
+- **Place labels.** Towns in larger type than districts.
+
+Open the console once. If the archive is deeper or shallower than
+`ABMAP_PROTOMAPS_MAXZOOM` claims, the app says so and names the number to use.
+
+Then switch to **Byways Topo (Mapbox)** — visible to you as an editor — and
+flip between them. That comparison is what the whole two-schema seam was built
+to make possible.
+
+Two things will look like bugs and are not. The map reloads when you switch
+between the two Byways Topo entries: they need different GL libraries, and the
+camera lives in the URL hash so nothing is lost. And offline downloads are
+offered on the Protomaps one and refused on the Mapbox one, which is the entire
+point of the exercise.
+
+## Rebuilding it later
+
+Re-cut, re-upload to the same URL, and nothing else changes. If the new archive
+has a different maximum zoom, update `PROTOMAPS_MAXZOOM` — the console warning
+will tell you, but a warning nobody reads is a blank map at one zoom level.
+
+Anyone who has downloaded regions keeps the tiles they had; they are stored by
+archive URL and z/x/y, so a rebuild at the same URL leaves them holding the old
+tiles until they download again. Deleting downloaded tiles from the offline
+panel clears them.
 
 ## What the port gains and what it loses
 
