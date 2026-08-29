@@ -113,9 +113,39 @@ jobs:
       #
       # PROTOMAPS_ARCHIVE still wins where it is set. A real bucket is the
       # answer for a wide region; this is the answer for finding out.
+      - name: Plan the map archive
+        id: plan
+        env:
+          BBOX: ${{ inputs.bbox || vars.PROTOMAPS_BBOX }}
+          MAXZOOM: ${{ inputs.maxzoom || vars.PROTOMAPS_MAXZOOM }}
+          CONFIGURED: ${{ vars.PROTOMAPS_ARCHIVE }}
+          REBUILD: ${{ vars.PROTOMAPS_REBUILD }}
+        run: |
+          set -euo pipefail
+          # A configured URL wins, and no bbox means nothing to cut.
+          if [ -n "$CONFIGURED" ] || [ -z "$BBOX" ]; then
+            echo "wanted=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          ZOOM="${MAXZOOM:-13}"
+          {
+            echo "wanted=yes"
+            echo "bbox=$BBOX"
+            echo "zoom=$ZOOM"
+            # A cache key may not contain a comma, and a bounding box is four
+            # numbers separated by commas. That is not a detail: the first run
+            # of this failed on it, and because a failed step fails its job,
+            # it took the entire site deploy down with it.
+            echo "key=pmtiles-$(printf '%s' "$BBOX" | tr ',' '_')-${ZOOM}-${REBUILD:-1}"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Cache the map archive
         id: archive-cache
-        if: ${{ (inputs.bbox || vars.PROTOMAPS_BBOX) != '' && vars.PROTOMAPS_ARCHIVE == '' }}
+        if: ${{ steps.plan.outputs.wanted != '' }}
+        # Never fatal. This whole path is a convenience, and the site is the
+        # product: publishing without the archive is a worse map, while not
+        # publishing is no map at all.
+        continue-on-error: true
         uses: actions/cache@v4
         with:
           path: tiles/byways.pmtiles
@@ -123,19 +153,23 @@ jobs:
           # extract on every deploy would add ten minutes to each one for a
           # basemap that changes meaningfully over months. Bump
           # PROTOMAPS_REBUILD to force a fresh cut.
-          key: pmtiles-${{ inputs.bbox || vars.PROTOMAPS_BBOX }}-${{ inputs.maxzoom || vars.PROTOMAPS_MAXZOOM }}-${{ vars.PROTOMAPS_REBUILD }}
+          key: ${{ steps.plan.outputs.key }}
 
       - name: Cut the map archive
         id: archive
-        if: ${{ (inputs.bbox || vars.PROTOMAPS_BBOX) != '' && vars.PROTOMAPS_ARCHIVE == '' }}
+        if: ${{ steps.plan.outputs.wanted != '' }}
+        # Same reasoning as the cache step: a bad bbox, or Protomaps having an
+        # afternoon, must not stop the site from going out. The step after this
+        # says so out loud rather than leaving a skipped archive to be noticed
+        # from the map looking wrong.
+        continue-on-error: true
         env:
-          BBOX: ${{ inputs.bbox || vars.PROTOMAPS_BBOX }}
-          MAXZOOM: ${{ inputs.maxzoom || vars.PROTOMAPS_MAXZOOM }}
+          BBOX: ${{ steps.plan.outputs.bbox }}
+          ZOOM: ${{ steps.plan.outputs.zoom }}
           PLANET: ${{ vars.PROTOMAPS_PLANET_URL }}
           CACHED: ${{ steps.archive-cache.outputs.cache-hit }}
         run: |
           set -euo pipefail
-          ZOOM="${MAXZOOM:-13}"
 
           if [ "$CACHED" = "true" ] && [ -s tiles/byways.pmtiles ]; then
             echo "Reusing the cached extract."
@@ -200,6 +234,18 @@ jobs:
             echo "- \`$BBOX\` to zoom ${DEPTH:-$ZOOM} — $((BYTES / 1024 / 1024)) MB, published at \`tiles/byways.pmtiles\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Say so if the archive was wanted and did not arrive
+        if: ${{ steps.plan.outputs.wanted != '' && steps.archive.outputs.url == '' }}
+        run: |
+          echo "::warning::A map archive was requested for ${{ steps.plan.outputs.bbox }} and could not be cut."
+          echo "::warning::The site is publishing without it, so Byways Topo will draw from Mapbox."
+          {
+            echo "### Map archive"
+            echo "- **Requested and not produced.** \`${{ steps.plan.outputs.bbox }}\` to zoom ${{ steps.plan.outputs.zoom }}."
+            echo "- The site was published anyway; Byways Topo falls back to Mapbox."
+            echo "- The reason is in the *Cut the map archive* step above."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Write the client config
         # Pages replaces the whole site each time, so there is nothing on the
         # far end to preserve and the file is always written — even empty, so
@@ -217,7 +263,9 @@ jobs:
           # bucket is somebody's deliberate choice and must not be silently
           # replaced by a test extract.
           PROTOMAPS_ARCHIVE: ${{ vars.PROTOMAPS_ARCHIVE || steps.archive.outputs.url }}
-          PROTOMAPS_MAXZOOM: ${{ vars.PROTOMAPS_ARCHIVE && vars.PROTOMAPS_MAXZOOM || steps.archive.outputs.maxzoom || vars.PROTOMAPS_MAXZOOM }}
+          # The depth read back from the file when one was cut, since an
+          # extract can come back shallower than it was asked for.
+          PROTOMAPS_MAXZOOM: ${{ steps.archive.outputs.maxzoom || vars.PROTOMAPS_MAXZOOM }}
         run: |
           {
             printf "window.ABMAP_MAPBOX_TOKEN = '%s';\n" "$MAPBOX_TOKEN"
