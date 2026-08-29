@@ -15,7 +15,7 @@ import {
 } from './config.js';
 import {
   loadEngine, buildRasterStyle, hasMapboxToken, mapboxToken, overlayParts, overlayIdFromLayer, overlayRows,
-  overlayLinks, styleFor, styleHasGlyphs, engineFor, schemaFor, sourceNameFor,
+  overlayLinks, styleFor, styleHasGlyphs, engineFor, schemaFor, sourceNoteFor,
 } from './lib/engine.js';
 import { loadCatalog, findMap } from './lib/catalog.js';
 import { parseMapFile, linePositions } from './lib/parse.js';
@@ -4684,16 +4684,16 @@ function downloadRow(region) {
  */
 function layerRow({ entry, selected, control, preview = false }) {
   /*
-   * Byways Topo says which foundation it is on.
+   * Byways Topo says whether it can be taken with you.
    *
-   * Its own description is true of all three - "OSM rendered for the outdoors"
-   * describes Mapbox Streets, our Protomaps archive and CyclOSM equally, since
-   * all three are OpenStreetMap underneath - so it cannot tell you which one
-   * you are looking at, and the difference decides whether the map costs money
-   * and whether it can be downloaded.
+   * Its own description cannot: "OSM rendered for the outdoors" is equally
+   * true of Mapbox Streets, of our own archive and of the CyclOSM fallback,
+   * since all three are OpenStreetMap underneath. The difference between them
+   * that a reader can act on is whether the map downloads, and an editor also
+   * gets to see which source is live, because they are the one comparing.
    */
-  const source = sourceNameFor(entry);
-  const description = [entry.description || '', source].filter(Boolean).join(' ');
+  const sourceNote = sourceNoteFor(entry, { editor: mayEdit(state.account?.user) });
+  const description = [entry.description || '', sourceNote].filter(Boolean).join(' ');
   const key = Array.isArray(entry.legend) && entry.legend.length ? entry.legend : null;
 
   // A continuous ramp — temperature, wind speed, cloud cover — has no list of

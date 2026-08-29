@@ -531,32 +531,51 @@ test('byways: a role a schema has no values for draws no arm', () => {
   assert.ok(protomaps.includes('barren'), 'nor is bare rock');
 });
 
-test('byways: the basemap row says which foundation it is actually on', async () => {
+test('byways: the basemap row says the thing a reader can act on', async () => {
   /*
-   * Byways Topo looks broadly the same on all three of its foundations, which
-   * is the point of the seam and also the problem: from the map you cannot
-   * tell which one is live. Its own description does not help — "OSM rendered
-   * for the outdoors" is true of Mapbox Streets, of our archive and of
-   * CyclOSM, since all three are OpenStreetMap underneath.
+   * The first version of this said "Drawing from Mapbox — metered, and cannot
+   * be taken offline", and the report back was a question: what does that
+   * mean? Which is the answer. It was two facts stapled together, one written
+   * in the vocabulary of whoever pays the bill, in a list read mostly by
+   * people who do not.
    *
-   * The attribution line does say, honestly, in the corner, to a reader who
-   * knows that "© Mapbox" means the archive is not configured. That is not the
-   * same as telling them.
+   * So: everyone is told whether the map can be taken with them, in the words
+   * the download button uses. Where the geometry comes from goes to editors,
+   * who are the ones comparing the two sources.
    */
-  const { sourceNameFor } = await import('../assets/js/lib/engine.js');
+  const { sourceNoteFor } = await import('../assets/js/lib/engine.js');
   const byways = { custom: 'byways' };
   const mapbox = { custom: 'byways-mapbox' };
+  const archive = 'https://x/y.pmtiles';
 
-  assert.match(sourceNameFor(byways, { archive: 'https://x/y.pmtiles', token: 'pk.x' }), /Protomaps/);
-  assert.match(sourceNameFor(byways, { archive: '', token: 'pk.x' }), /Mapbox/);
-  assert.match(sourceNameFor(byways, { archive: '', token: '' }), /CyclOSM/);
+  assert.equal(sourceNoteFor(byways, { archive, token: 'pk.x' }), 'Can be downloaded for offline use.');
+  assert.equal(sourceNoteFor(byways, { archive: '', token: 'pk.x' }), 'Cannot be downloaded for offline use.');
 
-  // The Mapbox twin says Mapbox whatever the archive is set to — it is the
-  // comparison, so it never follows the switch.
-  assert.match(sourceNameFor(mapbox, { archive: 'https://x/y.pmtiles', token: 'pk.x' }), /Mapbox/);
+  // No jargon reaches a reader who is not running the thing.
+  for (const options of [{ archive, token: 'pk.x' }, { archive: '', token: 'pk.x' }]) {
+    const text = sourceNoteFor(byways, options);
+    assert.doesNotMatch(text, /metered|bills|Mapbox|Protomaps|archive/i, text);
+  }
 
-  // And a basemap with one source says nothing, rather than a sentence that
-  // would be on every row in the list.
-  assert.equal(sourceNameFor({ id: 'usgs-topo' }, { archive: 'https://x/y.pmtiles', token: 'pk.x' }), '');
-  assert.equal(sourceNameFor(null), '');
+  // An editor gets the provenance, and still gets the part everyone gets.
+  const asEditor = { archive: '', token: 'pk.x', editor: true };
+  assert.match(sourceNoteFor(byways, asEditor), /Mapbox/);
+  assert.match(sourceNoteFor(byways, asEditor), /Cannot be downloaded/);
+  assert.match(sourceNoteFor(byways, { archive, token: 'pk.x', editor: true }), /own map archive/);
+
+  // The Mapbox twin never follows the switch — it is the comparison.
+  assert.equal(sourceNoteFor(mapbox, { archive, token: 'pk.x' }), 'Cannot be downloaded for offline use.');
+
+  /*
+   * Silent where neither source is configured, rather than explaining the
+   * substitution twice: the panel already carries a banner about it, and two
+   * accounts of the same fact in one card is how a reader learns to skip both.
+   */
+  assert.equal(sourceNoteFor(byways, { archive: '', token: '' }), '');
+  assert.equal(sourceNoteFor(byways, { archive: '', token: '', editor: true }), '');
+
+  // And a basemap with one source says nothing, rather than a sentence on
+  // every row in the list.
+  assert.equal(sourceNoteFor({ id: 'usgs-topo' }, { archive, token: 'pk.x' }), '');
+  assert.equal(sourceNoteFor(null), '');
 });

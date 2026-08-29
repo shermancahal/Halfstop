@@ -285,26 +285,52 @@ export function schemaFor(basemap) {
 }
 
 /**
- * Which geometry a basemap is drawing from, right now, in words.
+ * What is worth saying about a basemap beyond what it looks like.
  *
  * Byways Topo has three possible foundations and looks broadly the same on all
  * of them, which is the point of the seam and also the problem: from the map
- * itself you cannot tell which one is live. The attribution line says so
- * honestly but says it in the corner, in six point type, to a reader who has
- * to know that "© Mapbox" means the archive is not configured.
+ * itself you cannot tell which one is live.
  *
- * The two sources are arguments so all three answers can be tested. They are
- * read from config at import time otherwise, and a module-level constant is
- * not something a test can vary - which would leave the two branches that do
- * not happen to be configured untested, and those are the interesting ones.
+ * The first attempt at this said "Drawing from Mapbox — metered, and cannot be
+ * taken offline", and the report back was a question: what does that mean?
+ * Which is the answer. It was two facts stapled together, one of them written
+ * in the vocabulary of whoever is paying the bill, in a list read mostly by
+ * people who are not. "Metered" is a billing arrangement; nobody choosing a
+ * map cares whose.
  *
- * @returns {string} Empty for a basemap that has only one source.
+ * So the two audiences are separated. Everyone is told the one thing that
+ * changes what they can do — whether this map can be taken with them — in the
+ * same words the download button uses. Where the geometry comes from is shown
+ * to editors, because that is the person comparing the two sources and the
+ * only one for whom the answer is actionable.
+ *
+ * The sources are arguments so all the branches can be tested. They are read
+ * from config at import time otherwise, and a test cannot vary a module
+ * constant — which would leave whichever branches are not currently
+ * configured untested, and those are the interesting ones.
+ *
+ * @returns {string} Empty for a basemap where none of this applies.
  */
-export function sourceNameFor(basemap, { archive = PROTOMAPS_ARCHIVE, token = MAPBOX_TOKEN } = {}) {
+export function sourceNoteFor(basemap, {
+  archive = PROTOMAPS_ARCHIVE, token = MAPBOX_TOKEN, editor = false,
+} = {}) {
   if (basemap?.custom !== 'byways' && basemap?.custom !== 'byways-mapbox') return '';
-  if (basemap.custom === 'byways' && archive) return 'Drawing from our own Protomaps archive.';
-  if (token) return 'Drawing from Mapbox — metered, and cannot be taken offline.';
-  return 'Neither source is configured, so this is the CyclOSM raster instead.';
+
+  const fromArchive = basemap.custom === 'byways' && archive;
+  if (!fromArchive && !token) {
+    // Neither source configured. The panel already carries a banner explaining
+    // the substitution in full, so this does not repeat it.
+    return '';
+  }
+
+  const everyone = fromArchive
+    ? 'Can be downloaded for offline use.'
+    : 'Cannot be downloaded for offline use.';
+  if (!editor) return everyone;
+
+  return fromArchive
+    ? `Drawn from our own map archive. ${everyone}`
+    : `Drawn from Mapbox, which bills per view. ${everyone}`;
 }
 
 export function styleFor(basemap, overlays = []) {
