@@ -21,6 +21,19 @@ on:
       - 'claude/**'
   pull_request:
   workflow_dispatch:
+    inputs:
+      bbox:
+        description: >-
+          Cut a Protomaps archive for this bounding box and publish it with the
+          site: minlon,minlat,maxlon,maxlat. Overrides the PROTOMAPS_BBOX
+          variable for this run, so a coverage can be tried before it is
+          committed to. Ignored when PROTOMAPS_ARCHIVE names a bucket.
+        required: false
+        type: string
+      maxzoom:
+        description: 'How deep to cut it. Each level is four times the one below; 13 shows every road this map draws.'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -80,6 +93,113 @@ jobs:
         with:
           node-version: 22
 
+      # ---------------------------------------------------------------- archive
+      #
+      # Cutting the map archive here, into the site itself.
+      #
+      # Byways Topo can draw from a Protomaps archive instead of from Mapbox -
+      # free to look at, and downloadable - and the only thing it needs is a
+      # URL. Standing up a bucket to get one is a reasonable amount of work to
+      # do before finding out whether you like the map, so this offers the
+      # short way round: set PROTOMAPS_BBOX and the archive is cut here and
+      # published alongside the site, with no bucket, no credentials and no
+      # bill.
+      #
+      # Pages turns out to serve it correctly - it answers Range requests with
+      # a 206 and sends Access-Control-Allow-Origin, both measured rather than
+      # assumed (tools/layer-candidates.json, the pages: probes). The limit is
+      # the 1 GB published site, not the 100 MB *git* file limit, because this
+      # file never goes anywhere near git.
+      #
+      # PROTOMAPS_ARCHIVE still wins where it is set. A real bucket is the
+      # answer for a wide region; this is the answer for finding out.
+      - name: Cache the map archive
+        id: archive-cache
+        if: ${{ (inputs.bbox || vars.PROTOMAPS_BBOX) != '' && vars.PROTOMAPS_ARCHIVE == '' }}
+        uses: actions/cache@v4
+        with:
+          path: tiles/byways.pmtiles
+          # Deliberately not keyed on the date. Re-cutting a continental
+          # extract on every deploy would add ten minutes to each one for a
+          # basemap that changes meaningfully over months. Bump
+          # PROTOMAPS_REBUILD to force a fresh cut.
+          key: pmtiles-${{ inputs.bbox || vars.PROTOMAPS_BBOX }}-${{ inputs.maxzoom || vars.PROTOMAPS_MAXZOOM }}-${{ vars.PROTOMAPS_REBUILD }}
+
+      - name: Cut the map archive
+        id: archive
+        if: ${{ (inputs.bbox || vars.PROTOMAPS_BBOX) != '' && vars.PROTOMAPS_ARCHIVE == '' }}
+        env:
+          BBOX: ${{ inputs.bbox || vars.PROTOMAPS_BBOX }}
+          MAXZOOM: ${{ inputs.maxzoom || vars.PROTOMAPS_MAXZOOM }}
+          PLANET: ${{ vars.PROTOMAPS_PLANET_URL }}
+          CACHED: ${{ steps.archive-cache.outputs.cache-hit }}
+        run: |
+          set -euo pipefail
+          ZOOM="${MAXZOOM:-13}"
+
+          if [ "$CACHED" = "true" ] && [ -s tiles/byways.pmtiles ]; then
+            echo "Reusing the cached extract."
+          else
+            mkdir -p tiles
+
+            # The release asset is found by asking which assets exist, not by
+            # composing a filename. Their naming carries the version, so
+            # /latest/download/<name> cannot be written down in advance, and a
+            # guessed name fails as a 404 that reads like the tool being gone.
+            ASSET=$(curl -fsSL https://api.github.com/repos/protomaps/go-pmtiles/releases/latest \
+              | jq -r '.assets[] | select(.name | test("[Ll]inux_x86_64\\.tar\\.gz$")) | .browser_download_url' \
+              | head -1)
+            if [ -z "$ASSET" ]; then
+              echo "::error::No Linux x86_64 asset in the latest go-pmtiles release. Assets available:"
+              curl -fsSL https://api.github.com/repos/protomaps/go-pmtiles/releases/latest | jq -r '.assets[].name'
+              exit 1
+            fi
+            echo "pmtiles: $ASSET"
+            curl -fsSL "$ASSET" | tar xz pmtiles
+
+            # Which daily planet build to cut from, discovered rather than
+            # guessed: today's may not have finished, and the last date I could
+            # have written into this file is already wrong.
+            if [ -z "$PLANET" ]; then
+              for back in $(seq 0 14); do
+                DAY=$(date -u -d "-${back} day" +%Y%m%d)
+                TRY="https://build.protomaps.com/${DAY}.pmtiles"
+                if curl -fsI --max-time 30 "$TRY" >/dev/null 2>&1; then PLANET="$TRY"; break; fi
+              done
+            fi
+            if [ -z "$PLANET" ]; then
+              echo "::error::No daily build answered under https://build.protomaps.com/ for the last 15 days."
+              echo "::error::Set the PROTOMAPS_PLANET_URL variable to the archive to cut from."
+              exit 1
+            fi
+            echo "planet: $PLANET"
+
+            # Reads the planet by byte range rather than downloading it, which
+            # is the same property that makes the result usable in a browser.
+            ./pmtiles extract "$PLANET" tiles/byways.pmtiles --bbox="$BBOX" --maxzoom="$ZOOM"
+          fi
+
+          BYTES=$(stat -c%s tiles/byways.pmtiles)
+          echo "archive: $((BYTES / 1024 / 1024)) MB"
+          if [ "$BYTES" -gt 800000000 ]; then
+            echo "::error::The extract is $((BYTES / 1024 / 1024)) MB. A published Pages site is capped at 1 GB,"
+            echo "::error::and the rest of the site needs room. Narrow PROTOMAPS_BBOX or lower PROTOMAPS_MAXZOOM,"
+            echo "::error::or host it on a bucket and set PROTOMAPS_ARCHIVE to its URL instead."
+            exit 1
+          fi
+
+          # The depth the file actually has, not the one that was asked for.
+          # Overstating it draws blank ground past the archive's real limit,
+          # and an extract can come back shallower than requested.
+          DEPTH=$(./pmtiles show tiles/byways.pmtiles 2>/dev/null | grep -oiE 'max[ _]?zoom:? *[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
+          echo "url=./tiles/byways.pmtiles" >> "$GITHUB_OUTPUT"
+          echo "maxzoom=${DEPTH:-$ZOOM}" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Map archive"
+            echo "- Cut from \`$PLANET\`"
+            echo "- \`$BBOX\` to zoom ${DEPTH:-$ZOOM} — $((BYTES / 1024 / 1024)) MB, published at \`tiles/byways.pmtiles\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Write the client config
         # Pages replaces the whole site each time, so there is nothing on the
         # far end to preserve and the file is always written — even empty, so
@@ -92,8 +212,12 @@ jobs:
           # Not a secret - a public URL on a public bucket - but a repository
           # variable rather than a literal, because it differs between the site
           # and the app bundle and should be changeable without a commit.
-          PROTOMAPS_ARCHIVE: ${{ vars.PROTOMAPS_ARCHIVE }}
-          PROTOMAPS_MAXZOOM: ${{ vars.PROTOMAPS_MAXZOOM }}
+          #
+          # An archive cut above wins only where no URL was configured: a
+          # bucket is somebody's deliberate choice and must not be silently
+          # replaced by a test extract.
+          PROTOMAPS_ARCHIVE: ${{ vars.PROTOMAPS_ARCHIVE || steps.archive.outputs.url }}
+          PROTOMAPS_MAXZOOM: ${{ vars.PROTOMAPS_ARCHIVE && vars.PROTOMAPS_MAXZOOM || steps.archive.outputs.maxzoom || vars.PROTOMAPS_MAXZOOM }}
         run: |
           {
             printf "window.ABMAP_MAPBOX_TOKEN = '%s';\n" "$MAPBOX_TOKEN"
@@ -125,6 +249,18 @@ jobs:
 
       - name: Stage the upload package
         run: npm run build && node tools/build-dist.mjs
+
+      - name: Put the archive in the site
+        if: ${{ steps.archive.outputs.url != '' }}
+        # After the build, deliberately. build-dist writes the service
+        # worker's precache list from what is in dist at that moment, and a
+        # several-hundred-megabyte precache entry would try to download the
+        # whole archive the first time anyone opened the site. The worker
+        # ignores .pmtiles entirely; this keeps it out of the list as well.
+        run: |
+          mkdir -p dist/tiles
+          cp tiles/byways.pmtiles dist/tiles/byways.pmtiles
+          ls -lh dist/tiles/
 
       - name: Stamp the build
         run: |
