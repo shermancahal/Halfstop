@@ -1338,7 +1338,7 @@ function labelLayers() {
         // you nothing about whether you want to be on it; "unpaved" does.
         'text-field': hasSurface()
           ? ['case',
-            ['all', unpaved(), ['has', 'name']], ['concat', labelName(), ' \u00b7 unpaved'],
+            ['all', unpaved(), ['has', S.fields.name]], ['concat', labelName(), ' \u00b7 unpaved'],
             labelName()]
           : labelName(),
         'text-font': font(),
@@ -1360,7 +1360,7 @@ function labelLayers() {
       'source-layer': S.layers.road,
       filter: ['all',
         ['match', ['get', S.fields.roadClassField], classes('path', 'service'), true, false],
-        ['has', 'name'],
+        ['has', S.fields.name],
       ],
       minzoom: 14,
       layout: {

@@ -813,7 +813,13 @@ test('protomaps: every field the style reads is one the schema declares', () => 
   const read = new Map();
   const walk = (node, id) => {
     if (!Array.isArray(node)) return;
-    if (node[0] === 'get' && typeof node[1] === 'string') {
+    /*
+     * `has` as well as `get`. The first version of this walked only `get`,
+     * and `['has', 'name']` was sitting in two filters at the time — correct
+     * under both schemas by luck, since they happen to agree on that one
+     * field, and exactly the kind of luck that runs out when a third arrives.
+     */
+    if ((node[0] === 'get' || node[0] === 'has') && typeof node[1] === 'string') {
       if (!read.has(node[1])) read.set(node[1], id);
     }
     for (const child of node) walk(child, id);
