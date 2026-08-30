@@ -249,7 +249,18 @@ export const BASEMAPS = [
     // the same idea, drawn by somebody else.
     custom: 'byways',
     group: 'Topographic',
-    description: 'OSM rendered for the outdoors — tracks and surfaces.',
+    /*
+     * What it says has to be true on every foundation.
+     *
+     * This used to promise "tracks and surfaces", and surfaces stopped being
+     * true the day the Protomaps path went live: that schema has no surface
+     * field at all, so unpaved roads are not drawn differently from paved
+     * ones. The description is one line in a list and the reader has no way
+     * to know which of three foundations is under it, so it can only claim
+     * what all three do. Whether the paving is shown is a property of the
+     * source, and the source's own note is where that belongs.
+     */
+    description: 'OSM rendered for the outdoors — trails, tracks and route shields.',
     /*
      * Which geometry it draws from is decided at style time, not here.
      *
