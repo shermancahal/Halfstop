@@ -47,6 +47,23 @@ if (!url) {
  */
 const origin = process.argv[3] || process.env.ABMAP_ORIGIN || 'https://shermancahal.github.io';
 
+/*
+ * Whether CORS is involved at all, which decides whether any of it is fatal.
+ *
+ * The first version of this check did not ask, and immediately called a
+ * working setup broken: GitHub Pages answers OPTIONS with 405, so the preflight
+ * check failed - against an archive the site reads perfectly, because the
+ * archive is served from the same origin as the page and a same-origin request
+ * never preflights and never needs a header.
+ *
+ * That is worse than the "CORS NONE" it replaced. A check that cannot tell is
+ * merely useless; a check that confidently condemns a working configuration
+ * sends somebody off to fix something that was never wrong.
+ */
+const sameOrigin = (() => {
+  try { return new URL(url, origin).origin === new URL(origin).origin; } catch { return false; }
+})();
+
 const problems = [];
 const notes = [];
 
@@ -85,8 +102,14 @@ if (first.status === 206) {
 }
 
 const allowed = first.headers.get('access-control-allow-origin');
-console.log(`  CORS on the GET        ${allowed || 'NONE'}`);
-if (!allowed) {
+console.log(`  CORS on the GET        ${allowed || 'NONE'}${sameOrigin ? ' (not needed — same origin as the site)' : ''}`);
+if (sameOrigin) {
+  notes.push(
+    `This archive is served from ${new URL(origin).origin}, the same origin as the site that reads it.`
+    + ' CORS does not apply to a same-origin request, so nothing below about headers matters here.'
+    + ' Move it to a bucket and it will.',
+  );
+} else if (!allowed) {
   problems.push(
     `No Access-Control-Allow-Origin in the answer to a request from ${origin},`
     + ' so a browser will refuse every read and the map will be blank with nothing in the console'
@@ -99,7 +122,7 @@ if (!allowed) {
   );
 }
 const exposed = (first.headers.get('access-control-expose-headers') || '').toLowerCase();
-if (allowed && !exposed.includes('content-range') && !exposed.includes('*')) {
+if (!sameOrigin && allowed && !exposed.includes('content-range') && !exposed.includes('*')) {
   notes.push(
     'Access-Control-Expose-Headers does not list content-range.'
     + ' Reads still work; the browser simply cannot see how much it got.',
@@ -117,34 +140,38 @@ if (allowed && !exposed.includes('content-range') && !exposed.includes('*')) {
  * browser is stopped. That is exactly the shape of "it works from the
  * terminal and the map is blank".
  */
-try {
-  const preflight = await fetch(url, {
-    method: 'OPTIONS',
-    headers: {
-      Origin: origin,
-      'Access-Control-Request-Method': 'GET',
-      'Access-Control-Request-Headers': 'range',
-    },
-  });
-  const preflightOrigin = preflight.headers.get('access-control-allow-origin');
-  const preflightHeaders = (preflight.headers.get('access-control-allow-headers') || '').toLowerCase();
-  console.log(`  CORS preflight         ${preflight.status} · origin ${preflightOrigin || 'NONE'} · headers ${preflightHeaders || 'NONE'}`);
-  if (!preflight.ok || !preflightOrigin) {
-    problems.push(
-      `The CORS preflight (OPTIONS with Access-Control-Request-Headers: range) answered ${preflight.status}`
-      + `${preflightOrigin ? '' : ' with no Access-Control-Allow-Origin'}.`
-      + ' A browser stops there and never sends the read, so every tile fails.',
-    );
-  } else if (!preflightHeaders.includes('range') && !preflightHeaders.includes('*')) {
-    problems.push(
-      `The preflight allows the origin but not the Range header (it allows: ${preflightHeaders || 'nothing'}).`
-      + ' Reading one tile means asking for a byte range, so a browser will refuse every read'
-      + ' while curl and this check\'s own GET keep working. Add "range" to the bucket\'s allowed headers.',
-    );
+if (sameOrigin) {
+  console.log('  CORS preflight         not asked — a same-origin read never sends one');
+} else {
+  try {
+    const preflight = await fetch(url, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: origin,
+        'Access-Control-Request-Method': 'GET',
+        'Access-Control-Request-Headers': 'range',
+      },
+    });
+    const preflightOrigin = preflight.headers.get('access-control-allow-origin');
+    const preflightHeaders = (preflight.headers.get('access-control-allow-headers') || '').toLowerCase();
+    console.log(`  CORS preflight         ${preflight.status} · origin ${preflightOrigin || 'NONE'} · headers ${preflightHeaders || 'NONE'}`);
+    if (!preflight.ok || !preflightOrigin) {
+      problems.push(
+        `The CORS preflight (OPTIONS with Access-Control-Request-Headers: range) answered ${preflight.status}`
+        + `${preflightOrigin ? '' : ' with no Access-Control-Allow-Origin'}.`
+        + ' A browser stops there and never sends the read, so every tile fails.',
+      );
+    } else if (!preflightHeaders.includes('range') && !preflightHeaders.includes('*')) {
+      problems.push(
+        `The preflight allows the origin but not the Range header (it allows: ${preflightHeaders || 'nothing'}).`
+        + ' Reading one tile means asking for a byte range, so a browser will refuse every read'
+        + ' while curl and this check\'s own GET keep working. Add "range" to the bucket\'s allowed headers.',
+      );
+    }
+  } catch (error) {
+    console.log(`  CORS preflight         could not be asked — ${error.message}`);
+    notes.push(`The OPTIONS preflight could not be sent: ${error.message}`);
   }
-} catch (error) {
-  console.log(`  CORS preflight         could not be asked — ${error.message}`);
-  notes.push(`The OPTIONS preflight could not be sent: ${error.message}`);
 }
 
 const bytes = new Uint8Array(await first.arrayBuffer());
