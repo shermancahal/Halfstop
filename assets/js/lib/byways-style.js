@@ -328,13 +328,25 @@ export const PROTOMAPS_SCHEMA = {
     primary: 'primary',
     secondary: 'secondary',
     tertiary: 'tertiary',
+    /*
+     * Two values, because Protomaps splits what Mapbox groups - and because
+     * `unclassified` was named nowhere in this style while sitting in the
+     * Smokies tile, so every unclassified road drew nothing. In OSM that is
+     * not "unknown": it is the minor public road below tertiary, which is
+     * most of the rural network this map exists for.
+     */
+    street: ['residential', 'unclassified'],
     // Inferred: Mapbox's grouping, not an OSM tag.
-    street: 'residential',
-    // Inferred, same.
     streetLimited: 'living_street',
     service: 'service',
     track: 'track',
-    path: 'path',
+    /*
+     * Everything that is trail on the ground, for the same reason: `footway`,
+     * `steps`, `bridleway` and `cycleway` were all in that tile and named
+     * nowhere here. A map that draws only what OSM happens to have tagged
+     * `path` draws a fraction of a national park's trails.
+     */
+    path: ['path', 'footway', 'bridleway', 'steps', 'cycleway'],
     pedestrian: 'pedestrian',
   },
   /*
@@ -376,7 +388,17 @@ export const PROTOMAPS_SCHEMA = {
    * bodies of water like any other; playa is left out, because a dry lake bed
    * labelled as water is worse than not labelling it.
    */
-  waterClasses: ['ocean', 'lake', 'river', 'riverbank', 'reservoir'],
+  /*
+   * `water` is the one that matters, and it is why no lake on this map had a
+   * name on it. Protomaps tags a lake `kind: water`; this list said `lake`,
+   * which nothing in the archive has ever been. The tile that proved it held
+   * nineteen distinctly-named water features and drew zero labels.
+   *
+   * `stream` is here because this is a map for the outdoors and a named creek
+   * is worth reading. It costs nothing low down: streams are not in the tiles
+   * until deep in, so the layer's own minzoom never has them to draw.
+   */
+  waterClasses: ['ocean', 'lake', 'water', 'river', 'riverbank', 'reservoir', 'stream'],
   // Nothing to filter while summitLabel is null; the layer is dropped anyway.
   summitClasses: [],
   /*
@@ -527,6 +549,27 @@ const hasSurface = () => Boolean(S.fields.surface);
  */
 const R = (name) => S.roadClasses[name];
 
+/**
+ * The values for a set of road roles, flattened.
+ *
+ * A role used to be one value, because under Mapbox Streets it is: one class
+ * per role, every time. Protomaps splits several of them - what Mapbox calls a
+ * street is `residential` and `unclassified` there, and what it calls a path is
+ * `path`, `footway`, `bridleway`, `steps` and `cycleway` - so a role has to be
+ * able to name more than one, and a `match` label list has to stay flat to be
+ * valid.
+ *
+ * The gaps this closes were not found by reading: they came from reading a real
+ * tile and asking which of its `kind_detail` values the style never mentions.
+ * `unclassified` is the minor public road that connects rural places, and
+ * `footway` is most of a national park's trail network. Both were drawing
+ * nothing at all, on a map for driving byways and walking trails.
+ *
+ * For Mapbox every role is still a single string, so this produces exactly the
+ * list it always did - which the style snapshot holds to.
+ */
+const classes = (...roles) => roles.flatMap((role) => [].concat(S.roadClasses[role] ?? []));
+
 /** The ramps belonging to a class, same reasoning. */
 const RL = (name) => S.roadLinks[name];
 
@@ -561,8 +604,7 @@ const byKind = (group, arms, fallback) => [
 
 /** Roads that are drawn solid, and so have something for a dash to sit on. */
 const sealedClasses = () => [
-  R('motorway'), R('trunk'), R('primary'), R('secondary'), R('tertiary'),
-  R('street'), R('streetLimited'),
+  ...classes('motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'street', 'streetLimited'),
 ];
 
 /*
@@ -983,7 +1025,7 @@ function roadLayers() {
     type: 'line',
     source: S.source,
     'source-layer': S.layers.road,
-    filter: ['match', ['get', S.fields.roadClassField], [R('track'), R('service')], true, false],
+    filter: ['match', ['get', S.fields.roadClassField], classes('track', 'service'), true, false],
     minzoom: 11,
     layout: { 'line-cap': 'butt', 'line-join': 'round' },
     paint: {
@@ -999,7 +1041,7 @@ function roadLayers() {
     type: 'line',
     source: S.source,
     'source-layer': S.layers.road,
-    filter: ['match', ['get', S.fields.roadClassField], [R('path'), R('pedestrian')], true, false],
+    filter: ['match', ['get', S.fields.roadClassField], classes('path', 'pedestrian'), true, false],
     minzoom: 13,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
@@ -1036,7 +1078,7 @@ function roadLayers() {
     type: 'line',
     source: S.source,
     'source-layer': S.layers.road,
-    filter: ['match', ['get', S.fields.roadClassField], [R('street'), R('streetLimited')], true, false],
+    filter: ['match', ['get', S.fields.roadClassField], classes('street', 'streetLimited'), true, false],
     minzoom: 11,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
@@ -1063,7 +1105,7 @@ function roadLayers() {
     type: 'line',
     source: S.source,
     'source-layer': S.layers.road,
-    filter: ['match', ['get', S.fields.roadClassField], [R('street'), R('streetLimited')], true, false],
+    filter: ['match', ['get', S.fields.roadClassField], classes('street', 'streetLimited'), true, false],
     minzoom: 11,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
@@ -1195,7 +1237,7 @@ function labelLayers() {
        * from the map, with no error anywhere.
        */
       filter: ['match', ['get', S.fields.roadClassField],
-        [R('motorway'), R('trunk'), R('primary'), R('secondary'), R('tertiary'), R('street'), R('track')],
+        classes('motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'street', 'track'),
         true, false],
       minzoom: 13,
       layout: {
@@ -1225,7 +1267,7 @@ function labelLayers() {
       source: S.source,
       'source-layer': S.layers.road,
       filter: ['all',
-        ['match', ['get', S.fields.roadClassField], [R('path'), R('service')], true, false],
+        ['match', ['get', S.fields.roadClassField], classes('path', 'service'), true, false],
         ['has', 'name'],
       ],
       minzoom: 14,
@@ -1555,7 +1597,7 @@ function shieldLayers(state = '') {
    * z8, so the layer has nothing to draw before then anyway.
    */
   const onARoad = ['match', ['get', S.fields.roadClassField],
-    [R('motorway'), R('trunk'), R('primary'), R('secondary'), R('tertiary')], true, false];
+    classes('motorway', 'trunk', 'primary', 'secondary', 'tertiary'), true, false];
 
   /** Half a concurrency: its own number, its own image, shifted off centre. */
   const half = (id, text, shiftPx) => ({

@@ -180,8 +180,20 @@ test('byways: the road hierarchy maps across, and says where it flattens', () =>
     Object.keys(MAPBOX_SCHEMA.roadClasses).sort(),
     'the two schemas classify roads differently, so a class would go missing',
   );
+  /*
+   * A role may name one value or several. Protomaps splits some of what Mapbox
+   * groups - a street there is `residential` and `unclassified`, a path is five
+   * separate kinds - so the shape is string-or-array, and what has to hold is
+   * that every role resolves to at least one non-empty value. A role that
+   * resolves to nothing becomes `undefined` in a filter and removes a whole
+   * road class from the map without erroring.
+   */
   for (const [key, value] of Object.entries(PROTOMAPS_SCHEMA.roadClasses)) {
-    assert.ok(typeof value === 'string' && value.length > 0, `${key} maps to nothing`);
+    const values = [].concat(value);
+    assert.ok(values.length > 0, `${key} maps to nothing`);
+    for (const one of values) {
+      assert.ok(typeof one === 'string' && one.length > 0, `${key} maps to something that is not a class name`);
+    }
   }
 
   // Mapbox maps each class to itself; anything else means the inline values
@@ -196,8 +208,8 @@ test('byways: the road hierarchy maps across, and says where it flattens', () =>
    * and squinting at it - recorded so that if kind_detail turns out to exist,
    * the improvement is visible as this number changing.
    */
-  const distinct = new Set(Object.values(PROTOMAPS_SCHEMA.roadClasses)).size;
-  const before = new Set(Object.values(MAPBOX_SCHEMA.roadClasses)).size;
+  const distinct = new Set(Object.values(PROTOMAPS_SCHEMA.roadClasses).flat()).size;
+  const before = new Set(Object.values(MAPBOX_SCHEMA.roadClasses).flat()).size;
   assert.equal(before, 11, 'Mapbox draws eleven distinguishable road classes');
   /*
    * Eleven, not five. Reading kind_detail rather than kind is what recovered
@@ -206,7 +218,18 @@ test('byways: the road hierarchy maps across, and says where it flattens', () =>
    * hierarchy has flattened and the map is worse in a way that is easy to
    * look at and not notice.
    */
-  assert.equal(distinct, 11, 'the road hierarchy has flattened; roads must read kind_detail, not kind');
+  /*
+   * Sixteen now, not eleven. The five added are `unclassified`, `footway`,
+   * `bridleway`, `steps` and `cycleway`, and none of them came from reading
+   * the documentation - they came from reading a real tile and asking which
+   * of its values this style never mentions. Every one of them was drawing
+   * nothing.
+   *
+   * Pinned exactly rather than as a floor, for the same reason it was pinned
+   * at eleven: this number going down is the road hierarchy flattening, which
+   * is easy to look at and not notice.
+   */
+  assert.equal(distinct, 16, 'the road hierarchy has flattened; roads must read kind_detail, not kind');
   assert.equal(PROTOMAPS_SCHEMA.fields.roadClassField, 'kind_detail');
 });
 
@@ -360,8 +383,8 @@ test('protomaps: every road filter names a class the schema maps', () => {
    * literals among ten correct schema reads, survived until this ran.
    */
   const known = new Set([
-    ...Object.values(PROTOMAPS_SCHEMA.roadClasses),
-    ...Object.values(PROTOMAPS_SCHEMA.roadLinks),
+    ...Object.values(PROTOMAPS_SCHEMA.roadClasses).flat(),
+    ...Object.values(PROTOMAPS_SCHEMA.roadLinks).flat(),
   ]);
   const field = PROTOMAPS_SCHEMA.fields.roadClassField;
   const asked = new Set();
@@ -403,6 +426,9 @@ test('byways: no road class is written inline', () => {
     // does `className === 'motorway'`, where the name is a key of ROAD_CLASSES
     // rather than a value from the tiles.
     .replace(/\bRL?\('[a-zA-Z]+'\)/g, 'R()')
+    // `classes('street', 'track')` names roles, not tile values - the same
+    // exemption R() and RL() get, for the same reason.
+    .replace(/\bclasses\((?:\s*'[a-zA-Z]+'\s*,?)+\)/g, 'classes()')
     .replace(/className === '[a-z_]+'/g, 'className === K');
   const inline = [...roads.matchAll(/'(motorway|trunk|primary|secondary|tertiary|street|street_limited|track|path|pedestrian|service)(_link)?'/g)]
     .map((match) => match[0]);
