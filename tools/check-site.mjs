@@ -243,6 +243,23 @@ const report = await inTime('reading the map', () => tab.evaluate(() => {
   return out;
 }), EMPTY);
 
+/*
+ * Which build this actually looked at.
+ *
+ * Twice now a check has been dispatched while a deploy was still publishing,
+ * and the report that came back described the previous build - indistinguishable
+ * from the new one having not fixed anything. The site publishes deployed.txt
+ * with the commit in it, so the check can say which build it saw rather than
+ * leaving that to be inferred from timing.
+ */
+const stamp = await inTime('reading the build stamp', async () => {
+  const at = new URL('deployed.txt', page.href).href;
+  const response = await tab.request.get(at);
+  if (!response.ok()) return `deployed.txt answered ${response.status()}`;
+  return (await response.text()).split('\n').filter(Boolean).join(' · ');
+}, 'not read');
+
+console.log(`  build                 ${stamp}`);
 console.log(`  waited for             ${settled}`);
 console.log(`  archive               ${report.config.archive}`);
 console.log(`  maxzoom               ${report.config.maxzoom}`);
