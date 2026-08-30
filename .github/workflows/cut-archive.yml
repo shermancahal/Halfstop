@@ -117,10 +117,10 @@ jobs:
       # is the step that has caught every hosting problem this project has had.
       # Skipped rather than guessed at when no public URL is configured.
       - name: Ask the bucket whether a browser can read it
-        if: ${{ inputs.upload && vars.PROTOMAPS_PUBLIC_BASE != '' }}
+        if: ${{ inputs.upload && vars.R2_PUBLIC_BASE != '' }}
         continue-on-error: true
         env:
-          BASE: ${{ vars.PROTOMAPS_PUBLIC_BASE }}
+          BASE: ${{ vars.R2_PUBLIC_BASE }}
           KEY: ${{ inputs.key }}
         run: |
           set -o pipefail
@@ -153,7 +153,7 @@ jobs:
           BYTES: ${{ steps.cut.outputs.bytes }}
           DEPTH: ${{ steps.cut.outputs.maxzoom }}
           UPLOADED: ${{ inputs.upload }}
-          BASE: ${{ vars.PROTOMAPS_PUBLIC_BASE }}
+          BASE: ${{ vars.R2_PUBLIC_BASE }}
           KEY: ${{ inputs.key }}
         run: |
           if [ -z "${BYTES:-}" ]; then

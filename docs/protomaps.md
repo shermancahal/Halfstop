@@ -180,21 +180,30 @@ nothing:
 
 ### 4. Turn on public access and CORS · *Cloudflare*
 
-Bucket → **Settings**.
+**R2 → your bucket → the Settings tab.** Both of these live on that one page,
+under headings Cloudflare has renamed more than once — look for *Public access*
+(sometimes *Public Development URL*) and *CORS policy*.
 
 - **Public access**: enable the `r2.dev` development URL, or attach a custom
   domain. The custom domain is the better answer — the `r2.dev` URL is rate
   limited and Cloudflare says outright it is not for production — but the
-  development URL is fine for finding out whether the map is any good.
-- **CORS policy**: the JSON in step 5 of the manual walkthrough below. The
-  `range` header in `AllowedHeaders` is the one people leave out, and leaving
-  it out fails in a way that only a browser can see.
+  development URL is fine for finding out whether the map is any good. If the
+  bucket already shows a `https://pub-….r2.dev` address, this is already done.
+- **CORS policy**: paste the JSON from step 5 of the manual walkthrough below.
+  The `range` header in `AllowedHeaders` is the one people leave out, and
+  leaving it out fails in a way that only a browser can see — curl and Node
+  both get the bytes.
 
-Then add one more **Variable** so the run can check its own work:
+Then add one more **Variable** on GitHub so the run can check its own work:
 
 | Variable | Value |
 | --- | --- |
-| `PROTOMAPS_PUBLIC_BASE` | the public URL, e.g. `https://pub-xxxx.r2.dev` |
+| `R2_PUBLIC_BASE` | **the bucket's** public URL, e.g. `https://pub-xxxx.r2.dev` |
+
+That is the bucket, not the site. It gets the archive's filename appended to
+it, so the run can read back what it just uploaded. It was called
+`PROTOMAPS_PUBLIC_BASE` for about an hour, which read just as naturally as the
+site's own address and duly got asked about.
 
 ### 5. Run it · *GitHub*
 
