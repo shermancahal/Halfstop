@@ -18,6 +18,13 @@ on:
         description: 'The .pmtiles URL — e.g. https://pub-xxxx.r2.dev/byways.pmtiles'
         required: true
         type: string
+      tile:
+        description: >-
+          Also read this tile and say what is in it, as z/x/y. Answers the
+          question a wrong-looking map raises: the bytes arrived, so what do
+          they contain? 13/2195/3225 is Gatlinburg.
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -39,6 +46,10 @@ jobs:
         run: |
           set -o pipefail
           node tools/check-archive.mjs "${{ inputs.url }}" 2>&1 | tee report.txt
+
+      - name: Look inside a tile
+        if: ${{ inputs.tile != '' }}
+        run: node tools/inspect-archive.mjs "${{ inputs.url }}" "${{ inputs.tile }}" 2>&1 | tee -a report.txt
 
       - name: Put the answer in the summary
         if: always()
