@@ -256,6 +256,8 @@ export function reconcile(layers) {
       Object.values(PROTOMAPS_SCHEMA.landuse || {}).flat()],
     ['place', PROTOMAPS_SCHEMA.layers.place, PROTOMAPS_SCHEMA.fields.classField,
       Object.values(PROTOMAPS_SCHEMA.place || {}).flat()],
+    ['boundaryClasses', PROTOMAPS_SCHEMA.layers.boundary, PROTOMAPS_SCHEMA.fields.classField,
+      Object.values(PROTOMAPS_SCHEMA.boundaryClasses || {}).flat()],
     ['roadClasses', PROTOMAPS_SCHEMA.layers.road, PROTOMAPS_SCHEMA.fields.roadClassField,
       [...Object.values(PROTOMAPS_SCHEMA.roadClasses || {}),
         ...Object.values(PROTOMAPS_SCHEMA.roadLinks || {})]],
