@@ -981,6 +981,29 @@ function reliefLayers() {
 
 /* ---- water ---- */
 
+/**
+ * Whether one source-layer holds both the water bodies and the watercourses.
+ *
+ * Mapbox keeps them apart: `water` is polygons, `waterway` is lines, and a
+ * fill layer over the first and a line layer over the second each get exactly
+ * the geometry they can draw. Protomaps puts both in `water`, and that is not
+ * a detail - a fill layer handed a LineString does not skip it, it closes the
+ * ring from the last vertex back to the first and fills the result.
+ *
+ * What that looks like on a map is a river drawn as an enormous wedge: one
+ * edge following the water, the other a dead-straight chord across several
+ * miles of hillside. Which is exactly what was reported, over the Little
+ * River.
+ *
+ * Derived rather than declared, because the two names are already in the
+ * schema and a separate flag saying the same thing is a flag that can drift
+ * away from them.
+ */
+const sharedWaterLayer = () => S.layers.water === S.layers.waterway;
+
+/** A filter admitting one geometry family, single- and multi-part alike. */
+const onlyGeometry = (...types) => ['match', ['geometry-type'], types, true, false];
+
 function waterLayers() {
   return [
     {
@@ -988,6 +1011,12 @@ function waterLayers() {
       type: 'fill',
       source: S.source,
       'source-layer': S.layers.water,
+      /*
+       * Only where the schema needs it. Under Mapbox this key is absent, so
+       * the style is byte-identical to the one the snapshot holds - which is
+       * how a fix for one foundation is kept from quietly changing the other.
+       */
+      ...(sharedWaterLayer() ? { filter: onlyGeometry('Polygon', 'MultiPolygon') } : {}),
       paint: { 'fill-color': PALETTE.water },
     },
     {
@@ -995,6 +1024,9 @@ function waterLayers() {
       type: 'line',
       source: S.source,
       'source-layer': S.layers.waterway,
+      // The other half: without this, every lake gets its outline stroked as
+      // though it were a river.
+      ...(sharedWaterLayer() ? { filter: onlyGeometry('LineString', 'MultiLineString') } : {}),
       minzoom: 8,
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {

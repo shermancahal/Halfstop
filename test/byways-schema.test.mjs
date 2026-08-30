@@ -728,3 +728,53 @@ test('byways: no font name is written inline past the seam', () => {
     assert.ok(!past.includes(`'${name}'`), `"${name}" is written inline past the seam`);
   }
 });
+
+test('byways: a layer never draws geometry it cannot draw', () => {
+  /*
+   * A fill layer handed a LineString does not skip it. It closes the ring from
+   * the last vertex back to the first and fills the result - so a river comes
+   * out as an enormous wedge with one edge following the water and the other a
+   * dead-straight chord across several miles of hillside. That was reported,
+   * over the Little River, and it is the whole of this test.
+   *
+   * The cause is a seam problem rather than a data problem, which is why no
+   * existing check saw it. Mapbox keeps water bodies and watercourses in
+   * separate source-layers, so a fill over one and a line over the other each
+   * get exactly the geometry they can draw and no filter was ever needed.
+   * Protomaps puts both in `water`. Every field name was right, every value
+   * was right, and the map was wrong.
+   *
+   * So the rule is stated as a property of any schema, present or future:
+   * wherever a fill layer and a line layer read the same source-layer, both
+   * must say which geometry they are for. That fails on this bug, on the same
+   * bug in the line direction, and on a third foundation arriving with the
+   * same shape - rather than pinning the one filter that happens to fix today.
+   */
+  for (const [what, style] of [['mapbox', bywaysStyle('tok')], ['protomaps', protomapsStyle()]]) {
+    const byLayer = new Map();
+    for (const layer of style.layers) {
+      if (!layer['source-layer']) continue;
+      if (!byLayer.has(layer['source-layer'])) byLayer.set(layer['source-layer'], []);
+      byLayer.get(layer['source-layer']).push(layer);
+    }
+
+    for (const [sourceLayer, layers] of byLayer) {
+      const fills = layers.filter((layer) => layer.type === 'fill');
+      const lines = layers.filter((layer) => layer.type === 'line');
+      if (!fills.length || !lines.length) continue;
+
+      /*
+       * Both kinds read this source-layer, so neither may take it all. A
+       * `filter` mentioning geometry-type anywhere counts: some layers narrow
+       * by class as well, and the shape of that expression is not this test's
+       * business.
+       */
+      const saysGeometry = (layer) => JSON.stringify(layer.filter ?? null).includes('geometry-type');
+      for (const layer of [...fills, ...lines]) {
+        assert.ok(saysGeometry(layer),
+          `${what}: ${layer.id} is a ${layer.type} over "${sourceLayer}", which also carries `
+          + `${layer.type === 'fill' ? 'lines' : 'fills'}; it must say which geometry it draws`);
+      }
+    }
+  }
+});
