@@ -162,6 +162,8 @@ const EMPTY = {
   map: 'the page never answered',
   sources: [],
   rendered: [],
+  byStyleLayer: [],
+  silent: [],
 };
 
 const report = await inTime('reading the map', () => tab.evaluate(() => {
@@ -179,6 +181,8 @@ const report = await inTime('reading the map', () => tab.evaluate(() => {
     map: null,
     sources: [],
     rendered: [],
+    byStyleLayer: [],
+    silent: [],
   };
 
   const map = window.abmapMap;
@@ -213,11 +217,29 @@ const report = await inTime('reading the map', () => tab.evaluate(() => {
    * the question the archive inspector already answers.
    */
   const byLayer = new Map();
+  const byStyleLayer = new Map();
   for (const feature of map.queryRenderedFeatures()) {
     const key = `${feature.source}/${feature.sourceLayer || '-'}`;
     byLayer.set(key, (byLayer.get(key) || 0) + 1);
+    const drawn = feature.layer?.id;
+    if (drawn) byStyleLayer.set(drawn, (byStyleLayer.get(drawn) || 0) + 1);
   }
   out.rendered = [...byLayer].sort((a, b) => b[1] - a[1]);
+
+  /*
+   * And per style layer, which is the half that answers the useful question.
+   *
+   * Source-layer counts say the data arrived. They cannot distinguish a map
+   * with route shields on it from one without, because a shield layer and the
+   * road casing under it both read the `roads` source-layer and land in the
+   * same bucket. Listing what each style layer drew - and, more to the point,
+   * which ones drew nothing - is what says whether the map a reader sees is
+   * the map this style describes.
+   */
+  out.byStyleLayer = [...byStyleLayer].sort((a, b) => b[1] - a[1]);
+  out.silent = (map.getStyle()?.layers || [])
+    .filter((layer) => layer.type !== 'background' && !byStyleLayer.has(layer.id))
+    .map((layer) => layer.id);
   return out;
 }), EMPTY);
 
@@ -245,6 +267,16 @@ for (const source of report.sources) {
 console.log('\nRendered features on screen');
 if (!report.rendered.length) console.log('  NONE — nothing at all is drawing.');
 for (const [key, count] of report.rendered) console.log(`  ${String(count).padStart(6)}  ${key}`);
+
+console.log('\nDrawn by style layer');
+if (!report.byStyleLayer.length) console.log('  NONE');
+for (const [id, count] of report.byStyleLayer) console.log(`  ${String(count).padStart(6)}  ${id}`);
+if (report.silent.length) {
+  console.log(`\n  Drew nothing here — ${report.silent.length}:`);
+  console.log(`    ${report.silent.join(', ')}`);
+  console.log('    Some of these are honest (no glacier in Tennessee). A label or shield');
+  console.log('    layer in this list over ground that has them is a filter or a font.');
+}
 
 console.log('\nArchive, glyph and tile requests');
 if (!requests.length) console.log('  NONE — the map never asked for anything.');
