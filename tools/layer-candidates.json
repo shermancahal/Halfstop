@@ -857,5 +857,68 @@
     "url": "https://shermancahal.github.io/Map/assets/js/token.js",
     "find": "ABMAP_PROTOMAPS_ARCHIVE = '([^']*)'",
     "note": "What the deployed site is configured to read. The archive can be present and the config still empty, in which case Byways Topo goes on drawing from Mapbox and the extract is a file nobody asks for."
+  },
+  {
+    "id": "font:Noto Sans Regular",
+    "note": "The Byways style asks for Mapbox's font stack — 'DIN Pro Regular', 'Arial Unicode MS Regular' — and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
+    "expect": "data",
+    "find": "Noto",
+    "url": "https://protomaps.github.io/basemaps-assets/fonts/Noto%20Sans%20Regular/0-255.pbf"
+  },
+  {
+    "id": "font:Noto Sans Medium",
+    "note": "The Byways style asks for Mapbox's font stack — 'DIN Pro Regular', 'Arial Unicode MS Regular' — and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
+    "expect": "data",
+    "find": "Noto",
+    "url": "https://protomaps.github.io/basemaps-assets/fonts/Noto%20Sans%20Medium/0-255.pbf"
+  },
+  {
+    "id": "font:Noto Sans Bold",
+    "note": "The Byways style asks for Mapbox's font stack — 'DIN Pro Regular', 'Arial Unicode MS Regular' — and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
+    "expect": "data",
+    "find": "Noto",
+    "url": "https://protomaps.github.io/basemaps-assets/fonts/Noto%20Sans%20Bold/0-255.pbf"
+  },
+  {
+    "id": "font:Noto Sans Italic",
+    "note": "The Byways style asks for Mapbox's font stack — 'DIN Pro Regular', 'Arial Unicode MS Regular' — and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
+    "expect": "data",
+    "find": "Noto",
+    "url": "https://protomaps.github.io/basemaps-assets/fonts/Noto%20Sans%20Italic/0-255.pbf"
+  },
+  {
+    "id": "font:NotoSans-Regular",
+    "note": "The Byways style asks for Mapbox's font stack — 'DIN Pro Regular', 'Arial Unicode MS Regular' — and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
+    "expect": "data",
+    "find": "Noto",
+    "url": "https://protomaps.github.io/basemaps-assets/fonts/NotoSans-Regular/0-255.pbf"
+  },
+  {
+    "id": "font:NotoSans-Medium",
+    "note": "The Byways style asks for Mapbox's font stack — 'DIN Pro Regular', 'Arial Unicode MS Regular' — and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
+    "expect": "data",
+    "find": "Noto",
+    "url": "https://protomaps.github.io/basemaps-assets/fonts/NotoSans-Medium/0-255.pbf"
+  },
+  {
+    "id": "font:NotoSans-Bold",
+    "note": "The Byways style asks for Mapbox's font stack — 'DIN Pro Regular', 'Arial Unicode MS Regular' — and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
+    "expect": "data",
+    "find": "Noto",
+    "url": "https://protomaps.github.io/basemaps-assets/fonts/NotoSans-Bold/0-255.pbf"
+  },
+  {
+    "id": "font:NotoSans-Italic",
+    "note": "The Byways style asks for Mapbox's font stack — 'DIN Pro Regular', 'Arial Unicode MS Regular' — and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
+    "expect": "data",
+    "find": "Noto",
+    "url": "https://protomaps.github.io/basemaps-assets/fonts/NotoSans-Italic/0-255.pbf"
+  },
+  {
+    "id": "font:Noto Sans Regular,Noto Sans Italic",
+    "note": "The Byways style asks for Mapbox's font stack — 'DIN Pro Regular', 'Arial Unicode MS Regular' — and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
+    "expect": "data",
+    "find": "Noto",
+    "url": "https://protomaps.github.io/basemaps-assets/fonts/Noto%20Sans%20Regular,Noto%20Sans%20Italic/0-255.pbf"
   }
 ]
