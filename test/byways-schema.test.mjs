@@ -898,3 +898,38 @@ test('byways: the identify table names a real column for every layer', () => {
       `${schema.id}: the layer the roads and trails are drawn from is not identifiable`);
   }
 });
+
+test('byways: every kind of border the schema names is actually drawn', () => {
+  /*
+   * Three roles now — country, state, county — and each is a layer on both
+   * foundations or it is nothing at all.
+   *
+   * County lines were absent for no better reason than that the schema this
+   * style was ported from did not carry them, which is inheritance rather than
+   * a decision. They are in the archive at every zoom, and on a map about back
+   * roads they are the boundary those roads are organised by: whose grader
+   * clears the gravel, which sheriff, which set of numbered routes.
+   *
+   * Checked as a rule rather than a list, so a fourth role added to one schema
+   * and forgotten in the style fails here instead of drawing nothing.
+   */
+  for (const [what, style, schema] of [
+    ['mapbox', bywaysStyle('tok'), MAPBOX_SCHEMA],
+    ['protomaps', protomapsStyle(), PROTOMAPS_SCHEMA],
+  ]) {
+    const roles = Object.keys(schema.boundaryClasses || schema.boundaryFilters || {});
+    assert.deepEqual(roles.slice().sort(), ['country', 'county', 'state'],
+      `${what}: the boundary roles differ between the schemas, so one would go missing`);
+
+    for (const role of roles) {
+      const layer = style.layers.find((one) => one.id === `boundary-${role}`);
+      assert.ok(layer, `${what}: nothing draws the ${role} boundary`);
+      assert.ok(layer.filter, `${what}: boundary-${role} draws every border, not its own`);
+    }
+  }
+
+  // And they stack in the order a reader expects: the heavier line on top.
+  const ids = protomapsStyle().layers.map((layer) => layer.id);
+  assert.ok(ids.indexOf('boundary-county') < ids.indexOf('boundary-state'),
+    'a county line drawn over a state line makes the more important one dashed-through');
+});

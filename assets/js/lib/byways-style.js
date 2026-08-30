@@ -150,6 +150,8 @@ export const MAPBOX_SCHEMA = {
   boundaryFilters: {
     state: ['all', ['==', ['get', 'admin_level'], 1], ['==', ['get', 'maritime'], 'false']],
     country: ['all', ['<=', ['get', 'admin_level'], 0], ['==', ['get', 'maritime'], 'false']],
+    // Mapbox numbers counties two levels down from the country.
+    county: ['all', ['==', ['get', 'admin_level'], 2], ['==', ['get', 'maritime'], 'false']],
   },
   /*
    * The road hierarchy, which is what makes an atlas readable.
@@ -388,6 +390,13 @@ export const PROTOMAPS_SCHEMA = {
   boundaryClasses: {
     state: ['region'],
     country: ['country'],
+    /*
+     * Counties, which Protomaps files under `locality` — the same word its
+     * places layer uses for a town, in a different layer meaning a different
+     * thing. Read off real tiles rather than guessed: at z13 over Gatlinburg
+     * the only boundary present is `locality`, and it is the county line.
+     */
+    county: ['locality'],
   },
   boundaryFilters: null,
   /*
@@ -1288,6 +1297,34 @@ function boundaryFilter(role) {
 
 function boundaryLayers() {
   return [
+    /*
+     * Counties first, so the heavier lines paint over them.
+     *
+     * Drawn at all because this is a back-roads atlas and a county line is the
+     * boundary those roads are actually organised by: whose grader clears the
+     * gravel, which sheriff, which set of numbered routes. It was absent for
+     * no better reason than that the schema this style was ported from did not
+     * carry it, which is inheritance rather than a decision.
+     *
+     * Quiet, though. It is the most numerous boundary on the map by a long way
+     * and it is context rather than information, so: finer than a state line,
+     * dotted rather than dashed, and not until the ground is close enough that
+     * one is worth telling from the next.
+     */
+    {
+      id: 'boundary-county',
+      type: 'line',
+      source: S.source,
+      'source-layer': S.layers.boundary,
+      filter: boundaryFilter('county'),
+      minzoom: 7,
+      paint: {
+        'line-color': PALETTE.boundary,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 7, 0.4, 12, 0.9],
+        'line-dasharray': [1, 2],
+        'line-opacity': ['interpolate', ['linear'], ['zoom'], 7, 0.35, 10, 0.55],
+      },
+    },
     {
       id: 'boundary-state',
       type: 'line',
