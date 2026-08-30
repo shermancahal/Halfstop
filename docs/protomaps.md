@@ -105,6 +105,133 @@ re-uploads the whole thing, so this is right for a region and wrong for a
 continent. When the coverage outgrows it, the rest of this document is the
 answer, and switching is one variable.
 
+**And one measured caveat.** Pages does not answer `Range` reliably on a large
+object. It answered `206` on every probe made with curl and with Node, and then
+`tools/check-site.mjs` — which watches what a real browser actually receives —
+caught it answering a ranged request with `200` and the whole 463 MB file. The
+reader copes by slicing, so nothing looks wrong; a visitor on a phone simply
+downloads the entire archive. Treat Pages as fine for a small extract and as
+unsuitable for anything continental, and read the transfer sizes in a
+`check-site` run rather than trusting a `206` from the terminal.
+
+## Going national, without ever touching the file
+
+The walkthrough further down is the manual route, and it is still the right
+reference for what a bucket has to do. But nothing about a continental archive
+should involve a laptop: it is several gigabytes, it is cut by reading a
+hundred-gigabyte planet file by byte range, and downloading it in a browser in
+order to upload it again in a browser is an afternoon spent moving bytes past
+yourself.
+
+So *Cut a map archive* does both ends. Six steps, and the only slow one is
+waiting.
+
+### 1. Make the bucket
+
+Cloudflare dashboard → **R2** → *Create bucket*. Any name; `byways-tiles` is
+the one this document assumes. Location Automatic.
+
+### 2. Make an API token that can only write to that bucket
+
+**R2 → API → Manage API tokens → Create API token.**
+
+- Permission: **Object Read & Write**
+- Specify bucket: **the one bucket**, not "all buckets"
+- TTL: whatever you are comfortable re-issuing
+
+It shows you three things once and never again. Copy all three.
+
+This token can write to the bucket, which makes it the only genuinely secret
+value in this project — the Mapbox key is public by design and the archive URL
+is a public URL. There is a test asserting that no workflow which builds the
+site so much as mentions it.
+
+### 3. Put them in the repository
+
+**Settings → Secrets and variables → Actions.**
+
+Under **Secrets** — these three, exactly these names:
+
+| Secret | Where it came from |
+| --- | --- |
+| `R2_ACCOUNT_ID` | the Account ID on the R2 overview page |
+| `R2_ACCESS_KEY_ID` | the token's Access Key ID |
+| `R2_SECRET_ACCESS_KEY` | the token's Secret Access Key |
+
+Under **Variables** — not Secrets, because a workflow cannot read a secret
+through the `vars` context and setting them there looks done and changes
+nothing:
+
+| Variable | Value |
+| --- | --- |
+| `R2_BUCKET` | `byways-tiles` |
+
+### 4. Turn on public access and CORS
+
+Bucket → **Settings**.
+
+- **Public access**: enable the `r2.dev` development URL, or attach a custom
+  domain. The custom domain is the better answer — the `r2.dev` URL is rate
+  limited and Cloudflare says outright it is not for production — but the
+  development URL is fine for finding out whether the map is any good.
+- **CORS policy**: the JSON in step 5 of the manual walkthrough below. The
+  `range` header in `AllowedHeaders` is the one people leave out, and leaving
+  it out fails in a way that only a browser can see.
+
+Then add one more **Variable** so the run can check its own work:
+
+| Variable | Value |
+| --- | --- |
+| `PROTOMAPS_PUBLIC_BASE` | the public URL, e.g. `https://pub-xxxx.r2.dev` |
+
+### 5. Run it
+
+**Actions → Cut a map archive → Run workflow.**
+
+| Field | Value |
+| --- | --- |
+| bbox | `-125.0,24.4,-66.9,49.4` (the lower forty-eight) |
+| maxzoom | `13` |
+| planet | leave empty |
+| upload | **checked** |
+| key | `byways.pmtiles` |
+
+Then wait. A continental cut is hours, not minutes — the job allows five and a
+half. With `upload` checked it goes straight to the bucket by multipart upload
+and no artifact is produced, which is deliberate: a single PUT to R2 is capped
+at 300 MB, so neither the dashboard nor `wrangler r2 object put` can take a
+file this size.
+
+When it finishes it asks your bucket whether a browser could actually read what
+it just uploaded, and puts the answer in the run summary.
+
+### 6. Point the site at it
+
+The run summary names the two **Variables** to set, filled in with the real
+values:
+
+| Variable | Value |
+| --- | --- |
+| `PROTOMAPS_ARCHIVE` | `https://pub-xxxx.r2.dev/byways.pmtiles` |
+| `PROTOMAPS_MAXZOOM` | `13` |
+
+Setting `PROTOMAPS_ARCHIVE` also stops the deploy cutting and publishing its
+own copy alongside the site, so the next deploy gets smaller as well.
+
+Push anything, or re-run the deploy, and then look at it:
+
+**Actions → Check the live map → Run workflow**, with a view somewhere the new
+coverage should have data. It reports which build it looked at, what the
+archive answered, and how many features each style layer actually drew.
+
+### What it costs
+
+R2 charges for storage and for operations, and not for egress. Several
+gigabytes is cents a month; the reads are byte ranges rather than whole-file
+downloads, so the operation count follows how much the map is panned rather
+than how big the archive is. The reason this is worth doing is not really the
+money — it is that a bucket answers `Range` predictably, and Pages does not.
+
 ## Setting one up on a bucket, start to finish
 
 ### 1. Decide the coverage first

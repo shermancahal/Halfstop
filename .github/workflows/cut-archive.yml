@@ -26,6 +26,20 @@ on:
         description: 'Which planet build to cut from. Left empty, the most recent one that answers is used.'
         required: false
         type: string
+      upload:
+        description: >-
+          Push the result straight to R2 instead of handing back a download.
+          Needed for anything continental: an Actions artifact tops out well
+          below a national archive, and a browser download of several gigabytes
+          followed by a browser upload of several gigabytes is a bad afternoon.
+        required: false
+        default: false
+        type: boolean
+      key:
+        description: 'What to call it in the bucket.'
+        required: false
+        default: 'byways.pmtiles'
+        type: string
 
 permissions:
   contents: read
@@ -34,8 +48,22 @@ jobs:
   cut:
     name: Cut it
     runs-on: ubuntu-latest
+    # A continental extract is read out of the planet by byte range, and that
+    # is hours rather than minutes. The job cap is six; this stops short of it
+    # so the summary still gets written.
+    timeout-minutes: 330
     steps:
       - uses: actions/checkout@v4
+
+      - name: Make room
+        # A national archive is several gigabytes and the runner ships with a
+        # lot of things this job will never use. Cheaper than finding out at
+        # 90% of a three-hour cut.
+        if: ${{ inputs.upload }}
+        run: |
+          echo "before:"; df -h / | tail -1
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          echo "after:"; df -h / | tail -1
 
       - name: Cut the archive
         id: cut
@@ -44,12 +72,73 @@ jobs:
           ZOOM: ${{ inputs.maxzoom }}
           PLANET: ${{ inputs.planet }}
           OUT: byways.pmtiles
-          # An artifact is not a Pages site, so the ceiling here is what
-          # Actions will store rather than what Pages will serve.
-          LIMIT: '4000000000'
+          # Two ceilings, because the two destinations are nothing alike. Going
+          # to an artifact the limit is what Actions will store and what a
+          # person will wait to download; going to a bucket it is the runner's
+          # own disk.
+          LIMIT: ${{ inputs.upload && '20000000000' || '4000000000' }}
         run: sh tools/cut-archive.sh
 
+      # ------------------------------------------------------------- to R2
+      #
+      # The AWS CLI rather than wrangler or the dashboard, and this is the one
+      # thing about R2 worth writing down: a single PUT to R2 is capped at
+      # 300 MB, which is what both of those do. Past that it has to be a
+      # multipart upload, and `aws s3 cp` splits the file itself. It is already
+      # on the runner, so there is nothing to install.
+      - name: Put it in the bucket
+        if: ${{ inputs.upload }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          # Recent AWS CLI versions add a checksum header to every upload that
+          # several S3-compatible stores reject. Asking for it only where the
+          # protocol requires it keeps this working across both.
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          ACCOUNT: ${{ secrets.R2_ACCOUNT_ID }}
+          BUCKET: ${{ vars.R2_BUCKET }}
+          KEY: ${{ inputs.key }}
+        run: |
+          set -euo pipefail
+          for name in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY ACCOUNT BUCKET; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is not set. See docs/protomaps.md — the three R2 values are Secrets, the bucket name is a Variable."
+              exit 1
+            fi
+          done
+          aws s3 cp byways.pmtiles "s3://${BUCKET}/${KEY}" \
+            --endpoint-url "https://${ACCOUNT}.r2.cloudflarestorage.com" \
+            --content-type application/octet-stream \
+            --no-progress
+          echo "Uploaded $(wc -c < byways.pmtiles | tr -d ' ') bytes to ${BUCKET}/${KEY}"
+
+      # And then ask the bucket whether a browser can actually read it, which
+      # is the step that has caught every hosting problem this project has had.
+      # Skipped rather than guessed at when no public URL is configured.
+      - name: Ask the bucket whether a browser can read it
+        if: ${{ inputs.upload && vars.PROTOMAPS_PUBLIC_BASE != '' }}
+        continue-on-error: true
+        env:
+          BASE: ${{ vars.PROTOMAPS_PUBLIC_BASE }}
+          KEY: ${{ inputs.key }}
+        run: |
+          set -o pipefail
+          node tools/check-archive.mjs "${BASE%/}/${KEY}" 2>&1 | tee -a bucket.txt
+          {
+            echo "### The bucket, asked"
+            echo ""
+            echo '```'
+            cat bucket.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/upload-artifact@v4
+        # Only when it is not going to the bucket. A national archive is
+        # several gigabytes; uploading that to Actions so it can be downloaded
+        # and uploaded again is the long way round the thing this workflow
+        # exists to avoid.
+        if: ${{ !inputs.upload }}
         with:
           name: byways-pmtiles
           path: byways.pmtiles
@@ -59,10 +148,40 @@ jobs:
           compression-level: 0
 
       - name: What to do with it
+        if: always()
         env:
           BYTES: ${{ steps.cut.outputs.bytes }}
           DEPTH: ${{ steps.cut.outputs.maxzoom }}
+          UPLOADED: ${{ inputs.upload }}
+          BASE: ${{ vars.PROTOMAPS_PUBLIC_BASE }}
+          KEY: ${{ inputs.key }}
         run: |
+          if [ -z "${BYTES:-}" ]; then
+            echo "### byways.pmtiles" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Nothing was cut — see the *Cut the archive* step." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [ "$UPLOADED" = "true" ]; then
+            {
+              echo "### byways.pmtiles — in the bucket"
+              echo ""
+              echo "\`${{ inputs.bbox }}\` to zoom ${DEPTH} — $((BYTES / 1024 / 1024)) MB, cut from \`${{ steps.cut.outputs.planet }}\`."
+              echo ""
+              echo "Uploaded as \`${KEY}\`. Two repository **Variables** left to set:"
+              echo ""
+              if [ -n "$BASE" ]; then
+                echo "- \`PROTOMAPS_ARCHIVE\` = \`${BASE%/}/${KEY}\`"
+              else
+                echo "- \`PROTOMAPS_ARCHIVE\` = your bucket's public URL plus \`/${KEY}\`"
+              fi
+              echo "- \`PROTOMAPS_MAXZOOM\` = \`${DEPTH}\`"
+              echo ""
+              echo "Setting \`PROTOMAPS_ARCHIVE\` also stops the deploy cutting and publishing"
+              echo "its own copy with the site, so the next deploy gets smaller as well."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           {
             echo "### byways.pmtiles"
             echo ""

@@ -198,6 +198,55 @@ test('both workflows cut the map archive with the same script', async () => {
   assert.deepEqual(calling.sort(), ['cut-archive.yml', 'deploy-pages.yml']);
 });
 
+test('the bucket credentials never reach a workflow that writes the site', async () => {
+  /*
+   * An R2 API token can write to the bucket. It is the one genuinely secret
+   * value this project has - the Mapbox key is public by design and the
+   * archive URL is a public URL - and there is exactly one workflow that
+   * should ever see it.
+   *
+   * The risk is specific rather than theoretical. deploy-pages.yml reads
+   * secrets and writes them into assets/js/token.js, which is served to every
+   * visitor. That is correct for the two values that belong in a browser and
+   * catastrophic for a key that can write to a bucket, and the difference
+   * between the two is one line of YAML written by somebody in a hurry.
+   *
+   * So the rule is by name: only the workflow that uploads may mention them.
+   */
+  const dir = '.github/workflows';
+  const ALLOWED = 'cut-archive.yml';
+  const offenders = [];
+  for (const name of await readdir(dir)) {
+    if (!/\.ya?ml$/.test(name) || name === ALLOWED) continue;
+    const text = await readFile(path.join(dir, name), 'utf8');
+    for (const secret of ['R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_ACCOUNT_ID']) {
+      if (text.includes(secret)) offenders.push(`${name} mentions ${secret}`);
+    }
+  }
+  assert.deepEqual(offenders, [],
+    `only ${ALLOWED} may reference the bucket credentials`);
+});
+
+test('nothing writes a bucket credential into the client config', async () => {
+  /*
+   * The other half, and the one that would actually publish it: whatever
+   * builds assets/js/token.js must only put things in it that a browser is
+   * meant to have. Checked against the file that writes it rather than against
+   * a list of secrets, so a new credential added later is covered without
+   * anybody remembering to add it here.
+   */
+  const deploy = await readFile('.github/workflows/deploy-pages.yml', 'utf8');
+  const block = deploy.slice(deploy.indexOf('Write the client config'));
+  const written = [...block.matchAll(/window\.(ABMAP_[A-Z_]+)\s*=/g)].map((m) => m[1]);
+  assert.deepEqual(written.sort(), [
+    'ABMAP_MAPBOX_TOKEN',
+    'ABMAP_PROTOMAPS_ARCHIVE',
+    'ABMAP_PROTOMAPS_MAXZOOM',
+    'ABMAP_SUPABASE_KEY',
+    'ABMAP_SUPABASE_URL',
+  ], 'the client config gained or lost a value; every one of these is served to every visitor');
+});
+
 test('no reverse-geocode URL combines a limit with several types', async () => {
   /*
    * Mapbox answers that combination with a 422 and this message:
