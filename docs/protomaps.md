@@ -165,15 +165,28 @@ Backblaze B2 both work and both bill for it.
 
 1. Cloudflare dashboard → **R2** → **Create bucket** (`byways-tiles`)
 2. Click into the bucket and upload `byways.pmtiles` at the top level, not in a
-   folder. **The dashboard uploader stops at 300 MB**, which a continental
-   extract passes easily, so anything larger goes through wrangler:
+   folder.
 
-       npx wrangler r2 object put byways-tiles/byways.pmtiles \
-         --file byways.pmtiles --remote
+   **300 MB is a hard edge, and it is R2's rather than the dashboard's.** A
+   single-part upload cannot exceed it, so neither the dashboard nor
+   `wrangler r2 object put` — which does one PUT — will take a larger file.
+   Past that the upload has to be multipart, which means an S3 client:
 
-   `--remote` is not optional. Without it the object is written to the local
-   simulator and the bucket stays empty, which looks exactly like a successful
-   upload.
+       # An R2 API token first: R2 → Manage API Tokens → Create,
+       # with Object Read & Write. It gives an access key and a secret.
+       rclone config create r2 s3 provider=Cloudflare \
+         access_key_id=KEY secret_access_key=SECRET \
+         endpoint=https://ACCOUNT_ID.r2.cloudflarestorage.com
+       rclone copy byways.pmtiles r2:byways-tiles/
+
+   `aws s3 cp --endpoint-url https://ACCOUNT_ID.r2.cloudflarestorage.com`
+   works the same way; both split the file automatically.
+
+   **Or do not use a bucket at all.** GitHub Pages serves ranges and CORS
+   correctly, and the deploy will cut and publish an archive itself — see
+   *The short way* above. Anything under about 900 MB fits, needs no upload,
+   and needs no credentials. The bucket earns its place past that, or when
+   re-uploading the whole site on every deploy stops being reasonable.
 3. **Settings → Public access** — either enable the `r2.dev` development URL,
    which is fine for evaluating and is rate-limited and discouraged for
    production, or connect a custom domain such as `tiles.americanbyways.com`.
