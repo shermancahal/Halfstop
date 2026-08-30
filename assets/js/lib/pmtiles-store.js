@@ -29,6 +29,45 @@ export function tileKey(archive, z, x, y) {
 }
 
 /**
+ * The inverse, because the archive's name is the part that matters later.
+ *
+ * A stored tile belongs to the archive it came out of, and archives move: from
+ * the copy published beside the site to a bucket, from one bucket to another.
+ * When that happens every tile already on the device is still there and is no
+ * longer reachable, because the reader looks under the new name. Being able to
+ * read the old name back out is what lets that be reported rather than
+ * discovered as a blank map with no signal.
+ *
+ * Split on the last separator, not the first: an archive is a URL and a URL
+ * may contain almost anything, while the z/x/y after it never contains a `|`.
+ *
+ * @returns {{archive: string, z: number, x: number, y: number}|null}
+ */
+export function parseTileKey(key) {
+  const at = String(key).lastIndexOf('|');
+  if (at < 1) return null;
+  const parts = key.slice(at + 1).split('/');
+  if (parts.length !== 3) return null;
+  const [z, x, y] = parts.map(Number);
+  if (![z, x, y].every(Number.isInteger)) return null;
+  return { archive: key.slice(0, at), z, x, y };
+}
+
+/** Aggregate stored tiles by the archive they came from. */
+function tallyArchives(entries) {
+  const out = new Map();
+  for (const [key, size] of entries) {
+    const parsed = parseTileKey(key);
+    if (!parsed) continue;
+    const row = out.get(parsed.archive) || { tiles: 0, bytes: 0 };
+    row.tiles += 1;
+    row.bytes += size;
+    out.set(parsed.archive, row);
+  }
+  return out;
+}
+
+/**
  * An in-memory store, for tests and for a browser with no IndexedDB.
  *
  * Not a fallback that pretends: it is thrown away with the page, so an offline
@@ -42,6 +81,16 @@ export function memoryTileStore() {
     async has(key) { return map.has(key); },
     async put(key, bytes) { map.set(key, bytes); },
     async clear() { map.clear(); },
+    async archives() {
+      return tallyArchives([...map].map(([key, bytes]) => [key, bytes.byteLength || 0]));
+    },
+    async removeArchive(archive) {
+      let removed = 0;
+      for (const key of [...map.keys()]) {
+        if (parseTileKey(key)?.archive === archive) { map.delete(key); removed += 1; }
+      }
+      return removed;
+    },
     async count() { return map.size; },
     async bytes() {
       let total = 0;
@@ -119,6 +168,40 @@ export async function openTileStore({ indexedDB = globalThis.indexedDB, name = D
     },
     async clear() {
       await run('readwrite', (store) => request(store.clear()));
+    },
+    async archives() {
+      return run('readonly', (store) => new Promise((resolve, reject) => {
+        const rows = [];
+        const cursor = store.openCursor();
+        cursor.onsuccess = () => {
+          if (!cursor.result) { resolve(tallyArchives(rows)); return; }
+          rows.push([cursor.result.key, cursor.result.value.byteLength || 0]);
+          cursor.result.continue();
+        };
+        cursor.onerror = () => reject(cursor.error);
+      }));
+    },
+    async removeArchive(archive) {
+      /*
+       * By cursor rather than by key range. A key range over a string prefix
+       * would be faster and would also delete tiles from
+       * `https://host/byways.pmtiles.old` when asked for
+       * `https://host/byways.pmtiles`, because one is a prefix of the other.
+       * Deleting somebody's downloaded map is not the place to be clever.
+       */
+      return run('readwrite', (store) => new Promise((resolve, reject) => {
+        let removed = 0;
+        const cursor = store.openCursor();
+        cursor.onsuccess = () => {
+          if (!cursor.result) { resolve(removed); return; }
+          if (parseTileKey(cursor.result.key)?.archive === archive) {
+            cursor.result.delete();
+            removed += 1;
+          }
+          cursor.result.continue();
+        };
+        cursor.onerror = () => reject(cursor.error);
+      }));
     },
     async count() {
       return run('readonly', (store) => request(store.count()));

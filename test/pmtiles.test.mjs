@@ -23,7 +23,7 @@ import {
   tileId, readVarint, decodeDirectory, findEntry, parseHeader, parseTileURL,
   decompress, registerPMTilesProtocol,
 } from '../assets/js/lib/pmtiles.js';
-import { memoryTileStore, tileKey } from '../assets/js/lib/pmtiles-store.js';
+import { memoryTileStore, tileKey, parseTileKey } from '../assets/js/lib/pmtiles-store.js';
 import { buildArchive, encodeDirectory, varint } from './helpers/pmtiles-writer.mjs';
 import { tileKeysFor, downloadArchiveTiles, countTiles } from '../assets/js/lib/offline.js';
 
@@ -590,4 +590,58 @@ test('offline: a downloaded region is what the map reads back', async () => {
     /the network was used/,
     'a tile outside the downloaded region must fall through to the network',
   );
+});
+
+test('offline: the store can say which archive its tiles came from', async () => {
+  /*
+   * Archives move — from the copy published beside the site to a bucket, from
+   * one bucket to another — and the store keys every tile by the archive it
+   * came out of. So the day the URL changes, every tile already on the device
+   * is still there, still taking up space, and no longer reachable, because
+   * the reader looks under the new name.
+   *
+   * Nothing about that is an error. It is a map that quietly stopped working
+   * offline, which is the worst time to find out. Reading the old names back
+   * is what makes it reportable.
+   */
+  const store = memoryTileStore();
+  const old = 'https://shermancahal.github.io/Map/tiles/byways.pmtiles';
+  const now = 'https://pub-abc.r2.dev/byways.pmtiles';
+
+  await store.put(tileKey(old, 3, 4, 3), new Uint8Array(10));
+  await store.put(tileKey(old, 3, 5, 3), new Uint8Array(20));
+  await store.put(tileKey(now, 3, 4, 3), new Uint8Array(30));
+
+  const archives = await store.archives();
+  assert.deepEqual([...archives.keys()].sort(), [now, old].sort());
+  assert.deepEqual(archives.get(old), { tiles: 2, bytes: 30 });
+  assert.deepEqual(archives.get(now), { tiles: 1, bytes: 30 });
+
+  // And dropping one leaves the other entirely alone, which is the whole
+  // reason the archive comes first in the key.
+  assert.equal(await store.removeArchive(old), 2);
+  assert.equal(await store.count(), 1);
+  assert.ok(await store.get(tileKey(now, 3, 4, 3)), 'the current archive lost tiles');
+});
+
+test('offline: a key round-trips, including a URL with a query string', () => {
+  /*
+   * The separator is `|` and the split is on the last one, not the first,
+   * because an archive is a URL and a URL may contain almost anything. A
+   * signed bucket URL carries `?X-Amz-Signature=…`; splitting on the first
+   * separator would hand back a truncated name, and a truncated name is a
+   * different archive as far as everything downstream is concerned.
+   */
+  for (const archive of [
+    'https://pub-abc.r2.dev/byways.pmtiles',
+    './tiles/byways.pmtiles',
+    'https://example.test/a|b/byways.pmtiles?token=x|y&z=1',
+  ]) {
+    const parsed = parseTileKey(tileKey(archive, 13, 2195, 3225));
+    assert.deepEqual(parsed, { archive, z: 13, x: 2195, y: 3225 });
+  }
+
+  assert.equal(parseTileKey('nonsense'), null);
+  assert.equal(parseTileKey('archive|13/2195'), null);
+  assert.equal(parseTileKey('archive|a/b/c'), null);
 });
