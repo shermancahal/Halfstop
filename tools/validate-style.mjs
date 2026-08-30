@@ -126,9 +126,20 @@ for (const layer of protomaps.layers) {
  * different file.
  */
 {
+  /*
+   * Flattened, because a role may name more than one value.
+   *
+   * Protomaps splits several of what Mapbox groups - a street is `residential`
+   * and `unclassified`, a path is five separate kinds - so a role's value is
+   * string-or-array. Without the flatten this compared the array itself
+   * against the strings a filter asks for, and reported the whole of both
+   * problems it exists to catch, in both directions, about a style that was
+   * correct: "no road layer draws residential,unclassified" alongside "a road
+   * layer filters on residential, which the schema never maps".
+   */
   const mapped = new Set([
-    ...Object.values(PROTOMAPS_SCHEMA.roadClasses),
-    ...Object.values(PROTOMAPS_SCHEMA.roadLinks),
+    ...Object.values(PROTOMAPS_SCHEMA.roadClasses).flat(),
+    ...Object.values(PROTOMAPS_SCHEMA.roadLinks).flat(),
   ]);
   const asked = new Set();
   const walk = (node) => {
@@ -158,9 +169,15 @@ for (const layer of protomaps.layers) {
   for (const value of asked) {
     if (!mapped.has(value)) all.push(['Protomaps', { message: `a road layer filters on "${value}", which the schema never maps — it will match nothing` }]);
   }
-  const weights = new Set(Object.values(PROTOMAPS_SCHEMA.roadClasses));
-  if (weights.size !== 11) {
-    all.push(['Protomaps', { message: `the road hierarchy has ${weights.size} weights, not the eleven the map is drawn for` }]);
+  /*
+   * Sixteen distinguishable values across eleven roles. Five of them -
+   * unclassified, footway, bridleway, steps, cycleway - were found by reading
+   * a real tile and asking which of its kinds this style never mentions, and
+   * every one of them was drawing nothing.
+   */
+  const weights = new Set(Object.values(PROTOMAPS_SCHEMA.roadClasses).flat());
+  if (weights.size !== 16) {
+    all.push(['Protomaps', { message: `the road hierarchy has ${weights.size} values, not the sixteen the map is drawn for` }]);
   }
 }
 

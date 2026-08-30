@@ -407,6 +407,47 @@ test('protomaps: every road filter names a class the schema maps', () => {
     'a road layer filters on a class the schema never maps');
 });
 
+test('protomaps: every class the schema maps is drawn by some layer', () => {
+  /*
+   * The other direction, and the one that was only ever checked in CI.
+   *
+   * tools/validate-style.mjs has had both directions for a while, but it needs
+   * @mapbox/mapbox-gl-style-spec installed, so it runs only on a runner - and
+   * `npm test` runs with nothing installed, which is the point of it. The
+   * result was two implementations of the same check with one of them
+   * unreachable locally: adding a second value to a road role passed every
+   * test here and broke the deploy, because the validator was still comparing
+   * an array against the strings a filter asks for.
+   *
+   * This direction is the one that matters most anyway. A class the schema
+   * maps and no layer draws is a whole road type absent from the map, and
+   * nothing about the style is invalid - so the only symptom is roads that are
+   * not there, which is what half of today has been about.
+   */
+  const mapped = new Set([
+    ...Object.values(PROTOMAPS_SCHEMA.roadClasses).flat(),
+    ...Object.values(PROTOMAPS_SCHEMA.roadLinks).flat(),
+  ]);
+  const field = PROTOMAPS_SCHEMA.fields.roadClassField;
+  const asked = new Set();
+  const walk = (node) => {
+    if (!Array.isArray(node)) return;
+    const reads = Array.isArray(node[1]) && node[1][0] === 'get' && node[1][1] === field;
+    if ((node[0] === 'match' || node[0] === '==') && reads) {
+      for (const value of node.slice(2).flat()) if (typeof value === 'string') asked.add(value);
+    }
+    for (const child of node) walk(child);
+  };
+  for (const layer of protomapsStyle().layers) {
+    if (layer['source-layer'] !== PROTOMAPS_SCHEMA.layers.road) continue;
+    walk(layer.filter);
+    for (const value of Object.values(layer.paint || {})) walk(value);
+    for (const value of Object.values(layer.layout || {})) walk(value);
+  }
+  assert.deepEqual([...mapped].filter((value) => !asked.has(value)), [],
+    'the schema maps a road class that no layer draws, so it is invisible');
+});
+
 test('byways: no road class is written inline', () => {
   /*
    * The third of these source checks, and the one that had to be written after
