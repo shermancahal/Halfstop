@@ -94,3 +94,56 @@ test('mvt: fields the reader does not use are skipped by length, not parsed', ()
     ['places:2', 'boundaries:1'],
   );
 });
+
+/* -------------------------------------------------- and what they say --- */
+
+const value = (field, payload) => bytes(4, [...(
+  typeof payload === 'string' ? string(1, payload) : number(4, payload)
+)]);
+
+/** A layer whose features carry tags, so the key/value pairing can be checked. */
+const tagged = ({ name, keys, values, features }) => bytes(3, [
+  ...string(1, name),
+  ...features.flatMap((tags) => bytes(2, [
+    ...bytes(2, tags.flatMap((n) => varint(n))),
+    ...number(3, 2),
+    ...bytes(4, [9, 0, 0]),
+  ])),
+  ...keys.flatMap((key) => string(3, key)),
+  ...values.flatMap((one) => value(4, one)),
+  ...number(5, 4096),
+]);
+
+test('mvt: each key is paired with the values its features actually carry', () => {
+  /*
+   * The pairing is by index into two separate tables, and getting it backwards
+   * produces output that looks entirely plausible — every value is a real
+   * value and every key a real key, just attached to each other wrongly. Which
+   * would be the worst possible failure in a tool whose whole job is settling
+   * "does the style filter on what the tiles contain".
+   */
+  const [roads] = describeTile(Uint8Array.from(tagged({
+    name: 'roads',
+    keys: ['kind', 'kind_detail'],
+    values: ['minor_road', 'residential', 'major_road', 'motorway'],
+    features: [
+      [0, 0, 1, 1],   // kind=minor_road  kind_detail=residential
+      [0, 2, 1, 3],   // kind=major_road  kind_detail=motorway
+    ],
+  })));
+
+  assert.equal(roads.features, 2);
+  assert.deepEqual([...roads.seen.get('kind')].sort(), ['major_road', 'minor_road']);
+  assert.deepEqual([...roads.seen.get('kind_detail')].sort(), ['motorway', 'residential']);
+});
+
+test('mvt: a key no feature uses does not appear as having values', () => {
+  const [layer] = describeTile(Uint8Array.from(tagged({
+    name: 'roads',
+    keys: ['kind', 'surface'],
+    values: ['minor_road'],
+    features: [[0, 0]],
+  })));
+  assert.deepEqual([...layer.seen.get('kind')], ['minor_road']);
+  assert.equal(layer.seen.has('surface'), false, 'declared but never used is not the same as used');
+});

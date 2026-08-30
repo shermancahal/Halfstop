@@ -69,19 +69,64 @@ function fields(bytes, visit) {
 
 const text = (bytes) => new TextDecoder().decode(bytes);
 
-/** Layer name, feature count and attribute keys, for every layer in a tile. */
+/** A Value message: seven possible fields, one of which is set. */
+function value(bytes) {
+  let out;
+  fields(bytes, (field, item) => {
+    if (field === 1 && item instanceof Uint8Array) out = text(item);
+    else if (field === 4 || field === 5) out = item;
+    else if (field === 7) out = Boolean(item);
+    else if (out === undefined) out = '(number)';
+  });
+  return out;
+}
+
+/** The packed varints of a feature's tags: key index, value index, repeating. */
+function packed(bytes) {
+  const at = reader(bytes);
+  const out = [];
+  while (at.pos < bytes.length) out.push(varint(at));
+  return out;
+}
+
+/**
+ * Layer name, feature count, attribute keys — and the distinct values each key
+ * takes, which is the part that settles an argument.
+ *
+ * "The roads layer is present with 33 features" and "the roads layer is
+ * present with 33 features whose kind_detail is a word this style never
+ * filters on" look identical until the values are read. The first says the
+ * archive is fine; the second says exactly which line of the style is wrong.
+ */
 export function describeTile(tile) {
   const layers = [];
   // Tile.layers is field 3.
-  fields(tile, (field, value) => {
-    if (field !== 3 || !(value instanceof Uint8Array)) return;
-    const layer = { name: '', features: 0, keys: [], extent: 4096 };
-    fields(value, (inner, item) => {
+  fields(tile, (field, raw) => {
+    if (field !== 3 || !(raw instanceof Uint8Array)) return;
+    const layer = { name: '', features: 0, keys: [], values: [], extent: 4096, tags: [] };
+    fields(raw, (inner, item) => {
       if (inner === 1 && item instanceof Uint8Array) layer.name = text(item);
-      else if (inner === 2) layer.features += 1;
+      else if (inner === 2 && item instanceof Uint8Array) {
+        layer.features += 1;
+        fields(item, (part, body) => {
+          if (part === 2 && body instanceof Uint8Array) layer.tags.push(packed(body));
+        });
+      } else if (inner === 2) layer.features += 1;
       else if (inner === 3 && item instanceof Uint8Array) layer.keys.push(text(item));
+      else if (inner === 4 && item instanceof Uint8Array) layer.values.push(value(item));
       else if (inner === 5 && typeof item === 'number') layer.extent = item;
     });
+
+    // Key -> the set of values it takes across this layer's features.
+    layer.seen = new Map();
+    for (const tags of layer.tags) {
+      for (let i = 0; i + 1 < tags.length; i += 2) {
+        const key = layer.keys[tags[i]];
+        if (key === undefined) continue;
+        if (!layer.seen.has(key)) layer.seen.set(key, new Set());
+        layer.seen.get(key).add(layer.values[tags[i + 1]]);
+      }
+    }
     layers.push(layer);
   });
   return layers;
@@ -147,9 +192,19 @@ for (let zoom = Math.max(header.minZoom, 0); zoom <= header.maxZoom; zoom += 1) 
 // but carries none of the fields the style reads is its own failure.
 const deepest = await archive.tile(header.maxZoom, Math.floor(x * 2 ** (header.maxZoom - z)), Math.floor(y * 2 ** (header.maxZoom - z)));
 if (deepest) {
-  console.log(`\nAttribute keys at z${header.maxZoom}:`);
+  console.log(`\nWhat the deepest tile actually classifies things as:`);
+  // Only the keys a style branches on. Names and populations are noise here.
+  const classifying = ['kind', 'kind_detail', 'network', 'shield_text', 'surface'];
   for (const layer of describeTile(deepest)) {
-    console.log(`  ${layer.name.padEnd(12)} ${layer.keys.join(', ') || '(none)'}`);
+    console.log(`  ${layer.name}`);
+    for (const key of classifying) {
+      const seen = layer.seen.get(key);
+      if (!seen) continue;
+      const values = [...seen].filter((one) => one !== undefined).sort();
+      console.log(`    ${key.padEnd(12)} ${values.slice(0, 24).join(', ')}${values.length > 24 ? ` … +${values.length - 24}` : ''}`);
+    }
+    const others = layer.keys.filter((key) => !classifying.includes(key));
+    if (others.length) console.log(`    ${'(also)'.padEnd(12)} ${others.join(', ')}`);
   }
 }
 }
