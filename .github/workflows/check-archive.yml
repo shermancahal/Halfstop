@@ -48,7 +48,12 @@ jobs:
           node tools/check-archive.mjs "${{ inputs.url }}" 2>&1 | tee report.txt
 
       - name: Look inside a tile
-        if: ${{ inputs.tile != '' }}
+        # Always, not only when the host check passed. They answer different
+        # questions - "can a browser read this file" and "what is in it" - and
+        # a run that asked both and reported one is a wasted trip. The first
+        # time this mattered, the host check tripped over its own bug and took
+        # the tile reading down with it.
+        if: ${{ always() && inputs.tile != '' }}
         run: node tools/inspect-archive.mjs "${{ inputs.url }}" "${{ inputs.tile }}" 2>&1 | tee -a report.txt
 
       - name: Put the answer in the summary
