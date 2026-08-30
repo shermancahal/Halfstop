@@ -147,3 +147,51 @@ test('mvt: a key no feature uses does not appear as having values', () => {
   assert.deepEqual([...layer.seen.get('kind')], ['minor_road']);
   assert.equal(layer.seen.has('surface'), false, 'declared but never used is not the same as used');
 });
+
+test('reconcile: a schema naming a value the tiles never carry is reported', async (t) => {
+  /*
+   * The one failure mode every other test in this repo is blind to, checked
+   * on the tool that exists to see it.
+   *
+   * test/byways-schema.test.mjs says so in as many words: it reads the schema
+   * for both sides of every comparison, so a schema naming a value the data
+   * has never heard of is self-consistent and passes. That is not a
+   * hypothetical - it shipped. `waterClasses` said lakes were `lake`;
+   * Protomaps calls them `water`; every test passed and no lake on the map
+   * ever had a name on it.
+   *
+   * So the reconciler is fed a tile whose water is tagged the way Protomaps
+   * really tags it, and has to say that `lake` is named and absent and that
+   * `stream` is present. Silenced console, because the point is the findings.
+   */
+  const { reconcile } = await import('../tools/inspect-archive.mjs');
+  const { PROTOMAPS_SCHEMA } = await import('../assets/js/lib/byways-style.js');
+
+  const said = [];
+  const log = console.log;
+  console.log = (...parts) => said.push(parts.join(' '));
+  let findings;
+  try {
+    findings = reconcile([{
+      name: PROTOMAPS_SCHEMA.layers.water,
+      keys: ['kind'],
+      seen: new Map([['kind', new Set(['water', 'stream', 'swimming_pool'])]]),
+    }]);
+  } finally {
+    console.log = log;
+  }
+
+  const water = findings.find((one) => one.what === 'waterClasses');
+  assert.ok(water, 'the water claim was not examined at all');
+  assert.ok(water.unused.includes('lake'),
+    'a value the schema names and the tile does not have must be reported');
+  assert.ok(water.undrawn.includes('swimming_pool'),
+    'a value the tile has and the schema does not name must be reported');
+
+  // And the live schema has to be the corrected one: `water` present in both,
+  // so it appears in neither list.
+  assert.ok(!water.unused.includes('water') && !water.undrawn.includes('water'),
+    'waterClasses must name `water`, which is how Protomaps tags a lake');
+
+  t.diagnostic(`reported: ${said.length} lines`);
+});

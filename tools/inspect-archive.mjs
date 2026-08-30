@@ -234,7 +234,7 @@ if (deepest) {
  * one tile cannot prove either; they are reported as questions worth asking,
  * which is more than nothing was asking before.
  */
-function reconcile(layers) {
+export function reconcile(layers) {
   const seenIn = (layerName, key) => {
     const layer = layers.find((one) => one.name === layerName);
     return new Set([...(layer?.seen.get(key) || [])].filter((one) => one !== undefined));
@@ -261,17 +261,20 @@ function reconcile(layers) {
         ...Object.values(PROTOMAPS_SCHEMA.roadLinks || {})]],
   ];
 
+  const findings = [];
   console.log('\nThe schema against this tile');
   for (const [what, layerName, field, values] of claims) {
     if (!layerName || !field || !values?.length) continue;
     const present = seenIn(layerName, field);
     if (!present.size) {
+      findings.push({ what, field: `${layerName}.${field}`, silent: true });
       console.log(`  ${what.padEnd(17)} ${layerName}.${field} carries nothing in this tile — cannot say`);
       continue;
     }
     const named = new Set(values.map(String));
     const unused = [...named].filter((one) => !present.has(one));
-    const undrawn = [...present].filter((one) => !named.has(String(one)));
+    const undrawn = [...present].filter((one) => !named.has(String(one))).map(String);
+    findings.push({ what, field: `${layerName}.${field}`, unused, undrawn });
     console.log(`  ${what.padEnd(17)} ${layerName}.${field}`);
     if (unused.length) console.log(`    named, not in this tile   ${unused.join(', ')}`);
     if (undrawn.length) console.log(`    in this tile, not named   ${undrawn.join(', ')}`);
@@ -288,4 +291,5 @@ function reconcile(layers) {
     const count = names ? [...names].filter((one) => one !== undefined).length : 0;
     console.log(`    ${layer.name.padEnd(12)} ${count ? `${count} distinct` : `no "${PROTOMAPS_SCHEMA.fields.name}" field`}`);
   }
+  return findings;
 }
