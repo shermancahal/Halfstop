@@ -70,7 +70,18 @@ jobs:
             echo ""
             echo "Download it from **Artifacts** at the bottom of this run, then:"
             echo ""
-            echo "1. Upload it to your bucket."
+            if [ "$BYTES" -gt 300000000 ]; then
+              echo "1. Upload it to your bucket. **At $((BYTES / 1024 / 1024)) MB this is past the"
+              echo "   300 MB ceiling on Cloudflare's dashboard uploader**, so use wrangler:"
+              echo "   \`\`\`"
+              echo "   npx wrangler r2 object put byways-tiles/byways.pmtiles --file byways.pmtiles --remote"
+              echo "   \`\`\`"
+              echo "   Or re-run this workflow one zoom level shallower — each level is a"
+              echo "   quarter the size — and upload that through the dashboard instead."
+            else
+              echo "1. Upload it to your bucket. At $((BYTES / 1024 / 1024)) MB it is inside the"
+              echo "   300 MB ceiling on Cloudflare's dashboard uploader, so dragging it in works."
+            fi
             echo "2. \`npm run check:archive -- https://<bucket>/byways.pmtiles\` — it asks the host"
             echo "   whether it honours Range and sends CORS, and reads a real tile back."
             echo "3. Set the repository variables \`PROTOMAPS_ARCHIVE\` to that URL and"

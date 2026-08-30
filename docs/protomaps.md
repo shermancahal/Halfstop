@@ -164,10 +164,22 @@ is read far more than it is written, and R2 does not charge for reading. S3 and
 Backblaze B2 both work and both bill for it.
 
 1. Cloudflare dashboard → **R2** → **Create bucket** (`byways-tiles`)
-2. Upload `byways.pmtiles`
+2. Click into the bucket and upload `byways.pmtiles` at the top level, not in a
+   folder. **The dashboard uploader stops at 300 MB**, which a continental
+   extract passes easily, so anything larger goes through wrangler:
+
+       npx wrangler r2 object put byways-tiles/byways.pmtiles \
+         --file byways.pmtiles --remote
+
+   `--remote` is not optional. Without it the object is written to the local
+   simulator and the bucket stays empty, which looks exactly like a successful
+   upload.
 3. **Settings → Public access** — either enable the `r2.dev` development URL,
    which is fine for evaluating and is rate-limited and discouraged for
-   production, or connect a custom domain such as `tiles.americanbyways.com`
+   production, or connect a custom domain such as `tiles.americanbyways.com`.
+   **Come back and do the custom domain before this is anything but a test:**
+   `r2.dev` is rate-limited, and a rate-limited basemap fails as a map with
+   holes in it rather than as an error.
 
 ### 5. Add the CORS policy
 
