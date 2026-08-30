@@ -18,6 +18,7 @@
 import { pathToFileURL } from 'node:url';
 
 import { PMTilesArchive } from '../assets/js/lib/pmtiles.js';
+import { PROTOMAPS_SCHEMA } from '../assets/js/lib/byways-style.js';
 
 /* --------------------------------------------------------- protobuf, barely */
 
@@ -206,5 +207,85 @@ if (deepest) {
     const others = layer.keys.filter((key) => !classifying.includes(key));
     if (others.length) console.log(`    ${'(also)'.padEnd(12)} ${others.join(', ')}`);
   }
+
+  reconcile(describeTile(deepest));
 }
+}
+
+/**
+ * The schema's claims against the tile's contents, both directions.
+ *
+ * This is the one check the test suite structurally cannot do, and the test
+ * file says so in as many words: every schema test reads the schema for both
+ * sides of the comparison, so a schema that names a value the data has never
+ * heard of is self-consistent and passes everything. The style then filters on
+ * it, matches nothing, and draws an empty layer - which looks exactly like a
+ * layer that is correctly empty.
+ *
+ * `label-water` is the case that prompted this. The schema calls lakes 'lake';
+ * Protomaps calls them 'water'. Every test passed, the filter matched a
+ * quarter of what it should, and the only symptom was unnamed lakes.
+ *
+ * Both directions matter and they mean different things. A value the schema
+ * names and the tile has never seen is a filter that may be dead - "may",
+ * because one tile is not the world and there really are no oceans in
+ * Tennessee. A value the tile carries and the schema never names is ground the
+ * map is silently declining to draw. Neither is reported as a failure, because
+ * one tile cannot prove either; they are reported as questions worth asking,
+ * which is more than nothing was asking before.
+ */
+function reconcile(layers) {
+  const seenIn = (layerName, key) => {
+    const layer = layers.find((one) => one.name === layerName);
+    return new Set([...(layer?.seen.get(key) || [])].filter((one) => one !== undefined));
+  };
+
+  /*
+   * Every list of values the schema branches on, with the layer and field each
+   * is read out of. Written here rather than derived, because the schema is a
+   * flat bag of names and only the style knows which field each list is
+   * matched against - and a wrong pairing here would produce confident
+   * nonsense.
+   */
+  const claims = [
+    ['waterClasses', PROTOMAPS_SCHEMA.layers.waterLabel, PROTOMAPS_SCHEMA.fields.classField, PROTOMAPS_SCHEMA.waterClasses],
+    ['protectedClasses', PROTOMAPS_SCHEMA.layers.landuseOverlay, PROTOMAPS_SCHEMA.fields.classField, PROTOMAPS_SCHEMA.protectedClasses],
+    ['landcover', PROTOMAPS_SCHEMA.layers.landcover, PROTOMAPS_SCHEMA.fields.classField,
+      Object.values(PROTOMAPS_SCHEMA.landcover || {}).flat()],
+    ['landuse', PROTOMAPS_SCHEMA.layers.landuse, PROTOMAPS_SCHEMA.fields.classField,
+      Object.values(PROTOMAPS_SCHEMA.landuse || {}).flat()],
+    ['place', PROTOMAPS_SCHEMA.layers.place, PROTOMAPS_SCHEMA.fields.classField,
+      Object.values(PROTOMAPS_SCHEMA.place || {}).flat()],
+    ['roadClasses', PROTOMAPS_SCHEMA.layers.road, PROTOMAPS_SCHEMA.fields.roadClassField,
+      [...Object.values(PROTOMAPS_SCHEMA.roadClasses || {}),
+        ...Object.values(PROTOMAPS_SCHEMA.roadLinks || {})]],
+  ];
+
+  console.log('\nThe schema against this tile');
+  for (const [what, layerName, field, values] of claims) {
+    if (!layerName || !field || !values?.length) continue;
+    const present = seenIn(layerName, field);
+    if (!present.size) {
+      console.log(`  ${what.padEnd(17)} ${layerName}.${field} carries nothing in this tile — cannot say`);
+      continue;
+    }
+    const named = new Set(values.map(String));
+    const unused = [...named].filter((one) => !present.has(one));
+    const undrawn = [...present].filter((one) => !named.has(String(one)));
+    console.log(`  ${what.padEnd(17)} ${layerName}.${field}`);
+    if (unused.length) console.log(`    named, not in this tile   ${unused.join(', ')}`);
+    if (undrawn.length) console.log(`    in this tile, not named   ${undrawn.join(', ')}`);
+    if (!unused.length && !undrawn.length) console.log('    every value lines up');
+  }
+
+  /*
+   * And whether the labelled layers carry a name at all, since every label
+   * layer filters on one and a layer with no name field labels nothing.
+   */
+  console.log('\n  Does anything here have a name?');
+  for (const layer of layers) {
+    const names = layer.seen.get(PROTOMAPS_SCHEMA.fields.name);
+    const count = names ? [...names].filter((one) => one !== undefined).length : 0;
+    console.log(`    ${layer.name.padEnd(12)} ${count ? `${count} distinct` : `no "${PROTOMAPS_SCHEMA.fields.name}" field`}`);
+  }
 }
