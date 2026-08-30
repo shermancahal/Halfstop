@@ -133,7 +133,17 @@ the one this document assumes. Location Automatic.
 
 ### 2. Make an API token that can only write to that bucket
 
-**R2 → API → Manage API tokens → Create API token.**
+**R2 → API → Manage API tokens.** That page offers two kinds and the
+difference matters here:
+
+- **Account API token** — this one. It belongs to the account rather than to a
+  person, and Cloudflare's own note says it stays active even when whoever made
+  it leaves the organisation.
+- *User API token* — goes inactive if that person leaves. Fine for poking at a
+  bucket from a laptop; wrong for a credential a workflow depends on, because
+  the failure arrives months later as a rebuild that suddenly cannot upload.
+
+So: **Create Account API token**, then
 
 - Permission: **Object Read & Write**
 - Specify bucket: **the one bucket**, not "all buckets"
