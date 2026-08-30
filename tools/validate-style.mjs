@@ -203,6 +203,7 @@ for (const layer of protomaps.layers) {
     ...PROTOMAPS_SCHEMA.waterClasses || [],
     ...PROTOMAPS_SCHEMA.summitClasses || [],
     ...Object.values(PROTOMAPS_SCHEMA.place || {}).flat(),
+    ...Object.values(PROTOMAPS_SCHEMA.boundaryClasses || {}).flat(),
   ]);
   const field = PROTOMAPS_SCHEMA.fields.classField;
   const asked = new Map();

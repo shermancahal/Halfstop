@@ -547,6 +547,7 @@ test('protomaps: no layer filters on a class the schema never names', () => {
     ...Object.values(PROTOMAPS_SCHEMA.landcover || {}).flat(),
     ...Object.values(PROTOMAPS_SCHEMA.landuse || {}).flat(),
     ...Object.values(PROTOMAPS_SCHEMA.place || {}).flat(),
+    ...Object.values(PROTOMAPS_SCHEMA.boundaryClasses || {}).flat(),
     ...PROTOMAPS_SCHEMA.protectedClasses,
     ...PROTOMAPS_SCHEMA.waterClasses,
     ...PROTOMAPS_SCHEMA.summitClasses,
@@ -777,4 +778,55 @@ test('byways: a layer never draws geometry it cannot draw', () => {
       }
     }
   }
+});
+
+test('protomaps: every field the style reads is one the schema declares', () => {
+  /*
+   * The gap the "no Mapbox field name survives" check could not see.
+   *
+   * That one walks the Protomaps style looking for the *values* of
+   * MAPBOX_SCHEMA.fields — so it catches `class` where `kind` belongs. It is
+   * blind to a field name that appears in neither schema, and two did:
+   * `admin_level` and `maritime`, written inline in the boundary filters
+   * because Mapbox's admin layer has them and nobody re-read those two layers
+   * when the seam was cut.
+   *
+   * What that cost was not subtle. `['get', 'admin_level']` on a Protomaps
+   * boundary is null, `['<=', null, 0]` logs "Expected value to be of type
+   * number, but found null instead" once per tile, and both boundary layers
+   * drew nothing at all — no state line and no national border, anywhere on
+   * the map, at any zoom.
+   *
+   * So this asserts the whole property instead: every field the Protomaps
+   * style reads is either one the schema declares or one of a short list of
+   * names that belong to the app rather than the tiles. A new layer reading a
+   * field nobody declared fails here, whatever schema it was borrowed from.
+   */
+  const declared = new Set(Object.values(PROTOMAPS_SCHEMA.fields).filter(Boolean));
+
+  /*
+   * Names the app puts on its own features, which never come from an archive.
+   * Listed rather than pattern-matched, so adding one is a decision.
+   */
+  const ours = new Set(['index', 'ele']);
+
+  const read = new Map();
+  const walk = (node, id) => {
+    if (!Array.isArray(node)) return;
+    if (node[0] === 'get' && typeof node[1] === 'string') {
+      if (!read.has(node[1])) read.set(node[1], id);
+    }
+    for (const child of node) walk(child, id);
+  };
+  for (const layer of protomapsStyle().layers) {
+    walk(layer.filter, layer.id);
+    for (const value of Object.values(layer.paint || {})) walk(value, layer.id);
+    for (const value of Object.values(layer.layout || {})) walk(value, layer.id);
+  }
+
+  assert.ok(read.size > 0, 'the style reads no fields at all, which cannot be right');
+  const strays = [...read].filter(([field]) => !declared.has(field) && !ours.has(field))
+    .map(([field, id]) => `${id} reads "${field}"`);
+  assert.deepEqual(strays, [],
+    'a layer reads a field the Protomaps schema does not declare; it will come back null');
 });

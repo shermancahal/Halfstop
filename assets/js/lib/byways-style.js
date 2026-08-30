@@ -109,6 +109,24 @@ export const MAPBOX_SCHEMA = {
     elevation: 'ele',
   },
   /*
+   * Boundaries, as whole filters rather than field names.
+   *
+   * The two schemas describe a border in structurally different ways, not just
+   * with different words: Mapbox has a numeric `admin_level` plus a `maritime`
+   * string on its `admin` layer, Protomaps has a `kind` of country/region/
+   * locality on `boundaries` and no maritime flag at all. There is no pair of
+   * field names that turns one into the other, so trying to unify them into a
+   * single `boundaryField` would be forcing it - and forcing it is what
+   * produced the bug this replaces.
+   *
+   * These are Mapbox's, unchanged, which is what keeps the snapshot exact.
+   */
+  boundaryClasses: null,
+  boundaryFilters: {
+    state: ['all', ['==', ['get', 'admin_level'], 1], ['==', ['get', 'maritime'], 'false']],
+    country: ['all', ['<=', ['get', 'admin_level'], 0], ['==', ['get', 'maritime'], 'false']],
+  },
+  /*
    * The road hierarchy, which is what makes an atlas readable.
    *
    * Written out rather than assumed, because the other schema does not divide
@@ -306,6 +324,26 @@ export const PROTOMAPS_SCHEMA = {
     surface: null,
     elevation: null,
   },
+  /*
+   * Protomaps' own vocabulary, read from a real tile.
+   *
+   * `admin_level` and `maritime` were written inline in the boundary layers
+   * for as long as the Protomaps path existed. Neither field is in a Protomaps
+   * boundary, so `['get', 'admin_level']` returned null, `['<=', null, 0]`
+   * logged "Expected value to be of type number, but found null instead" once
+   * per tile, and both boundary layers drew nothing at all - no state line and
+   * no national border, anywhere on the map.
+   *
+   * What is actually there is `kind` (country, region, locality) and a numeric
+   * `kind_detail` carrying the OSM admin level. There is no maritime flag, so
+   * a coastline that doubles as a border is drawn as a border; that is a
+   * lesser wrong than drawing no borders at all.
+   */
+  boundaryClasses: {
+    state: ['region'],
+    country: ['country'],
+  },
+  boundaryFilters: null,
   /*
    * The hierarchy survives, because roads read kind_detail rather than kind.
    *
@@ -1180,6 +1218,28 @@ function roadLayers() {
 
 /* ---- boundaries ---- */
 
+/**
+ * The filter for one kind of border.
+ *
+ * Two mechanisms rather than one, because the two schemas genuinely work
+ * differently and pretending otherwise is what broke this. Mapbox filters on a
+ * numeric `admin_level` and a `maritime` string; Protomaps filters on the same
+ * class field everything else uses, with string values. There is no pair of
+ * field names that converts one into the other.
+ *
+ * A schema that classifies borders like everything else declares
+ * `boundaryClasses` and the expression is built here, so the class field comes
+ * from the schema rather than being spelled out - which is the rule the rest of
+ * this file follows and the one the old inline `['get', 'admin_level']` broke.
+ * A schema that does not declares the whole filter instead.
+ */
+function boundaryFilter(role) {
+  if (S.boundaryClasses) {
+    return ['match', ['get', S.fields.classField], S.boundaryClasses[role], true, false];
+  }
+  return S.boundaryFilters[role];
+}
+
 function boundaryLayers() {
   return [
     {
@@ -1187,7 +1247,7 @@ function boundaryLayers() {
       type: 'line',
       source: S.source,
       'source-layer': S.layers.boundary,
-      filter: ['all', ['==', ['get', 'admin_level'], 1], ['==', ['get', 'maritime'], 'false']],
+      filter: boundaryFilter('state'),
       paint: {
         'line-color': PALETTE.boundary,
         'line-width': ['interpolate', ['linear'], ['zoom'], 4, 0.7, 10, 1.6],
@@ -1199,7 +1259,7 @@ function boundaryLayers() {
       type: 'line',
       source: S.source,
       'source-layer': S.layers.boundary,
-      filter: ['all', ['<=', ['get', 'admin_level'], 0], ['==', ['get', 'maritime'], 'false']],
+      filter: boundaryFilter('country'),
       paint: {
         'line-color': PALETTE.boundary,
         'line-width': ['interpolate', ['linear'], ['zoom'], 3, 0.9, 10, 2.2],
