@@ -126,12 +126,12 @@ yourself.
 So *Cut a map archive* does both ends. Six steps, and the only slow one is
 waiting.
 
-### 1. Make the bucket
+### 1. Make the bucket · *Cloudflare*
 
 Cloudflare dashboard → **R2** → *Create bucket*. Any name; `byways-tiles` is
 the one this document assumes. Location Automatic.
 
-### 2. Make an API token that can only write to that bucket
+### 2. Make an API token that can only write to that bucket · *Cloudflare*
 
 **R2 → API → Manage API tokens.** That page offers two kinds and the
 difference matters here:
@@ -156,9 +156,11 @@ value in this project — the Mapbox key is public by design and the archive URL
 is a public URL. There is a test asserting that no workflow which builds the
 site so much as mentions it.
 
-### 3. Put them in the repository
+### 3. Put them in the repository · *GitHub*
 
-**Settings → Secrets and variables → Actions.**
+This is the one step that changes sites. On the repository —
+`github.com/<you>/Map` — **Settings → Secrets and variables → Actions**.
+That page has two tabs, and which tab a value goes in is not cosmetic.
 
 Under **Secrets** — these three, exactly these names:
 
@@ -176,7 +178,7 @@ nothing:
 | --- | --- |
 | `R2_BUCKET` | `byways-tiles` |
 
-### 4. Turn on public access and CORS
+### 4. Turn on public access and CORS · *Cloudflare*
 
 Bucket → **Settings**.
 
@@ -194,7 +196,7 @@ Then add one more **Variable** so the run can check its own work:
 | --- | --- |
 | `PROTOMAPS_PUBLIC_BASE` | the public URL, e.g. `https://pub-xxxx.r2.dev` |
 
-### 5. Run it
+### 5. Run it · *GitHub*
 
 **Actions → Cut a map archive → Run workflow.**
 
@@ -215,7 +217,7 @@ file this size.
 When it finishes it asks your bucket whether a browser could actually read what
 it just uploaded, and puts the answer in the run summary.
 
-### 6. Point the site at it
+### 6. Point the site at it · *GitHub*
 
 The run summary names the two **Variables** to set, filled in with the real
 values:
