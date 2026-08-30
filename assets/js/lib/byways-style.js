@@ -65,6 +65,31 @@ export const MAPBOX_SCHEMA = {
    */
   font: ['DIN Pro Regular', 'Arial Unicode MS Regular'],
   fontBold: ['DIN Pro Bold', 'Arial Unicode MS Bold'],
+  /*
+   * What a tap on the basemap can report, keyed by source layer.
+   *
+   * The identify card reads whatever is rendered under the finger, and it can
+   * only speak about a layer it recognises. That recognition was a table of
+   * Mapbox's source-layer names sitting in the viewer, which meant that under
+   * Protomaps a tap on a road, a trail, a town or a summit answered nothing at
+   * all: the layer there is called `roads`, and the table only knew `road`.
+   *
+   * `source` is the heading a reader sees. `field` is the column holding the
+   * kind of thing it is.
+   */
+  identify: {
+    water: { source: 'Water', field: 'class' },
+    waterway: { source: 'Water', field: 'class' },
+    road: { source: 'Road', field: 'class' },
+    landuse: { source: 'Land', field: 'class' },
+    landuse_overlay: { source: 'Land', field: 'class' },
+    natural_label: { source: 'Landform', field: 'class' },
+    place_label: { source: 'Place', field: 'type' },
+    structure: { source: 'Structure', field: 'class' },
+    building: { source: 'Building', field: 'type' },
+    poi_label: { source: 'Point of interest', field: 'category_en' },
+    airport_label: { source: 'Airport', field: 'class' },
+  },
   layers: {
     landcover: 'landcover',
     landuse: 'landuse',
@@ -249,6 +274,27 @@ export const PROTOMAPS_SCHEMA = {
    */
   font: ['Noto Sans Regular'],
   fontBold: ['Noto Sans Medium'],
+  /*
+   * The same, in Protomaps' vocabulary, read from real tiles.
+   *
+   * `earth` is deliberately absent: it is the land polygon the whole map sits
+   * on, it has no name and no kind beyond "earth", and reporting it would put
+   * a row saying nothing on the card for every tap anywhere on land.
+   *
+   * `roads` covers trails too — a footpath is a road with `kind: path` here —
+   * which is why a trail tap reported nothing while the trail was plainly
+   * drawn on the screen.
+   */
+  identify: {
+    water: { source: 'Water', field: 'kind' },
+    roads: { source: 'Road', field: 'kind_detail' },
+    landuse: { source: 'Land', field: 'kind' },
+    landcover: { source: 'Land', field: 'kind' },
+    places: { source: 'Place', field: 'kind_detail' },
+    pois: { source: 'Point of interest', field: 'kind' },
+    buildings: { source: 'Building', field: 'kind' },
+    boundaries: { source: 'Boundary', field: 'kind' },
+  },
   layers: {
     landcover: 'landcover',
     landuse: 'landuse',

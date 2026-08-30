@@ -836,3 +836,65 @@ test('protomaps: every field the style reads is one the schema declares', () => 
   assert.deepEqual(strays, [],
     'a layer reads a field the Protomaps schema does not declare; it will come back null');
 });
+
+test('byways: every layer the map draws is a layer a tap can ask about', () => {
+  /*
+   * Reported: "I click a trail and there is no data."
+   *
+   * The identify card reads whatever is rendered under the finger and can only
+   * speak about a source layer it recognises. That recognition was a table of
+   * Mapbox's names living in the viewer — `road`, `place_label`, `poi_label` —
+   * so under Protomaps, where the layer is called `roads`, a tap on a road, a
+   * trail, a town or a summit answered nothing at all. The map drew them
+   * perfectly and then had nothing to say about them.
+   *
+   * The rule is the one a reader assumes without being told: if it is drawn,
+   * it can be asked about. Anything genuinely not worth answering for is
+   * listed here by name, so leaving a layer out is a decision somebody wrote
+   * down rather than a gap.
+   */
+  const NOT_WORTH_ASKING = {
+    // Terrain dressing. A tap reporting "contour" or "hillshade" is noise over
+    // whatever the reader was actually pointing at.
+    mapbox: new Set(['contour', 'hillshade', 'landcover', 'admin']),
+    // `earth` is the land polygon the whole map sits on: no name, no kind
+    // beyond "earth", and a row on every tap anywhere on land.
+    protomaps: new Set(['earth']),
+  };
+
+  for (const [what, style, schema] of [
+    ['mapbox', bywaysStyle('tok'), MAPBOX_SCHEMA],
+    ['protomaps', protomapsStyle(), PROTOMAPS_SCHEMA],
+  ]) {
+    const drawn = new Set(style.layers.map((layer) => layer['source-layer']).filter(Boolean));
+    const silent = [...drawn]
+      .filter((layer) => !schema.identify?.[layer])
+      .filter((layer) => !NOT_WORTH_ASKING[what].has(layer));
+    assert.deepEqual(silent, [],
+      `${what}: these are drawn on the map and a tap on them says nothing`);
+  }
+});
+
+test('byways: the identify table names a real column for every layer', () => {
+  /*
+   * The other half. A layer can be in the table and still answer nothing if
+   * the column named for its kind does not exist — which is how `field: class`
+   * would behave against Protomaps, where the column is `kind`. Silent in the
+   * same way and for a different reason, so it is checked separately.
+   */
+  for (const [what, schema] of [['mapbox', MAPBOX_SCHEMA], ['protomaps', PROTOMAPS_SCHEMA]]) {
+    for (const [layer, entry] of Object.entries(schema.identify || {})) {
+      assert.ok(entry.source && typeof entry.source === 'string',
+        `${what}: ${layer} has no heading for a reader`);
+      assert.ok(entry.field && typeof entry.field === 'string',
+        `${what}: ${layer} names no column for the kind of thing it is`);
+    }
+  }
+
+  // And the one that was reported: a road is identifiable on both, under
+  // whatever each calls it.
+  for (const schema of [MAPBOX_SCHEMA, PROTOMAPS_SCHEMA]) {
+    assert.ok(schema.identify[schema.layers.road],
+      `${schema.id}: the layer the roads and trails are drawn from is not identifiable`);
+  }
+});

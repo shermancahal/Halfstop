@@ -6478,19 +6478,19 @@ const LAND_CLASS_LABELS = {
   hospital: 'Hospital grounds',
 };
 
-const MAP_FEATURE_KINDS = {
-  water: { source: 'Water', field: 'class' },
-  waterway: { source: 'Water', field: 'class' },
-  road: { source: 'Road', field: 'class' },
-  landuse: { source: 'Land', field: 'class' },
-  landuse_overlay: { source: 'Land', field: 'class' },
-  natural_label: { source: 'Landform', field: 'class' },
-  place_label: { source: 'Place', field: 'type' },
-  structure: { source: 'Structure', field: 'class' },
-  building: { source: 'Building', field: 'type' },
-  poi_label: { source: 'Point of interest', field: 'category_en' },
-  airport_label: { source: 'Airport', field: 'class' },
-};
+/**
+ * The schema the basemap on screen is drawn from.
+ *
+ * Everything below that reads a rendered feature has to ask this first. What
+ * a source layer is called, which column holds the kind of thing it is, which
+ * layer the roads are in — all of it differs between the two foundations, and
+ * the identify card used to have Mapbox's answers written into it. Under
+ * Protomaps that meant a tap on a road, a trail, a town or a summit answered
+ * nothing at all: the layer there is called `roads` and the table only knew
+ * `road`. Reported as "I click a trail and there is no data", which is exactly
+ * what it did.
+ */
+const mapSchema = () => schemaFor(basemapById(state.basemapId));
 
 /**
  * A rendered feature from one of our own queried overlays.
@@ -6565,15 +6565,17 @@ function describeMapFeature(feature) {
   const own = describeOverlayFeature(feature);
   if (own) return own;
 
-  const kind = MAP_FEATURE_KINDS[feature.sourceLayer];
+  const schema = mapSchema();
+  const kind = schema.identify?.[feature.sourceLayer];
   if (!kind) return null;
 
   const properties = feature.properties || {};
-  const name = properties.name_en || properties.name || '';
+  const name = properties[schema.fields.nameEn] || properties[schema.fields.name] || '';
   const specific = properties[kind.field] || '';
   // A nameless patch of "grass" is not an answer to "what is here". A nameless
-  // road is, because its surface and class are the answer.
-  if (!name && feature.sourceLayer !== 'road') return null;
+  // road is, because its surface and class are the answer — and a trail is a
+  // road here, which is the case that made this matter.
+  if (!name && feature.sourceLayer !== schema.layers.road) return null;
 
   /* Vector-tile columns are lower_snake_case — `national_park`, `street_limited`
      — which `humaniseValue` leaves alone because an agency code in that shape
@@ -6599,14 +6601,24 @@ function describeMapFeature(feature) {
    * cannot.
    */
   add('Kind', LAND_CLASS_LABELS[specific] ?? specific);
-  if (feature.sourceLayer === 'road') {
-    add('Route', properties.ref);
-    add('Surface', properties.surface);
-    add('Structure', properties.structure === 'none' ? '' : properties.structure);
+  if (feature.sourceLayer === schema.layers.road) {
+    add('Route', properties[schema.fields.ref]);
+    // Surface is a Mapbox column. Protomaps has none, so the row is absent
+    // there rather than empty — a schema that cannot answer says nothing.
+    if (schema.fields.surface) add('Surface', properties[schema.fields.surface]);
+    if (properties.structure && properties.structure !== 'none') add('Structure', properties.structure);
+    /*
+     * Protomaps carries the same three facts as booleans instead of one word.
+     * Worth reporting: whether the thing under your finger is a bridge is the
+     * kind of question asked while looking at a river crossing on a paper map.
+     */
+    if (properties.is_bridge === true || properties.is_bridge === 'true') add('Structure', 'Bridge');
+    else if (properties.is_tunnel === true || properties.is_tunnel === 'true') add('Structure', 'Tunnel');
   }
-  if (feature.sourceLayer === 'natural_label' || feature.sourceLayer === 'place_label') {
-    add('Elevation', properties.elevation_ft ? `${properties.elevation_ft} ft` : '');
-  }
+  const elevation = properties.elevation_ft
+    ? `${properties.elevation_ft} ft`
+    : properties[schema.fields.elevation || 'elevation'] || '';
+  if (elevation) add('Elevation', typeof elevation === 'string' ? elevation : `${elevation} m`);
 
   return {
     source: kind.source,
