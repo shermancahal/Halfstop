@@ -1,0 +1,85 @@
+name: Check the live map
+
+# Opens the published site in a real browser and reports why the map is empty.
+#
+# Every other check in this repo looks at one layer in isolation — the reader,
+# the host, the app against a stubbed engine — and a map that draws its
+# background colour and nothing else passes all of them, because the failure is
+# in the seam between them. A cross-origin refusal is the clearest case: curl
+# gets the bytes, `check:archive` reports the archive as fine, and the browser
+# refuses every read and reports it to the page as "Failed to fetch".
+#
+# So this runs the real site, at the real origin, in Chromium, and prints what
+# happened: the config being served, which engine loaded, every request the
+# archive received with its status or failure reason, and how many features
+# actually rendered.
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'The site to open — defaults to the published one.'
+        required: false
+        default: 'https://shermancahal.github.io/Map/'
+        type: string
+      basemap:
+        description: 'Which basemap to select. byways is the Protomaps/Mapbox one.'
+        required: false
+        default: 'byways'
+        type: string
+      view:
+        description: 'Where to look, as zoom/lat/lon. Defaults to Gatlinburg.'
+        required: false
+        default: '13/35.714/-83.511'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  look:
+    name: Open it and look
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install a browser
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+
+      - name: Open the site
+        id: look
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          node tools/check-site.mjs \
+            "${{ inputs.url }}" "${{ inputs.basemap }}" "${{ inputs.view }}" 2>&1 | tee report.txt
+
+      - name: Put the answer in the summary
+        if: always()
+        run: |
+          {
+            echo "### ${{ inputs.url }} · ${{ inputs.basemap }} · ${{ inputs.view }}"
+            echo ""
+            echo '```'
+            cat report.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: site.png
+          if-no-files-found: ignore
+
+      # The look step is allowed to fail so the summary and screenshot are
+      # always published; the job still reports the result.
+      - name: Report the result
+        if: steps.look.outcome == 'failure'
+        run: exit 1

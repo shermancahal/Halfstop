@@ -39,7 +39,7 @@ import {
   registerShieldImages, shieldRegistrationReport, shieldImageIds, stateDesign, rasterizeShieldById,
   shieldImageIdFor, loadShieldBlank, shieldImageId, hasShieldBlank,
 } from './lib/route-shields.js';
-import { shieldLayerUpdates, PALETTE } from './lib/byways-style.js';
+import { shieldLayerUpdates, PALETTE, MAPBOX_SCHEMA, PROTOMAPS_SCHEMA } from './lib/byways-style.js';
 import { PMTilesArchive } from './lib/pmtiles.js';
 import { openTileStore } from './lib/pmtiles-store.js';
 import { previewFor, swatchSVG, tileURL } from './lib/preview.js';
@@ -588,6 +588,7 @@ async function main() {
   refreshLightLines();
   refreshStormData();
   wireMapClicks();
+  exposeMap();
   exposeRoadInspector();
   exposeShieldInspector();
   exposeOverlayInspector();
@@ -1049,6 +1050,16 @@ function setStatus(busy, text = 'Loading…') {
 /* ------------------------------------------------------------------ basemaps & overlays */
 
 /**
+ * Every source id that is "the basemap" to a reader.
+ *
+ * Built from the schemas rather than written out, so it cannot fall behind
+ * them — which is exactly how 'protomaps' came to be missing.
+ */
+const BASEMAP_SOURCE_IDS = new Set(['basemap', ...[MAPBOX_SCHEMA, PROTOMAPS_SCHEMA]
+  .flatMap((schema) => [schema.source, schema.reliefSource])
+  .filter(Boolean)]);
+
+/**
  * Track whether a tile source is actually serving tiles.
  *
  * Third-party tile endpoints move and retire without notice, and a dead one is
@@ -1057,11 +1068,17 @@ function setStatus(busy, text = 'Loading…') {
  * staring at an empty map wondering what they broke.
  */
 function noteLayerHealth(sourceId, ok) {
-  // 'basemap' is our raster source; 'composite' and 'terrain' are the vector
-  // sources the Byways style declares. All three are the basemap as far as the
-  // user is concerned, and without this line a vector basemap that is failing
-  // authentication reports nothing at all — the map is simply empty.
-  const isBasemapSource = sourceId === 'basemap' || sourceId === 'composite' || sourceId === 'terrain';
+  // 'basemap' is our raster source; the rest are the vector sources the Byways
+  // style declares, under whichever schema built it. All of them are the
+  // basemap as far as the user is concerned, and without this line a vector
+  // basemap that is failing reports nothing at all — the map is simply empty.
+  //
+  // 'protomaps' was missing from this list for as long as the Protomaps path
+  // existed, which is how an archive that answered nothing produced a map with
+  // a background colour, no roads, and a layer picker that called the basemap
+  // healthy. The list is now every source either schema names, so adding a
+  // third foundation cannot repeat it.
+  const isBasemapSource = BASEMAP_SOURCE_IDS.has(sourceId);
   const layerId = isBasemapSource ? state.basemapId : overlayIdFromLayer(sourceId);
   if (!layerId) return;
 
@@ -1070,7 +1087,31 @@ function noteLayerHealth(sourceId, ok) {
   state.layerHealth.set(layerId, health);
 
   // Only call it dead once several requests have failed with none succeeding.
-  if (!ok && health.failed === 4 && health.ok === 0) renderLayersTab();
+  if (ok || health.failed !== 4 || health.ok !== 0) return;
+  renderLayersTab();
+
+  /*
+   * And say it out loud when it is the basemap.
+   *
+   * The error handler drops "Failed to fetch" on the floor, correctly: a
+   * single tile 404 is noisy and self-correcting. But a whole basemap
+   * answering nothing is the same message repeated, and dropping it is how a
+   * map that renders its background colour and nothing else arrives with an
+   * empty console and no explanation anywhere.
+   *
+   * The threshold is what makes this safe to shout about: four failures with
+   * no successes at all is not a slow network, it is a source that is not
+   * answering. And the most common reason it is not answering is the one
+   * reason a browser will never print — a cross-origin refusal, which the page
+   * only ever sees as a fetch that failed.
+   */
+  if (!isBasemapSource) return;
+  toast(
+    `${basemapById(state.basemapId)?.name || 'The basemap'} is not returning any tiles. `
+    + 'If it reads from a map archive, the host may be refusing cross-origin range requests. '
+    + 'Try another basemap under Layers.',
+    { tone: 'error', timeout: 16000 },
+  );
 }
 
 function layerIsBroken(id) {
@@ -1656,6 +1697,24 @@ function exposeOverlayInspector() {
       switchedOn: rows.length ? rows : 'nothing is switched on',
     };
   };
+}
+
+/**
+ * The map itself, on the console.
+ *
+ * The four inspectors below answer specific questions, and they were written
+ * one at a time as those questions came up. The question that had no inspector
+ * was the broadest one — "is anything drawing at all, and from where" — and it
+ * is the one that matters when the map is empty, because at that point every
+ * narrower inspector answers "no roads on screen" and none of them says why.
+ *
+ * Exposing the instance is also what lets tools/check-site.mjs read the live
+ * site: the sources it declares, whether each one loaded, and what is actually
+ * rendered. That check is the only thing in this repo that sees the whole
+ * stack at the real origin, and it needs a handle on the map to do it.
+ */
+function exposeMap() {
+  globalThis.abmapMap = state.map;
 }
 
 function exposeRoadInspector() {

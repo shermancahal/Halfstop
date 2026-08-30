@@ -28,10 +28,24 @@ const NAMES = {
 
 const url = process.argv[2];
 if (!url) {
-  console.error('Usage: node tools/check-archive.mjs <url to a .pmtiles file>');
+  console.error('Usage: node tools/check-archive.mjs <url to a .pmtiles file> [origin]');
   console.error('  e.g. node tools/check-archive.mjs https://tiles.example.com/byways.pmtiles');
   process.exit(2);
 }
+
+/*
+ * The origin the archive will actually be read from.
+ *
+ * CORS is not a property of a file, it is a property of a response to a
+ * request that carried an `Origin` header, and Node's fetch does not send one.
+ * The first version of this check asked for a range with no Origin, read back
+ * no `Access-Control-Allow-Origin`, and reported "CORS NONE" — which it would
+ * have reported just as confidently against a bucket that was configured
+ * perfectly. A check that returns the same answer either way is not a check.
+ *
+ * So the origin is stated, and every probe below carries it.
+ */
+const origin = process.argv[3] || process.env.ABMAP_ORIGIN || 'https://shermancahal.github.io';
 
 const problems = [];
 const notes = [];
@@ -44,7 +58,7 @@ const notes = [];
  */
 let first;
 try {
-  first = await fetch(url, { headers: { Range: 'bytes=0-16383' } });
+  first = await fetch(url, { headers: { Range: 'bytes=0-16383', Origin: origin } });
 } catch (error) {
   console.error(`Could not reach ${url}`);
   console.error(`  ${error.message}`);
@@ -52,6 +66,7 @@ try {
 }
 
 console.log(`${url}\n`);
+console.log(`  asked as               ${origin}`);
 console.log(`  status                 ${first.status} ${first.statusText}`);
 
 if (!first.ok) {
@@ -69,20 +84,67 @@ if (first.status === 206) {
   );
 }
 
-const origin = first.headers.get('access-control-allow-origin');
-console.log(`  CORS                   ${origin || 'NONE'}`);
-if (!origin) {
+const allowed = first.headers.get('access-control-allow-origin');
+console.log(`  CORS on the GET        ${allowed || 'NONE'}`);
+if (!allowed) {
   problems.push(
-    'No Access-Control-Allow-Origin header, so a browser will refuse every read.'
-    + ' This is what rules out Protomaps\' own demo bucket.',
+    `No Access-Control-Allow-Origin in the answer to a request from ${origin},`
+    + ' so a browser will refuse every read and the map will be blank with nothing in the console'
+    + ' beyond "Failed to fetch". On R2: the bucket needs a CORS policy naming that origin.',
+  );
+} else if (allowed !== '*' && allowed !== origin) {
+  problems.push(
+    `Access-Control-Allow-Origin came back as ${allowed}, which is neither * nor ${origin}.`
+    + ' A browser at that origin will refuse the read.',
   );
 }
 const exposed = (first.headers.get('access-control-expose-headers') || '').toLowerCase();
-if (origin && !exposed.includes('content-range') && !exposed.includes('*')) {
+if (allowed && !exposed.includes('content-range') && !exposed.includes('*')) {
   notes.push(
     'Access-Control-Expose-Headers does not list content-range.'
     + ' Reads still work; the browser simply cannot see how much it got.',
   );
+}
+
+/*
+ * The preflight, separately — because a Range request is not a simple request.
+ *
+ * `Range` is not on the CORS safelist, so before the browser sends the GET
+ * above it sends an OPTIONS and refuses to proceed unless the answer allows
+ * both the method and that header. A bucket can allow the origin and still
+ * fail here, by allowing no request headers at all, and the failure is
+ * invisible from the GET: curl and Node both get the bytes, and only the
+ * browser is stopped. That is exactly the shape of "it works from the
+ * terminal and the map is blank".
+ */
+try {
+  const preflight = await fetch(url, {
+    method: 'OPTIONS',
+    headers: {
+      Origin: origin,
+      'Access-Control-Request-Method': 'GET',
+      'Access-Control-Request-Headers': 'range',
+    },
+  });
+  const preflightOrigin = preflight.headers.get('access-control-allow-origin');
+  const preflightHeaders = (preflight.headers.get('access-control-allow-headers') || '').toLowerCase();
+  console.log(`  CORS preflight         ${preflight.status} · origin ${preflightOrigin || 'NONE'} · headers ${preflightHeaders || 'NONE'}`);
+  if (!preflight.ok || !preflightOrigin) {
+    problems.push(
+      `The CORS preflight (OPTIONS with Access-Control-Request-Headers: range) answered ${preflight.status}`
+      + `${preflightOrigin ? '' : ' with no Access-Control-Allow-Origin'}.`
+      + ' A browser stops there and never sends the read, so every tile fails.',
+    );
+  } else if (!preflightHeaders.includes('range') && !preflightHeaders.includes('*')) {
+    problems.push(
+      `The preflight allows the origin but not the Range header (it allows: ${preflightHeaders || 'nothing'}).`
+      + ' Reading one tile means asking for a byte range, so a browser will refuse every read'
+      + ' while curl and this check\'s own GET keep working. Add "range" to the bucket\'s allowed headers.',
+    );
+  }
+} catch (error) {
+  console.log(`  CORS preflight         could not be asked — ${error.message}`);
+  notes.push(`The OPTIONS preflight could not be sent: ${error.message}`);
 }
 
 const bytes = new Uint8Array(await first.arrayBuffer());
