@@ -67,37 +67,84 @@ tab.on('pageerror', (error) => consoleErrors.push(`pageerror: ${error.message}`)
  * carries the browser's own reason string, which is the only place the
  * difference is written down — the page sees an opaque "Failed to fetch".
  */
+const inFlight = new Map();
+const watched = (at) => /\.pmtiles|\.pbf|fonts|glyphs/.test(at);
+
+/*
+ * Started requests are tracked as well as finished ones.
+ *
+ * The first run of this hung for nine minutes on a live site, which no report
+ * would have explained afterwards because a request that never finishes
+ * produces neither a response nor a failure. It is also the single most
+ * likely thing to be wrong with a hosted archive - a host that ignores Range
+ * answers one tile read with the whole file - so "started, never finished,
+ * and here is how much arrived" is a diagnosis rather than a gap.
+ */
+tab.on('request', (request) => {
+  const at = request.url();
+  if (watched(at)) inFlight.set(request, { at, started: Date.now(), range: request.headers().range || '' });
+});
+
 tab.on('response', async (response) => {
   const at = response.url();
-  if (!/\.pmtiles|\.pbf|fonts|glyphs/.test(at)) return;
+  if (!watched(at)) return;
+  const started = inFlight.get(response.request());
+  inFlight.delete(response.request());
   requests.push({
     at,
     outcome: `${response.status()} ${response.statusText()}`,
     range: response.request().headers().range || '',
     allow: response.headers()['access-control-allow-origin'] || '',
+    length: response.headers()['content-length'] || '',
+    ms: started ? Date.now() - started.started : 0,
   });
 });
 tab.on('requestfailed', (request) => {
   const at = request.url();
-  if (!/\.pmtiles|\.pbf|fonts|glyphs/.test(at)) return;
+  if (!watched(at)) return;
+  inFlight.delete(request);
   requests.push({
     at,
     outcome: `FAILED — ${request.failure()?.errorText || 'no reason given'}`,
     range: request.headers().range || '',
     allow: '',
+    length: '',
+    ms: 0,
   });
 });
 
 console.log(`${page.href}\n`);
 
-await tab.goto(page.href, { waitUntil: 'load', timeout: 90000 });
+/*
+ * A hard deadline over everything below.
+ *
+ * Each individual wait already has a timeout and it was not enough: the run
+ * that motivated this sat for nine minutes with no output at all, because a
+ * page whose main thread is saturated stalls `evaluate` and `screenshot` too,
+ * and those are the calls that were meant to report the stall. A check that
+ * can hang is a check that tells you nothing on exactly the sites worth
+ * checking, so the whole sequence races a clock and whatever has been
+ * collected gets printed either way.
+ */
+const BUDGET = Number(process.env.ABMAP_BUDGET_MS || 150000);
+const ranOut = Symbol('ran out of time');
+const deadline = new Promise((resolve) => setTimeout(() => resolve(ranOut), BUDGET));
+const inTime = async (what, work, fallback) => {
+  const result = await Promise.race([work().catch((error) => `failed: ${error.message}`), deadline]);
+  if (result !== ranOut) return result;
+  console.log(`  ${what} did not finish inside ${BUDGET / 1000}s.`);
+  return fallback;
+};
+
+const arrived = await inTime('the page load', () => tab.goto(page.href, { waitUntil: 'load', timeout: 60000 }), null);
+if (arrived === null) console.log('  (the report below is whatever was collected before that)');
 
 /*
  * Wait for the map to settle rather than for a fixed time. `idle` fires when
  * the engine has stopped fetching and rendering, which is exactly the moment
  * the question "what drew?" has an answer.
  */
-const settled = await tab.evaluate(() => new Promise((resolve) => {
+const settled = await inTime('the map', () => tab.evaluate(() => new Promise((resolve) => {
   const deadline = setTimeout(() => resolve('timed out after 45s'), 45000);
   const check = () => {
     const map = window.abmapMap;
@@ -107,9 +154,17 @@ const settled = await tab.evaluate(() => new Promise((resolve) => {
   };
   if (check()) return;
   const poll = setInterval(() => { if (check()) clearInterval(poll); }, 250);
-})).catch((error) => `could not wait: ${error.message}`);
+})), 'never settled — the page is still busy');
 
-const report = await tab.evaluate(() => {
+const EMPTY = {
+  config: { archive: '(page never answered)', maxzoom: '', mapboxToken: '' },
+  engine: { maplibre: '', mapbox: '', pmtilesRegistered: false },
+  map: 'the page never answered',
+  sources: [],
+  rendered: [],
+};
+
+const report = await inTime('reading the map', () => tab.evaluate(() => {
   const out = {
     config: {
       archive: window.ABMAP_PROTOMAPS_ARCHIVE ?? '(undefined)',
@@ -164,7 +219,7 @@ const report = await tab.evaluate(() => {
   }
   out.rendered = [...byLayer].sort((a, b) => b[1] - a[1]);
   return out;
-});
+}), EMPTY);
 
 console.log(`  waited for             ${settled}`);
 console.log(`  archive               ${report.config.archive}`);
@@ -200,18 +255,36 @@ for (const request of requests) {
   const key = `${request.at}|${request.outcome}`;
   if (seen.has(key)) continue;
   seen.add(key);
-  console.log(`  ${request.outcome.padEnd(34)} ${request.allow ? `acao=${request.allow} ` : ''}${request.at}`);
+  const size = request.length ? `${(Number(request.length) / 1e6).toFixed(1)}MB ` : '';
+  const took = request.ms ? `${(request.ms / 1000).toFixed(1)}s ` : '';
+  console.log(`  ${request.outcome.padEnd(24)} ${size}${took}${request.allow ? `acao=${request.allow} ` : ''}${request.at}`);
 }
 if (requests.length > seen.size) console.log(`  (${requests.length - seen.size} more with outcomes already listed)`);
+
+if (inFlight.size) {
+  console.log(`\n  Still in flight when time ran out — ${inFlight.size}:`);
+  for (const { at, started, range } of [...inFlight.values()].slice(0, 8)) {
+    console.log(`    ${((Date.now() - started) / 1000).toFixed(0)}s so far  ${range ? `Range: ${range}  ` : ''}${at}`);
+  }
+  console.log('    A read that never finishes usually means the host ignored the Range header');
+  console.log('    and is sending the whole archive to answer one tile.');
+}
 
 console.log('\nConsole');
 if (!consoleErrors.length) console.log('  clean');
 for (const line of [...new Set(consoleErrors)].slice(0, 40)) console.log(`  ${line}`);
 
-await tab.screenshot({ path: 'site.png', fullPage: false });
-console.log('\nScreenshot written to site.png');
+const shot = await inTime('the screenshot', () => tab.screenshot({ path: 'site.png', timeout: 20000 }), null);
+console.log(shot === null ? '\nNo screenshot — the page never held still.' : '\nScreenshot written to site.png');
 
-await browser.close();
+/*
+ * Killed rather than closed. A close waits for the context to shut down
+ * cleanly, and a page still downloading an archive it should not be
+ * downloading will not — which would hang the process after the report is
+ * already printed, right where it looks like the check itself is stuck.
+ */
+await browser.close({ reason: 'done looking' }).catch(() => {});
+process.exitCode = 0;
 
 const drew = report.rendered.length > 0;
 if (!drew) {
@@ -220,3 +293,5 @@ if (!drew) {
   console.error('requests with no features means the style filtered everything out.');
   process.exit(1);
 }
+
+process.exit(process.exitCode || 0);
