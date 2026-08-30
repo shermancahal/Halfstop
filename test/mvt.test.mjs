@@ -195,3 +195,47 @@ test('reconcile: a schema naming a value the tiles never carry is reported', asy
 
   t.diagnostic(`reported: ${said.length} lines`);
 });
+
+test('reconcile: a role naming several values is compared value by value', async () => {
+  /*
+   * The reconciler stringified an array instead of flattening it, and reported
+   * both halves of a contradiction about a style that was correct:
+   * "residential,unclassified" as a value the tile does not have, and
+   * "residential" as a value the tile has that nothing names — two adjacent
+   * lines disagreeing with each other.
+   *
+   * That is worse than not checking. A report that contradicts itself costs
+   * whoever reads it the time to work out which half to believe, at the moment
+   * they are already hunting something else.
+   */
+  const { reconcile } = await import('../tools/inspect-archive.mjs');
+  const { PROTOMAPS_SCHEMA } = await import('../assets/js/lib/byways-style.js');
+
+  const multi = Object.entries(PROTOMAPS_SCHEMA.roadClasses).find(([, value]) => Array.isArray(value));
+  assert.ok(multi, 'no road role names several values, so there is nothing here to get wrong');
+  const [, values] = multi;
+
+  const log = console.log;
+  console.log = () => {};
+  let findings;
+  try {
+    findings = reconcile([{
+      name: PROTOMAPS_SCHEMA.layers.road,
+      keys: [PROTOMAPS_SCHEMA.fields.roadClassField],
+      seen: new Map([[PROTOMAPS_SCHEMA.fields.roadClassField, new Set(values)]]),
+    }]);
+  } finally {
+    console.log = log;
+  }
+
+  const roads = findings.find((one) => one.what === 'roadClasses');
+  assert.ok(roads, 'the road claim was not examined');
+  for (const value of values) {
+    assert.ok(!roads.undrawn.includes(value),
+      `"${value}" is named by the schema and must not be reported as undrawn`);
+    assert.ok(!roads.unused.includes(value),
+      `"${value}" is in the tile and must not be reported as absent`);
+  }
+  assert.ok(!roads.unused.some((one) => one.includes(',')),
+    'a whole role was stringified instead of flattened');
+});

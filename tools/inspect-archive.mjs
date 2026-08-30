@@ -259,8 +259,13 @@ export function reconcile(layers) {
     ['boundaryClasses', PROTOMAPS_SCHEMA.layers.boundary, PROTOMAPS_SCHEMA.fields.classField,
       Object.values(PROTOMAPS_SCHEMA.boundaryClasses || {}).flat()],
     ['roadClasses', PROTOMAPS_SCHEMA.layers.road, PROTOMAPS_SCHEMA.fields.roadClassField,
-      [...Object.values(PROTOMAPS_SCHEMA.roadClasses || {}),
-        ...Object.values(PROTOMAPS_SCHEMA.roadLinks || {})]],
+      // Flattened: a role may name several values, and without this the array
+      // itself was stringified - the report offered "residential,unclassified"
+      // as a value it could not find in the tile, and then listed
+      // "residential" as a value the tile had that nothing named. Both halves
+      // of a contradiction, about a style that was correct.
+      [...Object.values(PROTOMAPS_SCHEMA.roadClasses || {}).flat(),
+        ...Object.values(PROTOMAPS_SCHEMA.roadLinks || {}).flat()]],
   ];
 
   const findings = [];
