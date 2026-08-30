@@ -40,6 +40,11 @@ jobs:
   look:
     name: Open it and look
     runs-on: ubuntu-latest
+    # A stuck runner is worth failing over rather than sitting in. The whole
+    # check is under three minutes when anything is working, and the browser
+    # install is the step that has taken twenty seconds once and twelve
+    # minutes once on the same workflow.
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -47,12 +52,14 @@ jobs:
           node-version: 22
 
       - name: Install a browser
+        timeout-minutes: 8
         run: |
           npm install --no-save playwright
           npx playwright install --with-deps chromium
 
       - name: Open the site
         id: look
+        timeout-minutes: 5
         continue-on-error: true
         run: |
           set -o pipefail
