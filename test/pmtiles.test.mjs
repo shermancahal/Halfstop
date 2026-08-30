@@ -608,20 +608,35 @@ test('offline: the store can say which archive its tiles came from', async () =>
   const old = 'https://shermancahal.github.io/Map/tiles/byways.pmtiles';
   const now = 'https://pub-abc.r2.dev/byways.pmtiles';
 
+  /*
+   * And one whose whole name is the beginning of another's. Matching on a
+   * prefix is the obvious way to write this and it is wrong: asked to drop
+   * `byways.pmtiles` it would also drop `byways.pmtiles.old`. Deleting
+   * somebody's downloaded map is not the place to be clever, so the case is
+   * here rather than only in a comment.
+   */
+  const alike = `${now}.old`;
+
   await store.put(tileKey(old, 3, 4, 3), new Uint8Array(10));
   await store.put(tileKey(old, 3, 5, 3), new Uint8Array(20));
   await store.put(tileKey(now, 3, 4, 3), new Uint8Array(30));
+  await store.put(tileKey(alike, 3, 4, 3), new Uint8Array(40));
 
   const archives = await store.archives();
-  assert.deepEqual([...archives.keys()].sort(), [now, old].sort());
+  assert.deepEqual([...archives.keys()].sort(), [now, old, alike].sort());
   assert.deepEqual(archives.get(old), { tiles: 2, bytes: 30 });
   assert.deepEqual(archives.get(now), { tiles: 1, bytes: 30 });
+  assert.deepEqual(archives.get(alike), { tiles: 1, bytes: 40 });
 
-  // And dropping one leaves the other entirely alone, which is the whole
-  // reason the archive comes first in the key.
+  // Dropping one leaves the others entirely alone, which is the whole reason
+  // the archive comes first in the key.
   assert.equal(await store.removeArchive(old), 2);
-  assert.equal(await store.count(), 1);
+  assert.equal(await store.count(), 2);
   assert.ok(await store.get(tileKey(now, 3, 4, 3)), 'the current archive lost tiles');
+
+  assert.equal(await store.removeArchive(now), 1, 'only the exact archive should go');
+  assert.ok(await store.get(tileKey(alike, 3, 4, 3)),
+    'an archive whose name merely starts with the one asked for must survive');
 });
 
 test('offline: a key round-trips, including a URL with a query string', () => {

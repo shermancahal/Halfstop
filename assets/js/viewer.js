@@ -12,6 +12,7 @@
 import {
   SITE, BASEMAPS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN, OVERLAYS,
   DEFAULT_VIEW, DEFAULT_UNITS, TRACK_COLORS, STATE_NAMES, STATE_GROUP, PROTOMAPS_ARCHIVE,
+  PROTOMAPS_MAXZOOM,
 } from './config.js';
 import {
   loadEngine, buildRasterStyle, hasMapboxToken, mapboxToken, overlayParts, overlayIdFromLayer, overlayRows,
@@ -4410,8 +4411,8 @@ function renderOfflineTab() {
           const region = state.offline.add({
             name: `Region ${state.offline.list().length + 1}`,
             bounds: state.map.getBounds(),
-            minZoom: Math.max(0, Math.min(OFFLINE_MAX_ZOOM, Math.round(state.map.getZoom()) - 3)),
-            maxZoom: Math.min(OFFLINE_MAX_ZOOM, Math.max(8, Math.round(state.map.getZoom()) + 1)),
+            minZoom: Math.max(0, Math.min(deepestUsefulZoom(), Math.round(state.map.getZoom()) - 3)),
+            maxZoom: Math.min(deepestUsefulZoom(), Math.max(8, Math.round(state.map.getZoom()) + 1)),
             basemapId: basemap?.id || '',
             basemapName: basemap?.name || '',
           });
@@ -4517,14 +4518,40 @@ async function describeStorage(node) {
 }
 
 /** One saved region: what it covers, what it costs, and what you can do to it. */
+/**
+ * How deep a region can usefully be taken, for the basemap it was saved from.
+ *
+ * Two ceilings, and the lower one wins. `OFFLINE_MAX_ZOOM` is a judgement about
+ * what is worth carrying — each level past it quadruples the tiles to add
+ * detail nobody reads on a phone in weather. The archive's own depth is a fact:
+ * past it there are no tiles at all.
+ *
+ * Offering the deeper number was not harmless. Every tile past the archive's
+ * depth comes back absent, and absent is reported as "outside the map's
+ * coverage" — which reads as a badly drawn region and sends somebody off to
+ * redraw it, when the fix is a smaller number in a dropdown they were offered.
+ */
+function deepestUsefulZoom(region) {
+  const basemap = basemapById(region?.basemapId || state.basemapId);
+  const fromArchive = basemap?.custom === 'byways' && PROTOMAPS_ARCHIVE;
+  return fromArchive ? Math.min(OFFLINE_MAX_ZOOM, PROTOMAPS_MAXZOOM) : OFFLINE_MAX_ZOOM;
+}
+
 function regionRow(region, kind) {
   const measure = measureRegion(region, kind);
+  const deepest = deepestUsefulZoom(region);
 
   const zoomSelect = (which, value) => el('select', {
     class: 'region-zoom',
     'aria-label': which === 'minZoom' ? 'Minimum zoom' : 'Maximum zoom',
     onchange: (event) => state.offline.update(region.id, { [which]: Number(event.target.value) }),
-  }, Array.from({ length: OFFLINE_MAX_ZOOM + 1 }, (_, zoom) => el('option', {
+    /*
+     * A value already saved past the ceiling is still offered, so the control
+     * shows what the region actually says rather than silently disagreeing
+     * with it. Regions saved before the archive's depth was known are exactly
+     * that case.
+     */
+  }, Array.from({ length: Math.max(deepest, value) + 1 }, (_, zoom) => el('option', {
     value: String(zoom), selected: zoom === value, text: `z${zoom}`,
   })));
 
@@ -4556,6 +4583,12 @@ function regionRow(region, kind) {
       }),
     ]),
     el('div', { class: 'region-meta', text: regionBoundsLabel(region.bounds) }),
+    region.maxZoom > deepest
+      ? el('p', {
+        class: 'source-note',
+        text: `This map stops at z${deepest}; the levels past it will come back empty.`,
+      })
+      : null,
     el('div', { class: 'region-controls' }, [
       zoomSelect('minZoom', region.minZoom),
       el('span', { class: 'region-to', text: 'to' }),
@@ -4620,7 +4653,17 @@ function downloadRow(region) {
 
   const row = el('div', { class: 'region-download' });
 
-  if (!globalThis.caches) {
+  /*
+   * Two different stores, so two different questions.
+   *
+   * Raster tiles go into the Cache API; archive tiles go into IndexedDB,
+   * because the Cache API refuses to store a 206 at all. Asking only about
+   * `caches` told somebody with IndexedDB and no Cache Storage that their
+   * browser could not download a map it could in fact download perfectly well.
+   */
+  const canCacheTiles = Boolean(globalThis.caches);
+  const canStoreArchive = Boolean(globalThis.indexedDB);
+  if (!canCacheTiles && !(archiveURL && canStoreArchive)) {
     row.append(el('p', { class: 'source-note', text: 'This browser cannot store map tiles offline.' }));
     return row;
   }
