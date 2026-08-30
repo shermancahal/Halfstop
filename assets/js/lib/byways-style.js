@@ -55,6 +55,16 @@ export const MAPBOX_SCHEMA = {
   id: 'mapbox',
   source: 'composite',
   reliefSource: 'terrain',
+  /*
+   * The font stack, which is a property of the glyph server and not of this
+   * style's taste.
+   *
+   * A `text-font` names fonts the style's `glyphs` URL has to be able to
+   * serve, and the two schemas point at different servers. These are Mapbox's,
+   * and they exist only on Mapbox's font endpoint.
+   */
+  font: ['DIN Pro Regular', 'Arial Unicode MS Regular'],
+  fontBold: ['DIN Pro Bold', 'Arial Unicode MS Bold'],
   layers: {
     landcover: 'landcover',
     landuse: 'landuse',
@@ -203,6 +213,24 @@ export const PROTOMAPS_SCHEMA = {
   id: 'protomaps',
   source: 'protomaps',
   reliefSource: null,
+  /*
+   * Protomaps' own font set, which is Noto and nothing else.
+   *
+   * This is the single fault that made the Protomaps map look broken. The
+   * style asked for Mapbox's stack from Protomaps' font server, every glyph
+   * range came back 404, and a symbol layer whose font cannot be fetched draws
+   * no text at all - so the map rendered water, parks and roads and not one
+   * place name, road name or route number. Worse, the 404 storm kept the style
+   * from finishing inside its own timeout, which then set the app rebuilding
+   * its layers and re-registering shields on a loop.
+   *
+   * The names are measured, not guessed: Regular, Medium and Italic answer
+   * 200 on that server and "Noto Sans Bold" answers 404, which is why the
+   * bold stack here is Medium. tools/layer-candidates.json keeps those probes
+   * so the next person does not have to find out from a blank map.
+   */
+  font: ['Noto Sans Regular'],
+  fontBold: ['Noto Sans Medium'],
   layers: {
     landcover: 'landcover',
     landuse: 'landuse',
@@ -537,8 +565,19 @@ const sealedClasses = () => [
   R('street'), R('streetLimited'),
 ];
 
-const FONT = ['DIN Pro Regular', 'Arial Unicode MS Regular'];
-const FONT_BOLD = ['DIN Pro Bold', 'Arial Unicode MS Bold'];
+/*
+ * Functions, not constants, and for the reason three other things in this file
+ * are functions.
+ *
+ * A module-level constant is evaluated once at import and freezes whatever
+ * schema happened to be current - which here means every symbol layer would
+ * carry Mapbox's font names into a Protomaps style no matter what the schema
+ * said. That exact mistake has now been made four times in this file, and it
+ * is invisible under Mapbox every time, because under Mapbox the frozen value
+ * is the right one.
+ */
+const font = () => S.font;
+const fontBold = () => S.fontBold;
 
 /** Interpolate a line width across zooms, so roads thicken as you come in. */
 /*
@@ -885,7 +924,7 @@ function reliefLayers() {
       layout: {
         'symbol-placement': 'line',
         'text-field': ['concat', ['to-string', ['get', 'ele']], ' m'],
-        'text-font': FONT,
+        'text-font': font(),
         'text-size': 9.5,
         'symbol-spacing': 320,
       },
@@ -1111,7 +1150,7 @@ function labelLayers() {
       minzoom: 7,
       layout: {
         'text-field': labelName(),
-        'text-font': FONT,
+        'text-font': font(),
         'text-size': ['interpolate', ['linear'], ['zoom'], 7, 10, 14, 13],
         'text-max-width': 8,
       },
@@ -1130,7 +1169,7 @@ function labelLayers() {
       minzoom: 11,
       layout: {
         'text-field': labelName(),
-        'text-font': FONT,
+        'text-font': font(),
         'text-size': 11,
         'text-offset': [0, 0.6],
         'text-anchor': 'top',
@@ -1168,7 +1207,7 @@ function labelLayers() {
             ['all', unpaved(), ['has', 'name']], ['concat', labelName(), ' \u00b7 unpaved'],
             labelName()]
           : labelName(),
-        'text-font': FONT,
+        'text-font': font(),
         'text-size': ['interpolate', ['linear'], ['zoom'], 13, 9, 18, 12],
       },
       paint: {
@@ -1195,7 +1234,7 @@ function labelLayers() {
         'text-field': hasSurface()
           ? ['case', unpaved(), ['concat', labelName(), ' \u00b7 unpaved'], labelName()]
           : labelName(),
-        'text-font': FONT,
+        'text-font': font(),
         'text-size': ['interpolate', ['linear'], ['zoom'], 14, 8.5, 18, 11],
       },
       paint: {
@@ -1211,7 +1250,7 @@ function labelLayers() {
       'source-layer': S.layers.place,
       layout: {
         'text-field': labelName(),
-        'text-font': FONT_BOLD,
+        'text-font': fontBold(),
         /*
          * Towns bigger than everything else, at both ends of the ramp.
          *
@@ -1537,7 +1576,7 @@ function shieldLayers(state = '') {
       'icon-offset': [shiftPx, 0],
       'icon-rotation-alignment': 'viewport',
       'text-field': text,
-      'text-font': FONT_BOLD,
+      'text-font': fontBold(),
       'text-size': shieldTextSizeExpression(state, 2, ['length', text], { network: shieldNetwork() }),
       'text-offset': shieldTextOffsetExpression(state, 2, shiftPx, { override: refDesign(), network: shieldNetwork() }),
       'text-rotation-alignment': 'viewport',
@@ -1604,7 +1643,7 @@ function shieldLayers(state = '') {
         // one place that read `ref` straight through, which is why a single
         // route drew "SR 61" while a concurrency drew bare numbers.
         'text-field': ref(),
-        'text-font': FONT_BOLD,
+        'text-font': fontBold(),
         // Sized and placed per shield: a third of the blanks carry the state's
         // name across the top, and a number centred in the image lands on it.
         // Sized from the number, not from a default of two characters: "21/2"

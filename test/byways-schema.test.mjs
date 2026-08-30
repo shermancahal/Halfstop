@@ -579,3 +579,85 @@ test('byways: the basemap row says the thing a reader can act on', async () => {
   assert.equal(sourceNoteFor({ id: 'usgs-topo' }, { archive, token: 'pk.x' }), '');
   assert.equal(sourceNoteFor(null), '');
 });
+
+test('byways: the font stack follows the schema, because the glyph server does', () => {
+  /*
+   * The fault that made the Protomaps map look broken, and the one the
+   * "no Mapbox field name survives" check could not see.
+   *
+   * `text-font` is not a field name and not a source-layer, so every existing
+   * check walked straight past it - and it was a module-level constant, which
+   * is the frozen-at-import mistake this file has caught three times in other
+   * shapes. The result was Mapbox's font names asked of Protomaps' font
+   * server, a 404 on every glyph range, and a map that drew water, parks and
+   * roads with not one label, road name or route number on it.
+   *
+   * This asserts the whole property rather than the one symptom: whatever
+   * fonts a style ships, all of them must come from the schema that built it.
+   * Written that way it fails on a reverted constant, on a stack half-ported,
+   * and on a new symbol layer that hardcodes a font - three ways of making the
+   * same mistake, one of which has already happened.
+   */
+  for (const [what, style, schema] of [
+    ['mapbox', bywaysStyle('tok'), MAPBOX_SCHEMA],
+    ['protomaps', protomapsStyle(), PROTOMAPS_SCHEMA],
+  ]) {
+    const allowed = new Set([...schema.font, ...schema.fontBold]);
+    const symbols = style.layers.filter((layer) => layer.layout?.['text-font']);
+    // Protomaps ships fewer label layers than Mapbox - summits and named
+    // natural features are dropped, because that schema has nowhere to read
+    // them from - so the guard is only against a vacuous loop, and both
+    // weights are required so neither stack goes unexercised.
+    assert.ok(symbols.length >= 4, `${what}: expected the label layers to be present`);
+    const asked = new Set(symbols.flatMap((layer) => layer.layout['text-font']));
+    assert.ok(asked.has(schema.font[0]), `${what}: nothing uses the regular stack`);
+    assert.ok(asked.has(schema.fontBold[0]), `${what}: nothing uses the bold stack`);
+    for (const layer of symbols) {
+      for (const name of layer.layout['text-font']) {
+        assert.ok(allowed.has(name), `${what}: ${layer.id} asks for "${name}", which ${schema.id} does not name`);
+      }
+    }
+  }
+});
+
+test('byways: the Protomaps font names are the ones that server actually has', () => {
+  /*
+   * A pin, deliberately, on values that were measured rather than reasoned.
+   *
+   * protomaps.github.io/basemaps-assets serves Noto Sans Regular, Medium and
+   * Italic, and answers 404 for "Noto Sans Bold" - which is why the bold stack
+   * is Medium and looks like a typo. The probes are in
+   * tools/layer-candidates.json under `font:`, and they are the only reason
+   * these three strings are right.
+   *
+   * The test cannot check the server; it has no network. What it can do is
+   * make changing these a deliberate act rather than a tidy-up, which is
+   * exactly what "Bold" would look like to anyone reading the line.
+   */
+  assert.deepEqual(PROTOMAPS_SCHEMA.font, ['Noto Sans Regular']);
+  assert.deepEqual(PROTOMAPS_SCHEMA.fontBold, ['Noto Sans Medium'],
+    'Noto Sans Bold does not exist on that server; Medium is the bold weight it has');
+
+  // And the fonts have to be reachable from the glyphs URL the style ships.
+  assert.match(protomapsStyle().glyphs, /^https:\/\/protomaps\.github\.io\/basemaps-assets\/fonts\//);
+});
+
+test('byways: no font name is written inline past the seam', () => {
+  /*
+   * The source-text half, same as the source-layer and class checks above.
+   *
+   * A style built from the right schema and a style with the names inlined are
+   * identical documents under Mapbox, so only reading the file catches the
+   * second one. The schema definitions are where these strings belong; nothing
+   * below them may repeat one.
+   */
+  const source = readFileSync(path.join(HERE, '..', 'assets', 'js', 'lib', 'byways-style.js'), 'utf8');
+  const seam = source.indexOf('function buildStyle');
+  assert.ok(seam > 0, 'the style builder moved; this check needs its new name');
+
+  const past = source.slice(seam);
+  for (const name of [...MAPBOX_SCHEMA.font, ...MAPBOX_SCHEMA.fontBold,
+    ...PROTOMAPS_SCHEMA.font, ...PROTOMAPS_SCHEMA.fontBold]) {
+    assert.ok(!past.includes(`'${name}'`), `"${name}" is written inline past the seam`);
+  }
+});
