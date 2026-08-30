@@ -134,10 +134,43 @@ export async function allPhotoIds() {
  */
 export async function pruneUnreferenced(referencedIds) {
   const keep = new Set(referencedIds);
-  const stored = await allPhotoIds();
-  const orphans = stored.filter((id) => !keep.has(id));
+  const stored = await allRecords();
+  /*
+   * A saved map picture belongs to nobody, and that is not the same as being
+   * an orphan.
+   *
+   * Every other image in here hangs off a pin: remove the pin and the image
+   * has no reason to exist, which is what this sweep is for. A picture of the
+   * map was saved on its own, references nothing and is referenced by nothing,
+   * so the rule "delete what no folder points at" describes it exactly — and
+   * would take somebody's photograph of where they were standing.
+   */
+  const orphans = stored
+    .filter((record) => record.source !== SNAPSHOT_SOURCE && !keep.has(record.id))
+    .map((record) => record.id);
   await deletePhotos(orphans);
   return orphans.length;
+}
+
+/** How a picture of the map is marked, so the sweep above leaves it alone. */
+export const SNAPSHOT_SOURCE = 'map-snapshot';
+
+/** Every stored record without its blob, newest first. */
+async function allRecords() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const request = db.transaction(STORE, 'readonly').objectStore(STORE).getAll();
+    request.onsuccess = () => resolve((request.result || []).map(({ blob: _omit, ...rest }) => rest));
+    request.onerror = () => reject(request.error);
+  });
+}
+
+/** The saved pictures of the map, newest first. */
+export async function listSnapshots() {
+  const records = await allRecords();
+  return records
+    .filter((record) => record.source === SNAPSHOT_SOURCE)
+    .sort((a, b) => (b.added || 0) - (a.added || 0));
 }
 
 /** Rough usage, for showing how much room photos are taking. */

@@ -75,6 +75,7 @@ import {
 } from './lib/offline.js';
 import {
   putPhoto, photoURL, deletePhoto, pruneUnreferenced, fetchLinkedPhoto, formatBytes, PHOTO_TYPES,
+  listSnapshots, SNAPSHOT_SOURCE,
 } from './lib/photos.js';
 
 /* ------------------------------------------------------------------ state */
@@ -703,6 +704,8 @@ function cacheDom() {
   dom.status = document.getElementById('map-status');
   dom.statusText = document.getElementById('map-status-text');
   dom.folderList = document.getElementById('folder-list');
+  dom.offlineSaved = document.getElementById('offline-saved');
+  dom.offlineSavedCount = document.getElementById('offline-saved-count');
   dom.folderTotals = document.getElementById('folder-totals');
   dom.newFolder = document.getElementById('new-folder');
   dom.newTrip = document.getElementById('new-trip');
@@ -5828,9 +5831,34 @@ async function saveMapImage() {
       return;
     }
 
+    /*
+     * Kept as well as handed over.
+     *
+     * Sharing puts it in the phone's photo library, which is where it belongs
+     * and is also where it becomes indistinguishable from four hundred other
+     * pictures. Keeping a copy here means the map can list it beside the
+     * ground it is a picture of, and - the part that matters on a trip - it
+     * survives having no signal, because it never needed one.
+     *
+     * Storing first, so a share the person cancels still leaves them the
+     * picture. Never fatal: a full disk must not lose the share.
+     */
+    let kept = null;
+    try {
+      kept = await putPhoto(blob, {
+        source: SNAPSHOT_SOURCE,
+        name: `${stamp}.png`,
+        caption: `${centre.lat.toFixed(4)}, ${centre.lng.toFixed(4)} · z${state.map.getZoom().toFixed(1)}`,
+      });
+      renderFoldersTab();
+    } catch (error) {
+      console.warn('[map] the picture could not be kept on this device:', error.message);
+    }
+
     const how = await saveBlob(blob, `${stamp}.png`);
     if (how === 'shared') briefly('Picture ready to share.');
     else if (how === 'downloaded') briefly('Picture saved.');
+    else if (how === 'cancelled' && kept) briefly('Kept in Folders.');
   } catch {
     // A cross-origin tile taints the canvas and makes toDataURL throw. Every
     // source in the catalogue is checked for CORS by tools/check-layers.mjs
@@ -8579,6 +8607,8 @@ function renderFoldersTab() {
   dom.folderList.replaceChildren();
   if (existingPicker) dom.folderList.append(existingPicker);
 
+  renderSavedOffline();
+
   if (!folders.length) {
     dom.folderList.append(el('p', {
       class: 'hint',
@@ -8593,6 +8623,174 @@ function renderFoldersTab() {
   }
 
   restoreOpenEditor();
+}
+
+/**
+ * What is on the device: the ground taken offline, and the pictures kept.
+ *
+ * These live under Folders rather than in the offline menu they are managed
+ * from, and the reason is what a person is doing when they look. The menu is
+ * where you plan a download — you are online, at a table, deciding. This is
+ * where you check what you actually have, which is a question asked in a car
+ * park with one bar of signal, in the same panel as everything else you saved.
+ *
+ * Async because both answers live in IndexedDB, and rendered into a section
+ * that is already on screen rather than awaited before the panel opens: the
+ * rest of Folders must not wait on a disk read to draw.
+ */
+async function renderSavedOffline() {
+  const node = dom.offlineSaved;
+  if (!node) return;
+
+  const regions = state.offline.list();
+  let snapshots = [];
+  let stored = new Map();
+  try {
+    [snapshots, stored] = await Promise.all([
+      listSnapshots(),
+      openTileStore().then((store) => store.archives?.() ?? new Map()),
+    ]);
+  } catch {
+    // A blocked or private-mode IndexedDB answers nothing rather than throwing
+    // the panel away. The counts simply read as none.
+  }
+
+  // The node can have been replaced while the disk was read.
+  if (node !== dom.offlineSaved) return;
+  node.replaceChildren();
+
+  const totalTiles = [...stored.values()].reduce((sum, one) => sum + one.tiles, 0);
+  const totalBytes = [...stored.values()].reduce((sum, one) => sum + one.bytes, 0)
+    + snapshots.reduce((sum, one) => sum + (one.bytes || 0), 0);
+  if (dom.offlineSavedCount) {
+    dom.offlineSavedCount.textContent = totalBytes ? formatBytes(totalBytes) : '';
+  }
+
+  /*
+   * Tiles belonging to an archive this map no longer reads.
+   *
+   * The store keys every tile by the archive it came out of, so the day that
+   * URL changes — a copy beside the site becoming a bucket, one bucket
+   * becoming another — every tile already here stops being reachable. Nothing
+   * about that is an error: the reader looks under the new name, finds
+   * nothing, and asks the network, which is exactly what it should do. It just
+   * means the map quietly stopped working offline while still holding the
+   * space, and the only moment that gets noticed is the moment there is no
+   * signal.
+   */
+  const current = archiveURLNow();
+  const orphans = [...stored].filter(([name]) => name !== current);
+  if (orphans.length) {
+    const bytes = orphans.reduce((sum, [, one]) => sum + one.bytes, 0);
+    const tiles = orphans.reduce((sum, [, one]) => sum + one.tiles, 0);
+    node.append(el('div', { class: 'region' }, [
+      el('div', { class: 'region-meta' }, [
+        el('b', { text: 'From a map that has moved' }),
+      ]),
+      el('p', {
+        class: 'source-note',
+        text: `${tiles.toLocaleString()} tiles (${formatBytes(bytes)}) were downloaded from a `
+          + 'different copy of the map and cannot be read any more. Downloading these '
+          + 'regions again will replace them.',
+      }),
+      el('button', {
+        class: 'button button-secondary button-small', type: 'button',
+        text: `Remove ${formatBytes(bytes)}`,
+        onclick: async () => {
+          const store = await openTileStore();
+          let removed = 0;
+          for (const [name] of orphans) removed += await store.removeArchive?.(name) ?? 0;
+          toast(`Removed ${removed.toLocaleString()} tiles from a map that has moved.`);
+          renderSavedOffline();
+        },
+      }),
+    ]));
+  }
+
+  if (!regions.length && !snapshots.length && !totalTiles) {
+    node.append(el('p', {
+      class: 'hint',
+      text: 'Nothing saved yet. Use the download button above the map to mark ground to take '
+        + 'with you, or the camera to keep a picture of the view.',
+    }));
+    return;
+  }
+
+  if (regions.length) {
+    node.append(el('h3', { class: 'offline-heading', text: 'Map regions' }));
+    for (const region of regions) {
+      const held = stored.get(current);
+      node.append(el('div', { class: 'region' }, [
+        el('div', { class: 'region-head' }, [
+          el('b', { class: 'region-name-static', text: region.name }),
+          el('button', {
+            class: 'icon-button', type: 'button', title: `Show ${region.name}`,
+            html: icons.target,
+            onclick: () => {
+              const { west, south, east, north } = region.bounds;
+              state.map.fitBounds([[west, south], [east, north]], { padding: 40, duration: 600 });
+            },
+          }),
+        ]),
+        el('div', {
+          class: 'region-meta',
+          text: `z${region.minZoom}–${region.maxZoom} · ${region.basemapName || 'no basemap recorded'}`
+            + (held ? ` · ${held.tiles.toLocaleString()} tiles held` : ' · not downloaded'),
+        }),
+      ]));
+    }
+  }
+
+  if (snapshots.length) {
+    node.append(el('h3', { class: 'offline-heading', text: 'Pictures' }));
+    for (const shot of snapshots) node.append(snapshotRow(shot));
+  }
+}
+
+/** One saved picture: a thumbnail, where it was taken, and a way to be rid of it. */
+function snapshotRow(shot) {
+  const thumb = el('img', {
+    class: 'snapshot-thumb', alt: `Saved view at ${shot.caption || 'an unrecorded place'}`, loading: 'lazy',
+  });
+  /*
+   * The object URL is revoked when the row leaves the document rather than on
+   * a timer. A list of these rebuilt on every folder change would otherwise
+   * leak one blob URL per render, and the blobs are megabytes.
+   */
+  photoURL(shot.id).then((url) => {
+    if (!url) return;
+    thumb.src = url;
+    thumb.addEventListener('load', () => {
+      if (!thumb.isConnected) URL.revokeObjectURL(url);
+    });
+  }).catch(() => {});
+
+  return el('div', { class: 'region snapshot' }, [
+    thumb,
+    el('div', { class: 'snapshot-body' }, [
+      el('div', { class: 'region-meta', text: shot.caption || shot.name || 'Saved view' }),
+      el('div', { class: 'region-meta', text: `${formatDate(shot.added) || ''} · ${formatBytes(shot.bytes || 0)}` }),
+    ]),
+    el('button', {
+      class: 'icon-button', type: 'button', title: 'Delete this picture',
+      html: icons.trash,
+      onclick: async () => {
+        await deletePhoto(shot.id);
+        toast('Picture removed.');
+        renderSavedOffline();
+      },
+    }),
+  ]);
+}
+
+/** The archive the map is reading right now, absolute, or '' when there is none. */
+function archiveURLNow() {
+  if (!PROTOMAPS_ARCHIVE) return '';
+  try {
+    return new URL(PROTOMAPS_ARCHIVE, document.baseURI).href;
+  } catch {
+    return PROTOMAPS_ARCHIVE;
+  }
 }
 
 /** Re-open the pin editor after a re-render, anchored to its row again. */
