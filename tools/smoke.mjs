@@ -2158,6 +2158,58 @@ check('and it is listed once, however many times it was drawn',
 check('a nameless road still answers, because its surface is the answer',
   card.Road.pairs.Surface, 'Unpaved');
 check('and its class is spelled as a word', card.Road.designation, 'Track');
+
+/*
+ * One tap, one card, and the save on the card that did the naming.
+ *
+ * Reported from the phone: tapping a trailhead with a recreation layer on
+ * opened two cards over each other. This one named the place and listed its
+ * attributes; a second, from that overlay's own layer, knew almost nothing
+ * about it and had the only save button on screen. The reader had to notice
+ * that the useful card and the actionable card were different cards.
+ *
+ * Both halves are checked, because fixing either alone still leaves it wrong:
+ * a single card with no way to save it, or a save button on a card that has
+ * gone back to being one of two.
+ */
+check('one tap leaves one card, not a queried overlay opening a second',
+  await page.locator('.identify-card, .feature-popup, .drop-pin').count(), 1);
+check('and the card that named the place is the one offering to keep it',
+  await page.locator('.identify-card .popup-save-open').count(), 1);
+
+await page.locator('.identify-card .popup-save-open').click();
+check('which opens the folder picker in place, on the same card',
+  await page.locator('.identify-card .popup-save-panel').isVisible(), true);
+
+await page.locator('.identify-card .popup-folder').selectOption('__new__');
+await page.locator('.identify-card .popup-new-folder').fill('From the map');
+await page.locator('.identify-card .popup-save-confirm button').first().click();
+await page.waitForTimeout(500);
+
+const fromIdentify = await page.evaluate(() => {
+  const folders = JSON.parse(window.localStorage.getItem('ab-maps-folders-v1') || '{}');
+  const list = folders.folders || folders.items || [];
+  return list.find((entry) => entry.name === 'From the map')?.items?.[0]?.feature?.properties?.name;
+});
+/*
+ * The name is the point. A pin saved off this card used to be impossible, and
+ * the obvious way to add it - hand the save a bare point - would file
+ * "Dropped pin" over a place the card had just named on screen.
+ */
+check('and the pin is named after what the card identified, not "Dropped pin"',
+  fromIdentify, 'Fish Lake');
+
+/*
+ * Saving closes the card and moves to Folders, which is right for somebody who
+ * just saved something and wrong for the checks below, which go on reading
+ * this card and its layer switches. Put both back.
+ */
+await showTab('layers');
+await page.evaluate(() => window.__map.fire('click', {
+  lngLat: { lng: -111.5, lat: 38.5 }, point: { x: 400, y: 400 },
+  originalEvent: { pointerType: 'touch', width: 40, height: 40 },
+}));
+await page.waitForTimeout(900);
 check('the forest around it is named too', card.Land.designation, 'Fishlake National Forest');
 
 // The mark stays under the card: "on this spot" with nothing marking the spot

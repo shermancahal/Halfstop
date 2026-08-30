@@ -1007,6 +1007,7 @@ function goToPlace(place) {
   showIdentifyResults(place.center, [{
     source: place.kind,
     designation: place.name,
+    named: Boolean(place.name),
     attributes: null,
     rows: place.context ? [['Where', place.context]] : [],
   }]);
@@ -5606,7 +5607,10 @@ function addPointOverlay(overlay, layerId) {
         'text-halo-width': 1.2,
       },
     });
-    bindFeatureInteractions(layerId);
+    // Cursor only. The identify card answers for every queried overlay at once,
+    // and a second card from this one layer would be the same feature said
+    // twice.
+    bindFeatureInteractions(layerId, { popup: false });
   }
 
   refreshQueryOverlay(overlay);
@@ -5869,10 +5873,24 @@ async function saveMapImage() {
 
 /* ------------------------------------------------------------------ interactions */
 
-function bindFeatureInteractions(layerId) {
+/**
+ * Make a layer answer to the pointer.
+ *
+ * `popup` is a choice because two things want to answer the same tap. A layer
+ * that carries the reader's own data - a pin they saved, a track they opened -
+ * is the whole answer, and its card is the right one. A queried overlay is
+ * not: it is one agency's opinion among several under the same finger, and the
+ * identify card exists precisely to gather all of them.
+ *
+ * With both, a tap on a trailhead opened two cards over each other saying the
+ * same thing in different words, one of which had the save button. Which is
+ * what got reported, and it reads as the map arguing with itself.
+ */
+function bindFeatureInteractions(layerId, { popup = true } = {}) {
   state.interactiveLayers.add(layerId);
   state.map.on('mouseenter', layerId, () => { state.map.getCanvas().style.cursor = 'pointer'; });
   state.map.on('mouseleave', layerId, () => { state.map.getCanvas().style.cursor = ''; });
+  if (!popup) return;
   state.map.on('click', layerId, (event) => {
     const feature = event.features?.[0];
     if (feature) showFeaturePopup(feature, event.lngLat);
@@ -6105,6 +6123,13 @@ async function identifyAt(entry, position, { tolerance, bounds, size }) {
     // designation as the sublayer name rather than as a field, so "Roads
     // Managed for Limited Public Motorized Use" arrives here and nowhere else.
     designation: result.layerName || '',
+    /*
+     * And it is a layer's name, not the feature's, which matters the moment
+     * anything wants to name a pin after what was tapped. "Motor Vehicle Use
+     * Map: Roads" is a true and useful heading and a terrible name for a place
+     * you are trying to find again.
+     */
+    named: false,
     attributes: result.attributes || {},
     fields: entry.identify.fields || null,
     vehicles: Boolean(entry.identify.vehicles),
@@ -6312,8 +6337,61 @@ function showIdentifyResults(position, groups, { pending = false } = {}) {
     }),
   ]));
 
+  /*
+   * And the one action this card was missing.
+   *
+   * A trailhead used to answer a tap with two cards on top of each other: this
+   * one, naming it and listing its attributes, and a second from the overlay's
+   * own layer that knew almost nothing about it but had the save button. The
+   * reader had to notice that the useful card and the actionable card were
+   * different cards.
+   *
+   * So the save comes here, where the naming already is. Only once the answer
+   * has arrived - offering to save "Looking…" would be its own small lie - and
+   * only when something was actually found, because a tap on empty ground has
+   * nothing to name.
+   */
+  if (!pending && groups.length) {
+    content.append(saveToFolderActions(identifiedFeature(position, groups), popup));
+  }
+
   popup.setDOMContent(content).addTo(state.map);
   return { popup, body };
+}
+
+/**
+ * A saveable pin for whatever the identify card just named.
+ *
+ * The card can be showing several agencies' answers for one finger. The name
+ * to save under is the first one that has a name of its own — the groups
+ * arrive most-specific first, and "Rough Trail Parking Lot" is a better pin
+ * than "Recreation". Falling back to the source keeps the pin from being
+ * called "Dropped pin" when the card plainly knows better.
+ */
+function identifiedFeature(position, groups) {
+  /*
+   * A group that names a thing beats one that names a layer, whatever order
+   * they arrived in.
+   *
+   * The first attempt took the first designation there was, which put
+   * "Motor Vehicle Use Map: Roads" on a pin dropped beside a lake the same
+   * card had just called Fish Lake. Both strings are correct headings; only
+   * one of them is a place.
+   */
+  const named = groups.find((group) => group.named && group.designation)
+    || groups.find((group) => group.designation)
+    || groups[0];
+  const source = groups.find((group) => group.source)?.source || '';
+  return {
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [position.lng ?? position[0], position.lat ?? position[1]] },
+    properties: {
+      kind: 'waypoint',
+      name: named?.designation || named?.source || 'Dropped pin',
+      description: source && source !== named?.designation ? `From ${source}.` : '',
+      icon: DEFAULT_PIN_ICON,
+    },
+  };
 }
 
 /**
@@ -6471,6 +6549,9 @@ function describeOverlayFeature(feature) {
   return {
     source: overlay.name,
     designation: String(name),
+    // This one is the feature's own name, out of the field the catalogue
+    // nominates — "Rough Trail Parking Lot" rather than "Recreation".
+    named: Boolean(name),
     attributes: null,
     rows,
     links: overlayLinks(overlay.query?.links, properties),
@@ -6530,6 +6611,10 @@ function describeMapFeature(feature) {
   return {
     source: kind.source,
     designation: name || (specific ? words(humaniseValue(specific)) : '') || kind.source,
+    // Only where the tile actually carried one. The fallbacks below it are a
+    // class spelled as a word — "Track" — which names a kind of thing and not
+    // a thing.
+    named: Boolean(name),
     attributes: null,
     rows,
   };
@@ -6650,7 +6735,10 @@ function showFeaturePopup(feature, lngLat, { edit = false, identity = null } = {
     })
     : null;
 
-  const content = el('div', {});
+  // Named so that "how many cards did one tap open" is a question a test can
+  // ask. It was an anonymous div, and the two-cards-at-once bug lived behind
+  // exactly that.
+  const content = el('div', { class: 'feature-popup' });
   content.append(el('div', { class: 'popup-head' }, [
     glyph,
     el('div', { class: 'popup-head-text' }, [
