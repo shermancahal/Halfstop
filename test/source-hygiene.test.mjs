@@ -198,6 +198,35 @@ test('both workflows cut the map archive with the same script', async () => {
   assert.deepEqual(calling.sort(), ['cut-archive.yml', 'deploy-pages.yml']);
 });
 
+test('only one file composes an archive tile key', async () => {
+  /*
+   * The offline round-trip test in test/pmtiles.test.mjs cannot catch this,
+   * and it is worth saying why: now that both sides call `tileKey`, changing
+   * the format changes both together and the test passes — correctly, because
+   * that is no longer a bug. The bug is somebody writing the template out
+   * again, at which point the two sides can drift by one character.
+   *
+   * And that failure is the quietest one this app has. The download reports
+   * every tile saved, the phone fills up, and the map is blank the moment the
+   * signal goes — with no error anywhere, because a tile the store does not
+   * hold is a legitimate answer that falls through to a network read that
+   * cannot happen.
+   */
+  const composing = [];
+  for (const root of ['assets/js', 'assets/js/lib', 'tools']) {
+    for (const name of await readdir(root, { withFileTypes: true })) {
+      if (!name.isFile() || !/\.m?js$/.test(name.name)) continue;
+      const rel = path.join(root, name.name);
+      if (rel.endsWith('pmtiles-store.js')) continue;
+      const text = await readFile(rel, 'utf8');
+      // The shape of the key: something, a separator, then z/x/y.
+      if (/\$\{[a-zA-Z.]+\}[|#/]\$\{z\}\/\$\{x\}\/\$\{y\}/.test(text)) composing.push(rel);
+    }
+  }
+  assert.deepEqual(composing, [],
+    'these build an archive tile key themselves; it must come from tileKey()');
+});
+
 test('the bucket credentials never reach a workflow that writes the site', async () => {
   /*
    * An R2 API token can write to the bucket. It is the one genuinely secret

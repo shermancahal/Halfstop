@@ -531,3 +531,63 @@ test('overlapping tiers are downloaded once, not once per tier', () => {
   ]);
   assert.equal(tiles.length, tileKeysFor([{ zoom: 10, boxes: [SMOKIES] }]).length);
 });
+
+test('offline: a downloaded region is what the map reads back', async () => {
+  /*
+   * The two halves of offline, joined, because separately they both pass while
+   * the feature does not work.
+   *
+   * `downloadArchiveTiles` writes tiles into a store under a name, and the
+   * `pmtiles://` handler looks tiles up in that store before it touches the
+   * archive. If those two disagree about the name by one character, the
+   * download reports every tile saved, the phone fills up, and the map is
+   * blank the moment there is no signal — with no error anywhere, because a
+   * tile the store does not have is a legitimate answer that falls through to
+   * a network read that cannot happen.
+   *
+   * So this downloads a region and then reads it back the way the map does,
+   * with the archive removed from under it: a fetch that throws if it is
+   * called at all. Anything the handler returns after that came from the
+   * store, which is the only thing worth asserting.
+   */
+  const tiles = new Map();
+  for (const [z, x, y] of [[3, 4, 3], [3, 5, 3], [3, 4, 2]]) {
+    tiles.set(`${z}/${x}/${y}`, new TextEncoder().encode(`tile ${z}/${x}/${y}`.padEnd(32, ' ')));
+  }
+  const bytes = buildArchive(tiles);
+  const url = 'https://example.test/national.pmtiles';
+
+  const archive = new PMTilesArchive(url, serve(bytes));
+  const store = memoryTileStore();
+  const wanted = [{ z: 3, x: 4, y: 3 }, { z: 3, x: 5, y: 3 }];
+
+  const result = await downloadArchiveTiles(wanted, { archive, store, name: url });
+  assert.equal(result.done, 2, 'both tiles should have been stored');
+  assert.equal(result.failed, 0);
+
+  /*
+   * Now the map, offline. The protocol is registered with a fetch that throws,
+   * so the archive is genuinely unreachable — the same condition as a phone in
+   * a canyon, rather than a simulation of one.
+   */
+  const gl = { addProtocol(scheme, handler) { this.handler = handler; } };
+  registerPMTilesProtocol(gl, {
+    store,
+    fetch: () => { throw new Error('the network was used, so this was not offline'); },
+  });
+
+  const answer = await gl.handler({ url: `pmtiles://${url}/3/4/3` });
+  assert.deepEqual(
+    new TextDecoder().decode(new Uint8Array(answer.data)).trim(),
+    'tile 3/4/3',
+    'the handler returned something other than the tile that was downloaded',
+  );
+
+  // And a tile the region did not cover still has to fail rather than
+  // silently answer empty, or "downloaded" would mean nothing.
+  await assert.rejects(
+    () => gl.handler({ url: `pmtiles://${url}/3/4/2` }),
+    /the network was used/,
+    'a tile outside the downloaded region must fall through to the network',
+  );
+});

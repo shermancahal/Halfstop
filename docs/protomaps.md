@@ -166,9 +166,16 @@ Under **Secrets** — these three, exactly these names:
 
 | Secret | Where it came from |
 | --- | --- |
-| `R2_ACCOUNT_ID` | the Account ID on the R2 overview page |
+| `R2_ACCOUNT_ID` | the **Account ID** on the R2 overview page — 32 hex characters. It is also the first part of the S3 endpoint shown beside it, and pasting that whole endpoint works too. |
 | `R2_ACCESS_KEY_ID` | the token's Access Key ID |
 | `R2_SECRET_ACCESS_KEY` | the token's Secret Access Key |
+
+The account ID is the one worth pasting carefully. The dashboard shows it next
+to the S3 endpoint, which is the value that *looks* like it belongs in a field
+called endpoint — and because the secret is masked in the log, getting it wrong
+produces `Invalid endpoint: https://***.r2.cloudflarestorage.com`, which names
+nothing you can see. The workflow now takes either form and checks the shape
+before it spends an upload on it.
 
 Under **Variables** — not Secrets, because a workflow cannot read a secret
 through the `vars` context and setting them there looks done and changes

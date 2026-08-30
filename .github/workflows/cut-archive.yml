@@ -107,6 +107,28 @@ jobs:
               exit 1
             fi
           done
+          # The account id, however it was pasted.
+          #
+          # The R2 page shows the Account ID and the "S3 API" endpoint next to
+          # each other, and the endpoint is the one that looks like it belongs
+          # in a field called endpoint. Pasting it produced
+          # "https://https://....r2.cloudflarestorage.com", which the AWS CLI
+          # rejects as an invalid endpoint - and since the value is masked in
+          # the log, the error names nothing you can see. A trailing newline
+          # from a copy does the same thing and is even less visible.
+          #
+          # So: take either form, strip either wrapper, and check the shape
+          # before spending an upload on it.
+          ACCOUNT="$(printf '%s' "$ACCOUNT" | tr -d '[:space:]')"
+          ACCOUNT="${ACCOUNT#https://}"
+          ACCOUNT="${ACCOUNT#http://}"
+          ACCOUNT="${ACCOUNT%%/*}"
+          ACCOUNT="${ACCOUNT%.r2.cloudflarestorage.com}"
+          if ! printf '%s' "$ACCOUNT" | grep -Eq '^[0-9a-f]{32}$'; then
+            echo "::error::R2_ACCOUNT_ID is not a Cloudflare account ID. After trimming it is ${#ACCOUNT} characters; an account ID is 32 lowercase hex digits."
+            echo "::error::Find it on the R2 overview page (right-hand column, 'Account ID'), or in the dashboard URL after dash.cloudflare.com/. Pasting the whole S3 endpoint is fine too — this strips it."
+            exit 1
+          fi
           aws s3 cp byways.pmtiles "s3://${BUCKET}/${KEY}" \
             --endpoint-url "https://${ACCOUNT}.r2.cloudflarestorage.com" \
             --content-type application/octet-stream \

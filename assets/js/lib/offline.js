@@ -16,6 +16,8 @@
  * usually planning this the night before, on a connection you do not trust.
  */
 
+import { tileKey } from './pmtiles-store.js';
+
 /**
  * The zoom ceiling for a saved region.
  *
@@ -671,7 +673,18 @@ export async function downloadArchiveTiles(tiles, {
       if (signal?.aborted) return;
       const { z, x, y } = tiles[index];
       index += 1;
-      const key = `${name}|${z}/${x}/${y}`;
+      /*
+       * The key comes from the reader's own function, never from a template
+       * written out here.
+       *
+       * These two halves have to agree exactly or offline fails in the worst
+       * way available: the download reports every tile saved, the store fills
+       * up, and the map is blank with no signal because the reader looks under
+       * a name nothing was written to. There is no error anywhere in that -
+       * an absent tile is a legitimate answer - so the only defence is that
+       * one function decides the name for both sides.
+       */
+      const key = tileKey(name, z, x, y);
       try {
         if (await store.has(key)) { done += 1; onProgress?.(done, failed, tiles.length); continue; }
         const bytes = await archive.tile(z, x, y);
