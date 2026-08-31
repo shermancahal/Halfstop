@@ -130,6 +130,33 @@ tab.on('requestfailed', (request) => {
   });
 });
 
+/*
+ * Feature-service calls, recorded separately.
+ *
+ * `watched` above matches the archive, tiles, glyphs and fonts — which is
+ * every request the basemap makes and none of the requests a queried overlay
+ * makes. So this report could say `overlay-faa-uas-grid` drew nothing while
+ * being structurally incapable of showing whether its data had ever been
+ * asked for, and I read three runs of it as evidence about the layer.
+ *
+ * A layer that never fetched, a fetch that was refused and a fetch that came
+ * back empty are three different faults with three different fixes, and they
+ * are indistinguishable on screen. This is the line that separates them.
+ */
+const dataCalls = [];
+const isData = (at) => /FeatureServer|MapServer|\/query\?/i.test(at);
+tab.on('response', (response) => {
+  const at = response.url();
+  if (!isData(at)) return;
+  dataCalls.push({ at, outcome: `${response.status()} ${response.statusText()}` });
+});
+tab.on('requestfailed', (request) => {
+  const at = request.url();
+  if (!isData(at)) return;
+  dataCalls.push({ at, outcome: `FAILED — ${request.failure()?.errorText || 'no reason given'}` });
+});
+
+
 console.log(`${page.href}\n`);
 
 /*
@@ -211,6 +238,7 @@ const EMPTY = {
   rendered: [],
   byStyleLayer: [],
   silent: [],
+  overlays: [],
 };
 
 const report = await inTime('reading the map', () => tab.evaluate(() => {
@@ -230,6 +258,7 @@ const report = await inTime('reading the map', () => tab.evaluate(() => {
     rendered: [],
     byStyleLayer: [],
     silent: [],
+    overlays: [],
   };
 
   const map = window.abmapMap;
@@ -287,6 +316,48 @@ const report = await inTime('reading the map', () => tab.evaluate(() => {
   out.silent = (map.getStyle()?.layers || [])
     .filter((layer) => layer.type !== 'background' && !byStyleLayer.has(layer.id))
     .map((layer) => layer.id);
+  /*
+   * Each queried overlay in three stages, because it can fail at any of them.
+   *
+   * A queried overlay draws nothing for three unrelated reasons: nobody
+   * fetched its data, the data arrived but the engine holds no features for
+   * this view, or it is held and something in the style keeps it off screen.
+   * All three land in the "drew nothing" list below looking identical, which
+   * is how three fixes in a row went to the wrong stage.
+   *
+   * `set` is what the app handed the source, `indexed` is what the engine
+   * will answer for out of it, and the layer line is where it sits in the
+   * draw order and how visible it is. Whichever of those is zero first is
+   * the stage that is broken.
+   */
+  const order = (map.getStyle()?.layers || []).map((layer) => layer.id);
+  const paintOf = (name) => {
+    for (const prop of ['fill-pattern', 'fill-opacity', 'line-opacity', 'circle-opacity', 'text-opacity']) {
+      try {
+        const value = map.getPaintProperty(name, prop);
+        if (value !== undefined) return `${prop}=${JSON.stringify(value).slice(0, 60)}`;
+      } catch { /* the layer type does not carry this one */ }
+    }
+    return '';
+  };
+  for (const id of Object.keys(map.getStyle()?.sources || {})) {
+    if (!id.startsWith('overlay-')) continue;
+    const data = map.getSource(id)?._data;
+    out.overlays.push({
+      id,
+      set: Array.isArray(data?.features) ? data.features.length : `not a collection (${typeof data})`,
+      indexed: (() => { try { return map.querySourceFeatures(id).length; } catch { return 'unknown'; } })(),
+      layers: order
+        .map((name, at) => ({ name, at }))
+        .filter((one) => one.name === id || one.name.startsWith(`${id}--`))
+        .map((one) => {
+          const visibility = (() => {
+            try { return map.getLayoutProperty(one.name, 'visibility') ?? 'visible'; } catch { return '?'; }
+          })();
+          return `${one.name} · ${map.getLayer(one.name)?.type || '?'} · #${one.at} of ${order.length} · ${visibility} · ${paintOf(one.name)}`;
+        }),
+    });
+  }
   return out;
 }), EMPTY);
 
@@ -330,6 +401,18 @@ for (const source of report.sources) {
   console.log(`  ${source.id.padEnd(14)} ${String(source.type).padEnd(7)} loaded=${String(source.loaded).padEnd(6)} maxzoom=${source.maxzoom ?? '-'} ${source.tiles}`);
 }
 
+if (report.overlays.length) {
+  console.log('\nQueried overlays — fetched, indexed, drawn');
+  for (const overlay of report.overlays) {
+    console.log(`  ${overlay.id}`);
+    console.log(`    features set on the source   ${overlay.set}`);
+    console.log(`    features the engine holds    ${overlay.indexed}`);
+    for (const layer of overlay.layers) console.log(`    ${layer}`);
+  }
+  console.log('    set=0 means nothing was fetched or the answer was empty — read the');
+  console.log('    feature-service calls below. set>0 with nothing drawn is the style.');
+}
+
 console.log('\nRendered features on screen');
 if (!report.rendered.length) console.log('  NONE — nothing at all is drawing.');
 for (const [key, count] of report.rendered) console.log(`  ${String(count).padStart(6)}  ${key}`);
@@ -342,6 +425,17 @@ if (report.silent.length) {
   console.log(`    ${report.silent.join(', ')}`);
   console.log('    Some of these are honest (no glacier in Tennessee). A label or shield');
   console.log('    layer in this list over ground that has them is a filter or a font.');
+}
+
+console.log('\nFeature-service calls');
+if (!dataCalls.length) {
+  console.log('  NONE — no queried overlay asked any service for anything.');
+} else {
+  for (const call of dataCalls) {
+    const short = call.at.replace(/\?.*$/, '').replace('https://', '');
+    const where = /[?&]where=([^&]*)/.exec(call.at)?.[1] || '';
+    console.log(`  ${call.outcome.padEnd(22)} ${short}${where ? `  where=${decodeURIComponent(where)}` : ''}`);
+  }
 }
 
 console.log('\nArchive, glyph and tile requests');
