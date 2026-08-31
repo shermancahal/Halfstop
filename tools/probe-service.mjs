@@ -16,7 +16,41 @@
  * why it runs in CI. See .github/workflows/probe-service.yml.
  */
 
-const [target, ...fields] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+
+/*
+ * `--count "<where>"` with an optional `--bbox`, for the other question this
+ * tool gets asked: not "what values exist" but "how many are actually here".
+ *
+ * A layer drawing nothing over one town has two explanations that look
+ * identical from the app - the request failed, or the answer is genuinely
+ * empty - and only counting settles it. Added while trying to work out whether
+ * excluding military operating areas had left the airspace layer with nothing
+ * to draw over Charleston, which is a question about that town rather than
+ * about the whole service.
+ */
+const flag = (name) => {
+  const at = argv.indexOf(name);
+  if (at < 0) return null;
+  const value = argv[at + 1];
+  argv.splice(at, value === undefined ? 1 : 2);
+  return value ?? '';
+};
+const countWhere = flag('--count');
+const bbox = flag('--bbox');
+
+const [target, ...fields] = argv;
+
+if (target && countWhere !== null) {
+  const answer = await ask(countQuery(target, countWhere || '1=1')).catch((error) => {
+    console.error(`  the service refused: ${error.message}`);
+    process.exit(1);
+  });
+  console.log(`\n${target}`);
+  console.log(`  where ${countWhere || '1=1'}${bbox ? `  within ${bbox}` : '  (whole layer)'}`);
+  console.log(`  ${answer.count ?? 0} feature(s)\n`);
+  process.exit(0);
+}
 
 if (!target || !fields.length) {
   console.error('usage: node tools/probe-service.mjs <service url> FIELD [FIELD...]');
@@ -69,6 +103,14 @@ function countQuery(url, where) {
   at.search = '';
   at.searchParams.set('where', where);
   at.searchParams.set('returnCountOnly', 'true');
+  // The same envelope the app sends, when one is asked for, so the number is
+  // the number that view would get rather than a national total.
+  if (bbox) {
+    at.searchParams.set('geometry', bbox);
+    at.searchParams.set('geometryType', 'esriGeometryEnvelope');
+    at.searchParams.set('inSR', '4326');
+    at.searchParams.set('spatialRel', 'esriSpatialRelIntersects');
+  }
   at.searchParams.set('f', 'json');
   return at.href;
 }

@@ -21,8 +21,20 @@ on:
         required: true
         type: string
       fields:
-        description: 'Field names, comma or space separated — e.g. TYPE_CODE,LOCAL_TYPE'
-        required: true
+        description: 'Field names, comma or space separated — e.g. TYPE_CODE,LOCAL_TYPE. Ignored when counting.'
+        required: false
+        type: string
+      count:
+        description: >-
+          Count features matching this WHERE instead of listing values — e.g.
+          TYPE_CODE <> 'MOA'. Use 1=1 for everything.
+        required: false
+        type: string
+      bbox:
+        description: >-
+          Limit the count to an envelope, minlon,minlat,maxlon,maxlat. Only
+          used with `count`. This is how you ask what one view would receive.
+        required: false
         type: string
 
 permissions:
@@ -43,9 +55,19 @@ jobs:
       - name: Ask it
         run: |
           set -o pipefail
-          FIELDS="$(printf '%s' "${{ inputs.fields }}" | tr ',' ' ')"
-          # shellcheck disable=SC2086
-          node tools/probe-service.mjs "${{ inputs.url }}" $FIELDS 2>&1 | tee report.txt
+          if [ -n "${{ inputs.count }}" ]; then
+            if [ -n "${{ inputs.bbox }}" ]; then
+              node tools/probe-service.mjs "${{ inputs.url }}" \
+                --count "${{ inputs.count }}" --bbox "${{ inputs.bbox }}" 2>&1 | tee report.txt
+            else
+              node tools/probe-service.mjs "${{ inputs.url }}" \
+                --count "${{ inputs.count }}" 2>&1 | tee report.txt
+            fi
+          else
+            FIELDS="$(printf '%s' "${{ inputs.fields }}" | tr ',' ' ')"
+            # shellcheck disable=SC2086
+            node tools/probe-service.mjs "${{ inputs.url }}" $FIELDS 2>&1 | tee report.txt
+          fi
 
       - name: Put the answer in the summary
         if: always()
