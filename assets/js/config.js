@@ -840,7 +840,24 @@ export const OVERLAYS = [
           tag: { severity: 'Permit or caution' },
         },
       ],
-      minzoom: 7,
+      /*
+       * The same floor the drone grid has, and now for the same two reasons.
+       *
+       * Asked for: restrictions should be a zoomed-in layer like Drone
+       * ceilings. It is also what the layer needs. Five services now answer
+       * this one switch, each capped at 300 records, and a state-wide view
+       * asks all five for everything inside it - so the cap starts truncating
+       * and the map draws a confident partial answer, which on this layer is
+       * the worst kind of wrong. A view that cannot be complete is better not
+       * drawn.
+       *
+       * And it is the FAA's org quota, measured today at 6,006 request units
+       * against a 6,000-per-minute ceiling: wide views are the expensive ones.
+       *
+       * Below the floor the layer draws nothing and the panel says why, which
+       * is the part that makes a floor honest rather than a silent gap.
+       */
+      minzoom: 10,
       color: '#C0392B',
       /*
        * Two names for one thing. The FAA's three services answer NAME; the
