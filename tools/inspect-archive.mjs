@@ -298,5 +298,39 @@ export function reconcile(layers) {
     const count = names ? [...names].filter((one) => one !== undefined).length : 0;
     console.log(`    ${layer.name.padEnd(12)} ${count ? `${count} distinct` : `no "${PROTOMAPS_SCHEMA.fields.name}" field`}`);
   }
+
+  /*
+   * And which kinds of road carry one, which the line above cannot answer.
+   *
+   * "roads: 7 distinct names" is true of a tile where every name belongs to a
+   * highway and not one trail has any, and that is the difference between a
+   * label layer that is broken and a label layer with nothing to draw. Asked
+   * per feature rather than per layer, because a name and a kind are on the
+   * same feature and the whole question is how they pair up.
+   */
+  const roads = layers.find((one) => one.name === PROTOMAPS_SCHEMA.layers.road);
+  if (roads?.tags?.length) {
+    const field = PROTOMAPS_SCHEMA.fields.roadClassField;
+    const nameAt = roads.keys.indexOf(PROTOMAPS_SCHEMA.fields.name);
+    const kindAt = roads.keys.indexOf(field);
+    const tally = new Map();
+    for (const tags of roads.tags) {
+      let kind = '(none)';
+      let named = false;
+      for (let i = 0; i + 1 < tags.length; i += 2) {
+        if (tags[i] === kindAt) kind = roads.values[tags[i + 1]] ?? kind;
+        if (tags[i] === nameAt) named = true;
+      }
+      const row = tally.get(kind) || { total: 0, named: 0 };
+      row.total += 1;
+      if (named) row.named += 1;
+      tally.set(kind, row);
+    }
+    console.log(`\n  Which ${field} carry a name?`);
+    for (const [kind, row] of [...tally].sort((a, b) => b[1].total - a[1].total)) {
+      console.log(`    ${String(kind).padEnd(14)} ${row.named} of ${row.total} named`);
+    }
+  }
+
   return findings;
 }
