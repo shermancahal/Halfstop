@@ -135,7 +135,9 @@ them are free to fix and one costs a domain.
 - **No signup event at all** — the request never reached Supabase. A key or
   URL problem in `token.js`, not an email problem.
 - **A signup event, and no mail event** — the address already has an account.
-  See below; no email was ever going to be sent.
+  Supabase names it outright: `POST /signup` returning **200** with
+  `user repeated signup: request completed`. See below; no email was ever going
+  to be sent.
 - **A signup event and a failed mail event** — delivery. Rate limit or SMTP.
 
 That order matters: the fix for each is in a different place, and the symptom
@@ -149,8 +151,12 @@ one that already exists returns success, with a user, no session, an empty
 auth log shows the signup succeeding.
 
 The app now reads that array and says so rather than telling you to check an
-inbox nothing is coming to. If you see that message, use **Email me a link**
-instead of creating the account again.
+inbox nothing is coming to. If you see that message the account exists, so:
+
+- **Sign in** with the password, which needs no email at all. Try this first.
+- **Email me a link** if the password is gone — but note that this one *does*
+  need delivery to work, so a magic link that never arrives puts you back in
+  the rate-limit case below with a different symptom.
 
 ### The built-in sender's rate limit
 
