@@ -709,12 +709,13 @@ export const OVERLAYS = [
      */
     legendNote: 'Standing and scheduled restrictions only. Same-day TFRs — fires, VIP '
       + 'movements — are NOTAMs and are not in this layer; use the link on any feature to '
-      + 'check the current list before you fly. Amber marks designated wilderness, where '
-      + 'overflight is advisory but the land manager\u2019s own rules on taking off and '
-      + 'landing still apply. National park boundaries are not in this layer yet.',
+      + 'check the current list before you fly. Amber is designated wilderness and Park '
+      + 'Service land: flying over is not itself prohibited, but taking off, landing or '
+      + 'operating from the ground there is \u2014 so amber means find somewhere else to '
+      + 'stand, not somewhere else to fly.',
     group: 'Airspace',
     name: 'Restrictions & advisories',
-    description: 'Where drones may not fly, and where you would need permission. Source: FAA, USFS',
+    description: 'Where drones may not fly, and where you would need permission. Source: FAA, NPS, USFS',
     query: {
       /*
        * The FAA services share a host and a query shape, so they differ only
@@ -792,6 +793,52 @@ export const OVERLAYS = [
           nameField: 'wildernessname',
           tag: { severity: 'Permit or caution' },
         },
+        /*
+         * Every acre the Park Service administers, and the second amber.
+         *
+         * Reported alongside Dolly Sods: New River Gorge showed nothing.
+         * Wilderness does not cover it - it is a park with no designated
+         * wilderness in it - so this is a separate service and a separate
+         * question, and the layer's description claimed NPS for months
+         * without querying it.
+         *
+         * Layer 2 of that FeatureServer is the unit boundary. Measured over
+         * New River Gorge before it was written in: 200, CORS for any origin,
+         * GeoJSON, and "UNIT_NAME":"New River Gorge National Park and
+         * Preserve".
+         *
+         * UPPER case, and that is the point of having asked. The wilderness
+         * service above answers lower case from the same kind of query; this
+         * one is a hosted FeatureServer and keeps the case it was defined
+         * with. There is no rule to infer here, only two services that had to
+         * be asked separately - and a label taking its case from the other
+         * one renders nothing while looking like a park with no name.
+         *
+         * All unit types, not only the ones called National Park. Launching,
+         * landing and operating from NPS land is prohibited under 36 CFR 1.5
+         * and Policy Memorandum 14-05, and that rule does not soften for a
+         * parkway or a scenic trail. Drawing only the famous ones would be
+         * the map choosing which prohibitions to mention.
+         *
+         * Amber rather than red, deliberately, and this is a judgement rather
+         * than a reading of the data. What is prohibited is taking off,
+         * landing and operating from the ground; NPS does not control the
+         * airspace, and flying over at altitude is not itself an offence.
+         * Red is reserved here for airspace you may not be in at all. The
+         * identify card names the actual rule, because a colour cannot.
+         */
+        {
+          url: 'https://services1.arcgis.com/fBc8EJBxQRMcHlei/arcgis/rest/services/'
+            + 'NPS_Land_Resources_Division_Boundary_and_Tract_Data_Service/FeatureServer/2/query'
+            + '?where={where}&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
+            + '&spatialRel=esriSpatialRelIntersects&outFields=UNIT_NAME,UNIT_TYPE'
+            + '&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005'
+            + '&resultRecordCount=300&f=geojson',
+          layer: 'NPS_Boundary',
+          use: 'National Park Service land',
+          nameField: 'UNIT_NAME',
+          tag: { severity: 'Permit or caution' },
+        },
       ],
       minzoom: 7,
       color: '#C0392B',
@@ -802,11 +849,13 @@ export const OVERLAYS = [
        * own displayFieldName says - measured off a row rather than read off
        * the field list, which is how LOCAL_TYPE survived here for months.
        */
-      label: ['NAME', 'wildernessname'],
+      label: ['NAME', 'wildernessname', 'UNIT_NAME'],
       fields: {
         severity: { label: 'Status' },
         use: { label: 'Kind' },
         wildernessname: { label: 'Wilderness' },
+        UNIT_NAME: { label: 'Park unit' },
+        UNIT_TYPE: { label: 'Designation' },
         TYPE_CODE: { label: 'Type' },
         UPPER_VAL: { label: 'Ceiling', suffix: ' ft' },
         LOWER_VAL: { label: 'Floor', suffix: ' ft' },
@@ -828,7 +877,8 @@ export const OVERLAYS = [
     opacity: 0.45,
     enabled: false,
     attribution: 'Restrictions © <a href="https://www.faa.gov/">FAA</a>, '
-      + 'wilderness © <a href="https://www.fs.usda.gov/">USFS</a>',
+      + 'wilderness © <a href="https://www.fs.usda.gov/">USFS</a>, '
+      + 'park boundaries © <a href="https://www.nps.gov/">NPS</a>',
   },
   {
     id: 'faa-uas-grid',
