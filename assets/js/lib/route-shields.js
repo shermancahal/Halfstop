@@ -942,6 +942,9 @@ export function shieldTextOffset(design, length) {
  * The nationals are drawn rather than loaded from a blank, so their numbers sit
  * where those drawings put them — the interstate's below its red crown.
  */
+const REF_LENGTH = 'abmap-reflen';
+const BOUND = ['var', REF_LENGTH];
+
 export function shieldTextSizeExpression(state = '', length = 2, refLength = null, { network = '' } = {}) {
   /*
    * Sized from the number the road actually carries, when the caller can say.
@@ -962,19 +965,29 @@ export function shieldTextSizeExpression(state = '', length = 2, refLength = nul
     const named = design === LOCAL ? stateDesign(state) : design;
     const at = (chars) => (isStateDesign(named) ? shieldTextSize(named, chars) : NOMINAL_TEXT);
     if (!refLength) return at(length);
+    /*
+     * Against the bound length, not the expression that computes it.
+     *
+     * Four comparisons per arm times one arm per marker meant the ref
+     * expression - itself a coalesce over several fields - was written out
+     * more than two hundred times in one layer. That layer's `text-size` came
+     * to 261 KB on its own, which is a style the browser has to parse before
+     * it draws anything, and the report that arrived with this bug was that
+     * rendering had got slower.
+     */
     return ['case',
-      ['>=', refLength, 5], at(5),
-      ['>=', refLength, 4], at(4),
-      ['>=', refLength, 3], at(3),
+      ['>=', BOUND, 5], at(5),
+      ['>=', BOUND, 4], at(4),
+      ['>=', BOUND, 3], at(3),
       at(2)];
   };
 
-  if (network) return networkArms(network, sized);
-  return [
+  const byShield = network ? networkArms(network, sized) : [
     'match', ['get', 'shield'],
     ...SHIELD_MATCH.flatMap((arm) => [arm.values, sized(arm.design)]),
     sized(UNCLAIMED),
   ];
+  return refLength ? ['let', REF_LENGTH, refLength, byShield] : byShield;
 }
 
 /**
@@ -1261,9 +1274,34 @@ function networkArms(field, valueFor) {
  * marker of its own already gets.
  */
 function stateArms(net, valueFor) {
+  /*
+   * Grouped by the answer, not written out per state.
+   *
+   * Fifty-one arms of an inlined `case` is a quarter of a megabyte of style
+   * once every shield layer has one, and the sizes and inks are not fifty-one
+   * different things - there are three inks in the whole table and a handful
+   * of sizes. So states sharing an answer share an arm, and a state whose
+   * answer is the fallback's gets no arm at all.
+   *
+   * `match` takes an array of labels for one output, which is exactly this.
+   */
+  const fallback = valueFor('state');
+  const spare = JSON.stringify(fallback);
+  const byValue = new Map();
+  for (const code of statesWithShields()) {
+    const value = valueFor(`st-${code}`);
+    const key = JSON.stringify(value);
+    if (key === spare) continue;
+    if (!byValue.has(key)) byValue.set(key, { value, codes: [] });
+    byValue.get(key).codes.push(code);
+  }
+
+  if (!byValue.size) return fallback;
   const arms = [];
-  for (const code of statesWithShields()) arms.push(code, valueFor(`st-${code}`));
-  return ['match', ['slice', net, 3, 5], ...arms, valueFor('state')];
+  for (const { value, codes } of byValue.values()) {
+    arms.push(codes.length === 1 ? codes[0] : codes, value);
+  }
+  return ['match', ['slice', net, 3, 5], ...arms, fallback];
 }
 
 /** Whether a design is a state route marker — a state's own, or the generic. */
