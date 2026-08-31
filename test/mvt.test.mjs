@@ -239,3 +239,52 @@ test('reconcile: a role naming several values is compared value by value', async
   assert.ok(!roads.unused.some((one) => one.includes(',')),
     'a whole role was stringified instead of flattened');
 });
+
+test('reconcile: the road-name tally shows the names, and shows the name and not the kind', async () => {
+  /*
+   * "path  3 of 4 named" is a statistic, and the question it gets asked is not
+   * a statistical one. Someone is standing on a trail looking at a map that
+   * will not label it, and what they need to know is whether *that* trail is
+   * one of the three. So the tally prints a few of the names.
+   *
+   * Which puts a second index in the loop, next to one that reads the same
+   * arrays for the kind — and reading the kind's value where the name's
+   * belongs would print `path` beside `path` and look entirely reasonable.
+   * That is the mistake this test exists for, so it asserts the name is a
+   * name: present, and not the class it is filed under.
+   */
+  const { reconcile } = await import('../tools/inspect-archive.mjs');
+  const { PROTOMAPS_SCHEMA } = await import('../assets/js/lib/byways-style.js');
+  const field = PROTOMAPS_SCHEMA.fields.roadClassField;
+  const nameField = PROTOMAPS_SCHEMA.fields.name;
+
+  const said = [];
+  const log = console.log;
+  console.log = (...parts) => said.push(parts.join(' '));
+  try {
+    reconcile([{
+      name: PROTOMAPS_SCHEMA.layers.road,
+      features: 2,
+      keys: [field, nameField],
+      values: ['path', 'Angel Windows Trail #218', 'track'],
+      // kind_detail=path, name=Angel Windows Trail #218 — then an unnamed track.
+      tags: [[0, 0, 1, 1], [0, 2]],
+      seen: new Map([[field, new Set(['path', 'track'])]]),
+    }]);
+  } finally {
+    console.log = log;
+  }
+
+  const row = said.find((line) => line.trim().startsWith('path '));
+  assert.ok(row, `no tally line for paths in:\n${said.join('\n')}`);
+  assert.match(row, /1 of 1 named/, 'the named count is wrong');
+  assert.match(row, /Angel Windows Trail #218/, 'the name itself must be printed, not just counted');
+
+  // The trap: the example must not be the value of the class field.
+  const example = row.split('e.g.')[1]?.trim();
+  assert.notEqual(example, 'path', 'that is the kind, printed where the name belongs');
+
+  // And an unnamed kind stays quiet rather than inventing an example.
+  const track = said.find((line) => line.trim().startsWith('track '));
+  assert.ok(track && !track.includes('e.g.'), 'an unnamed kind should offer no example');
+});

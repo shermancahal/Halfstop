@@ -328,19 +328,27 @@ export function reconcile(layers) {
     const tally = new Map();
     for (const tags of roads.tags) {
       let kind = '(none)';
-      let named = false;
+      let named = '';
       for (let i = 0; i + 1 < tags.length; i += 2) {
         if (tags[i] === kindAt) kind = roads.values[tags[i + 1]] ?? kind;
-        if (tags[i] === nameAt) named = true;
+        if (tags[i] === nameAt) named = String(roads.values[tags[i + 1]] ?? '');
       }
-      const row = tally.get(kind) || { total: 0, named: 0 };
+      const row = tally.get(kind) || { total: 0, named: 0, examples: [] };
       row.total += 1;
-      if (named) row.named += 1;
+      if (named) {
+        row.named += 1;
+        // The names themselves, not just how many. "path: 3 of 4 named" says
+        // the field is populated; it cannot say whether the trail someone is
+        // standing on is one of the three. Printing a few turns a statistic
+        // back into the thing that was actually asked about.
+        if (row.examples.length < 3 && !row.examples.includes(named)) row.examples.push(named);
+      }
       tally.set(kind, row);
     }
     console.log(`\n  Which ${field} carry a name?`);
     for (const [kind, row] of [...tally].sort((a, b) => b[1].total - a[1].total)) {
-      console.log(`    ${String(kind).padEnd(14)} ${row.named} of ${row.total} named`);
+      const shown = row.examples.length ? `  e.g. ${row.examples.join(' \u00b7 ')}` : '';
+      console.log(`    ${String(kind).padEnd(14)} ${row.named} of ${row.total} named${shown}`);
     }
   }
 
