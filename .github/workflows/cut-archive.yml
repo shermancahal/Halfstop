@@ -18,7 +18,11 @@ on:
         required: true
         type: string
       maxzoom:
-        description: 'How deep. Each level is four times the one below; 13 shows every road this map draws, 15 is for house numbers.'
+        description: >-
+          How deep. Each level is four times the one below: the lower
+          forty-eight measures 4.2 GB at 13 and about 17 at 14. Below 14
+          trails, tracks and minor roads arrive with no name on them. 15 is
+          as deep as the planet build goes — ask for 16 and you get 15.
         required: false
         default: '13'
         type: string
