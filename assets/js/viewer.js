@@ -280,6 +280,22 @@ function styleReady() {
   }
 }
 
+/**
+ * Whether a layer can be added to the style yet.
+ *
+ * Deliberately weaker than `styleReady()`. That asks whether everything has
+ * finished, including every source; this asks the only question `addLayer`
+ * cares about, which is whether there is a parsed style to add to. Things that
+ * need the data settled still use the stronger one.
+ */
+function styleUsable() {
+  try {
+    return Boolean(state.map?.getStyle?.()?.layers?.length);
+  } catch {
+    return false;
+  }
+}
+
 /** Run now if the style is ready, otherwise once it next finishes loading. */
 function whenStyleReady(run) {
   if (styleReady()) { run(); return; }
@@ -300,7 +316,10 @@ function whenStyleReady(run) {
   // another styledata.
   let done = false;
   const attempt = () => {
-    if (done || !styleReady()) return;
+    // `styleUsable` rather than `styleReady`: a style whose sources never
+    // settle would otherwise hold every deferred caller here for ever, which
+    // is exactly what kept the airspace layers off the vector basemap.
+    if (done || !styleUsable()) return;
     done = true;
     map.off('styledata', attempt);
     map.off('idle', attempt);
@@ -5683,7 +5702,29 @@ function refreshQueryOverlays() {
 }
 
 function addOverlayLayer(overlay) {
-  if (!styleReady()) { whenStyleReady(() => addOverlayLayer(overlay)); return; }
+  /*
+   * Gated on the style being *usable*, not on it being finished.
+   *
+   * Reported: the airspace layers work on every basemap except Byways Topo.
+   * That is the whole diagnosis in one sentence. A raster basemap bakes its
+   * overlays into the style it builds, so they are there before this function
+   * is ever called; the vector basemap has to add them afterwards, through
+   * here.
+   *
+   * And here waited for `isStyleLoaded()`, which is false while *any source*
+   * is still loading — not merely while the style is being parsed. The
+   * Protomaps basemap reads an 8.8 GB archive by range request and never
+   * really stops, and `offline-regions` has been observed sitting at
+   * loaded=false as well. One source like that and the deferred call never
+   * fires: the layer is never added, draws nothing, and answers no tap,
+   * silently, on one basemap only.
+   *
+   * A layer can be added as soon as the style has layers to insert beside,
+   * which happens long before its sources settle. If the engine disagrees it
+   * throws, and that is what the retry below is for — asking it and being
+   * refused is better evidence than a predicate that means something else.
+   */
+  if (!styleUsable()) { whenStyleReady(() => addOverlayLayer(overlay)); return; }
   const entry = state.overlays.get(overlay.id);
   const opacity = entry?.opacity ?? overlay.opacity ?? 1;
 
