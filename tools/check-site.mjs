@@ -444,15 +444,21 @@ if (report.silent.length) {
  */
 const retried = await inTime('re-setting overlay data', () => tab.evaluate(async () => {
   const map = window.abmapMap;
-  if (!map) return [];
+  if (!map) return [{ id: '(no map)', why: 'the page exposed no map' }];
   const out = [];
   for (const id of Object.keys(map.getStyle()?.sources || {})) {
     if (!id.startsWith('overlay-')) continue;
     const source = map.getSource(id);
     const data = source?._data;
-    if (!Array.isArray(data?.features) || !data.features.length) continue;
+    if (!Array.isArray(data?.features) || !data.features.length) {
+      out.push({ id, why: 'the source holds no data to re-set — nothing to test here' });
+      continue;
+    }
     const before = map.querySourceFeatures(id).length;
-    if (before) continue;
+    if (before) {
+      out.push({ id, why: `the engine already holds ${before} — nothing to test here` });
+      continue;
+    }
     source.setData(data);
     await new Promise((resolve) => {
       const deadline = setTimeout(resolve, 8000);
@@ -462,11 +468,16 @@ const retried = await inTime('re-setting overlay data', () => tab.evaluate(async
     out.push({ id, set: data.features.length, before, after: map.querySourceFeatures(id).length });
   }
   return out;
-}), []);
+}), null);
 
-if (Array.isArray(retried) && retried.length) {
-  console.log('\nHanded the same data over a second time');
+console.log('\nHanded the same data over a second time');
+if (!Array.isArray(retried)) {
+  console.log(`  the experiment itself did not run: ${retried ?? 'no answer'}`);
+} else if (!retried.length) {
+  console.log('  no queried overlay is switched on.');
+} else {
   for (const one of retried) {
+    if (one.why) { console.log(`  ${one.id}: ${one.why}`); continue; }
     console.log(`  ${one.id}: ${one.set} set · engine held ${one.before}, now holds ${one.after}`);
   }
   console.log('  A count that comes up here means the first setData was too early.');

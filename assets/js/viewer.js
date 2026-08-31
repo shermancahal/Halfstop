@@ -5197,12 +5197,25 @@ async function refreshQueryOverlay(overlay) {
     // An ArcGIS error is a 200 with an `error` object in it, which parses
     // cleanly and has no features — worth telling apart from an empty view.
     if (data.error) throw new Error(data.error.message || 'service error');
-    source.setData(data.type === 'FeatureCollection' ? data : empty);
+    /*
+     * An answer in the wrong shape is a failure, not a view with nothing in
+     * it. This wrote `empty` over whatever the layer was holding, so one odd
+     * response - a quota notice, an HTML error page served as 200 - emptied a
+     * layer that had been drawing a moment earlier, and said nothing.
+     */
+    if (data.type !== 'FeatureCollection') {
+      throw new Error(`answered with ${data.type || typeof data}, not a FeatureCollection`);
+    }
+    source.setData(data);
     // The same health counter the tile layers feed, so a queried layer that
     // stops answering gets the same "not responding" badge rather than
     // silently showing an empty map.
     noteLayerHealth(overlayLayerIds(overlay)[0], true);
-  } catch {
+  } catch (error) {
+    // Out loud. A queried layer that stops answering used to be silent on the
+    // map and silent in the console, which is indistinguishable from ground
+    // that has nothing on it.
+    console.warn(`[overlay ${overlay.id}] did not answer:`, error?.message || error);
     noteLayerHealth(overlayLayerIds(overlay)[0], false);
   }
 }
@@ -5254,7 +5267,12 @@ async function refreshUseOverlay(overlay, source, empty) {
       const response = await fetch(queryURL(target, state.map, kind.where));
       if (!response.ok) return [];
       const data = await response.json();
-      if (data.error || !Array.isArray(data.features)) return [];
+      // Thrown rather than returned as "no features", so the catch below says
+      // which sublayer and why. Both used to arrive here as an empty array.
+      if (data.error) throw new Error(data.error.message || 'service error');
+      if (!Array.isArray(data.features)) {
+        throw new Error(`answered with ${data.type || typeof data}, not features`);
+      }
       return data.features.map((feature) => ({
         ...feature,
         properties: { ...feature.properties, use: kind.use, ...(kind.tag || {}) },
@@ -5270,14 +5288,31 @@ async function refreshUseOverlay(overlay, source, empty) {
        */
       console.warn(`[overlay ${overlay.id}] ${kind.layer || kind.use} did not answer:`,
         error?.message || error);
-      return [];
+      // null, not []. An empty array is a real answer from a sublayer with
+      // nothing in this view, and the two must not merge into one number.
+      return null;
     }
   }));
 
-  const features = answers.flat();
+  /*
+   * Nothing is written when every sublayer failed.
+   *
+   * `empty` here used to overwrite whatever the layer was holding, and the
+   * health line then read `|| !features.length`, which reports a layer whose
+   * every request was refused as healthy. So a total outage looked exactly
+   * like flying over ground with no restrictions on it - the worst possible
+   * confusion for this particular layer.
+   */
+  const answered = answers.filter(Array.isArray);
+  if (!answered.length) {
+    noteLayerHealth(overlayLayerIds(overlay)[0], false);
+    return;
+  }
+
+  const features = answered.flat();
   source.setData(features.length ? { type: 'FeatureCollection', features } : empty);
-  // Every sublayer failing is a broken layer; some failing is a quiet view.
-  noteLayerHealth(overlayLayerIds(overlay)[0], answers.some((answer) => answer.length) || !features.length);
+  // Some sublayers failing is a quiet view; all of them failing returned above.
+  noteLayerHealth(overlayLayerIds(overlay)[0], true);
 }
 
 /**
@@ -5739,20 +5774,18 @@ function addOverlayLayer(overlay) {
   const opacity = entry?.opacity ?? overlay.opacity ?? 1;
 
   if (overlay.query) {
-    addQueryOverlay(overlay, opacity);
     /*
-     * And fetch its data now, rather than waiting for the map to move.
+     * `addQueryOverlay` ends by fetching, and so does `addPointOverlay`. A
+     * second call here asked every service twice.
      *
-     * `refreshQueryOverlays` had exactly one caller: the `moveend` handler. So
-     * a queried layer switched on while the map sits still stayed empty until
-     * something nudged it - which reads as a layer that does not work, and is
-     * why Drone ceilings looked dead on the basemap where the layer had only
-     * just started being added at all.
-     *
-     * Switching a layer on is a request for its data. Asking for it here is
-     * that request being honoured, and a pan afterwards refreshes it as before.
+     * I added it believing nothing fetched on switch-on, having read only
+     * `refreshQueryOverlays` and its one `moveend` caller. The check now
+     * records feature-service calls, and it shows each endpoint being asked
+     * two and three times per page load. On the FAA's ArcGIS org, which
+     * shares a per-minute quota across every service on it, doubling the
+     * request rate is a way to turn a working layer into an empty one.
      */
-    refreshQueryOverlay(overlay);
+    addQueryOverlay(overlay, opacity);
     return;
   }
 
