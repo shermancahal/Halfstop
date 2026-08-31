@@ -2070,13 +2070,13 @@ function trackSkyScale() {
 }
 
 function trackQueryOverlays() {
-  let timer = null;
   // Which floors the view was above last time, so the panel is only rebuilt
   // when one is actually crossed rather than on every pan.
   let floorsMet = '';
   state.map.on('moveend', () => {
-    clearTimeout(timer);
-    timer = setTimeout(refreshQueryOverlays, 700);
+    // One debounce, in scheduleQueryOverlay. A second one here would only
+    // make the answer later.
+    refreshQueryOverlays();
 
     const zoom = state.map.getZoom?.() ?? 0;
     const met = inScopeOverlays()
@@ -5733,7 +5733,7 @@ function addQueryOverlay(overlay, opacity) {
     });
   }
 
-  refreshQueryOverlay(overlay);
+  scheduleQueryOverlay(overlay);
 }
 
 /**
@@ -5789,13 +5789,42 @@ function addPointOverlay(overlay, layerId) {
     bindFeatureInteractions(layerId, { popup: false });
   }
 
-  refreshQueryOverlay(overlay);
+  scheduleQueryOverlay(overlay);
+}
+
+/*
+ * One pending refresh per overlay, so the same layer asked twice in quick
+ * succession asks its services once.
+ *
+ * A page opened at a URL with a view in it did exactly that: the layer is
+ * added while the map still sits at the default view and fetches for it, then
+ * the hash moves the map and `moveend` fetches again. Two requests per service
+ * per load, and the box check cannot help - those two views genuinely differ,
+ * and the first one was for the wrong place.
+ *
+ * Debouncing per overlay collapses them: the add schedules, the hash-driven
+ * move reschedules, and one request goes out for the view that was actually
+ * asked for. Switching a layer on while the map sits still is the same path,
+ * a beat later.
+ *
+ * Per overlay rather than one timer for all of them, because a layer switched
+ * on during a pan must not have its first fetch cancelled by another layer's.
+ */
+const SETTLE_MS = 700;
+const refreshTimers = new Map();
+
+function scheduleQueryOverlay(overlay) {
+  clearTimeout(refreshTimers.get(overlay.id));
+  refreshTimers.set(overlay.id, setTimeout(() => {
+    refreshTimers.delete(overlay.id);
+    refreshQueryOverlay(overlay);
+  }, SETTLE_MS));
 }
 
 /** Re-ask every queried overlay that is switched on, once the map settles. */
 function refreshQueryOverlays() {
   for (const overlay of activeOverlays()) {
-    if (overlay.query) refreshQueryOverlay(overlay);
+    if (overlay.query) scheduleQueryOverlay(overlay);
   }
 }
 
