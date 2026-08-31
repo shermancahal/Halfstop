@@ -413,6 +413,34 @@ const report = await inTime('reading the map', () => tab.evaluate(() => {
       coveringTiles: (() => {
         try { return cache.getIds().length; } catch { return '?'; }
       })(),
+      /*
+       * Twenty-two tiles, no features, no error, every flag healthy. So the
+       * tiles were built - from something. Their state says which: all
+       * 'errored' is a worker failure nothing reported, all 'loaded' and
+       * empty means the worker was handed an empty collection and the later
+       * one never reached it.
+       */
+      states: Object.values(cache?._tiles || {}).reduce((tally, tile) => {
+        const key = String(tile?.state ?? 'unknown');
+        tally[key] = (tally[key] || 0) + 1;
+        return tally;
+      }, {}),
+      renderable: (() => {
+        try { return cache.getRenderableIds().length; } catch { return '?'; }
+      })(),
+      buckets: Object.values(cache?._tiles || {})
+        .reduce((n, tile) => n + Object.keys(tile?.buckets || {}).length, 0),
+      // Outstanding worker round-trips. A load whose answer never came back
+      // leaves this above zero for good.
+      pendingLoads: map.getSource(key)?._pendingLoads ?? '?',
+      // And the first coordinate of the data actually held, so two runs can
+      // be compared on whether they were given the same features at all.
+      firstPoint: (() => {
+        try {
+          const one = map.getSource(key)?._data?.features?.[0];
+          return JSON.stringify(one?.geometry?.coordinates?.flat(2)?.slice(0, 2) ?? null);
+        } catch { return '?'; }
+      })(),
     }));
   out.errors = window.__abmapErrors || [];
   return out;
@@ -475,7 +503,9 @@ if (report.caches?.length) {
   for (const cache of report.caches) {
     console.log(`  ${cache.key}`);
     console.log(`    used=${cache.used}  sourceLoaded=${cache.sourceLoaded}  errored=${cache.sourceErrored}  paused=${cache.paused}`);
-    console.log(`    tiles held ${cache.tiles} · ids ${cache.coveringTiles}`);
+    console.log(`    tiles held ${cache.tiles} · ids ${cache.coveringTiles} · renderable ${cache.renderable}`);
+    console.log(`    tile states ${JSON.stringify(cache.states)} · buckets ${cache.buckets} · pending loads ${cache.pendingLoads}`);
+    console.log(`    first coordinate of the data held ${cache.firstPoint}`);
   }
   console.log('    used=false means no visible layer claims it, so it builds no tiles.');
 }
