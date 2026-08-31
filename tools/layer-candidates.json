@@ -936,10 +936,24 @@
     "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Special_Use_Airspace/FeatureServer/0/query?where=1%3D1&geometry=-79.44,38.93,-79.24,39.13&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=5&f=geojson"
   },
   {
-    "id": "wild:nps-fields",
+    "id": "wild:usfs-props",
     "expect": "data",
-    "find": "\"(?:name|alias)\"\\s*:\\s*\"[^\"]{0,60}\"",
-    "note": "The layer's description has said 'Source: FAA, NPS, USFS' since it was written and it queries only the FAA. Park boundaries are the other half of what an advisory layer should carry. Sublayers and columns first: this is a MapServer with several, and guessing an index is how the BLM lookup cost an afternoon.",
-    "url": "https://mapservices.nps.gov/arcgis/rest/services/LandResourcesDivision/NPS_Land_Resources_Division_Boundary_and_Tract_Data_Service/MapServer?f=pjson"
+    "find": "\"properties\"\\s*:\\s*\\{[^}]{0,400}",
+    "note": "The property NAMES in the GeoJSON, which is the half that decides whether the label and the identify rows render. The service's own description answers displayFieldName WILDERNESSNAME while its fieldAliases are keyed lowercase - and ArcGIS GeoJSON output lower-cases field names, which is already written down in refreshPointOverlay. LOCAL_TYPE sat in a config for months because this exact question was answered from a field list rather than from a row.",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_Wilderness_01/MapServer/0/query?where=1%3D1&geometry=-79.44,38.93,-79.24,39.13&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=1&f=geojson"
+  },
+  {
+    "id": "nps:folder",
+    "expect": "data",
+    "find": "\"services\"\\s*:\\s*\\[[^\\]]{0,900}",
+    "note": "What that host actually publishes. My NPS_Land_Resources_Division_... guess answered 404 Service not found - I said I would read the folder rather than guess an index and then guessed the service name instead. This asks the folder, which is how the USFS wilderness service was confirmed.",
+    "url": "https://mapservices.nps.gov/arcgis/rest/services/LandResourcesDivision?f=pjson"
+  },
+  {
+    "id": "nps:root",
+    "expect": "data",
+    "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,600}",
+    "note": "And the folder list itself, in case LandResourcesDivision is not the folder name either. Two probes because 'the folder is empty' and 'the folder does not exist' are different answers and the first one alone cannot tell them apart.",
+    "url": "https://mapservices.nps.gov/arcgis/rest/services?f=pjson"
   }
 ]
