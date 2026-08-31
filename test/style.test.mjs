@@ -1650,3 +1650,46 @@ test('byways: every let-bound variable is a name GL will accept', async () => {
 
   assert.deepEqual(bad, [], 'GL will refuse to compile the whole style for these');
 });
+
+test('fields: what the config claims to read is separated from what it invents', async () => {
+  /*
+   * The half of the field check that needs no network, which is also the half
+   * that decides whether the other half is useful.
+   *
+   * Two ways to make it worthless. Counting the tags this app attaches itself
+   * — `use`, `severity` — reports one imaginary missing column per layer and
+   * buries the real ones. Asking each sublayer separately calls WKHR_CODE dead
+   * because it is on the national-defence endpoint and not the special-use
+   * one, which would send somebody deleting a row that works. Both were live
+   * possibilities; the second nearly happened by hand.
+   */
+  const { declared, endpoints, injected } = await import('../tools/check-fields.mjs');
+  const { OVERLAYS } = await import('../assets/js/config.js');
+
+  const airspace = OVERLAYS.find((layer) => layer.id === 'faa-restrictions');
+  assert.ok(airspace);
+
+  const names = declared(airspace);
+  assert.ok(names.includes('TYPE_CODE'), 'a field read from the service must be checked');
+  assert.ok(names.includes('NAME'), 'the label field is read too, and is as able to be wrong');
+  assert.ok(names.includes('WKHR_CODE'), 'a field belonging to one sublayer is still declared');
+
+  // Ours, not the service's.
+  assert.ok(injected(airspace).has('severity'), 'a tag the app attaches is not a column');
+  assert.ok(!names.includes('severity'), 'the fill field is attached here, so it cannot be missing');
+  assert.ok(!names.includes('use'), 'the sublayer marker is attached here too');
+
+  /*
+   * Every sublayer, because a field is only dead when no endpoint has it.
+   */
+  const places = endpoints(airspace);
+  assert.equal(places.length, airspace.query.uses.length);
+  for (const place of places) {
+    assert.ok(!place.url.includes('{layer}'), `${place.name} kept its placeholder`);
+    assert.doesNotThrow(() => new URL(place.url), `${place.name} is not a usable address`);
+  }
+
+  // A layer with one endpoint and no sublayers still gets checked.
+  const single = OVERLAYS.find((layer) => layer.query?.url && !layer.query.uses);
+  if (single) assert.equal(endpoints(single).length, 1);
+});
