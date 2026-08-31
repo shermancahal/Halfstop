@@ -1615,6 +1615,16 @@ test('byways: every let-bound variable is a name GL will accept', async () => {
   const bad = [];
 
   const walk = (node, where) => {
+    /*
+     * Objects as well as arrays. `layer.layout` is an object whose values are
+     * the expressions, and a walk that returned on anything not an array
+     * inspected nothing at all — this test passed with the broken name still
+     * in place, which is how it was caught.
+     */
+    if (node && typeof node === 'object' && !Array.isArray(node)) {
+      for (const value of Object.values(node)) walk(value, where);
+      return;
+    }
     if (!Array.isArray(node)) return;
     if (node[0] === 'let') {
       // ['let', name, value, name, value, …, body] — the names are every
