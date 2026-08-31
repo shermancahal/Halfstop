@@ -121,9 +121,56 @@ and handled on the way back in.
 Nothing in the web build is blocked by this. It is listed so that "sign-in
 works" is not mistaken for "sign-in works in the app".
 
-## 4. Email delivery, when there is a real domain
+## 4. Email that never arrives
 
-The default sender is Supabase's, which is rate limited and sends from their
-domain. **Authentication → Emails → SMTP Settings** takes over both, and is
-worth doing once there is a domain to send from. It changes nothing about the
-redirect problem above, which is separate and comes first.
+Three different things produce "I asked for an account and nothing came back",
+and they are worth telling apart before changing any settings, because two of
+them are free to fix and one costs a domain.
+
+### First: read the auth log. It settles which of the three it is.
+
+**Logs → Auth Logs** in the sidebar (older dashboards put it under
+**Authentication → Logs**). Filter to the minute you pressed the button.
+
+- **No signup event at all** — the request never reached Supabase. A key or
+  URL problem in `token.js`, not an email problem.
+- **A signup event, and no mail event** — the address already has an account.
+  See below; no email was ever going to be sent.
+- **A signup event and a failed mail event** — delivery. Rate limit or SMTP.
+
+That order matters: the fix for each is in a different place, and the symptom
+on screen is identical.
+
+### The address already has an account
+
+Supabase will not tell a stranger whether an address is registered. Signing up
+one that already exists returns success, with a user, no session, an empty
+`identities` array — **and sends nothing**. There is no error anywhere, and the
+auth log shows the signup succeeding.
+
+The app now reads that array and says so rather than telling you to check an
+inbox nothing is coming to. If you see that message, use **Email me a link**
+instead of creating the account again.
+
+### The built-in sender's rate limit
+
+The default sender is Supabase's own, and it is throttled hard — a handful of
+emails per hour per project, and the exact number has been lowered more than
+once. **Authentication → Rate Limits** shows the current figure for "Rate limit
+for sending emails".
+
+Over that limit, requests are **rejected rather than queued**: the send fails,
+the signup still looks fine on screen, and nothing arrives. Testing sign-in a
+few times in a row is enough to hit it, which makes it look intermittent — the
+first attempt of the day works and the next three do not.
+
+That service is documented as being for development only. A real sender is the
+fix, and it also removes the throttle:
+
+**Authentication → Emails → SMTP Settings → Enable Custom SMTP.** Host, port
+587, username and password from the provider, and a sender address on a domain
+you control — which is the part that needs a domain. Resend, Postmark, Mailgun
+and SES all have free or near-free tiers at this volume.
+
+None of this touches the redirect problem in section 1, which is separate and
+comes first: fixing delivery only means the wrong link arrives reliably.
