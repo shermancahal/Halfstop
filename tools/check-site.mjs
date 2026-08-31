@@ -38,9 +38,26 @@ if (!url) {
 /* Gatlinburg by default: inside the Smokies extract, and somewhere with roads. */
 const view = process.argv[4] || '13/35.714/-83.511';
 
+/*
+ * Overlays, because the report was about one of them.
+ *
+ * "Restrictions & advisories produces nothing" is not visible from a check
+ * that only ever loads the basemap: the queried layers are off by default, so
+ * every run so far has said nothing about them either way. The app already
+ * reads its visible overlays from `?o=`, so switching them on needs no new
+ * machinery in the app — only for this to stop ignoring the one parameter that
+ * would have shown the failure.
+ *
+ * An empty value is not the same as an absent one: `?o=` means "none of them",
+ * which is a useful thing to ask for, so only a missing argument leaves the
+ * defaults alone.
+ */
+const overlays = process.argv[5] ?? null;
+
 const page = new URL(url);
 if (!page.pathname.endsWith('.html')) page.pathname = page.pathname.replace(/\/?$/, '/') + 'map.html';
 page.searchParams.set('b', basemap);
+if (overlays !== null) page.searchParams.set('o', overlays);
 // The map is constructed with `hash: 'view'`, so the position rides in a named
 // parameter rather than the bare `#z/lat/lon` the engine uses by default.
 page.hash = `#view=${view}`;
@@ -273,6 +290,7 @@ if (typeof report.map === 'string') {
   console.log(`  map                   ${report.map}`);
 } else {
   console.log(`  style                 ${report.map.styleName} · ${report.map.layers} layers · loaded=${report.map.styleLoaded}`);
+  console.log(`  overlays asked for    ${overlays === null ? '(defaults)' : (overlays || '(none)')}`);
   console.log(`  looking at            z${report.map.zoom} ${report.map.centre}`);
 }
 

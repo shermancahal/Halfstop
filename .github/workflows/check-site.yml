@@ -32,6 +32,14 @@ on:
         required: false
         default: '13/35.714/-83.511'
         type: string
+      overlays:
+        description: >-
+          Overlay ids to switch on, comma separated — e.g.
+          faa-restrictions,faa-uas-grid. Leave blank for the defaults; the
+          queried layers are off by default, so a run that does not set this
+          says nothing about them.
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -63,8 +71,17 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          node tools/check-site.mjs \
-            "${{ inputs.url }}" "${{ inputs.basemap }}" "${{ inputs.view }}" 2>&1 | tee report.txt
+          # The overlay argument is passed only when one was given: an empty
+          # string means "switch them all off", which is a different request
+          # from "leave the defaults alone".
+          if [ -n "${{ inputs.overlays }}" ]; then
+            node tools/check-site.mjs \
+              "${{ inputs.url }}" "${{ inputs.basemap }}" "${{ inputs.view }}" \
+              "${{ inputs.overlays }}" 2>&1 | tee report.txt
+          else
+            node tools/check-site.mjs \
+              "${{ inputs.url }}" "${{ inputs.basemap }}" "${{ inputs.view }}" 2>&1 | tee report.txt
+          fi
 
       - name: Put the answer in the summary
         if: always()
