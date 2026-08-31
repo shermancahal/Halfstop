@@ -709,10 +709,12 @@ export const OVERLAYS = [
      */
     legendNote: 'Standing and scheduled restrictions only. Same-day TFRs — fires, VIP '
       + 'movements — are NOTAMs and are not in this layer; use the link on any feature to '
-      + 'check the current list before you fly.',
+      + 'check the current list before you fly. Amber marks designated wilderness, where '
+      + 'overflight is advisory but the land manager\u2019s own rules on taking off and '
+      + 'landing still apply. National park boundaries are not in this layer yet.',
     group: 'Airspace',
     name: 'Restrictions & advisories',
-    description: 'Where drones may not fly, and where you would need permission. Source: FAA, NPS, USFS',
+    description: 'Where drones may not fly, and where you would need permission. Source: FAA, USFS',
     query: {
       /*
        * The FAA services share a host and a query shape, so they differ only
@@ -736,13 +738,53 @@ export const OVERLAYS = [
         // because when it is on it is a genuine prohibition, and the panel
         // says when.
         { layer: 'Stadiums', use: 'Stadium — during events', tag: { severity: 'No fly' } },
+        /*
+         * Wilderness, on its own host, and the first amber this layer can draw.
+         *
+         * Reported from Dolly Sods: Aloft shows a Caution there and this map
+         * showed nothing. It was not a broken request - the layer queried
+         * three FAA services and no wilderness service of any kind, while its
+         * legend offered a 'Permit or caution' band nothing could produce and
+         * its description named USFS. An advisory layer that silently omits a
+         * whole category of advisory is worse than one that never claimed it.
+         *
+         * The service is the Forest Service's, and holds the whole National
+         * Wilderness Preservation System rather than only the acres USFS
+         * manages. Measured over that box before it was written in: 200,
+         * application/geo+json, one Polygon, CORS for our origin, and
+         * "wildernessname":"Dolly Sods Wilderness". f=geojson is not universal
+         * on a MapServer, so that was worth asking rather than assuming.
+         *
+         * Amber, not red. Wilderness overflight is an advisory - the FAA asks
+         * for 2,000 feet AGL over it - and the land manager's own rules on
+         * taking off and landing are what actually bite. Drawing it in the
+         * no-fly red would put it beside prohibited airspace, which is the
+         * mistake the MOA exclusion above exists to avoid.
+         */
+        {
+          url: 'https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_Wilderness_01/MapServer/0/query'
+            + '?where={where}&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
+            + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
+            + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=300&f=geojson',
+          layer: 'Wilderness',
+          use: 'Wilderness area',
+          tag: { severity: 'Permit or caution' },
+        },
       ],
       minzoom: 7,
       color: '#C0392B',
-      label: 'NAME',
+      /*
+       * Two names for one thing. The FAA's three services answer NAME; the
+       * wilderness service answers `wildernessname`, lower-case, because
+       * ArcGIS GeoJSON output lower-cases field names whatever the service's
+       * own displayFieldName says - measured off a row rather than read off
+       * the field list, which is how LOCAL_TYPE survived here for months.
+       */
+      label: ['NAME', 'wildernessname'],
       fields: {
         severity: { label: 'Status' },
         use: { label: 'Kind' },
+        wildernessname: { label: 'Wilderness' },
         TYPE_CODE: { label: 'Type' },
         UPPER_VAL: { label: 'Ceiling', suffix: ' ft' },
         LOWER_VAL: { label: 'Floor', suffix: ' ft' },
@@ -763,7 +805,8 @@ export const OVERLAYS = [
     },
     opacity: 0.45,
     enabled: false,
-    attribution: 'Restrictions © <a href="https://www.faa.gov/">FAA</a>',
+    attribution: 'Restrictions © <a href="https://www.faa.gov/">FAA</a>, '
+      + 'wilderness © <a href="https://www.fs.usda.gov/">USFS</a>',
   },
   {
     id: 'faa-uas-grid',

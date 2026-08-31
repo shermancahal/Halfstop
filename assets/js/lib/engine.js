@@ -442,6 +442,25 @@ export function buildRasterStyle(basemap, overlays = []) {
   return style;
 }
 
+/**
+ * What a queried overlay's label reads, which may be more than one column.
+ *
+ * One layer can merge services that disagree about what a name is called. The
+ * airspace layer reads NAME from the FAA's three; the wilderness service calls
+ * it `wildernessname`, lower-case, because ArcGIS GeoJSON output lower-cases
+ * field names whatever the service's own displayFieldName says. A single field
+ * name there would leave every wilderness area unlabelled, which looks exactly
+ * like a feature that has no name.
+ *
+ * A list rather than a rename because the alternative is copying values between
+ * properties as they arrive, and a coalesce says the same thing declaratively
+ * and stays visible in the config.
+ */
+export function labelExpression(label) {
+  const names = Array.isArray(label) ? label : [label];
+  return ['coalesce', ...names.filter(Boolean).map((name) => ['get', name]), ''];
+}
+
 /** Whether a style can carry text at all — i.e. whether it declares glyphs. */
 export const styleHasGlyphs = (style) => typeof style?.glyphs === 'string' && style.glyphs.length > 0;
 

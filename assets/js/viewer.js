@@ -16,7 +16,7 @@ import {
 } from './config.js';
 import {
   loadEngine, buildRasterStyle, hasMapboxToken, mapboxToken, overlayParts, overlayIdFromLayer, overlayRows,
-  overlayLinks, styleFor, styleHasGlyphs, styleFont, engineFor, schemaFor, sourceNoteFor,
+  overlayLinks, styleFor, styleHasGlyphs, styleFont, labelExpression, engineFor, schemaFor, sourceNoteFor,
 } from './lib/engine.js';
 import { loadCatalog, findMap } from './lib/catalog.js';
 import { parseMapFile, linePositions } from './lib/parse.js';
@@ -5664,7 +5664,7 @@ function addQueryOverlay(overlay, opacity) {
       type: 'symbol',
       source: fill,
       layout: {
-        'text-field': ['coalesce', ['get', overlay.query.label], ''],
+        'text-field': labelExpression(overlay.query.label),
         'text-font': styleFont(state.map.getStyle()),
         'text-size': ['interpolate', ['linear'], ['zoom'], 8, 10, 13, 12, 16, 13],
         'symbol-placement': (road || trail) ? 'line' : 'point',

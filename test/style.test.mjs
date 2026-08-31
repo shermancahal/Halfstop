@@ -16,7 +16,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildRasterStyle, overlayParts, overlayIdFromLayer, overlayLinks, overlayRows, styleFor } from '../assets/js/lib/engine.js';
+import { buildRasterStyle, overlayParts, overlayIdFromLayer, overlayLinks, overlayRows, styleFor, labelExpression } from '../assets/js/lib/engine.js';
 import {
   BASEMAPS, OVERLAYS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN, STATE_NAMES, STATE_GROUP,
 } from '../assets/js/config.js';
@@ -28,6 +28,7 @@ import {
   SHIELD_SCALE, BLANK_PIXEL_RATIO, MIN_TEXT,
 } from '../assets/js/lib/route-shields.js';
 import { SHIELD_BOXES } from '../assets/js/lib/shield-boxes.js';
+import { declared } from '../tools/check-fields.mjs';
 import { formatTemperature, convertTemperature } from '../assets/js/lib/geo.js';
 import {
   shieldDesign,
@@ -1692,4 +1693,71 @@ test('fields: what the config claims to read is separated from what it invents',
   // A layer with one endpoint and no sublayers still gets checked.
   const single = OVERLAYS.find((layer) => layer.query?.url && !layer.query.uses);
   if (single) assert.equal(endpoints(single).length, 1);
+});
+
+test('overlays: a legend never offers a colour the layer cannot draw', () => {
+  /*
+   * Reported from Dolly Sods: Aloft shows a Caution and this map showed
+   * nothing. The airspace layer's legend has offered a 'Permit or caution'
+   * amber band since it was written, its fillBy has carried a colour for it,
+   * and every sublayer tagged severity 'No fly'. Nothing could produce amber.
+   *
+   * That is worse than a missing layer. A key that names a category tells a
+   * reader the map is looking for it, so ground with no amber on it reads as
+   * ground with no advisory on it - which is exactly the wrong thing to
+   * conclude over designated wilderness.
+   *
+   * Stated as the property rather than as a fact about this one layer: where
+   * a layer colours by a field its sublayers tag, every colour it offers has
+   * to be reachable from some sublayer. That fails on this bug, on a legend
+   * entry added ahead of its data, and on a sublayer dropped later leaving an
+   * orphaned colour behind.
+   */
+  let checked = 0;
+  for (const overlay of OVERLAYS) {
+    const by = overlay.query?.fillBy;
+    const uses = overlay.query?.uses;
+    if (!by?.colors || !uses?.length) continue;
+    // Only layers where the tag is what decides the colour: a layer reading
+    // the value out of the data cannot be checked without the data.
+    if (!uses.every((kind) => kind.tag && kind.tag[by.field] !== undefined)) continue;
+    checked += 1;
+
+    const reachable = new Set(uses.map((kind) => String(kind.tag[by.field])));
+    for (const value of Object.keys(by.colors)) {
+      assert.ok(reachable.has(value),
+        `${overlay.id}: nothing can produce "${value}", which its key offers a colour for`);
+    }
+    for (const entry of overlay.legend || []) {
+      assert.ok(reachable.has(entry.label),
+        `${overlay.id}: the key promises "${entry.label}" and no sublayer tags it`);
+    }
+  }
+  assert.ok(checked >= 1, 'no layer exercised this; the shape of the config changed');
+});
+
+test('overlays: a label may name every column its services call a name', () => {
+  /*
+   * One layer, several services, and no agreement about what a name is
+   * called: the FAA's three answer NAME, the wilderness service answers
+   * `wildernessname` in lower case, because ArcGIS lower-cases field names in
+   * GeoJSON output whatever its own displayFieldName says. A single field
+   * there leaves every wilderness area unlabelled, which is indistinguishable
+   * from a feature that has no name.
+   */
+  assert.deepEqual(labelExpression('NAME'), ['coalesce', ['get', 'NAME'], '']);
+  assert.deepEqual(labelExpression(['NAME', 'wildernessname']),
+    ['coalesce', ['get', 'NAME'], ['get', 'wildernessname'], '']);
+
+  // And every name a config lists is a name the field check will verify.
+  for (const overlay of OVERLAYS) {
+    const label = overlay.query?.label;
+    if (!label) continue;
+    const named = [label].flat();
+    assert.ok(named.every((one) => typeof one === 'string' && one),
+      `${overlay.id}: a label column is not a name`);
+    assert.deepEqual(declared({ ...overlay, query: { ...overlay.query } })
+      .filter((one) => named.includes(one)).sort(), [...named].sort(),
+    `${overlay.id}: the field check would not look for every column the label reads`);
+  }
 });

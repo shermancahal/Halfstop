@@ -52,7 +52,9 @@ export function declared(layer) {
   const query = layer.query || {};
   const names = new Set();
   for (const name of Object.keys(query.fields || {})) names.add(name);
-  if (typeof query.label === 'string') names.add(query.label);
+  // A label may name several columns: services merged into one layer disagree
+  // about what a name is called, and every one of them has to be checked.
+  for (const name of [query.label].flat()) if (typeof name === 'string') names.add(name);
   if (query.fillBy?.field) names.add(query.fillBy.field);
   for (const name of injected(layer)) names.delete(name);
   return [...names];
