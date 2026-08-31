@@ -1,0 +1,59 @@
+name: Probe a data service
+
+# Asks a feature service what values a field actually takes.
+#
+# Every queried layer in config.js filters or colours on some field, and the
+# values behind those filters have repeatedly been written from documentation
+# or from memory rather than measured. A filter naming a value the service has
+# never heard of matches nothing and draws an empty layer, which looks exactly
+# like ground with nothing on it.
+#
+# The same job `check-archive` does for the tiles, for the other half of the
+# map. Needs the network, so it runs here.
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: >-
+          The service query endpoint — e.g.
+          https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Special_Use_Airspace/FeatureServer/0/query
+        required: true
+        type: string
+      fields:
+        description: 'Field names, comma or space separated — e.g. TYPE_CODE,LOCAL_TYPE'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Ask the service
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # No install: the probe is a fetch and some counting, which is the point
+      # of this repo having no runtime dependencies.
+      - name: Ask it
+        run: |
+          set -o pipefail
+          FIELDS="$(printf '%s' "${{ inputs.fields }}" | tr ',' ' ')"
+          # shellcheck disable=SC2086
+          node tools/probe-service.mjs "${{ inputs.url }}" $FIELDS 2>&1 | tee report.txt
+
+      - name: Put the answer in the summary
+        if: always()
+        run: |
+          {
+            echo "### ${{ inputs.fields }}"
+            echo ""
+            echo '```'
+            cat report.txt || echo "nothing was written"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

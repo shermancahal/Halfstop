@@ -1,0 +1,124 @@
+/*
+ * Ask an ArcGIS feature service what values a field actually takes.
+ *
+ *   node tools/probe-service.mjs <service-query-url> FIELD [FIELD...]
+ *
+ * The same question `inspect-archive` answers for a vector tile, asked of the
+ * other half of this map. Every layer in config.js filters or colours on some
+ * field, and the values are written from documentation, from a sample of one
+ * county, or from memory - after which a filter that matches nothing draws an
+ * empty layer, which looks exactly like ground with nothing on it.
+ *
+ * `returnDistinctValues` does the counting on the server, so this is one small
+ * request rather than a download of the layer.
+ *
+ * No dependencies, and no network in the sandbox this is written in, which is
+ * why it runs in CI. See .github/workflows/probe-service.yml.
+ */
+
+const [target, ...fields] = process.argv.slice(2);
+
+if (!target || !fields.length) {
+  console.error('usage: node tools/probe-service.mjs <service url> FIELD [FIELD...]');
+  console.error('  e.g. …/Special_Use_Airspace/FeatureServer/0/query TYPE_CODE LOCAL_TYPE');
+  process.exit(2);
+}
+
+/**
+ * Strip whatever query the caller pasted and ask our own question.
+ *
+ * A URL copied out of config.js carries a bbox, an output format and a record
+ * cap, all of which would narrow the answer to whatever was on screen when it
+ * was written. The point here is the whole layer.
+ */
+function distinctQuery(url, names) {
+  const at = new URL(url);
+  at.search = '';
+  at.searchParams.set('where', '1=1');
+  at.searchParams.set('outFields', names.join(','));
+  at.searchParams.set('returnDistinctValues', 'true');
+  at.searchParams.set('returnGeometry', 'false');
+  at.searchParams.set('resultRecordCount', '1000');
+  at.searchParams.set('f', 'json');
+  return at.href;
+}
+
+function countQuery(url, where) {
+  const at = new URL(url);
+  at.search = '';
+  at.searchParams.set('where', where);
+  at.searchParams.set('returnCountOnly', 'true');
+  at.searchParams.set('f', 'json');
+  return at.href;
+}
+
+async function ask(url) {
+  const response = await fetch(url, { headers: { accept: 'application/json' } });
+  if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+  const body = await response.json();
+  // An ArcGIS error is a 200 with an `error` object in it: it parses cleanly
+  // and has no rows, which is indistinguishable from a layer that is empty.
+  if (body.error) throw new Error(body.error.message || 'service error');
+  return body;
+}
+
+const escapeSQL = (value) => String(value).replace(/'/g, "''");
+
+console.log(`\n${target}`);
+console.log(`  asking for ${fields.join(', ')}\n`);
+
+let rows;
+try {
+  rows = await ask(distinctQuery(target, fields));
+} catch (error) {
+  console.error(`  the service refused: ${error.message}`);
+  process.exit(1);
+}
+
+const combos = (rows.features || []).map((feature) => feature.attributes || {});
+if (!combos.length) {
+  console.log('  no rows came back — the service answered, and has nothing to say.');
+  process.exit(0);
+}
+
+console.log(`  ${combos.length} distinct combination(s)\n`);
+
+for (const field of fields) {
+  const seen = new Map();
+  for (const row of combos) {
+    const value = row[field];
+    const key = value === null || value === undefined ? '(null)' : String(value);
+    seen.set(key, (seen.get(key) || 0) + 1);
+  }
+  console.log(`  ${field}`);
+  for (const [value, times] of [...seen].sort((a, b) => a[0].localeCompare(b[0]))) {
+    console.log(`    ${value.padEnd(28)} in ${times} combination(s)`);
+  }
+  console.log('');
+}
+
+/*
+ * And how many features each value of the first field actually covers.
+ *
+ * Distinct values say a code exists; they do not say whether it is one polygon
+ * or nine thousand. A filter is worth writing for the second and not the
+ * first, and the difference decides whether excluding a code changes anything
+ * a reader would see.
+ */
+const [primary] = fields;
+const values = [...new Set(combos.map((row) => row[primary]).filter((one) => one !== null && one !== undefined))];
+if (values.length && values.length <= 40) {
+  console.log(`  How many features carry each ${primary}?`);
+  const total = await ask(countQuery(target, '1=1')).catch(() => null);
+  for (const value of values.sort()) {
+    try {
+      const answer = await ask(countQuery(target, `${primary} = '${escapeSQL(value)}'`));
+      const count = answer.count ?? 0;
+      const share = total?.count ? ` · ${((count / total.count) * 100).toFixed(1)}% of the layer` : '';
+      console.log(`    ${String(value).padEnd(28)} ${String(count).padStart(6)}${share}`);
+    } catch (error) {
+      console.log(`    ${String(value).padEnd(28)} could not be counted: ${error.message}`);
+    }
+  }
+  if (total?.count) console.log(`    ${'(whole layer)'.padEnd(28)} ${String(total.count).padStart(6)}`);
+}
