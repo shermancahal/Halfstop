@@ -64,7 +64,27 @@ if [ ! -s "$OUT" ]; then
   mkdir -p "$(dirname "$OUT")"
   # Reads the planet by byte range rather than downloading it, which is the
   # same property that makes the result usable from a browser.
-  ./pmtiles extract "$PLANET" "$OUT" --bbox="$BBOX" --maxzoom="$ZOOM"
+  #
+  # Retried, because what it hits at continental size is not a failure of this
+  # command. The cut pulls gigabytes of byte ranges from one host, and
+  # Cloudflare answers 524 when the origin stops keeping up: measured at 99% of
+  # an 8.6 GB fetch, after throughput fell 24 -> 13 -> 5.7 -> 1.6 MB/s over the
+  # final minute. Losing the whole transfer to the last few seconds of it is
+  # worth a second go. A bad bbox or an unreachable planet fails the same way
+  # on every attempt and costs only the time it already took, so this cannot
+  # turn a real error into a long one.
+  attempt=1
+  until ./pmtiles extract "$PLANET" "$OUT" --bbox="$BBOX" --maxzoom="$ZOOM"; do
+    if [ "$attempt" -ge 3 ]; then
+      fail "pmtiles extract failed $attempt times. The error is above; an HTTP 5xx there is the planet host rather than this bbox."
+    fi
+    attempt=$((attempt + 1))
+    note "extract failed - attempt $attempt of 3"
+    # A part-written archive is worse than none: it has a valid header and
+    # stops partway through the ground it claims.
+    rm -f "$OUT"
+    sleep 15
+  done
 else
   note "Reusing the extract already at $OUT."
 fi
