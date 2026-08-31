@@ -1405,3 +1405,91 @@ test('shield spacing leaves room for the overzoom above the tileset', () => {
     assert.ok(top <= 240, `${id} spacing tops out at ${top}, which quadruples badly past z16`);
   }
 });
+
+test('shields: the marker comes from the road, not from where the map is looking', async () => {
+  /*
+   * Reported from the New River valley, looking at West Virginia with Virginia
+   * across the river: every state marker on screen wore West Virginia's shape,
+   * Virginia's routes included, and the whole screen redrew as Virginia's the
+   * moment the centre crossed over.
+   *
+   * The state arm resolved to the state under the viewport. That is the only
+   * thing available under the shape-named schema — a road there says
+   * `circle-white` and never says who signed it — and it was carried across to
+   * the schema that does say, in the value `US:VA`, on the feature itself.
+   *
+   * Evaluated rather than inspected. An expression with a `st-VA` arm in it
+   * looks correct while matching on the wrong input, which is precisely the
+   * bug, so a structural assertion would have passed on it.
+   */
+  const { evaluate } = await import('./helpers/expression.mjs');
+  const { shieldImageExpression, shieldTextColour, shieldTextOffsetExpression } =
+    await import('../assets/js/lib/route-shields.js');
+
+  // Built as the style builds it: the map is over West Virginia.
+  const at = (net) => ({ properties: { network: net, shield_text: '460' } });
+  const image = shieldImageExpression('WV', {
+    length: ['length', ['coalesce', ['get', 'shield_text'], '']],
+    network: 'network',
+  });
+
+  assert.equal(evaluate(image, at('US:WV')), 'abmap-shield-st-WV-3');
+  assert.equal(evaluate(image, at('US:VA')), 'abmap-shield-st-VA-3',
+    'a Virginia route drew West Virginia’s marker because the viewport was asked');
+
+  // The nationals look the same in every state and must not be pulled in.
+  assert.equal(evaluate(image, at('US:I')), 'abmap-shield-interstate-3');
+  assert.equal(evaluate(image, at('US:US')), 'abmap-shield-us-3');
+
+  // A road nothing has claimed gets the plain circle, not the state's marker —
+  // that is how a county road ends up wearing a state's letter.
+  assert.equal(evaluate(image, at('CA:ON')), 'abmap-shield-circle-3');
+
+  /*
+   * `US:WV:Secondary` is a real network value, and slicing to the end of the
+   * string rather than to two characters looks up a state called
+   * "WV:Secondary" — falling through to the generic rectangle for every signed
+   * secondary route in the state, which is most of the rural network here.
+   */
+  assert.equal(evaluate(image, at('US:WV:Secondary')), 'abmap-shield-st-WV-3');
+
+  // The clear space is measured from each state's own artwork, so the number
+  // has to be placed for the marker actually drawn.
+  assert.notDeepEqual(
+    evaluate(shieldTextOffsetExpression('WV', 2, 0, { network: 'network' }), at('US:VA')),
+    evaluate(shieldTextOffsetExpression('WV', 2, 0, { network: 'network' }), at('US:WV')),
+    'two markers of different shapes cannot share one text offset',
+  );
+
+  /*
+   * And the ink, which is the one that disappears rather than merely looking
+   * wrong: several markers are dark, so a number drawn in a neighbour's ink
+   * can come out dark on dark.
+   */
+  const ink = shieldTextColour('WV', { network: 'network' });
+  assert.equal(evaluate(ink, at('US:CA')), '#ffffff', 'California’s green spade takes white numerals');
+  assert.equal(evaluate(ink, at('US:NM')), '#b0202f', 'New Mexico’s Zia is red');
+  assert.equal(evaluate(ink, at('US:WV')), '#1c1c1c');
+  assert.equal(evaluate(ink, at('US:I')), '#ffffff');
+});
+
+test('shields: every state with a marker can be reached from its network value', async () => {
+  /*
+   * Stated over the whole table rather than the three states in the report.
+   * The arms are generated from `STATE_SHIELDS`, so a state added to the table
+   * and forgotten in the expression is the failure this catches — it would
+   * draw the generic rectangle, which is a plausible-looking sign and not a
+   * missing one.
+   */
+  const { evaluate } = await import('./helpers/expression.mjs');
+  const { shieldImageExpression, statesWithShields } = await import('../assets/js/lib/route-shields.js');
+
+  const image = shieldImageExpression('WV', { length: 2, network: 'network' });
+  for (const code of statesWithShields()) {
+    assert.equal(
+      evaluate(image, { properties: { network: `US:${code}` } }),
+      `abmap-shield-st-${code}-2`,
+      `${code} does not reach its own marker`,
+    );
+  }
+});

@@ -957,7 +957,10 @@ export function shieldTextSizeExpression(state = '', length = 2, refLength = nul
    * worst case that might land on the same design.
    */
   const sized = (design) => {
-    const at = (chars) => (design === LOCAL ? shieldTextSize(stateDesign(state), chars) : NOMINAL_TEXT);
+    // `networkArms` hands over a concrete state design; the Mapbox table still
+    // hands over the symbol, which means whatever the viewport is over.
+    const named = design === LOCAL ? stateDesign(state) : design;
+    const at = (chars) => (isStateDesign(named) ? shieldTextSize(named, chars) : NOMINAL_TEXT);
     if (!refLength) return at(length);
     return ['case',
       ['>=', refLength, 5], at(5),
@@ -980,24 +983,29 @@ export function shieldTextSizeExpression(state = '', length = 2, refLength = nul
  *        so the conversion has to happen per arm rather than once.
  */
 export function shieldTextOffsetExpression(state = '', length = 2, shiftPx = 0, { override = null, network = '' } = {}) {
-  const local = shieldTextOffset(stateDesign(state), length);
   // The interstate number clears its crown; the US shield's sits centre.
   const national = (design) => (design === 'interstate' ? [0, 0.18] : [0, 0.06]);
   const shift = (base, design) => {
     if (!shiftPx) return base;
-    const size = design === LOCAL ? shieldTextSize(stateDesign(state), length) : NOMINAL_TEXT;
+    const size = isStateDesign(design) ? shieldTextSize(design, length) : NOMINAL_TEXT;
     return [Math.round((base[0] + shiftPx / size) * 100) / 100, base[1]];
   };
-  const placed = (design) => ['literal', design === UNCLAIMED
-    ? shift(shieldTextOffset(UNCLAIMED, length), UNCLAIMED)
-    : shift(design === LOCAL ? local : national(design), design)];
+  const placed = (design) => {
+    const named = design === LOCAL ? stateDesign(state) : design;
+    if (named === UNCLAIMED) return ['literal', shift(shieldTextOffset(UNCLAIMED, length), UNCLAIMED)];
+    // Each state's blank has its own clear space, measured from the artwork,
+    // so the offset has to be looked up for the marker actually drawn.
+    const base = isStateDesign(named) ? shieldTextOffset(named, length) : national(named);
+    return ['literal', shift(base, named)];
+  };
+  // Both branches go through `placed`, which resolves the symbol to the
+  // viewport's state for the shape-named schema and takes the concrete design
+  // for the network-named one. It was written out twice and the two copies
+  // had already drifted apart on which size the sideways shift divides by.
   const byShield = network ? networkArms(network, placed) : [
     'match', ['get', 'shield'],
-    ...SHIELD_MATCH.flatMap((arm) => [
-      arm.values,
-      ['literal', shift(arm.design === LOCAL ? local : national(arm.design), arm.design)],
-    ]),
-    ['literal', shift(shieldTextOffset(UNCLAIMED, length), UNCLAIMED)],
+    ...SHIELD_MATCH.flatMap((arm) => [arm.values, placed(arm.design)]),
+    placed(UNCLAIMED),
   ];
   if (!override) return byShield;
 
@@ -1217,12 +1225,19 @@ const LOCAL = Symbol('local state design');
  * looking. Protomaps says `US:I`, `US:US`, `US:KY`: the network itself, which
  * is the question the shield is actually asking.
  *
- * The state arm still resolves to the design for the state under the viewport
- * rather than the two letters in the value. That is a real thing left on the
- * table — the network knows the answer exactly, and near a border the viewport
- * does not — but every size, offset and colour below is computed per design,
- * and reading the state per feature turns each of them into fifty-one arms.
- * Worth doing; worth doing on its own, with the border case as its test.
+ * The state arm reads the two letters in the value, not the viewport.
+ *
+ * It used to resolve to the state under the map's centre, which was inherited
+ * from the Mapbox path where it is the only thing available - a road there
+ * says `circle-white`, a shape, and never who signed it. Under this schema the
+ * road says `US:WV`, so the viewport was being consulted about a question the
+ * feature had already answered. Reported from the New River valley: every
+ * marker on screen wore West Virginia's shape, Virginia's included, and the
+ * whole screen redrew as Virginia's when the centre crossed the river.
+ *
+ * The cost is that every size, offset and colour becomes fifty-one arms
+ * instead of one, since each is computed per design. They are generated from
+ * the same table the markers are, so the arms cannot drift from the shapes.
  */
 function networkArms(field, valueFor) {
   const net = ['coalesce', ['get', field], ''];
@@ -1230,8 +1245,30 @@ function networkArms(field, valueFor) {
     ['==', net, 'US:I'], valueFor('interstate'),
     ['==', net, 'US:US'], valueFor('us'),
     // Any other US network is somebody's state or county route.
-    ['==', ['slice', net, 0, 3], 'US:'], valueFor(LOCAL),
+    ['==', ['slice', net, 0, 3], 'US:'], stateArms(net, valueFor),
     valueFor(UNCLAIMED)];
+}
+
+/**
+ * Which state's marker, from the network value itself.
+ *
+ * Sliced to exactly two characters rather than to the end: a network is
+ * `US:WV` but may be `US:WV:Secondary`, and taking the rest of the string
+ * would look up a state called "WV:Secondary" and quietly fall through to the
+ * generic marker for every signed secondary route in the state.
+ *
+ * The fallback is the plain rounded rectangle, which is what a state with no
+ * marker of its own already gets.
+ */
+function stateArms(net, valueFor) {
+  const arms = [];
+  for (const code of statesWithShields()) arms.push(code, valueFor(`st-${code}`));
+  return ['match', ['slice', net, 3, 5], ...arms, valueFor('state')];
+}
+
+/** Whether a design is a state route marker — a state's own, or the generic. */
+function isStateDesign(design) {
+  return design === 'state' || String(design).startsWith('st-');
 }
 
 const SHIELD_MATCH = [
@@ -1352,9 +1389,23 @@ export function shieldTextColour(state = '', { override = null, network = '' } =
   const entry = STATE_SHIELDS[String(state).trim().toUpperCase()];
   const localText = entry ? entry.fg : '#1c1c1c';
 
-  // White on the interstate's blue; the state's own ink on everything else,
+  /*
+   * The ink belongs to the marker, not to where the map is looking.
+   *
+   * Several state markers are dark - Arizona's black square, Idaho's black
+   * outline, South Carolina's blue disc - so borrowing a neighbour's ink is
+   * how a number goes dark on dark and disappears entirely.
+   */
+  const inkFor = (design) => {
+    const code = String(design).startsWith('st-') ? String(design).slice(3) : '';
+    return STATE_SHIELDS[code]?.fg || '#1c1c1c';
+  };
+
+  // White on the interstate's blue; the marker's own ink on everything else,
   // which is what the shape table below works out to as well.
-  const byShield = network ? networkArms(network, (design) => (design === 'interstate' ? '#ffffff' : localText)) : [
+  const byShield = network
+    ? networkArms(network, (design) => (design === 'interstate' ? '#ffffff' : inkFor(design)))
+    : [
     'match', ['get', 'shield'],
     ['us-interstate', 'us-interstate-business', 'us-interstate-duplex', 'us-interstate-truck'], '#ffffff',
     ['us-state', 'us-state-duplex'], localText,
