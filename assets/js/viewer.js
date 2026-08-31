@@ -5259,7 +5259,17 @@ async function refreshUseOverlay(overlay, source, empty) {
         ...feature,
         properties: { ...feature.properties, use: kind.use, ...(kind.tag || {}) },
       }));
-    } catch {
+    } catch (error) {
+      /*
+       * Said out loud, because this catch is why the layer was silent.
+       *
+       * A refused request and an empty answer both returned [] with nothing
+       * written anywhere, so "no restrictions here" and "the service would not
+       * talk to us" looked identical from the map and from the console. Half a
+       * day went into telling those two apart by other means.
+       */
+      console.warn(`[overlay ${overlay.id}] ${kind.layer || kind.use} did not answer:`,
+        error?.message || error);
       return [];
     }
   }));
@@ -5728,7 +5738,23 @@ function addOverlayLayer(overlay) {
   const entry = state.overlays.get(overlay.id);
   const opacity = entry?.opacity ?? overlay.opacity ?? 1;
 
-  if (overlay.query) { addQueryOverlay(overlay, opacity); return; }
+  if (overlay.query) {
+    addQueryOverlay(overlay, opacity);
+    /*
+     * And fetch its data now, rather than waiting for the map to move.
+     *
+     * `refreshQueryOverlays` had exactly one caller: the `moveend` handler. So
+     * a queried layer switched on while the map sits still stayed empty until
+     * something nudged it - which reads as a layer that does not work, and is
+     * why Drone ceilings looked dead on the basemap where the layer had only
+     * just started being added at all.
+     *
+     * Switching a layer on is a request for its data. Asking for it here is
+     * that request being honoured, and a pan afterwards refreshes it as before.
+     */
+    refreshQueryOverlay(overlay);
+    return;
+  }
 
   for (const part of overlayParts(overlay)) {
     if (state.map.getLayer(part.layerId)) continue;
