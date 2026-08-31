@@ -489,3 +489,50 @@ test('offline: every basemap offering a download offers its own map', () => {
       `${basemap.id} renders from vector tiles but has cacheable rasters, which would download a different map`);
   }
 });
+
+test('offline: a region is discarded under the archive it came from', async () => {
+  /*
+   * The tiles a region holds are keyed by the archive that produced them, and
+   * that name is recorded on the region precisely because it can differ from
+   * the one the map is reading now.
+   *
+   * Computing the keys from the current archive instead would delete nothing,
+   * report success, and leave the space occupied - the failure mode being
+   * fixed here, arriving through the fix for it.
+   */
+  const { regionTileKeys } = await import('../assets/js/lib/offline.js');
+  const { parseTileKey, memoryTileStore } = await import('../assets/js/lib/pmtiles-store.js');
+
+  const region = {
+    archive: 'https://old.example/byways.pmtiles',
+    bounds: { west: -83.7, south: 37.7, east: -83.5, north: 37.9 },
+    minZoom: 10,
+    maxZoom: 11,
+  };
+  const keys = regionTileKeys(region);
+  assert.ok(keys.length > 1, 'a two-zoom region should cover more than one tile');
+  for (const key of keys) {
+    assert.equal(parseTileKey(key).archive, region.archive,
+      'a key was built from something other than the region’s own archive');
+  }
+
+  // Zooms outside the region are not touched, in either direction.
+  const zooms = new Set(keys.map((key) => parseTileKey(key).z));
+  assert.deepEqual([...zooms].sort((a, b) => a - b), [10, 11]);
+
+  // A region with no archive recorded was never downloaded, and asking for its
+  // keys must not produce keys under the empty name.
+  assert.deepEqual(regionTileKeys({ ...region, archive: '' }), []);
+
+  // And the store removes those and only those.
+  const store = memoryTileStore();
+  const body = new Uint8Array([1, 2, 3]);
+  for (const key of keys) await store.put(key, body);
+  const neighbour = 'https://old.example/byways.pmtiles.old|10/0/0';
+  await store.put(neighbour, body);
+  const removed = await store.remove(keys);
+  assert.equal(removed, keys.length);
+  assert.equal(await store.has(neighbour), true,
+    'an archive whose name merely begins the same must survive');
+  assert.equal(await store.count(), 1);
+});

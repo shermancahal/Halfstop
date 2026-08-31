@@ -81,6 +81,11 @@ export function memoryTileStore() {
     async has(key) { return map.has(key); },
     async put(key, bytes) { map.set(key, bytes); },
     async clear() { map.clear(); },
+    async remove(keys) {
+      let removed = 0;
+      for (const key of keys) if (map.delete(key)) removed += 1;
+      return removed;
+    },
     async archives() {
       return tallyArchives([...map].map(([key, bytes]) => [key, bytes.byteLength || 0]));
     },
@@ -165,6 +170,35 @@ export async function openTileStore({ indexedDB = globalThis.indexedDB, name = D
         ? bytes.buffer
         : bytes.slice().buffer;
       await run('readwrite', (store) => request(store.put(copy, key)));
+    },
+    /*
+     * Delete named tiles, which is what dropping one region needs.
+     *
+     * `removeArchive` is the wrong tool for it: two regions downloaded from
+     * the same archive share its name, so removing by archive takes both. The
+     * keys are computed from the region's own bounds and zooms, so this
+     * removes exactly the ground that region covers and nothing under it.
+     */
+    async remove(keys) {
+      return run('readwrite', (store) => new Promise((resolve, reject) => {
+        let removed = 0;
+        let pending = 0;
+        let listed = false;
+        const finish = () => { if (listed && pending === 0) resolve(removed); };
+        for (const key of keys) {
+          pending += 1;
+          const found = store.getKey(key);
+          found.onsuccess = () => {
+            if (found.result === undefined) { pending -= 1; finish(); return; }
+            const gone = store.delete(key);
+            gone.onsuccess = () => { removed += 1; pending -= 1; finish(); };
+            gone.onerror = () => reject(gone.error);
+          };
+          found.onerror = () => reject(found.error);
+        }
+        listed = true;
+        finish();
+      }));
     },
     async clear() {
       await run('readwrite', (store) => request(store.clear()));

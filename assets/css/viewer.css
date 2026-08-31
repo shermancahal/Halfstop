@@ -2364,3 +2364,18 @@ html, body { height: 100%; overflow: hidden; }
   gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line);
 }
 .offline-storage .source-note { margin: 0; }
+
+/* An out-of-date download. Marked rather than removed, so it has to read as a
+   note about ground you still have — not as an error about ground you lost. */
+.region-stale {
+  margin-top: 8px; padding: 8px 10px; border-radius: 8px;
+  border: 1px solid var(--warn-line, var(--line));
+  background: var(--warn-wash, color-mix(in srgb, var(--accent) 7%, transparent));
+}
+.region-stale-why {
+  margin: 0 0 8px; font-size: .74rem; line-height: 1.45; color: var(--ink-2);
+}
+.region-stale .region-controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.region-stale-status {
+  font-size: .72rem; color: var(--ink-3); font-variant-numeric: tabular-nums;
+}

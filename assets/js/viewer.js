@@ -71,6 +71,7 @@ import { mayEdit } from './lib/editable.js';
 import {
   OfflineStore, MAX_ZOOM as OFFLINE_MAX_ZOOM, TILE_BUDGET,
   mayCacheTiles, tileURLsFor, downloadTiles, clearTiles, tileKeysFor, downloadArchiveTiles,
+  regionTileKeys,
   measureRegion, regionsToGeoJSON, formatBytes as formatTileBytes,
 } from './lib/offline.js';
 import {
@@ -4766,6 +4767,7 @@ function downloadRow(region) {
         } else {
           status.textContent = `${result.done.toLocaleString()} tiles saved. This region works offline.`;
         }
+        if (archiveTiles.length && !result.cancelled) stampArchive(region, archiveURL);
       } catch (error) {
         status.textContent = error.message || 'The download could not start.';
       } finally {
@@ -4777,6 +4779,45 @@ function downloadRow(region) {
 
   row.append(el('div', { class: 'region-controls' }, [button, status]));
   return row;
+}
+
+/*
+ * Which archive a region's tiles came out of, recorded on the region.
+ *
+ * The store keys a tile by the archive's URL, and that URL is deliberately
+ * stable across re-cuts so a download survives the switch to a bucket. The
+ * cost of that stability is this: when the archive behind the URL is cut
+ * deeper, every tile already on the device is from the old one, still matches
+ * the key, and is served in preference to the network - silently, and exactly
+ * as the reader is meant to behave.
+ *
+ * So the depth is stamped alongside the name. Nothing else in the pipeline
+ * distinguishes one generation of an archive from the next, and the depth is
+ * the one number that changes when it is re-cut for a reason anybody would
+ * notice.
+ */
+function stampArchive(region, archiveURL) {
+  const name = new URL(archiveURL, document.baseURI).href;
+  state.offline.update(region.id, { archive: name, archiveDepth: PROTOMAPS_MAXZOOM });
+}
+
+/**
+ * Whether a region's stored tiles predate the archive the map now reads.
+ *
+ * Returns the reason rather than a boolean, because the two reasons need
+ * different words: an archive that moved leaves tiles that are unreachable and
+ * merely wasting space, while an archive re-cut in place leaves tiles that are
+ * reachable, wrong, and preferred over the network.
+ *
+ * A region with no stamp is not stale - it is one that was never downloaded,
+ * or was downloaded before this was recorded, and calling either out of date
+ * would send somebody re-downloading ground they already have.
+ */
+function archiveDrift(region, current) {
+  if (!region?.archive || !current) return '';
+  if (region.archive !== current) return 'moved';
+  if (Number(region.archiveDepth) !== Number(PROTOMAPS_MAXZOOM)) return 'recut';
+  return '';
 }
 
 /**
@@ -8820,7 +8861,7 @@ async function renderSavedOffline() {
     node.append(el('h3', { class: 'offline-heading', text: 'Map regions' }));
     for (const region of regions) {
       const held = stored.get(current);
-      node.append(el('div', { class: 'region' }, [
+      const row = el('div', { class: 'region' }, [
         el('div', { class: 'region-head' }, [
           el('b', { class: 'region-name-static', text: region.name }),
           el('button', {
@@ -8837,7 +8878,10 @@ async function renderSavedOffline() {
           text: `z${region.minZoom}–${region.maxZoom} · ${region.basemapName || 'no basemap recorded'}`
             + (held ? ` · ${held.tiles.toLocaleString()} tiles held` : ' · not downloaded'),
         }),
-      ]));
+      ]);
+      const drift = archiveDrift(region, current);
+      if (drift) row.append(staleRegionNotice(region, drift));
+      node.append(row);
     }
   }
 
@@ -8845,6 +8889,101 @@ async function renderSavedOffline() {
     node.append(el('h3', { class: 'offline-heading', text: 'Pictures' }));
     for (const shot of snapshots) node.append(snapshotRow(shot));
   }
+}
+
+/**
+ * The out-of-date banner on a downloaded region, with both ways out.
+ *
+ * Flagged rather than cleared automatically, which was a deliberate choice:
+ * the whole point of a download is having it where there is no signal, and
+ * deleting it on the user's behalf is the one action that cannot be undone in
+ * a car park with one bar. The stale tiles keep working until somebody says
+ * otherwise - they are a slightly older map, not a broken one.
+ */
+function staleRegionNotice(region, drift) {
+  const note = el('div', { class: 'region-stale' });
+  const status = el('span', { class: 'region-stale-status' });
+
+  note.append(el('p', {
+    class: 'region-stale-why',
+    text: drift === 'moved'
+      ? 'Downloaded from a map file this app no longer reads, so these tiles are '
+        + 'taking up space without being used.'
+      : 'The map has been re-cut since this was downloaded. These tiles still work '
+        + 'and are used before the network, so this ground stays as it was.',
+  }));
+
+
+  const again = el('button', {
+    class: 'button button-secondary button-small', type: 'button', text: 'Re-download',
+    onclick: async () => {
+      const archiveURL = PROTOMAPS_ARCHIVE;
+      if (!archiveURL) { status.textContent = 'No map archive is configured.'; return; }
+      again.disabled = true;
+      drop.disabled = true;
+      status.textContent = 'Downloading…';
+      try {
+        /*
+         * The old tiles go first, and that ordering is the point.
+         *
+         * A download only writes what it fetches, so a re-download over the
+         * same keys would leave anything the new archive does not answer for
+         * sitting there from the old one - a region half of one generation and
+         * half of another, which is worse than either.
+         */
+        const store = await openTileStore();
+        await store.remove?.(regionTileKeys(region));
+        const tiers = [];
+        for (let zoom = region.minZoom; zoom <= region.maxZoom; zoom += 1) {
+          tiers.push({ zoom, boxes: [region.bounds] });
+        }
+        const name = new URL(archiveURL, document.baseURI).href;
+        const result = await downloadArchiveTiles(tileKeysFor(tiers), {
+          archive: new PMTilesArchive(name),
+          store,
+          name,
+          onProgress: (done, failed) => {
+            status.textContent = `${done.toLocaleString()} saved${failed ? ` · ${failed} unavailable` : ''}`;
+          },
+        });
+        stampArchive(region, archiveURL);
+        status.textContent = `${result.done.toLocaleString()} tiles saved.`;
+        renderSavedOffline();
+      } catch (error) {
+        status.textContent = error.message || 'The download could not start.';
+        again.disabled = false;
+        drop.disabled = false;
+      }
+    },
+  });
+
+  const drop = el('button', {
+    class: 'button button-secondary button-small', type: 'button', text: 'Discard tiles',
+    onclick: async () => {
+      again.disabled = true;
+      drop.disabled = true;
+      status.textContent = 'Removing…';
+      try {
+        const store = await openTileStore();
+        const removed = await store.remove?.(regionTileKeys(region)) ?? 0;
+        /*
+         * The region itself stays, with its stamp cleared. It is a rectangle
+         * somebody drew and named; the tiles are what was thrown away, and
+         * taking the rectangle too would mean drawing it again to get it back.
+         */
+        state.offline.update(region.id, { archive: '', archiveDepth: 0 });
+        toast(`Removed ${removed.toLocaleString()} out-of-date tiles.`);
+        renderSavedOffline();
+      } catch (error) {
+        status.textContent = error.message || 'Those tiles could not be removed.';
+        again.disabled = false;
+        drop.disabled = false;
+      }
+    },
+  });
+
+  note.append(el('div', { class: 'region-controls' }, [again, drop, status]));
+  return note;
 }
 
 /** One saved picture: a thumbnail, where it was taken, and a way to be rid of it. */

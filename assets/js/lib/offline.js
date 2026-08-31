@@ -659,6 +659,24 @@ export function tileKeysFor(tiers) {
  * @param {{archive: object, store: object, name: string}} where
  * @returns {Promise<{done: number, failed: number, absent: number, cancelled: boolean}>}
  */
+/**
+ * Every store key one saved region holds, under the archive it came from.
+ *
+ * Keyed on `region.archive` and not on whichever archive the map is reading
+ * now, which is the whole point of recording it. A region downloaded from an
+ * archive that has since moved holds tiles under the old name; computing the
+ * keys from the current one would delete nothing, report success, and leave
+ * the space still occupied.
+ */
+export function regionTileKeys(region) {
+  if (!region?.archive || !region.bounds) return [];
+  const tiers = [];
+  const from = Math.min(region.minZoom, region.maxZoom);
+  const to = Math.max(region.minZoom, region.maxZoom);
+  for (let zoom = from; zoom <= to; zoom += 1) tiers.push({ zoom, boxes: [region.bounds] });
+  return tileKeysFor(tiers).map(({ z, x, y }) => tileKey(region.archive, z, x, y));
+}
+
 export async function downloadArchiveTiles(tiles, {
   archive, store, name, concurrency = 6, onProgress, signal,
 } = {}) {
