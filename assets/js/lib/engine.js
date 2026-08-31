@@ -461,6 +461,37 @@ export function labelExpression(label) {
   return ['coalesce', ...names.filter(Boolean).map((name) => ['get', name]), ''];
 }
 
+/**
+ * Whether a queried overlay has to ask its services again for this view.
+ *
+ * These are other people's servers, and one of them meters. The FAA's ArcGIS
+ * org shares a quota across every service on it, measured today at 6,006
+ * request units against a ceiling of 6,000 per minute - so the airspace layer
+ * can be emptied by asking too often, and the empty layer looks exactly like
+ * clear sky.
+ *
+ * A fetch covers a padded box, so panning a little stays inside what is
+ * already held and asks nothing. Four things force a new request:
+ *
+ *   nothing held yet;
+ *   what is held is older than `maxAgeMs` - these are live restrictions and a
+ *     stale answer is the wrong kind of confident;
+ *   the view has moved outside the box that was fetched;
+ *   the last answer was truncated, so what is held is a partial picture and
+ *     zooming into it would keep showing the gaps as open ground.
+ *
+ * Zooming in without any of those asks nothing: the service returns the same
+ * features whatever the zoom, so a box already covered is already answered.
+ */
+export function viewNeedsFetch(last, view, { now = Date.now(), maxAgeMs = 5 * 60 * 1000 } = {}) {
+  if (!last?.box || !view?.box) return true;
+  if (last.truncated) return true;
+  if (!(now - last.at < maxAgeMs)) return true;
+  const [west, south, east, north] = view.box;
+  const [heldWest, heldSouth, heldEast, heldNorth] = last.box;
+  return west < heldWest || south < heldSouth || east > heldEast || north > heldNorth;
+}
+
 /** Whether a style can carry text at all — i.e. whether it declares glyphs. */
 export const styleHasGlyphs = (style) => typeof style?.glyphs === 'string' && style.glyphs.length > 0;
 

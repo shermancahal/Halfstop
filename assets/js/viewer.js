@@ -16,7 +16,8 @@ import {
 } from './config.js';
 import {
   loadEngine, buildRasterStyle, hasMapboxToken, mapboxToken, overlayParts, overlayIdFromLayer, overlayRows,
-  overlayLinks, styleFor, styleHasGlyphs, styleFont, labelExpression, engineFor, schemaFor, sourceNoteFor,
+  overlayLinks, styleFor, styleHasGlyphs, styleFont, labelExpression, viewNeedsFetch,
+  engineFor, schemaFor, sourceNoteFor,
 } from './lib/engine.js';
 import { loadCatalog, findMap } from './lib/catalog.js';
 import { parseMapFile, linePositions } from './lib/parse.js';
@@ -5163,12 +5164,10 @@ function firstDataLayerId() {
  * national view of every fire in the country is both illegible and an unkind
  * thing to ask of somebody's server, so it has a minimum zoom.
  */
-function queryURL(template, map, where = '') {
-  const bounds = map.getBounds();
-  const box = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()]
-    .map((value) => value.toFixed(4)).join(',');
+function queryURL(template, box, where = '') {
+  const envelope = box.map((value) => value.toFixed(4)).join(',');
   return template
-    .replace('{bbox}', encodeURIComponent(box))
+    .replace('{bbox}', encodeURIComponent(envelope))
     /*
      * `1=1` when nobody asked for anything narrower, which is what every URL
      * in the config said literally before one of them needed a filter. A
@@ -5176,6 +5175,31 @@ function queryURL(template, map, where = '') {
      * the thirty-odd layers that do not use it.
      */
     .replace('{where}', encodeURIComponent(where || '1=1'));
+}
+
+/**
+ * What each queried overlay last asked for, so it need not ask again.
+ *
+ * Keyed by overlay id and cleared where it matters: a fresh source is an
+ * empty source, so `addQueryOverlay` drops the entry when it creates one.
+ * Tying invalidation to that rather than to a basemap change means a style
+ * swap, a layer toggled off and on, and anything else that rebuilds a source
+ * are all covered by the one rule, instead of three places that have to
+ * remember.
+ */
+const fetchedFor = new Map();
+
+/*
+ * The record cap every one of these URLs carries. Named once here because the
+ * "did this answer get cut off" test has to use the same number the request
+ * asked for, and two copies of it drift.
+ */
+const CAP = 300;
+
+/** The envelope one refresh asks about — padded, so a small pan stays inside. */
+function fetchBox(map) {
+  const bounds = map.getBounds();
+  return padBounds([bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()], 0.2);
 }
 
 async function refreshQueryOverlay(overlay) {
@@ -5187,11 +5211,25 @@ async function refreshQueryOverlay(overlay) {
   const empty = { type: 'FeatureCollection', features: [] };
   if ((state.map.getZoom?.() ?? 0) < minzoom) { source.setData(empty); return; }
 
-  if (points) { await refreshPointOverlay(overlay, source, empty); return; }
-  if (overlay.query.uses) { await refreshUseOverlay(overlay, source, empty); return; }
+  /*
+   * Ask only when the answer would differ.
+   *
+   * The view sits inside a box that was already fetched, recently, and
+   * completely - so the features are already on the source and the request
+   * would return them again. Skipping it is most of what keeps this layer
+   * inside the FAA's shared quota, which is a real ceiling we have hit.
+   */
+  const bounds = state.map.getBounds();
+  const view = { box: [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()] };
+  if (!viewNeedsFetch(fetchedFor.get(overlay.id), view)) return;
+  const box = fetchBox(state.map);
+  const held = (truncated) => fetchedFor.set(overlay.id, { box, at: Date.now(), truncated });
+
+  if (points) { await refreshPointOverlay(overlay, source, empty, box, held); return; }
+  if (overlay.query.uses) { await refreshUseOverlay(overlay, source, empty, box, held); return; }
 
   try {
-    const response = await fetch(queryURL(url, state.map));
+    const response = await fetch(queryURL(url, box));
     if (!response.ok) throw new Error(String(response.status));
     const data = await response.json();
     // An ArcGIS error is a 200 with an `error` object in it, which parses
@@ -5207,6 +5245,9 @@ async function refreshQueryOverlay(overlay) {
       throw new Error(`answered with ${data.type || typeof data}, not a FeatureCollection`);
     }
     source.setData(data);
+    // A full page is a partial picture: hold it, but ask again next time
+    // rather than treating the gaps as ground with nothing on it.
+    held((data.features?.length || 0) >= CAP || Boolean(data.exceededTransferLimit));
     // The same health counter the tile layers feed, so a queried layer that
     // stops answering gets the same "not responding" badge rather than
     // silently showing an empty map.
@@ -5238,7 +5279,7 @@ async function refreshQueryOverlay(overlay) {
  * Twelve requests is not free, which is why these layers carry a higher zoom
  * floor than the rest.
  */
-async function refreshUseOverlay(overlay, source, empty) {
+async function refreshUseOverlay(overlay, source, empty, box, held) {
   const { url, uses } = overlay.query;
 
   const answers = await Promise.all(uses.map(async (kind) => {
@@ -5264,7 +5305,7 @@ async function refreshUseOverlay(overlay, source, empty) {
        * spent on polygons that get thrown away, so a busy view would lose real
        * restrictions to make room for warnings that do not apply.
        */
-      const response = await fetch(queryURL(target, state.map, kind.where));
+      const response = await fetch(queryURL(target, box, kind.where));
       if (!response.ok) return [];
       const data = await response.json();
       // Thrown rather than returned as "no features", so the catch below says
@@ -5311,6 +5352,12 @@ async function refreshUseOverlay(overlay, source, empty) {
 
   const features = answered.flat();
   source.setData(features.length ? { type: 'FeatureCollection', features } : empty);
+  /*
+   * Truncated if any one sublayer filled its page, and also if any of them
+   * failed - both mean what is held is less than what is there, and this
+   * layer must not treat a partial answer as a settled one.
+   */
+  held(answered.length !== answers.length || answered.some((one) => one.length >= CAP));
   // Some sublayers failing is a quiet view; all of them failing returned above.
   noteLayerHealth(overlayLayerIds(overlay)[0], true);
 }
@@ -5327,12 +5374,12 @@ async function refreshUseOverlay(overlay, source, empty) {
  * One slow or missing sublayer must not empty the map, so each is settled
  * independently and whatever came back is drawn.
  */
-async function refreshPointOverlay(overlay, source, empty) {
+async function refreshPointOverlay(overlay, source, empty, box, held) {
   const { url, points } = overlay.query;
 
   const answers = await Promise.all(points.map(async (kind) => {
     try {
-      const target = queryURL(url.replace('{layer}', String(kind.layer)), state.map);
+      const target = queryURL(url.replace('{layer}', String(kind.layer)), box);
       const response = await fetch(target);
       if (!response.ok) return [];
       const data = await response.json();
@@ -5356,6 +5403,7 @@ async function refreshPointOverlay(overlay, source, empty) {
 
   const features = answers.flat();
   source.setData(features.length ? { type: 'FeatureCollection', features } : empty);
+  held(answers.some((list) => list.length >= CAP));
   noteLayerHealth(overlayLayerIds(overlay)[0], answers.some((list) => list.length > 0));
 
   // Kept for abmapOverlays(). "No icons" has three causes that look identical
@@ -5475,6 +5523,10 @@ function addQueryOverlay(overlay, opacity) {
       data: { type: 'FeatureCollection', features: [] },
       attribution: overlay.attribution || '',
     });
+    // A new source holds nothing, so nothing this overlay fetched before
+    // describes it. One rule covers a style swap, a layer switched off and on
+    // and anything else that rebuilds a source.
+    fetchedFor.delete(overlay.id);
   }
   if (!state.map.getLayer(fill)) {
     const [, amount] = opacityPaint('fill', opacity);
@@ -5698,6 +5750,7 @@ function addPointOverlay(overlay, layerId) {
       data: { type: 'FeatureCollection', features: [] },
       attribution: overlay.attribution || '',
     });
+    fetchedFor.delete(overlay.id);
   }
 
   if (!state.map.getLayer(layerId)) {

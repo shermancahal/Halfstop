@@ -16,7 +16,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildRasterStyle, overlayParts, overlayIdFromLayer, overlayLinks, overlayRows, styleFor, labelExpression } from '../assets/js/lib/engine.js';
+import {
+  buildRasterStyle, overlayParts, overlayIdFromLayer, overlayLinks, overlayRows, styleFor,
+  labelExpression, viewNeedsFetch,
+} from '../assets/js/lib/engine.js';
 import {
   BASEMAPS, OVERLAYS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN, STATE_NAMES, STATE_GROUP,
 } from '../assets/js/config.js';
@@ -1784,4 +1787,56 @@ test('overlays: a label may name every column its services call a name', () => {
         `${overlay.id}: the label and the sublayers disagree about the name columns`);
     }
   }
+});
+
+test('overlays: a view already covered asks the services nothing', () => {
+  /*
+   * The FAA's ArcGIS org meters a quota across every service on it, and this
+   * map hit it: 6,006 request units against a ceiling of 6,000 per minute,
+   * measured. A metered layer that gets emptied by asking too often is worse
+   * than a slow one, because an empty airspace layer reads as clear sky.
+   *
+   * So a fetch covers a padded box and a view inside it asks nothing. Every
+   * rule below is a way that shortcut could hide something real, which is why
+   * each is asserted rather than assumed.
+   */
+  const held = { box: [-80, 38, -79, 39], at: 1_000_000, truncated: false };
+  const inside = { box: [-79.6, 38.4, -79.4, 38.6] };
+  const now = held.at + 1000;
+
+  assert.equal(viewNeedsFetch(held, inside, { now }), false,
+    'a view inside what is already held needs no request');
+
+  // Nothing held, and the "held" of a source that was just rebuilt empty.
+  assert.equal(viewNeedsFetch(undefined, inside, { now }), true);
+  assert.equal(viewNeedsFetch(held, undefined, { now }), true);
+
+  // Outside in each direction on its own, so a sign error in one comparison
+  // cannot hide behind three that are right.
+  for (const [what, box] of [
+    ['west', [-80.5, 38.4, -79.4, 38.6]],
+    ['south', [-79.6, 37.5, -79.4, 38.6]],
+    ['east', [-79.6, 38.4, -78.5, 38.6]],
+    ['north', [-79.6, 38.4, -79.4, 39.5]],
+  ]) {
+    assert.equal(viewNeedsFetch(held, { box }, { now }), true,
+      `a view past the ${what} edge of what is held needs a request`);
+  }
+
+  /*
+   * Age. These are live restrictions - a temporary flight restriction that
+   * came up ten minutes ago is exactly the one worth seeing - so what is held
+   * goes stale on a clock rather than lasting the session.
+   */
+  assert.equal(viewNeedsFetch(held, inside, { now: held.at + 4 * 60 * 1000 }), false);
+  assert.equal(viewNeedsFetch(held, inside, { now: held.at + 6 * 60 * 1000 }), true);
+
+  /*
+   * And a truncated answer is never treated as settled. Every one of these
+   * URLs caps at 300 records; a full page means there was more, so what is
+   * held is a partial picture and its gaps look exactly like open ground.
+   * Zooming into it must ask again rather than trusting the holes.
+   */
+  assert.equal(viewNeedsFetch({ ...held, truncated: true }, inside, { now }), true,
+    'a capped answer is a partial one and must not be reused');
 });
