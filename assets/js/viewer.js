@@ -5144,11 +5144,19 @@ function firstDataLayerId() {
  * national view of every fire in the country is both illegible and an unkind
  * thing to ask of somebody's server, so it has a minimum zoom.
  */
-function queryURL(template, map) {
+function queryURL(template, map, where = '') {
   const bounds = map.getBounds();
   const box = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()]
     .map((value) => value.toFixed(4)).join(',');
-  return template.replace('{bbox}', encodeURIComponent(box));
+  return template
+    .replace('{bbox}', encodeURIComponent(box))
+    /*
+     * `1=1` when nobody asked for anything narrower, which is what every URL
+     * in the config said literally before one of them needed a filter. A
+     * template without the placeholder is left alone, so this is invisible to
+     * the thirty-odd layers that do not use it.
+     */
+    .replace('{where}', encodeURIComponent(where || '1=1'));
 }
 
 async function refreshQueryOverlay(overlay) {
@@ -5214,7 +5222,17 @@ async function refreshUseOverlay(overlay, source, empty) {
        * told apart by how serious each is.
        */
       const target = kind.url || url.replace('{layer}', String(kind.layer));
-      const response = await fetch(queryURL(target, state.map));
+      /*
+       * And a sublayer may narrow what it asks for.
+       *
+       * Special-use airspace is one service holding prohibitions and
+       * advisories together, and 46.6% of it is military operating areas that
+       * restrict nothing. Filtering on the server rather than after the fetch
+       * because the layer caps at 300 records: drop them here and the cap is
+       * spent on polygons that get thrown away, so a busy view would lose real
+       * restrictions to make room for warnings that do not apply.
+       */
+      const response = await fetch(queryURL(target, state.map, kind.where));
       if (!response.ok) return [];
       const data = await response.json();
       if (data.error || !Array.isArray(data.features)) return [];

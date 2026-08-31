@@ -1543,3 +1543,52 @@ test('shields: a county route is a circle, and an oval when the number is a frac
   assert.equal(shieldTextSize('county', 2), shieldTextSize('circle', 2),
     'two characters read the same in both, which is what keeps it looking round');
 });
+
+test('layers: a sublayer filter reaches the service that is meant to apply it', async () => {
+  /*
+   * The failure this exists for is silence.
+   *
+   * A `where` on a sublayer whose URL has no `{where}` placeholder is
+   * substituted into nothing: the request goes out unfiltered, the layer draws
+   * everything it was meant to exclude, and there is no error anywhere. That
+   * is the shape the MOA bug already had once — the config said in a comment
+   * that military operating areas were not drawn, while the query said
+   * `where=1=1` and drew 718 of them, 46.6% of the layer.
+   *
+   * Stated over every layer rather than the one that prompted it, so the next
+   * filter added to a URL that cannot carry one fails here instead of on the
+   * map.
+   */
+  const { OVERLAYS } = await import('../assets/js/config.js');
+
+  for (const layer of OVERLAYS) {
+    const uses = layer.query?.uses;
+    if (!uses) continue;
+    for (const kind of uses) {
+      if (!kind.where) continue;
+      const template = kind.url || layer.query.url || '';
+      assert.ok(template.includes('{where}'),
+        `${layer.id}/${kind.layer || kind.use} declares a filter its URL cannot carry`);
+    }
+  }
+});
+
+test('layers: military operating areas are excluded from the no-fly layer', async () => {
+  /*
+   * Pinned, because it is a decision rather than an implementation detail, and
+   * because it was a comment describing behaviour the code did not have for as
+   * long as the layer has existed.
+   *
+   * An MOA does not restrict civilian flight. Drawing one in the red this
+   * layer reserves for prohibited airspace is not a cosmetic problem: it is
+   * the map saying "do not fly here" about somewhere you may fly.
+   */
+  const { OVERLAYS } = await import('../assets/js/config.js');
+  const airspace = OVERLAYS.find((layer) => layer.id === 'faa-restrictions');
+  assert.ok(airspace, 'the restrictions layer is gone');
+
+  const sua = airspace.query.uses.find((kind) => kind.layer === 'Special_Use_Airspace');
+  assert.ok(sua, 'special-use airspace is no longer a sublayer of the restrictions layer');
+  assert.match(sua.where || '', /TYPE_CODE\s*<>\s*'MOA'/,
+    'the MOA exclusion is missing, and the comment above it says it is there');
+});

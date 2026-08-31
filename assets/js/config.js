@@ -689,11 +689,23 @@ export const OVERLAYS = [
      * overlap each other and everything else, and a flat fill stacked twice
      * reads as a third colour that means nothing.
      *
-     * MOAs are deliberately not here. A military operating area does not
-     * restrict civilian flight - it is an advisory - and is generally based
-     * above 1,000 AGL, which is 600 feet above anything this map's users are
-     * flying. Drawing them would be filling the screen with warnings that do
-     * not apply.
+     * MOAs are excluded, and until now that was only a comment.
+     *
+     * A military operating area does not restrict civilian flight - it is an
+     * advisory, generally based above 1,000 AGL, which is 600 feet above
+     * anything this map's users are flying. This paragraph has said so since
+     * the layer was written, while the query said `where=1=1` and drew them
+     * anyway, in the red reserved for a prohibition.
+     *
+     * Measured, because the size of it is the argument: MOAs are 718 of the
+     * 1,542 features in that service - 46.6% of everything the layer draws.
+     * Not a stray polygon; half the warnings on screen were ones that do not
+     * apply. Counted with tools/probe-service.mjs.
+     *
+     * Alert (39) and Warning (212) areas are advisories too, and are still
+     * drawn in the No-fly red. That is a judgement about what this map should
+     * say rather than an oversight, and it is written here so the next reader
+     * meets it as a decision.
      */
     legendNote: 'Standing and scheduled restrictions only. Same-day TFRs — fires, VIP '
       + 'movements — are NOTAMs and are not in this layer; use the link on any feature to '
@@ -708,11 +720,16 @@ export const OVERLAYS = [
        * `url` instead - the sublayer machinery takes either.
        */
       url: 'https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/{layer}/FeatureServer/0/query'
-        + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
+        + '?where={where}&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
         + '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true'
         + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=300&f=geojson',
       uses: [
-        { layer: 'Special_Use_Airspace', use: 'Prohibited or restricted airspace', tag: { severity: 'No fly' } },
+        {
+          layer: 'Special_Use_Airspace',
+          use: 'Prohibited or restricted airspace',
+          tag: { severity: 'No fly' },
+          where: "TYPE_CODE <> 'MOA'",
+        },
         { layer: 'National_Defense_Airspace_TFR_Areas', use: 'National defence area', tag: { severity: 'No fly' } },
         // A stadium TFR is real but not permanent: it runs from an hour before
         // an event to an hour after, for venues seating 30,000 or more. Red,
@@ -726,7 +743,7 @@ export const OVERLAYS = [
       fields: {
         severity: { label: 'Status' },
         use: { label: 'Kind' },
-        LOCAL_TYPE: { label: 'Type' },
+        TYPE_CODE: { label: 'Type' },
         UPPER_VAL: { label: 'Ceiling', suffix: ' ft' },
         LOWER_VAL: { label: 'Floor', suffix: ' ft' },
         WKHR_CODE: { label: 'Hours' },
