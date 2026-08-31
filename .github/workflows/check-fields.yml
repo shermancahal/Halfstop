@@ -1,0 +1,59 @@
+name: Check the fields a layer reads
+
+# Does every column the config reads exist on the service it reads it from?
+#
+# `LOCAL_TYPE: { label: 'Type' }` sat in the airspace layer for as long as that
+# layer existed. The service has no such column, so the row never rendered, and
+# a row that never renders looks exactly like a feature with nothing to say.
+# Found by hand, one layer at a time; this asks all of them at once.
+#
+# Separate from `check-layers` deliberately. That reports on other people's
+# uptime and must never fail a deploy over it. This reports on our own claims,
+# so it is allowed to fail.
+
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: 'One layer id, or blank for all of them.'
+        required: false
+        type: string
+  schedule:
+    # Weekly. A service can drop or rename a column long after we integrated
+    # it, and the symptom is a row quietly going blank - which nobody reports,
+    # because there is nothing to see.
+    - cron: '17 8 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  fields:
+    name: Compare the config against the services
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Ask every service what it holds
+        id: check
+        run: |
+          set -o pipefail
+          if [ -n "${{ inputs.only }}" ]; then
+            node tools/check-fields.mjs --only "${{ inputs.only }}" 2>&1 | tee report.txt
+          else
+            node tools/check-fields.mjs 2>&1 | tee report.txt
+          fi
+
+      - name: Put the answer in the summary
+        if: always()
+        run: |
+          {
+            echo "### Fields the config reads"
+            echo ""
+            echo '```'
+            cat report.txt || echo "nothing was written"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
