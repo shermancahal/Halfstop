@@ -1592,3 +1592,51 @@ test('layers: military operating areas are excluded from the no-fly layer', asyn
   assert.match(sua.where || '', /TYPE_CODE\s*<>\s*'MOA'/,
     'the MOA exclusion is missing, and the comment above it says it is there');
 });
+
+test('byways: every let-bound variable is a name GL will accept', async () => {
+  /*
+   * This one shipped, and shipped past a full green test run.
+   *
+   * `let` variable names must be alphanumeric or underscore. A hyphen — which
+   * is the convention for every other id in this codebase, since they are DOM
+   * and image ids — makes GL reject the *whole style* at compile time, so the
+   * map does not draw at all. Six deploys failed on `abmap-reflen` while
+   * `npm test` stayed green, because the only thing that checks expression
+   * validity is `validate:style`, and that needs a dependency this repo does
+   * not install locally.
+   *
+   * So the rule is stated here, where it runs on every commit. It cannot
+   * replace the real validator — it knows one rule — but it covers the class
+   * that has now cost a day of deploys, and it costs nothing.
+   */
+  const { bywaysStyle, PROTOMAPS_SCHEMA } = await import('../assets/js/lib/byways-style.js');
+
+  const LEGAL = /^[A-Za-z0-9_]+$/;
+  const bad = [];
+
+  const walk = (node, where) => {
+    if (!Array.isArray(node)) return;
+    if (node[0] === 'let') {
+      // ['let', name, value, name, value, …, body] — the names are every
+      // other argument from index 1, stopping before the body.
+      for (let i = 1; i + 1 < node.length; i += 2) {
+        const name = node[i];
+        if (typeof name !== 'string' || !LEGAL.test(name)) bad.push(`${where}: ${JSON.stringify(name)}`);
+      }
+    }
+    for (const child of node) walk(child, where);
+  };
+
+  for (const [label, style] of [
+    ['mapbox', bywaysStyle('pk.test')],
+    ['protomaps', bywaysStyle('pk.test', { schema: PROTOMAPS_SCHEMA, archive: 'https://x/y.pmtiles', maxzoom: 14 })],
+  ]) {
+    for (const layer of style.layers) {
+      for (const group of ['layout', 'paint', 'filter']) {
+        walk(layer[group], `${label}/${layer.id}/${group}`);
+      }
+    }
+  }
+
+  assert.deepEqual(bad, [], 'GL will refuse to compile the whole style for these');
+});

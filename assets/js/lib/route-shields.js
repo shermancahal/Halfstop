@@ -988,7 +988,16 @@ export function shieldTextOffset(design, length) {
  * The nationals are drawn rather than loaded from a blank, so their numbers sit
  * where those drawings put them — the interstate's below its red crown.
  */
-const REF_LENGTH = 'abmap-reflen';
+/*
+ * Underscore, not a hyphen.
+ *
+ * GL rejects a `let` whose variable name is not alphanumeric-or-underscore,
+ * and it rejects it at style-compile time - so the whole style fails to load
+ * rather than this one expression misbehaving. Written as `abmap-reflen` to
+ * match every other id in this file, which are DOM and image ids where a
+ * hyphen is the convention. This one is not either of those.
+ */
+const REF_LENGTH = 'abmap_reflen';
 const BOUND = ['var', REF_LENGTH];
 
 export function shieldTextSizeExpression(state = '', length = 2, refLength = null, { network = '' } = {}) {
