@@ -266,9 +266,16 @@ test('reconcile: the road-name tally shows the names, and shows the name and not
       name: PROTOMAPS_SCHEMA.layers.road,
       features: 2,
       keys: [field, nameField],
-      values: ['path', 'Angel Windows Trail #218', 'track'],
+      /*
+       * Deliberately arranged so no value sits at the index of the key that
+       * points at it: with the name at values[2] and the name key at slot 1,
+       * a loop that reads the key index where the value index belongs picks
+       * up `track` and the test sees it. An earlier fixture had them lined
+       * up, and the mutation it was written to catch passed.
+       */
+      values: ['path', 'track', 'Angel Windows Trail #218'],
       // kind_detail=path, name=Angel Windows Trail #218 — then an unnamed track.
-      tags: [[0, 0, 1, 1], [0, 2]],
+      tags: [[0, 0, 1, 2], [0, 1]],
       seen: new Map([[field, new Set(['path', 'track'])]]),
     }]);
   } finally {
