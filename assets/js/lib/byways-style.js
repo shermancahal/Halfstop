@@ -66,6 +66,20 @@ export const MAPBOX_SCHEMA = {
   font: ['DIN Pro Regular', 'Arial Unicode MS Regular'],
   fontBold: ['DIN Pro Bold', 'Arial Unicode MS Bold'],
   /*
+   * And the server those names have to come from, beside them.
+   *
+   * These two facts are one fact. Keeping the URL in the style builder and the
+   * names here let a layer added later ask for Mapbox's stack from Protomaps'
+   * server, which 404s every glyph range - and a tile whose glyphs cannot be
+   * fetched fails to parse *entirely*, taking its fill and line buckets with
+   * it. That is what emptied every queried overlay on the vector basemap while
+   * the identical data drew on every raster one.
+   *
+   * Stated as a function of the key so there is one expression of it, which
+   * `styleFont` matches a live style against to answer "whose fonts are these".
+   */
+  glyphs: (key) => `https://api.mapbox.com/fonts/v1/mapbox/{fontstack}/{range}.pbf?access_token=${key}`,
+  /*
    * What a tap on the basemap can report, keyed by source layer.
    *
    * The identify card reads whatever is rendered under the finger, and it can
@@ -278,6 +292,8 @@ export const PROTOMAPS_SCHEMA = {
    */
   font: ['Noto Sans Regular'],
   fontBold: ['Noto Sans Medium'],
+  /** Where those names exist. See the note on the Mapbox schema's glyphs. */
+  glyphs: () => 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
   /*
    * The same, in Protomaps' vocabulary, read from real tiles.
    *
@@ -884,9 +900,7 @@ function buildStyle(token, schema, { archive, maxzoom }) {
      * this style uses is a shield drawn on a canvas at runtime and registered
      * by id, so there is nothing for a sprite sheet to supply.
      */
-    glyphs: schema.id === 'mapbox'
-      ? `https://api.mapbox.com/fonts/v1/mapbox/{fontstack}/{range}.pbf?access_token=${key}`
-      : 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
+    glyphs: schema.glyphs(key),
     ...(schema.id === 'mapbox'
       ? { sprite: `https://api.mapbox.com/styles/v1/mapbox/streets-v12/sprite?access_token=${key}` }
       : {}),

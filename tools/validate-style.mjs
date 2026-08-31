@@ -15,7 +15,7 @@
 import { createRequire } from 'node:module';
 import { bywaysStyle, shieldLayerUpdates, PROTOMAPS_SCHEMA } from '../assets/js/lib/byways-style.js';
 import { runtimeLayers, runtimeSources } from '../assets/js/lib/runtime-layers.js';
-import { buildRasterStyle, styleHasGlyphs } from '../assets/js/lib/engine.js';
+import { buildRasterStyle, styleHasGlyphs, styleFont } from '../assets/js/lib/engine.js';
 import { OVERLAYS, STATE_GROUP } from '../assets/js/config.js';
 
 const require = createRequire(import.meta.url);
@@ -56,7 +56,7 @@ const withRuntime = (base, labels) => ({
       name, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
     ])),
   },
-  layers: [...base.layers, ...runtimeLayers({ labels })],
+  layers: [...base.layers, ...runtimeLayers({ labels, font: styleFont(base) })],
 });
 
 const rasterBasemap = {

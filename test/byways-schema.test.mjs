@@ -17,11 +17,13 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 import { bywaysStyle, MAPBOX_SCHEMA, PROTOMAPS_SCHEMA } from '../assets/js/lib/byways-style.js';
+import { runtimeLayers } from '../assets/js/lib/runtime-layers.js';
+import { styleFont } from '../assets/js/lib/engine.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SNAPSHOT = path.join(HERE, 'fixtures', 'byways-style.snapshot.json');
@@ -978,5 +980,103 @@ test('byways: a golf course is not painted as parkland', () => {
   for (const [what, schema] of [['mapbox', MAPBOX_SCHEMA], ['protomaps', PROTOMAPS_SCHEMA]]) {
     const drawn = Object.values(schema.landuse || {}).flat();
     assert.ok(!drawn.includes('golf_course'), `${what}: a golf course is drawn as land the map invites you onto`);
+  }
+});
+
+test('byways: a layer the app adds takes its font from the style it is added to', () => {
+  /*
+   * The seam again, one file further out, and this time it emptied whole
+   * layers rather than dropping their labels.
+   *
+   * The check above asserts this property for the layers the *style builder*
+   * writes, and reads only byways-style.js. Everything the viewer adds
+   * afterwards - queried overlays, storm tracks, light bearings - sat outside
+   * that scope. Two of those symbol layers named 'DIN Offc Pro Medium', which
+   * is not even the Mapbox schema's stack, and three named no font at all,
+   * which means GL's default. Protomaps' font server has none of the three.
+   *
+   * Missing labels is not the damage. A GeoJSON tile is parsed on the worker,
+   * and that parse builds every layer's bucket, symbol layers included, glyphs
+   * and all. A glyph range that 404s rejects the parse, so the tile ends in
+   * state `errored` and its fill and line buckets are never built either.
+   * Measured on the live site over Charleston: 32 features handed to the
+   * source, 21 of 22 tiles errored, zero buckets, nothing drawn, and no error
+   * raised anywhere a reader or the console could see it. The identical data
+   * drew 264 features on every raster basemap, because those use Mapbox's
+   * glyph server, which does have 'DIN Offc Pro Medium'.
+   *
+   * So: whatever font a runtime layer carries, it must be the one the style's
+   * own glyph server serves.
+   */
+  for (const [what, schema] of [['mapbox', MAPBOX_SCHEMA], ['protomaps', PROTOMAPS_SCHEMA]]) {
+    const layers = runtimeLayers({ labels: true, font: schema.font });
+    const symbols = layers.filter((layer) => layer.layout?.['text-field'] !== undefined);
+    assert.ok(symbols.length >= 3, `${what}: expected the labelled runtime layers to be present`);
+    for (const layer of symbols) {
+      assert.deepEqual(layer.layout['text-font'], schema.font,
+        `${what}: ${layer.id} does not use the stack ${schema.id}'s glyph server serves`);
+    }
+  }
+
+  /*
+   * And none of them carries one of its own. A layer that names a font is a
+   * layer that can disagree with its style, which is the entire bug; the
+   * stamp above is only trustworthy if it is the sole source.
+   */
+  for (const layer of runtimeLayers({ labels: true })) {
+    assert.equal(layer.layout?.['text-font'], undefined,
+      `${layer.id} names a font of its own rather than taking the style's`);
+  }
+});
+
+test('byways: styleFont answers for the style in hand, not for a basemap id', () => {
+  /*
+   * The discriminator. Deriving this from which basemap is selected would be a
+   * second copy of the mapping that already exists, and this file has caught
+   * that shape of mistake four times. The style carries its own glyphs URL;
+   * that URL is the fact.
+   */
+  assert.deepEqual(styleFont(protomapsStyle()), PROTOMAPS_SCHEMA.font);
+  assert.deepEqual(styleFont(protomapsStyle(), { bold: true }), PROTOMAPS_SCHEMA.fontBold);
+  assert.deepEqual(styleFont(bywaysStyle('tok')), MAPBOX_SCHEMA.font);
+  assert.deepEqual(styleFont(bywaysStyle('tok'), { bold: true }), MAPBOX_SCHEMA.fontBold);
+
+  // A raster basemap is given Mapbox's glyph server by buildRasterStyle, so it
+  // gets Mapbox's names; a style with no glyphs at all cannot carry text, and
+  // the answer is unused rather than wrong.
+  assert.deepEqual(styleFont({ glyphs: MAPBOX_SCHEMA.glyphs('pk.test') }), MAPBOX_SCHEMA.font);
+  assert.deepEqual(styleFont({}), MAPBOX_SCHEMA.font);
+});
+
+test('byways: no font name is written inline anywhere the app ships', () => {
+  /*
+   * The source-text half, widened.
+   *
+   * The version of this above reads byways-style.js and nothing else, so a
+   * font inlined in viewer.js or runtime-layers.js was outside the property it
+   * claimed to enforce - and both of those files had one. Scoping a rule to
+   * the file where it was first broken is how the same fault comes back
+   * somewhere else, which is exactly what happened.
+   *
+   * Stated over every file the browser loads: a `text-font` may be an
+   * expression or a call, never a literal list of names.
+   */
+  const dir = path.join(HERE, '..', 'assets', 'js');
+  const files = [];
+  const walk = (at) => {
+    for (const entry of readdirSync(at, { withFileTypes: true })) {
+      const full = path.join(at, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith('.js')) files.push(full);
+    }
+  };
+  walk(dir);
+  assert.ok(files.length >= 5, 'expected to find the app source; this check needs its new path');
+
+  for (const file of files) {
+    const source = readFileSync(file, 'utf8');
+    const inline = /['"]text-font['"]\s*:\s*\[\s*['"]/.exec(source);
+    assert.equal(inline, null,
+      `${path.relative(dir, file)} writes a font stack inline: ${inline?.[0]}`);
   }
 });

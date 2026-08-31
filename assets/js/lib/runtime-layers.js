@@ -43,7 +43,7 @@ export function runtimeSources() {
  * geometry sits above the basemap, and the sky bearings go over everything
  * because the whole point is to read them against the terrain.
  */
-export function runtimeLayers({ labels = true } = {}) {
+export function runtimeLayers({ labels = true, font } = {}) {
   const layers = [
   {
     id: 'storm-area', type: 'fill', source: STORM_SOURCE,
@@ -147,7 +147,6 @@ export function runtimeLayers({ labels = true } = {}) {
     layout: {
       'text-field': ['get', 'label'],
       'text-size': 10,
-      'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Regular'],
       'text-allow-overlap': false,
       'text-padding': 6,
     },
@@ -292,5 +291,27 @@ export function runtimeLayers({ labels = true } = {}) {
    * left out instead of failing. The lines and tracks still draw; only their
    * labels are missing, and the panel lists the same bearings in words.
    */
-  return labels ? layers : layers.filter((layer) => !layer.layout?.['text-field']);
+  const carried = labels ? layers : layers.filter((layer) => !layer.layout?.['text-field']);
+
+  /*
+   * And the font is stamped on here, in one place, rather than written on each
+   * layer.
+   *
+   * Three of the five symbol layers below named no font at all, which is not
+   * neutral: GL then asks for its default stack, and Protomaps' font server
+   * has that no more than it has Mapbox's. The two that did name one named
+   * Mapbox's. Every one of them 404s on the vector basemap, and a glyph range
+   * that 404s rejects the whole tile parse - so `light-directions` sat at
+   * loaded=false in every report for a day, and this was read as a label
+   * problem rather than as the source never loading.
+   *
+   * Doing it at the single exit that already knows which layers carry text
+   * means a symbol layer added below cannot forget, and cannot disagree with
+   * the style it is added to.
+   */
+  if (!font) return carried;
+  return carried.map((layer) => (layer.layout?.['text-field'] === undefined ? layer : {
+    ...layer,
+    layout: { ...layer.layout, 'text-font': [...font] },
+  }));
 }

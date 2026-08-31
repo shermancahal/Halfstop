@@ -16,7 +16,7 @@ import {
 } from './config.js';
 import {
   loadEngine, buildRasterStyle, hasMapboxToken, mapboxToken, overlayParts, overlayIdFromLayer, overlayRows,
-  overlayLinks, styleFor, styleHasGlyphs, engineFor, schemaFor, sourceNoteFor,
+  overlayLinks, styleFor, styleHasGlyphs, styleFont, engineFor, schemaFor, sourceNoteFor,
 } from './lib/engine.js';
 import { loadCatalog, findMap } from './lib/catalog.js';
 import { parseMapFile, linePositions } from './lib/parse.js';
@@ -5665,7 +5665,7 @@ function addQueryOverlay(overlay, opacity) {
       source: fill,
       layout: {
         'text-field': ['coalesce', ['get', overlay.query.label], ''],
-        'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Regular'],
+        'text-font': styleFont(state.map.getStyle()),
         'text-size': ['interpolate', ['linear'], ['zoom'], 8, 10, 13, 12, 16, 13],
         'symbol-placement': (road || trail) ? 'line' : 'point',
         'text-max-width': (road || trail) ? 20 : 8,
@@ -5718,7 +5718,7 @@ function addPointOverlay(overlay, layerId) {
         // The name only once there is room for it. At the zoom this layer
         // starts, a label on every site is the wall of text this replaced.
         'text-field': ['step', ['zoom'], '', 12, ['get', 'name']],
-        'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Regular'],
+        'text-font': styleFont(state.map.getStyle()),
         'text-size': 11,
         'text-offset': [0, 1.1],
         'text-anchor': 'top',
@@ -5843,7 +5843,7 @@ function addAppLayers() {
   // them. Adding them is all that is left here — except for whether the style
   // can carry text at all, which decides if the label layers come with them.
   const labels = styleHasGlyphs(state.map.getStyle());
-  for (const layer of runtimeLayers({ labels })) {
+  for (const layer of runtimeLayers({ labels, font: styleFont(state.map.getStyle()) })) {
     if (!state.map.getLayer(layer.id)) state.map.addLayer(layer);
   }
 }

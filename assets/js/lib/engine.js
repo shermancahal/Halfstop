@@ -445,6 +445,39 @@ export function buildRasterStyle(basemap, overlays = []) {
 /** Whether a style can carry text at all — i.e. whether it declares glyphs. */
 export const styleHasGlyphs = (style) => typeof style?.glyphs === 'string' && style.glyphs.length > 0;
 
+/**
+ * The font stack a layer added on top of this style is allowed to name.
+ *
+ * `text-font` names fonts the style's own `glyphs` URL has to be able to
+ * serve, and the two foundations point at different servers. The basemap's own
+ * layers have taken their fonts from the schema since the Protomaps port; the
+ * layers this app adds afterwards — overlays, storm tracks, light bearings —
+ * did not, and three of them named no font at all, which means GL's default
+ * stack. Protomaps has neither.
+ *
+ * The consequence is worse than missing labels, which is what it looked like
+ * for a day. A GeoJSON tile is parsed on the worker, and that parse builds
+ * every layer's bucket including the symbol ones, glyphs and all. A glyph
+ * range that 404s rejects the whole parse, so the tile ends up in state
+ * `errored` and its fill and line buckets are never built either. Measured
+ * over Charleston: 21 of 22 tiles errored, zero buckets, and the map raised
+ * no error anyone could see.
+ *
+ * Derived from the style in hand rather than from the basemap id, so this
+ * cannot fall out of step with which style is actually loaded — which is the
+ * mistake, in this exact place, that it exists to end.
+ */
+export function styleFont(style, { bold = false } = {}) {
+  const glyphs = String(style?.glyphs || '');
+  // Everything before {fontstack} identifies the server without the key.
+  const owner = [MAPBOX_SCHEMA, PROTOMAPS_SCHEMA]
+    .find((schema) => glyphs.startsWith(schema.glyphs('').split('{')[0]));
+  // A style with no glyphs cannot carry text at all, so the answer is unused;
+  // Mapbox is the right default because that is what buildRasterStyle sets.
+  const schema = owner || MAPBOX_SCHEMA;
+  return [...(bold ? schema.fontBold : schema.font)];
+}
+
 
 /**
  * The identify rows for one overlay feature, in the order the catalogue asked.
