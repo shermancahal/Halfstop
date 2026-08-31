@@ -962,5 +962,26 @@
     "find": "\"properties\"\\s*:\\s*\\{[^}]{0,400}",
     "note": "Three questions in one probe, over New River Gorge - reported as showing nothing, and a national park rather than wilderness, so the layer just shipped cannot cover it. Does this FeatureServer answer f=geojson at all; does it hold that park; and what are the property NAMES in GeoJSON output. The last is the trap: the existing nps:boundary probe asked f=json and got UNIT_NAME in upper case, and the wilderness service answered upper case to its own description and lower case in GeoJSON. Reading the case off the wrong format is how a label renders nothing and looks like a feature with no name.",
     "url": "https://services1.arcgis.com/fBc8EJBxQRMcHlei/arcgis/rest/services/NPS_Land_Resources_Division_Boundary_and_Tract_Data_Service/FeatureServer/2/query?where=1%3D1&geometry=-81.2,37.8,-80.9,38.1&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=3&f=geojson"
+  },
+  {
+    "id": "faa:special_use_ai-fields",
+    "expect": "data",
+    "find": "\"name\"\\s*:\\s*\"[A-Z_]{2,}\"",
+    "note": "Narrowing outFields from * needs each sublayer's own column list, not one list for all three. ArcGIS refuses a query naming a column the layer does not have - with 'Cannot perform query. Invalid query parameters.', the same sentence it uses for a malformed request - and these three do not agree: WKHR_CODE is on the national defence layer and not on special-use, which this repo established the hard way. So: ask each one what it has before asking any of them for less.",
+    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Special_Use_Airspace/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "faa:national_defen-fields",
+    "expect": "data",
+    "find": "\"name\"\\s*:\\s*\"[A-Z_]{2,}\"",
+    "note": "Narrowing outFields from * needs each sublayer's own column list, not one list for all three. ArcGIS refuses a query naming a column the layer does not have - with 'Cannot perform query. Invalid query parameters.', the same sentence it uses for a malformed request - and these three do not agree: WKHR_CODE is on the national defence layer and not on special-use, which this repo established the hard way. So: ask each one what it has before asking any of them for less.",
+    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/National_Defense_Airspace_TFR_Areas/FeatureServer/0?f=pjson"
+  },
+  {
+    "id": "faa:stadiums-fields",
+    "expect": "data",
+    "find": "\"name\"\\s*:\\s*\"[A-Z_]{2,}\"",
+    "note": "Narrowing outFields from * needs each sublayer's own column list, not one list for all three. ArcGIS refuses a query naming a column the layer does not have - with 'Cannot perform query. Invalid query parameters.', the same sentence it uses for a malformed request - and these three do not agree: WKHR_CODE is on the national defence layer and not on special-use, which this repo established the hard way. So: ask each one what it has before asking any of them for less.",
+    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Stadiums/FeatureServer/0?f=pjson"
   }
 ]
