@@ -936,13 +936,6 @@
     "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_Wilderness_01/MapServer/0/query?where=1%3D1&geometry=-79.44,38.93,-79.24,39.13&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=1&f=geojson"
   },
   {
-    "id": "nps:folder",
-    "expect": "data",
-    "find": "\"services\"\\s*:\\s*\\[[^\\]]{0,900}",
-    "note": "What that host actually publishes. My NPS_Land_Resources_Division_... guess answered 404 Service not found - I said I would read the folder rather than guess an index and then guessed the service name instead. This asks the folder, which is how the USFS wilderness service was confirmed.",
-    "url": "https://mapservices.nps.gov/arcgis/rest/services/LandResourcesDivision?f=pjson"
-  },
-  {
     "id": "nps:root",
     "expect": "data",
     "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,600}",
@@ -962,5 +955,12 @@
     "find": "\"features\"\\s*:\\s*\\[\\s*\\{",
     "note": "The same box through the app's own WHERE. If this finds a feature the layer should be drawing one over Dolly Sods and is not, which is a bug; if it comes back 'no features' while the probe above finds one, the difference is exactly the MOA exclusion and the map is behaving as designed. Asking both is the only way to tell those apart - one query alone cannot.",
     "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Special_Use_Airspace/FeatureServer/0/query?geometry=-79.44,38.93,-79.24,39.13&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=10&f=geojson&where=TYPE_CODE%20%3C%3E%20%27MOA%27"
+  },
+  {
+    "id": "nps:newriver-geojson",
+    "expect": "data",
+    "find": "\"properties\"\\s*:\\s*\\{[^}]{0,400}",
+    "note": "Three questions in one probe, over New River Gorge - reported as showing nothing, and a national park rather than wilderness, so the layer just shipped cannot cover it. Does this FeatureServer answer f=geojson at all; does it hold that park; and what are the property NAMES in GeoJSON output. The last is the trap: the existing nps:boundary probe asked f=json and got UNIT_NAME in upper case, and the wilderness service answered upper case to its own description and lower case in GeoJSON. Reading the case off the wrong format is how a label renders nothing and looks like a feature with no name.",
+    "url": "https://services1.arcgis.com/fBc8EJBxQRMcHlei/arcgis/rest/services/NPS_Land_Resources_Division_Boundary_and_Tract_Data_Service/FeatureServer/2/query?where=1%3D1&geometry=-81.2,37.8,-80.9,38.1&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=3&f=geojson"
   }
 ]
