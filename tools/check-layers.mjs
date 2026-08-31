@@ -445,7 +445,23 @@ async function probe(entry) {
              * formed and holding nothing. Existence, shape and returning data
              * are three questions; only the third one puts a layer on a map.
              */
-            : emptyFeatures(decoded) ? 'no features' : 'ok')
+            : emptyFeatures(decoded) ? 'no features'
+            /*
+             * And a data probe that names what it expects has to find it.
+             *
+             * `find` decided only which text got printed here, while the
+             * `page` branch above has always treated it as the assertion it
+             * reads like. So a candidate written to assert something - "this
+             * box holds no special-use airspace" - was scored purely on the
+             * service answering at all, and reported as expected while its
+             * own body said the opposite. I wrote that candidate and read the
+             * green line.
+             *
+             * Same verdict name as the page branch, for the same meaning: it
+             * answered, and it did not say the thing.
+             */
+            : (entry.find && !findIn(decoded, entry.find).length) ? 'page did not say it'
+            : 'ok')
           : !isImage ? 'not an image'
           // A tile a browser is not allowed to read is a tile that does not
           // draw, however well it downloads from a script. Worth failing on:

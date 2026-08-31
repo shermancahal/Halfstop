@@ -929,13 +929,6 @@
     "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_Wilderness_01/MapServer/0/query?where=1%3D1&geometry=-79.44,38.93,-79.24,39.13&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=5&f=geojson"
   },
   {
-    "id": "wild:sua-dollysods",
-    "expect": "data",
-    "find": "\"features\"\\s*:\\s*\\[\\s*\\]",
-    "note": "The control, and it passes by being EMPTY. The special-use airspace service is one of the three this layer does query, and if it holds nothing over Dolly Sods then the layer drawing nothing there is correct behaviour on the wrong data rather than a broken request. Asserting the empty collection makes that a measurement instead of an assumption - and it fails loudly if the FAA ever does put something there.",
-    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Special_Use_Airspace/FeatureServer/0/query?where=1%3D1&geometry=-79.44,38.93,-79.24,39.13&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=5&f=geojson"
-  },
-  {
     "id": "wild:usfs-props",
     "expect": "data",
     "find": "\"properties\"\\s*:\\s*\\{[^}]{0,400}",
@@ -955,5 +948,19 @@
     "find": "\"folders\"\\s*:\\s*\\[[^\\]]{0,600}",
     "note": "And the folder list itself, in case LandResourcesDivision is not the folder name either. Two probes because 'the folder is empty' and 'the folder does not exist' are different answers and the first one alone cannot tell them apart.",
     "url": "https://mapservices.nps.gov/arcgis/rest/services?f=pjson"
+  },
+  {
+    "id": "wild:sua-what",
+    "expect": "data",
+    "find": "\"(?:TYPE_CODE|NAME|LOCAL_TYPE)\"\\s*:\\s*\"[^\"]{0,60}\"",
+    "note": "What the FAA actually holds over Dolly Sods, by name and type. The probe this replaces asserted the box was EMPTY and the service returned a feature - and the harness scored it as expected, because `find` was only ever a print filter on a data probe. So the claim 'nothing there' rested on nothing. TYPE_CODE decides whether the app is right to hide it: the layer excludes MOAs deliberately, because a military operating area restricts no civilian flight and is generally based above 1,000 AGL.",
+    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Special_Use_Airspace/FeatureServer/0/query?geometry=-79.44,38.93,-79.24,39.13&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=10&f=geojson&where=1%3D1"
+  },
+  {
+    "id": "wild:sua-asapp",
+    "expect": "data",
+    "find": "\"features\"\\s*:\\s*\\[\\s*\\{",
+    "note": "The same box through the app's own WHERE. If this finds a feature the layer should be drawing one over Dolly Sods and is not, which is a bug; if it comes back 'no features' while the probe above finds one, the difference is exactly the MOA exclusion and the map is behaving as designed. Asking both is the only way to tell those apart - one query alone cannot.",
+    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Special_Use_Airspace/FeatureServer/0/query?geometry=-79.44,38.93,-79.24,39.13&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=10&f=geojson&where=TYPE_CODE%20%3C%3E%20%27MOA%27"
   }
 ]
