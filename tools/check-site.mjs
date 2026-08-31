@@ -157,6 +157,29 @@ tab.on('requestfailed', (request) => {
 });
 
 
+/*
+ * Errors the map raises, caught before the app can swallow them.
+ *
+ * `isSourceLoaded` answers true for a source that ERRORED as well as one that
+ * finished — MapLibre returns early on `_sourceErrored` — so the Sources
+ * section above cannot tell those apart, and this report has shown
+ * `loaded=true` for a source holding nothing several times today. The app also
+ * has its own `error` handler, so a raised error need not reach the console.
+ *
+ * Installed before any script runs and attached the moment the map exists.
+ */
+await tab.addInitScript(() => {
+  window.__abmapErrors = [];
+  const watch = setInterval(() => {
+    const map = window.abmapMap;
+    if (!map) return;
+    clearInterval(watch);
+    map.on('error', (event) => {
+      window.__abmapErrors.push(`${event?.sourceId || event?.source?.id || '(no source)'}: ${event?.error?.message || event}`);
+    });
+  }, 30);
+});
+
 console.log(`${page.href}\n`);
 
 /*
@@ -239,6 +262,8 @@ const EMPTY = {
   byStyleLayer: [],
   silent: [],
   overlays: [],
+  caches: [],
+  errors: [],
 };
 
 const report = await inTime('reading the map', () => tab.evaluate(() => {
@@ -259,6 +284,8 @@ const report = await inTime('reading the map', () => tab.evaluate(() => {
     byStyleLayer: [],
     silent: [],
     overlays: [],
+    caches: [],
+    errors: [],
   };
 
   const map = window.abmapMap;
@@ -358,6 +385,36 @@ const report = await inTime('reading the map', () => tab.evaluate(() => {
         }),
     });
   }
+  /*
+   * And the engine's own bookkeeping for each overlay source.
+   *
+   * `set` says the app handed the data over and `indexed` says the engine has
+   * nothing to show for it; between those two sits a SourceCache, and its
+   * four flags say which. `used` false means no visible layer claims it, so
+   * it never builds tiles. `_paused` means reloads are being ignored.
+   * `_sourceErrored` means it gave up - and is also why `isSourceLoaded`
+   * answers true for a source holding nothing.
+   *
+   * Read defensively: these are internals and may move between versions. A
+   * field that is not there reads as '?', which is honest, rather than as
+   * false, which would be a finding.
+   */
+  const caches = map.style?.sourceCaches || map.style?._sourceCaches || {};
+  out.caches = Object.entries(caches)
+    .filter(([key]) => key.includes('overlay-'))
+    .map(([key, cache]) => ({
+      key,
+      used: cache?.used ?? '?',
+      usedForTerrain: cache?.usedForTerrain ?? '?',
+      sourceLoaded: cache?._sourceLoaded ?? '?',
+      sourceErrored: cache?._sourceErrored ?? '?',
+      paused: cache?._paused ?? '?',
+      tiles: Object.keys(cache?._tiles || {}).length,
+      coveringTiles: (() => {
+        try { return cache.getIds().length; } catch { return '?'; }
+      })(),
+    }));
+  out.errors = window.__abmapErrors || [];
   return out;
 }), EMPTY);
 
@@ -412,6 +469,20 @@ if (report.overlays.length) {
   console.log('    set=0 means nothing was fetched or the answer was empty — read the');
   console.log('    feature-service calls below. set>0 with nothing drawn is the style.');
 }
+
+if (report.caches?.length) {
+  console.log('\nWhat the engine thinks of each overlay source');
+  for (const cache of report.caches) {
+    console.log(`  ${cache.key}`);
+    console.log(`    used=${cache.used}  sourceLoaded=${cache.sourceLoaded}  errored=${cache.sourceErrored}  paused=${cache.paused}`);
+    console.log(`    tiles held ${cache.tiles} · ids ${cache.coveringTiles}`);
+  }
+  console.log('    used=false means no visible layer claims it, so it builds no tiles.');
+}
+
+console.log('\nErrors the map raised');
+if (!report.errors?.length) console.log('  none');
+for (const line of report.errors || []) console.log(`  ${line}`);
 
 console.log('\nRendered features on screen');
 if (!report.rendered.length) console.log('  NONE — nothing at all is drawing.');
