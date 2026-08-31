@@ -173,6 +173,36 @@ const settled = await inTime('the map', () => tab.evaluate(() => new Promise((re
   const poll = setInterval(() => { if (check()) clearInterval(poll); }, 250);
 })), 'never settled — the page is still busy');
 
+/*
+ * And then wait for the style itself, which `idle` does not guarantee.
+ *
+ * Every report today was taken with `loaded=false` in it, and I read the
+ * "drew nothing" list off it several times without noticing. Overlay layers
+ * are attached after the style finishes, so a check that samples before then
+ * cannot tell a layer that is broken from one that has not been added yet -
+ * and I nearly reported the first when the evidence only supported "too
+ * early".
+ *
+ * `idle` means the engine has stopped fetching and rendering, which happens
+ * once before the style is complete. This waits for the style to say so, then
+ * for the map to go quiet again.
+ */
+const stable = await inTime('the style', () => tab.evaluate(() => new Promise((resolve) => {
+  const map = window.abmapMap;
+  if (!map) { resolve('no map'); return; }
+  const deadline = setTimeout(() => resolve(`gave up with styleLoaded=${map.isStyleLoaded()}`), 30000);
+  const done = (how) => { clearTimeout(deadline); resolve(how); };
+  const settleThen = () => {
+    if (!map.isStyleLoaded()) return false;
+    map.once('idle', () => done('style loaded'));
+    // A map already quiet emits no further idle on its own.
+    map.triggerRepaint?.();
+    return true;
+  };
+  if (settleThen()) return;
+  const poll = setInterval(() => { if (settleThen()) clearInterval(poll); }, 200);
+})), 'the style never finished');
+
 const EMPTY = {
   config: { archive: '(page never answered)', maxzoom: '', mapboxToken: '' },
   engine: { maplibre: '', mapbox: '', pmtilesRegistered: false },
@@ -291,6 +321,7 @@ if (typeof report.map === 'string') {
 } else {
   console.log(`  style                 ${report.map.styleName} · ${report.map.layers} layers · loaded=${report.map.styleLoaded}`);
   console.log(`  overlays asked for    ${overlays === null ? '(defaults)' : (overlays || '(none)')}`);
+  console.log(`  waited for            ${settled} · ${stable}`);
   console.log(`  looking at            z${report.map.zoom} ${report.map.centre}`);
 }
 
