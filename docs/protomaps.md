@@ -280,17 +280,25 @@ Kentucky, West Virginia and their neighbours:
 with no warning — so check `pmtiles show` rather than assuming you got what you
 typed.
 
-Two cuts of the lower forty-eight, measured rather than estimated:
+Two cuts of the lower forty-eight, both measured:
 
-| maxzoom | size | tiles | notes |
+| maxzoom | size | cut | upload |
 | --- | --- | --- | --- |
-| 13 | 4.2 GB | 1,280,500 | every road this atlas draws; **trails are unnamed** |
-| 14 | ~17 GB | ~5.1M | trail and path names appear here |
-| 15 | ~67 GB | ~20M | Protomaps' deepest; diminishing returns |
+| 13 | 4.20 GB | 1m34s | 46s |
+| 14 | 8.77 GB | 2m07s | 62s |
+| 15 | not measured | | |
 
-The z13 cut took 1m34s to extract and 46s to upload, so the wall-clock cost is
-much smaller than the byte count suggests. Each level up is roughly four times
-the level below.
+**A level up quadruples the tile count and roughly doubles the bytes.** Those
+are not the same number, and the tile count is the misleading one: 4.20 GB to
+8.77 is 2.1x, because deeper tiles are individually smaller and most of the
+continent is empty at any depth. This table said ~17 GB at 14 until the file
+came back at 8.77, from multiplying by the four.
+
+Which is also why there is no row for 15. Doubling twice would say ~18 GB and
+that is the same arithmetic being wrong again, one step further out.
+
+The wall clock is the part worth knowing in advance: the byte counts read like
+an afternoon and the whole national cut is under four minutes.
 
 The honest question is what depth the map is actually read at, not how much
 ground it covers — and for this atlas the answer turned out to be sharp. At
