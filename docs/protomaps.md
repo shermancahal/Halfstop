@@ -219,7 +219,7 @@ site's own address and duly got asked about.
 | Field | Value |
 | --- | --- |
 | bbox | `-125.0,24.4,-66.9,49.4` (the lower forty-eight) |
-| maxzoom | `13` |
+| maxzoom | `13`, or `14` if you want trail names (see above) |
 | planet | leave empty |
 | upload | **checked** |
 | key | `byways.pmtiles` |
@@ -275,11 +275,28 @@ Kentucky, West Virginia and their neighbours:
 
     --bbox=-89.6,34.9,-77.7,40.7 --maxzoom=13
 
-As an order of magnitude at maxzoom 15: a single state is tens of megabytes,
-the Appalachians a few hundred, the lower forty-eight several gigabytes. Every
-level below that divides those by four. The honest question is what depth the
-map is actually read at, not how much ground it covers — z13 shows every road
-this atlas draws; z15 is for reading house numbers.
+**z15 is the floor, not a choice.** Protomaps' planet build stops there. Ask
+`pmtiles extract` for maxzoom 16 and you get a file that ends at 15, silently,
+with no warning — so check `pmtiles show` rather than assuming you got what you
+typed.
+
+Two cuts of the lower forty-eight, measured rather than estimated:
+
+| maxzoom | size | tiles | notes |
+| --- | --- | --- | --- |
+| 13 | 4.2 GB | 1,280,500 | every road this atlas draws; **trails are unnamed** |
+| 14 | ~17 GB | ~5.1M | trail and path names appear here |
+| 15 | ~67 GB | ~20M | Protomaps' deepest; diminishing returns |
+
+The z13 cut took 1m34s to extract and 46s to upload, so the wall-clock cost is
+much smaller than the byte count suggests. Each level up is roughly four times
+the level below.
+
+The honest question is what depth the map is actually read at, not how much
+ground it covers — and for this atlas the answer turned out to be sharp. At
+z13, OSM paths are present but carry no `name`; at z14 three of four sampled
+paths are named. If trail names matter, z14 is the line. If they do not, z13 is
+a quarter of the storage.
 
 ### 2. Install the extract tool
 
