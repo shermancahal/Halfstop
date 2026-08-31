@@ -88,6 +88,45 @@ const escapeSQL = (value) => String(value).replace(/'/g, "''");
 console.log(`\n${target}`);
 console.log(`  asking for ${fields.join(', ')}\n`);
 
+/*
+ * What the layer says it holds, before asking it about anything.
+ *
+ * ArcGIS answers a query naming a field it does not have with "Cannot perform
+ * query. Invalid query parameters." — the same sentence it uses for a
+ * malformed request, an unsupported option and a bad geometry. That message
+ * sent me looking at query parameters twice for what was a wrong field name,
+ * which is the exact mistake this tool was written to stop somebody making.
+ *
+ * So the field list comes first and is printed whatever happens. A layer whose
+ * columns are not what the config assumes is worth seeing on its own.
+ */
+const layerURL = new URL(target);
+layerURL.pathname = layerURL.pathname.replace(/\/query\/?$/, '');
+layerURL.search = '?f=json';
+
+let known = null;
+try {
+  const info = await ask(layerURL.href);
+  known = (info.fields || []).map((field) => field.name);
+  console.log(`  ${info.name || 'the layer'} · ${known.length} field(s)`);
+  console.log(`    ${known.join(', ')}\n`);
+} catch (error) {
+  console.log(`  could not read the layer's own description: ${error.message}\n`);
+}
+
+if (known) {
+  const missing = fields.filter((field) => !known.includes(field));
+  if (missing.length) {
+    console.error(`  this layer has no ${missing.join(', ')}.`);
+    const guess = (name) => known.filter((one) => one.toLowerCase().includes(name.toLowerCase().split('_')[0]));
+    for (const field of missing) {
+      const near = guess(field);
+      if (near.length) console.error(`    for ${field}, it does have: ${near.join(', ')}`);
+    }
+    process.exit(1);
+  }
+}
+
 const PAGE = 2000;
 const PAGES = 10;
 
