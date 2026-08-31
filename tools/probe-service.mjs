@@ -38,7 +38,28 @@ function distinctQuery(url, names) {
   at.searchParams.set('outFields', names.join(','));
   at.searchParams.set('returnDistinctValues', 'true');
   at.searchParams.set('returnGeometry', 'false');
-  at.searchParams.set('resultRecordCount', '1000');
+  at.searchParams.set('f', 'json');
+  return at.href;
+}
+
+/**
+ * The same question without `returnDistinctValues`, a page at a time.
+ *
+ * Not every service supports distinct — the FAA's airspace layer answers
+ * "Cannot perform query. Invalid query parameters." to it — and a probe that
+ * gives up there answers nothing about the layer anybody actually wanted to
+ * ask about. Reading rows and counting them here is slower and is bounded by
+ * what the service will hand over, which is why the report says which way the
+ * answer was reached rather than presenting both as the same fact.
+ */
+function pageQuery(url, names, offset, size) {
+  const at = new URL(url);
+  at.search = '';
+  at.searchParams.set('where', '1=1');
+  at.searchParams.set('outFields', names.join(','));
+  at.searchParams.set('returnGeometry', 'false');
+  at.searchParams.set('resultOffset', String(offset));
+  at.searchParams.set('resultRecordCount', String(size));
   at.searchParams.set('f', 'json');
   return at.href;
 }
@@ -67,21 +88,53 @@ const escapeSQL = (value) => String(value).replace(/'/g, "''");
 console.log(`\n${target}`);
 console.log(`  asking for ${fields.join(', ')}\n`);
 
-let rows;
+const PAGE = 2000;
+const PAGES = 10;
+
+let combos = [];
+let how = 'every distinct combination, counted by the service';
+let complete = true;
+
 try {
-  rows = await ask(distinctQuery(target, fields));
+  const rows = await ask(distinctQuery(target, fields));
+  combos = (rows.features || []).map((feature) => feature.attributes || {});
 } catch (error) {
-  console.error(`  the service refused: ${error.message}`);
-  process.exit(1);
+  console.log(`  distinct values refused (${error.message}) — reading rows instead\n`);
+  how = `read from up to ${(PAGE * PAGES).toLocaleString()} rows`;
+  const seen = new Set();
+  let offset = 0;
+  complete = false;
+  for (let page = 0; page < PAGES; page += 1) {
+    let body;
+    try {
+      body = await ask(pageQuery(target, fields, offset, PAGE));
+    } catch (inner) {
+      console.error(`  the service refused: ${inner.message}`);
+      process.exit(1);
+    }
+    const got = body.features || [];
+    for (const feature of got) {
+      const row = feature.attributes || {};
+      const key = JSON.stringify(fields.map((field) => row[field] ?? null));
+      if (!seen.has(key)) { seen.add(key); combos.push(row); }
+    }
+    // `exceededTransferLimit` is how a service says there is more; its absence
+    // on a short page is how it says there is not.
+    if (got.length < PAGE && !body.exceededTransferLimit) { complete = true; break; }
+    offset += got.length || PAGE;
+  }
 }
 
-const combos = (rows.features || []).map((feature) => feature.attributes || {});
 if (!combos.length) {
   console.log('  no rows came back — the service answered, and has nothing to say.');
   process.exit(0);
 }
 
-console.log(`  ${combos.length} distinct combination(s)\n`);
+console.log(`  ${combos.length} distinct combination(s) · ${how}`);
+if (!complete) {
+  console.log('  NOT the whole layer: a value rarer than that cap would not appear here.');
+}
+console.log('');
 
 for (const field of fields) {
   const seen = new Map();
