@@ -729,15 +729,26 @@ export const OVERLAYS = [
         {
           layer: 'Special_Use_Airspace',
           use: 'Prohibited or restricted airspace',
+          nameField: 'NAME',
           tag: { severity: 'No fly' },
           where: "TYPE_CODE <> 'MOA'",
         },
-        { layer: 'National_Defense_Airspace_TFR_Areas', use: 'National defence area', tag: { severity: 'No fly' } },
+        {
+          layer: 'National_Defense_Airspace_TFR_Areas',
+          use: 'National defence area',
+          nameField: 'NAME',
+          tag: { severity: 'No fly' },
+        },
         // A stadium TFR is real but not permanent: it runs from an hour before
         // an event to an hour after, for venues seating 30,000 or more. Red,
         // because when it is on it is a genuine prohibition, and the panel
         // says when.
-        { layer: 'Stadiums', use: 'Stadium — during events', tag: { severity: 'No fly' } },
+        {
+          layer: 'Stadiums',
+          use: 'Stadium — during events',
+          nameField: 'NAME',
+          tag: { severity: 'No fly' },
+        },
         /*
          * Wilderness, on its own host, and the first amber this layer can draw.
          *
@@ -768,6 +779,17 @@ export const OVERLAYS = [
             + '&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=300&f=geojson',
           layer: 'Wilderness',
           use: 'Wilderness area',
+          /*
+           * Which column this service calls a name, declared beside the
+           * service rather than inferred at the label.
+           *
+           * Lower-case, measured off a returned row: ArcGIS lower-cases field
+           * names in GeoJSON output whatever displayFieldName says. The label
+           * below has to name every one of these, and a test asserts that
+           * equality - so a service added later without this line fails
+           * rather than drawing unlabelled shapes nobody can identify.
+           */
+          nameField: 'wildernessname',
           tag: { severity: 'Permit or caution' },
         },
       ],

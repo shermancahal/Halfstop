@@ -1749,15 +1749,39 @@ test('overlays: a label may name every column its services call a name', () => {
   assert.deepEqual(labelExpression(['NAME', 'wildernessname']),
     ['coalesce', ['get', 'NAME'], ['get', 'wildernessname'], '']);
 
-  // And every name a config lists is a name the field check will verify.
   for (const overlay of OVERLAYS) {
     const label = overlay.query?.label;
     if (!label) continue;
     const named = [label].flat();
     assert.ok(named.every((one) => typeof one === 'string' && one),
       `${overlay.id}: a label column is not a name`);
+
+    // Every name a config lists is a name the field check will verify.
     assert.deepEqual(declared({ ...overlay, query: { ...overlay.query } })
       .filter((one) => named.includes(one)).sort(), [...named].sort(),
     `${overlay.id}: the field check would not look for every column the label reads`);
+
+    /*
+     * And the label names exactly what the services call a name - no more,
+     * no less.
+     *
+     * The first version of this checked only that the listed columns were
+     * verified, which passed with the wilderness column removed: the label
+     * fell back to NAME, every wilderness area drew unlabelled, and nothing
+     * said so. Found by putting the bug back, which is the only reason this
+     * paragraph exists.
+     *
+     * Equality both ways: a missing column leaves a service's features
+     * anonymous, and a stale one outlives the sublayer it was added for.
+     */
+    for (const kind of overlay.query.uses || []) {
+      assert.ok(kind.nameField,
+        `${overlay.id}: sublayer ${kind.layer || kind.use} does not say which column is its name`);
+    }
+    if (overlay.query.uses?.length) {
+      assert.deepEqual([...new Set(named)].sort(),
+        [...new Set(overlay.query.uses.map((kind) => kind.nameField))].sort(),
+        `${overlay.id}: the label and the sublayers disagree about the name columns`);
+    }
   }
 });
