@@ -224,6 +224,8 @@ export const MAPBOX_SCHEMA = {
   place: { settlement: ['settlement'] },
   /** Named water worth a label. Mapbox's natural_label vocabulary. */
   waterClasses: ['lake', 'ocean', 'sea', 'river'],
+  // Mapbox's water layer holds no pools, so there is nothing to leave out.
+  waterExclude: null,
   /** And the one class that covers peaks, ridges and passes. */
   summitClasses: ['landform'],
 };
@@ -469,7 +471,14 @@ export const PROTOMAPS_SCHEMA = {
    * gain a synonym rather than changing.
    */
   landuse: {
-    park: ['park', 'village_green', 'playground', 'recreation_ground', 'golf_course'],
+    /*
+     * `golf_course` is deliberately not here.
+     *
+     * It was, and it painted a golf course the same green as a state park —
+     * which on a map about where you can go reads as an invitation, and a golf
+     * course is private ground with a fence round it.
+     */
+    park: ['park', 'village_green', 'playground', 'recreation_ground'],
     grass: ['grass', 'grassland'],
     wood: ['wood'],
     scrub: ['scrub'],
@@ -492,6 +501,18 @@ export const PROTOMAPS_SCHEMA = {
    * until deep in, so the layer's own minzoom never has them to draw.
    */
   waterClasses: ['ocean', 'lake', 'water', 'river', 'riverbank', 'reservoir', 'stream'],
+  /*
+   * Water that is not landscape.
+   *
+   * Protomaps files swimming pools in the same layer as lakes and rivers, and
+   * the fill draws by geometry rather than by kind — deliberately, because
+   * naming the kinds it wants is how lakes went unlabelled for a week. So this
+   * is an exclusion rather than a whitelist: everything wet still draws, minus
+   * the handful that are wet without being water in any sense a map reader
+   * means. A kind Protomaps adds tomorrow appears without anyone doing
+   * anything, which is the right default.
+   */
+  waterExclude: ['swimming_pool'],
   // Nothing to filter while summitLabel is null; the layer is dropped anyway.
   summitClasses: [],
   /*
@@ -1097,6 +1118,29 @@ const sharedWaterLayer = () => S.layers.water === S.layers.waterway;
 /** A filter admitting one geometry family, single- and multi-part alike. */
 const onlyGeometry = (...types) => ['match', ['geometry-type'], types, true, false];
 
+/**
+ * What the water fill draws: everything wet, minus a short exclusion.
+ *
+ * Two rules, either of which may be absent. Geometry has to be stated where
+ * one source layer holds both bodies and courses; kinds have to be excluded
+ * where that layer also holds things wet without being water.
+ *
+ * An exclusion rather than a list of what to draw, on purpose. Naming the
+ * kinds it wants is exactly how lakes went unlabelled: the schema said `lake`,
+ * the archive said `water`, and the filter matched nothing while looking
+ * correct. Excluding is safe in the direction that matters — a kind nobody
+ * anticipated still draws.
+ */
+function waterFillFilter() {
+  const parts = [];
+  if (sharedWaterLayer()) parts.push(onlyGeometry('Polygon', 'MultiPolygon'));
+  if (S.waterExclude?.length) {
+    parts.push(['!', ['match', ['get', S.fields.classField], S.waterExclude, true, false]]);
+  }
+  if (!parts.length) return null;
+  return parts.length === 1 ? parts[0] : ['all', ...parts];
+}
+
 function waterLayers() {
   return [
     {
@@ -1109,7 +1153,7 @@ function waterLayers() {
        * the style is byte-identical to the one the snapshot holds - which is
        * how a fix for one foundation is kept from quietly changing the other.
        */
-      ...(sharedWaterLayer() ? { filter: onlyGeometry('Polygon', 'MultiPolygon') } : {}),
+      ...(waterFillFilter() ? { filter: waterFillFilter() } : {}),
       paint: { 'fill-color': PALETTE.water },
     },
     {

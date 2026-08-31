@@ -550,6 +550,8 @@ test('protomaps: no layer filters on a class the schema never names', () => {
     ...Object.values(PROTOMAPS_SCHEMA.boundaryClasses || {}).flat(),
     ...PROTOMAPS_SCHEMA.protectedClasses,
     ...PROTOMAPS_SCHEMA.waterClasses,
+    // Named in order to be left out, which is still the schema naming it.
+    ...(PROTOMAPS_SCHEMA.waterExclude || []),
     ...PROTOMAPS_SCHEMA.summitClasses,
   ]);
   const field = PROTOMAPS_SCHEMA.fields.classField;
@@ -932,4 +934,49 @@ test('byways: every kind of border the schema names is actually drawn', () => {
   const ids = protomapsStyle().layers.map((layer) => layer.id);
   assert.ok(ids.indexOf('boundary-county') < ids.indexOf('boundary-state'),
     'a county line drawn over a state line makes the more important one dashed-through');
+});
+
+test('protomaps: a swimming pool is not a body of water on this map', () => {
+  /*
+   * Protomaps files pools in the same layer as lakes and rivers, and the fill
+   * draws by geometry rather than by kind — deliberately, because naming the
+   * kinds it wants is exactly how lakes went unlabelled: the schema said
+   * `lake`, the archive said `water`, and the filter matched nothing while
+   * looking entirely correct.
+   *
+   * So this is an exclusion, and the test says which direction has to stay
+   * safe. A kind nobody has anticipated must still draw; only the named
+   * handful is dropped. Written as "the filter refuses the pool and accepts an
+   * invented kind" rather than as a pin on the expression, so rewriting the
+   * filter differently is fine and inverting it is not.
+   */
+  const filter = protomapsStyle().layers.find((layer) => layer.id === 'water').filter;
+  const text = JSON.stringify(filter);
+  assert.ok(text.includes('swimming_pool'), 'the pool is not excluded');
+  assert.ok(text.includes('"!"'), 'the exclusion reads as a whitelist, which is the failure mode this avoids');
+
+  for (const kind of PROTOMAPS_SCHEMA.waterExclude) {
+    assert.ok(!PROTOMAPS_SCHEMA.waterClasses.includes(kind),
+      `${kind} is both drawn and excluded, so the two rules disagree`);
+  }
+
+  // And Mapbox's water layer has no pools in it, so it carries no exclusion
+  // and its style is untouched.
+  assert.equal(MAPBOX_SCHEMA.waterExclude, null);
+  assert.equal(bywaysStyle('tok').layers.find((layer) => layer.id === 'water').filter, undefined);
+});
+
+test('byways: a golf course is not painted as parkland', () => {
+  /*
+   * It was, in the same green as a state park — which on a map about where you
+   * can go reads as an invitation, and a golf course is private ground with a
+   * fence round it.
+   *
+   * Checked on both schemas by value rather than by role, because the mistake
+   * would be reintroducing it under any role at all.
+   */
+  for (const [what, schema] of [['mapbox', MAPBOX_SCHEMA], ['protomaps', PROTOMAPS_SCHEMA]]) {
+    const drawn = Object.values(schema.landuse || {}).flat();
+    assert.ok(!drawn.includes('golf_course'), `${what}: a golf course is drawn as land the map invites you onto`);
+  }
 });
