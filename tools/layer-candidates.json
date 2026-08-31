@@ -860,65 +860,86 @@
   },
   {
     "id": "font:Noto Sans Regular",
-    "note": "The Byways style asks for Mapbox's font stack — 'DIN Pro Regular', 'Arial Unicode MS Regular' — and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
+    "note": "The Byways style asks for Mapbox's font stack \u2014 'DIN Pro Regular', 'Arial Unicode MS Regular' \u2014 and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
     "expect": "data",
     "find": "Noto",
     "url": "https://protomaps.github.io/basemaps-assets/fonts/Noto%20Sans%20Regular/0-255.pbf"
   },
   {
     "id": "font:Noto Sans Medium",
-    "note": "The Byways style asks for Mapbox's font stack — 'DIN Pro Regular', 'Arial Unicode MS Regular' — and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
+    "note": "The Byways style asks for Mapbox's font stack \u2014 'DIN Pro Regular', 'Arial Unicode MS Regular' \u2014 and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
     "expect": "data",
     "find": "Noto",
     "url": "https://protomaps.github.io/basemaps-assets/fonts/Noto%20Sans%20Medium/0-255.pbf"
   },
   {
     "id": "font:Noto Sans Bold",
-    "note": "The Byways style asks for Mapbox's font stack — 'DIN Pro Regular', 'Arial Unicode MS Regular' — and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
+    "note": "The Byways style asks for Mapbox's font stack \u2014 'DIN Pro Regular', 'Arial Unicode MS Regular' \u2014 and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
     "expect": "data",
     "find": "Noto",
     "url": "https://protomaps.github.io/basemaps-assets/fonts/Noto%20Sans%20Bold/0-255.pbf"
   },
   {
     "id": "font:Noto Sans Italic",
-    "note": "The Byways style asks for Mapbox's font stack — 'DIN Pro Regular', 'Arial Unicode MS Regular' — and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
+    "note": "The Byways style asks for Mapbox's font stack \u2014 'DIN Pro Regular', 'Arial Unicode MS Regular' \u2014 and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
     "expect": "data",
     "find": "Noto",
     "url": "https://protomaps.github.io/basemaps-assets/fonts/Noto%20Sans%20Italic/0-255.pbf"
   },
   {
     "id": "font:NotoSans-Regular",
-    "note": "The Byways style asks for Mapbox's font stack — 'DIN Pro Regular', 'Arial Unicode MS Regular' — and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
+    "note": "The Byways style asks for Mapbox's font stack \u2014 'DIN Pro Regular', 'Arial Unicode MS Regular' \u2014 and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
     "expect": "data",
     "find": "Noto",
     "url": "https://protomaps.github.io/basemaps-assets/fonts/NotoSans-Regular/0-255.pbf"
   },
   {
     "id": "font:NotoSans-Medium",
-    "note": "The Byways style asks for Mapbox's font stack — 'DIN Pro Regular', 'Arial Unicode MS Regular' — and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
+    "note": "The Byways style asks for Mapbox's font stack \u2014 'DIN Pro Regular', 'Arial Unicode MS Regular' \u2014 and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
     "expect": "data",
     "find": "Noto",
     "url": "https://protomaps.github.io/basemaps-assets/fonts/NotoSans-Medium/0-255.pbf"
   },
   {
     "id": "font:NotoSans-Bold",
-    "note": "The Byways style asks for Mapbox's font stack — 'DIN Pro Regular', 'Arial Unicode MS Regular' — and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
+    "note": "The Byways style asks for Mapbox's font stack \u2014 'DIN Pro Regular', 'Arial Unicode MS Regular' \u2014 and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
     "expect": "data",
     "find": "Noto",
     "url": "https://protomaps.github.io/basemaps-assets/fonts/NotoSans-Bold/0-255.pbf"
   },
   {
     "id": "font:NotoSans-Italic",
-    "note": "The Byways style asks for Mapbox's font stack — 'DIN Pro Regular', 'Arial Unicode MS Regular' — and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
+    "note": "The Byways style asks for Mapbox's font stack \u2014 'DIN Pro Regular', 'Arial Unicode MS Regular' \u2014 and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
     "expect": "data",
     "find": "Noto",
     "url": "https://protomaps.github.io/basemaps-assets/fonts/NotoSans-Italic/0-255.pbf"
   },
   {
     "id": "font:Noto Sans Regular,Noto Sans Italic",
-    "note": "The Byways style asks for Mapbox's font stack — 'DIN Pro Regular', 'Arial Unicode MS Regular' — and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
+    "note": "The Byways style asks for Mapbox's font stack \u2014 'DIN Pro Regular', 'Arial Unicode MS Regular' \u2014 and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
     "expect": "data",
     "find": "Noto",
     "url": "https://protomaps.github.io/basemaps-assets/fonts/Noto%20Sans%20Regular,Noto%20Sans%20Italic/0-255.pbf"
+  },
+  {
+    "id": "wild:usfs-dollysods",
+    "expect": "data",
+    "find": "\"type\"\\s*:\\s*\"(?:FeatureCollection|Feature|Polygon|MultiPolygon)\"",
+    "note": "Dolly Sods specifically, 39.0283 -79.3361, because that is the report. Aloft shows a Caution there for a wilderness area; Restrictions & advisories shows nothing, and the layer queries no wilderness service at all. The existing wild: probes cover the southern Appalachians, which is a different box - a service that works in Tennessee is not evidence about West Virginia.",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_Wilderness_01/MapServer/0/query?where=1%3D1&geometry=-79.44,38.93,-79.24,39.13&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&resultRecordCount=5&f=geojson"
+  },
+  {
+    "id": "wild:sua-dollysods",
+    "expect": "data",
+    "find": "\"features\"\\s*:\\s*\\[\\s*\\]",
+    "note": "The control, and it passes by being EMPTY. The special-use airspace service is one of the three this layer does query, and if it holds nothing over Dolly Sods then the layer drawing nothing there is correct behaviour on the wrong data rather than a broken request. Asserting the empty collection makes that a measurement instead of an assumption - and it fails loudly if the FAA ever does put something there.",
+    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Special_Use_Airspace/FeatureServer/0/query?where=1%3D1&geometry=-79.44,38.93,-79.24,39.13&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=5&f=geojson"
+  },
+  {
+    "id": "wild:nps-fields",
+    "expect": "data",
+    "find": "\"(?:name|alias)\"\\s*:\\s*\"[^\"]{0,60}\"",
+    "note": "The layer's description has said 'Source: FAA, NPS, USFS' since it was written and it queries only the FAA. Park boundaries are the other half of what an advisory layer should carry. Sublayers and columns first: this is a MapServer with several, and guessing an index is how the BLM lookup cost an afternoon.",
+    "url": "https://mapservices.nps.gov/arcgis/rest/services/LandResourcesDivision/NPS_Land_Resources_Division_Boundary_and_Tract_Data_Service/MapServer?f=pjson"
   }
 ]
