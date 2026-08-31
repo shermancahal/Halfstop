@@ -38,7 +38,6 @@
       <a href="./" class="is-active">Home</a>
       <a href="map.html">Map</a>
       <a href="faq.html">Help</a>
-      <a href="#contribute">Contribute</a>
       <a href="#roadmap">Roadmap</a>
     </nav>
     <button class="icon-button" id="theme-toggle" type="button" aria-label="Toggle theme"></button>
@@ -95,10 +94,10 @@
     </div>
   </section>
 
-  <section class="section" id="about">
+  <section class="section" id="about" data-editable="about">
     <div class="wrap">
       <div class="section-head"><h2>How it works</h2></div>
-      <div class="prose-grid">
+      <div class="prose-grid" data-editable-body>
         <div>
           <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z"/><path d="M14 2v6h6"/></svg>Open files, not a walled garden</h3>
           <p>Every map is published in the format it was recorded in — GPX, KML or KMZ — alongside a GeoJSON conversion. Download it, open it in GaiaGPS, Garmin BaseCamp, CalTopo or QGIS. Nothing here is locked to this site.</p>
@@ -114,6 +113,11 @@
       </div>
     </div>
   </section>
+
+  <!-- Contribute is hidden for now, and commented out rather than deleted: this
+       is still the only written account of how a map gets published, and it
+       comes back by removing these two comment markers and the two nav links
+       above (header and footer) that pointed at it.
 
   <section class="section" id="contribute">
     <div class="wrap">
@@ -132,13 +136,15 @@
     </div>
   </section>
 
-  <section class="section" id="roadmap">
+  -->
+
+  <section class="section" id="roadmap" data-editable="roadmap">
     <div class="wrap">
       <div class="section-head">
         <h2>Where this is going</h2>
         <p>The library first, then the app.</p>
       </div>
-      <ul class="roadmap">
+      <ul class="roadmap" data-editable-body>
         <li>
           <span class="phase shipped">Shipped</span>
           <span><b>A map-first site</b><span class="detail">The map is the homepage. Switchable topo, imagery and street basemaps with stackable overlays, distance and elevation stats, and a shareable URL for any view — with this library a click away.</span></span>
@@ -181,7 +187,6 @@
       <ul>
         <li><a href="faq.html">Help &amp; FAQ</a></li>
         <li><a href="map.html">Map</a></li>
-        <li><a href="#contribute">Publishing a map</a></li>
         <li><a href="#roadmap">Roadmap</a></li>
       </ul>
     </div>

@@ -401,6 +401,11 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 .faq-section p { margin: 0 0 11px; line-height: 1.62; color: var(--ink-2); }
 .faq-section strong { color: var(--ink); }
 
+/* Any editable section anchors its own pencil. .faq-section already sets this;
+   the home page's sections do not, and an absolutely positioned button with no
+   positioned ancestor climbs to the viewport corner. */
+[data-editable] { position: relative; }
+
 /* The pencil sits in the section's own top-right rather than beside the
    heading, so a two-line heading does not push it out of reach. */
 .faq-edit {

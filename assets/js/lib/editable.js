@@ -43,6 +43,22 @@ export function editableSections(root = document) {
  * at; an edit that could rename it would break a link somebody had shared.
  */
 export function applySaved(section, html) {
+  /*
+   * A section may name the element that holds its prose.
+   *
+   * The help page is a flat section - a heading and paragraphs - so "keep the
+   * h2, replace the rest" describes it exactly. The home page is not: its
+   * sections wrap their content in layout, and replacing everything but the
+   * heading would throw that away and leave the prose full-bleed.
+   *
+   * So a page can mark the body it means. Without one the old rule stands, and
+   * the help page's saved rows keep applying to the same place.
+   */
+  const named = bodyOf(section);
+  if (named) {
+    named.innerHTML = html;
+    return named;
+  }
   const heading = section.querySelector('h2');
   section.innerHTML = '';
   if (heading) section.append(heading);
@@ -51,6 +67,19 @@ export function applySaved(section, html) {
   body.innerHTML = html;
   section.append(body);
   return body;
+}
+
+/**
+ * The element holding a section's prose, whichever shape it is.
+ *
+ * `matches` before `querySelector`, because querySelector searches descendants
+ * only. A section whose whole content is its body - a single paragraph marked
+ * editable - would otherwise fall through to the "keep the h2, replace the
+ * rest" path and be replaced by itself, emptied. Nearly shipped exactly that.
+ */
+export function bodyOf(section) {
+  if (section.matches?.('[data-editable-body]')) return section;
+  return section.querySelector('[data-editable-body]') || section.querySelector('.faq-body') || null;
 }
 
 /** Load whatever has been saved for this page and swap it in. */

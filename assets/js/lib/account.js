@@ -169,6 +169,29 @@ export class Account extends EventTarget {
       options: { emailRedirectTo: returnTo() },
     });
     if (error) throw new Error(error.message);
+
+    /*
+     * An address that already has an account gets a success and no email.
+     *
+     * Supabase will not tell a stranger whether an address is registered, so
+     * signing up again returns 200 with a user object, no session, and an
+     * empty `identities` array - and sends nothing. Read as "no session", that
+     * is indistinguishable from a fresh signup awaiting confirmation, so this
+     * told people to check an inbox that was never going to receive anything.
+     * Reported as exactly that: a create-account request with nothing back.
+     *
+     * `identities` empty is the documented signal. Guarded on the array being
+     * present so a future response shape that omits it falls through to the
+     * ordinary message rather than accusing everyone of already existing.
+     */
+    const identities = data?.user?.identities;
+    if (Array.isArray(identities) && identities.length === 0) {
+      this.setStatus('signed-out',
+        'That address already has an account. Sign in below, or use "Email me a link" '
+        + 'if you have forgotten the password.');
+      return { confirmed: false, existing: true };
+    }
+
     // With email confirmation on, there is no session yet — say so rather than
     // leaving the user staring at an unchanged screen.
     if (!data.session) {

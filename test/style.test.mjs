@@ -31,6 +31,7 @@ import {
   SHIELD_SCALE, BLANK_PIXEL_RATIO, MIN_TEXT,
 } from '../assets/js/lib/route-shields.js';
 import { SHIELD_BOXES } from '../assets/js/lib/shield-boxes.js';
+import { bodyOf, applySaved } from '../assets/js/lib/editable.js';
 import { declared } from '../tools/check-fields.mjs';
 import { formatTemperature, convertTemperature } from '../assets/js/lib/geo.js';
 import {
@@ -1839,4 +1840,49 @@ test('overlays: a view already covered asks the services nothing', () => {
    */
   assert.equal(viewNeedsFetch({ ...held, truncated: true }, inside, { now }), true,
     'a capped answer is a partial one and must not be reused');
+});
+
+test('pages: an editable section that is its own body is not replaced by itself', () => {
+  /*
+   * `querySelector` searches descendants only. A section whose whole content
+   * is its prose - one paragraph marked editable - matches
+   * [data-editable-body] itself and nothing under it, so a lookup that only
+   * searched downwards found nothing, fell through to the "keep the h2,
+   * replace everything else" path, and emptied the element it was meant to
+   * fill. Written after nearly shipping exactly that on the home page's lede.
+   *
+   * The stub is the smallest thing the two functions actually touch. A real
+   * DOM here would be a dependency this repo does not have, and `npm test`
+   * running with nothing installed is the point.
+   */
+  const node = (attrs = {}, children = []) => ({
+    attrs,
+    children,
+    innerHTML: '',
+    matches(selector) { return selector === '[data-editable-body]' && 'data-editable-body' in this.attrs; },
+    querySelector(selector) {
+      const hit = (one) => (selector === '[data-editable-body]'
+        ? 'data-editable-body' in one.attrs
+        : one.attrs.class === selector.replace('.', '') || one.attrs.tag === selector);
+      for (const child of this.children) {
+        if (hit(child)) return child;
+        const deeper = child.querySelector?.(selector);
+        if (deeper) return deeper;
+      }
+      return null;
+    },
+  });
+
+  const itsOwnBody = node({ 'data-editable': 'lede', 'data-editable-body': '' });
+  assert.equal(bodyOf(itsOwnBody), itsOwnBody, 'a section that is its own body has to find itself');
+  applySaved(itsOwnBody, '<b>saved</b>');
+  assert.equal(itsOwnBody.innerHTML, '<b>saved</b>', 'and be filled rather than emptied');
+
+  // The nested shape still resolves to the child, not the section.
+  const inner = node({ 'data-editable-body': '' });
+  const wrapped = node({ 'data-editable': 'roadmap' }, [node({ tag: 'h2' }), inner]);
+  assert.equal(bodyOf(wrapped), inner);
+  applySaved(wrapped, '<i>x</i>');
+  assert.equal(inner.innerHTML, '<i>x</i>');
+  assert.equal(wrapped.innerHTML, '', 'the section keeps its layout; only the body changes');
 });

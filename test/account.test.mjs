@@ -167,3 +167,65 @@ test('account: a provider refusal is reported rather than swallowed', async () =
 
   await assert.rejects(() => account.signInWithProvider('apple'), /provider is not enabled/);
 });
+
+test('account: signing up an address that already exists says so', async () => {
+  /*
+   * Reported: a create-account request, and nothing came back.
+   *
+   * Supabase will not tell a stranger whether an address is registered, so a
+   * repeat signup returns 200 with a user, no session, and an empty
+   * `identities` array - and sends no email at all. Read only as "no session",
+   * that is indistinguishable from a fresh signup awaiting confirmation, and
+   * the app told people to watch an inbox nothing was going to arrive in.
+   */
+  const client = fakeClient();
+  client.auth.signUp = async (options) => {
+    client.calls.push(['signUp', options]);
+    return { data: { session: null, user: { identities: [] } }, error: null };
+  };
+  const account = new Account(folders, { client: async () => client, configured: () => true });
+  const result = await account.signUp('taken@example.com', 'hunter2');
+
+  assert.equal(result.existing, true);
+  assert.match(account.message, /already has an account/i);
+  assert.doesNotMatch(account.message, /check your email/i,
+    'the one message that is certainly wrong here is the one telling them to wait for mail');
+});
+
+test('account: a genuinely new signup still points at the inbox', async () => {
+  // The other side of the same branch: a fresh address gets a user WITH an
+  // identity, and must not be told it already exists.
+  const client = fakeClient();
+  client.auth.signUp = async (options) => {
+    client.calls.push(['signUp', options]);
+    return { data: { session: null, user: { identities: [{ provider: 'email' }] } }, error: null };
+  };
+  const account = new Account(folders, { client: async () => client, configured: () => true });
+  const result = await account.signUp('new@example.com', 'hunter2');
+
+  assert.equal(result.existing, undefined);
+  assert.match(account.message, /check your email/i);
+});
+
+test('account: a response with no identities at all is not read as "already exists"', async () => {
+  /*
+   * The guard is `Array.isArray(identities) && length === 0`, and the obvious
+   * shorter form `!identities?.length` is wrong in a way no other test here
+   * catches: an absent field is not an empty one. A future response shape that
+   * simply omits `identities` would then tell every new signup that their
+   * address is already registered - and send them to a sign-in they cannot do.
+   *
+   * Found by mutation: replacing the guard with the short form passed both
+   * tests above.
+   */
+  const client = fakeClient();
+  client.auth.signUp = async (options) => {
+    client.calls.push(['signUp', options]);
+    return { data: { session: null, user: { id: 'abc' } }, error: null };
+  };
+  const account = new Account(folders, { client: async () => client, configured: () => true });
+  const result = await account.signUp('new@example.com', 'hunter2');
+
+  assert.equal(result.existing, undefined);
+  assert.match(account.message, /check your email/i);
+});

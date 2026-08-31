@@ -28,6 +28,19 @@ export const SITE = {
    * this array in their devtools; nobody can make the database take their row.
    */
   editors: ['shermancahal@gmail.com'],
+  /*
+   * Which "Continue with …" buttons the sign-in panel offers.
+   *
+   * Empty because neither is configured yet, and a button that starts an OAuth
+   * round trip to a provider the project has not set up sends somebody to an
+   * error page from a provider they trust - which reads as this site being
+   * broken rather than unfinished. Offering nothing is the honest state.
+   *
+   * A list rather than two booleans so turning one on is adding its id here:
+   * 'apple', 'google'. The buttons, their labels and the divider above the
+   * email form all follow from it, and an empty list draws none of them.
+   */
+  authProviders: [],
 };
 
 /**

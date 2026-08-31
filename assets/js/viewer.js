@@ -9876,10 +9876,29 @@ function renderAccount() {
     },
   });
 
+  /*
+   * Only the providers the project has actually set up.
+   *
+   * `SITE.authProviders` is empty while neither is configured. A button that
+   * starts an OAuth round trip to a provider nobody has registered sends the
+   * reader to an error page carrying Apple's or Google's branding, which reads
+   * as this site being broken rather than unfinished - so it is not drawn, and
+   * neither is the divider that only makes sense above an email form with
+   * something above it.
+   */
+  const PROVIDER_LABELS = { apple: 'Continue with Apple', google: 'Continue with Google' };
+  const offered = (SITE.authProviders || []).filter((id) => PROVIDER_LABELS[id]);
+
   dom.account.append(
     el('p', { class: 'hint', style: 'margin-bottom:10px', text: 'Sign in to keep your folders across devices.' }),
-    el('div', { class: 'account-actions' }, [provider('apple', 'Continue with Apple'), provider('google', 'Continue with Google')]),
-    el('p', { class: 'hint account-or', text: 'or with an email address' }),
+  );
+  if (offered.length) {
+    dom.account.append(
+      el('div', { class: 'account-actions' }, offered.map((id) => provider(id, PROVIDER_LABELS[id]))),
+      el('p', { class: 'hint account-or', text: 'or with an email address' }),
+    );
+  }
+  dom.account.append(
     email,
     password,
     el('div', { class: 'account-actions' }, buttons),
