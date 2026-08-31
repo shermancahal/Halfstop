@@ -427,6 +427,51 @@ if (report.silent.length) {
   console.log('    layer in this list over ground that has them is a filter or a font.');
 }
 
+/*
+ * And if an overlay holds data the engine does not, hand it the same data
+ * again and see whether that is enough.
+ *
+ * Measured on one commit at one place: Byways Topo set 32 features on
+ * overlay-faa-uas-grid and the engine held 0; the raster basemap set the same
+ * 32 and held 168. Same fetch, same source, same layers. That narrows it to
+ * the moment the data was handed over, and the way to test a race is to
+ * repeat the handover once the race is over rather than to reason about it —
+ * three fixes reasoned from the code did not work.
+ *
+ * If the count comes up after this, the fault is when setData was called and
+ * the fix is to call it again when the source is ready. If it stays at zero,
+ * it is not the handover and this rules that out instead.
+ */
+const retried = await inTime('re-setting overlay data', () => tab.evaluate(async () => {
+  const map = window.abmapMap;
+  if (!map) return [];
+  const out = [];
+  for (const id of Object.keys(map.getStyle()?.sources || {})) {
+    if (!id.startsWith('overlay-')) continue;
+    const source = map.getSource(id);
+    const data = source?._data;
+    if (!Array.isArray(data?.features) || !data.features.length) continue;
+    const before = map.querySourceFeatures(id).length;
+    if (before) continue;
+    source.setData(data);
+    await new Promise((resolve) => {
+      const deadline = setTimeout(resolve, 8000);
+      map.once('idle', () => { clearTimeout(deadline); resolve(); });
+      map.triggerRepaint?.();
+    });
+    out.push({ id, set: data.features.length, before, after: map.querySourceFeatures(id).length });
+  }
+  return out;
+}), []);
+
+if (Array.isArray(retried) && retried.length) {
+  console.log('\nHanded the same data over a second time');
+  for (const one of retried) {
+    console.log(`  ${one.id}: ${one.set} set · engine held ${one.before}, now holds ${one.after}`);
+  }
+  console.log('  A count that comes up here means the first setData was too early.');
+}
+
 console.log('\nFeature-service calls');
 if (!dataCalls.length) {
   console.log('  NONE — no queried overlay asked any service for anything.');
