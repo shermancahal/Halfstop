@@ -189,11 +189,23 @@ for (let zoom = Math.max(header.minZoom, 0); zoom <= header.maxZoom; zoom += 1) 
   console.log(`  z${String(zoom).padEnd(2)} ${tx}/${ty}  ${String(tile.length).padStart(7)} B  ${summary}`);
 }
 
-// And the attribute keys of the deepest tile, since a layer that is present
-// but carries none of the fields the style reads is its own failure.
-const deepest = await archive.tile(header.maxZoom, Math.floor(x * 2 ** (header.maxZoom - z)), Math.floor(y * 2 ** (header.maxZoom - z)));
+/*
+ * And the attributes of the tile that was actually asked for.
+ *
+ * This used to classify the deepest tile in the archive no matter which one
+ * the argument named, which made "look inside 14/4386/6331" answer about z15 —
+ * confidently, and with a heading saying "deepest" that nobody reads as a
+ * refusal. The question it was being asked at the time was whether a field
+ * appears at one zoom and not another, so it answered the one question it
+ * could not answer, twice, with the same numbers.
+ */
+const asked = await archive.tile(z, x, y);
+const deepest = asked
+  || await archive.tile(header.maxZoom, Math.floor(x * 2 ** (header.maxZoom - z)), Math.floor(y * 2 ** (header.maxZoom - z)));
 if (deepest) {
-  console.log(`\nWhat the deepest tile actually classifies things as:`);
+  console.log(asked
+    ? `\nWhat z${z}/${x}/${y} actually classifies things as:`
+    : `\nz${z}/${x}/${y} is absent; what the deepest tile over it classifies things as:`);
   // Only the keys a style branches on. Names and populations are noise here.
   const classifying = ['kind', 'kind_detail', 'network', 'shield_text', 'surface'];
   for (const layer of describeTile(deepest)) {
