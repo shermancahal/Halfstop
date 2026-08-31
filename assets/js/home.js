@@ -1,5 +1,10 @@
 /**
- * Landing page: renders the published catalogue with search and facet filters.
+ * The landing page: branding, the theme toggle, and its own editable prose.
+ *
+ * It used to be the map library, and the code for that is all still here and
+ * still correct - the catalogue markup is commented out of index.html rather
+ * than deleted, and main() returns early when it finds no grid. If the library
+ * comes back, uncommenting the section is the whole change.
  *
  * Card thumbnails are drawn from the `preview` polyline the build step stores in
  * catalog.json — normalised to a unit box — so the grid never has to download
@@ -27,7 +32,6 @@ function cacheDom() {
 }
 
 function applyBranding() {
-  document.title = `Map library — ${SITE.name}`;
   const set = (id, value) => { const node = document.getElementById(id); if (node && value) node.textContent = value; };
   set('brand-name', SITE.name);
   set('brand-parent', SITE.parent?.name);
@@ -178,6 +182,22 @@ async function main() {
   cacheDom();
   applyBranding();
   initTheme(document.getElementById('theme-toggle'));
+
+  /*
+   * The catalogue is optional markup now.
+   *
+   * The library section and the counters over it are commented out of
+   * index.html, and everything below this line writes into elements that went
+   * with them - the grid, the two filter selects, the search box, the four
+   * stat values. None of that is guarded individually, and guarding it
+   * individually would be the wrong shape anyway: there is no half-catalogue
+   * to render. Left alone, renderStats is the first to reach for something
+   * that is not there, main() rejects, and the homepage logs an error on
+   * every single load - which is how a console stops being worth reading.
+   *
+   * Uncommenting the section in index.html is all it takes to bring this back.
+   */
+  if (!dom.grid) return;
 
   try {
     catalog = await loadCatalog();

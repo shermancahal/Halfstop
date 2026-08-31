@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>American Byways GPS — maps for the back roads</title>
+<title>Fieldstop — maps for the back roads</title>
 <meta name="description" content="A back-roads atlas that works with no signal: federal and state land, forest roads, topographic and aerial mapping you can download before you leave.">
-<meta property="og:title" content="American Byways Maps">
+<meta property="og:title" content="Fieldstop">
 <meta property="og:description" content="Field maps, tracks and waypoints from the road — viewable in the browser, downloadable as GPX, KML or GeoJSON.">
 <meta property="og:type" content="website">
 <meta name="theme-color" content="#b4441f" media="(prefers-color-scheme: light)">
@@ -19,7 +19,7 @@
 <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Byways GPS">
+<meta name="apple-mobile-web-app-title" content="Fieldstop">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="stylesheet" href="assets/css/site.css">
 </head>
@@ -30,7 +30,7 @@
     <a class="brand" href="./">
       <img class="brand-mark" src="assets/img/mark.svg" alt="" width="30" height="30">
       <span class="brand-text">
-        <span class="brand-name" id="brand-name">American Byways GPS</span>
+        <span class="brand-name" id="brand-name">Fieldstop</span>
         <span class="brand-parent" id="brand-parent">American Byways</span>
       </span>
     </a>
@@ -46,29 +46,42 @@
 
 <main>
 
-  <section class="hero">
+  <section class="hero" data-editable="hero">
     <div class="wrap">
       <div class="hero-inner">
         <span class="eyebrow">A project of <span id="parent-name">American Byways</span></span>
-        <h1>Maps for the roads the atlas forgot.</h1>
-        <p class="lede">
-          A back-roads atlas that works with no signal. Federal and state land, forest
-          roads, drone ceilings and the weather over them — drawn over topographic and
-          aerial mapping you can download before you leave the tarmac.
-        </p>
+        <div data-editable-body>
+          <h1>Maps for the roads the atlas forgot.</h1>
+          <p class="lede">
+            A back-roads atlas that works with no signal. Federal and state land, forest
+            roads, drone ceilings and the weather over them — drawn over topographic and
+            aerial mapping you can download before you leave the tarmac.
+          </p>
+        </div>
         <div class="hero-actions">
           <a class="button button-primary" href="map.html">Open the map</a>
-          <a class="button button-secondary" href="#library">Jump to the list</a>
-        </div>
-        <div class="stat-strip" id="stat-strip" hidden>
-          <div><div class="stat-value" id="stat-maps">—</div><div class="stat-label">Published maps</div></div>
-          <div><div class="stat-value" id="stat-distance">—</div><div class="stat-label">Mapped distance</div></div>
-          <div><div class="stat-value" id="stat-waypoints">—</div><div class="stat-label">Waypoints</div></div>
-          <div><div class="stat-value" id="stat-regions">—</div><div class="stat-label">Regions</div></div>
+          <a class="button button-secondary" href="#about">How it works</a>
         </div>
       </div>
     </div>
   </section>
+
+  <!-- The library and the counters over it are hidden for now, and commented
+       out rather than deleted, the same way Contribute is: the catalogue is
+       still built and still published at data/catalog.json, and the map still
+       reads it. What went was the shop window, not the shelf.
+
+       Both come back by removing these two markers. home.js finds no grid and
+       skips the catalogue entirely, so it does not need changing to restore
+       them - but the hero has lost the "Jump to the list" button that pointed
+       at #library, and that would want putting back.
+
+  <div class="stat-strip" id="stat-strip" hidden>
+    <div><div class="stat-value" id="stat-maps">-</div><div class="stat-label">Published maps</div></div>
+    <div><div class="stat-value" id="stat-distance">-</div><div class="stat-label">Mapped distance</div></div>
+    <div><div class="stat-value" id="stat-waypoints">-</div><div class="stat-label">Waypoints</div></div>
+    <div><div class="stat-value" id="stat-regions">-</div><div class="stat-label">Regions</div></div>
+  </div>
 
   <section class="section" id="library">
     <div class="wrap">
@@ -81,7 +94,7 @@
         <div class="search-field">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
           <label class="visually-hidden" for="search">Search maps</label>
-          <input type="search" id="search" placeholder="Search by name, place or tag…" autocomplete="off">
+          <input type="search" id="search" placeholder="Search by name, place or tag..." autocomplete="off">
         </div>
         <label class="visually-hidden" for="filter-region">Filter by region</label>
         <select id="filter-region"><option value="">All regions</option></select>
@@ -94,10 +107,12 @@
     </div>
   </section>
 
+  -->
+
   <section class="section" id="about" data-editable="about">
-    <div class="wrap">
+    <div class="wrap" data-editable-body>
       <div class="section-head"><h2>How it works</h2></div>
-      <div class="prose-grid" data-editable-body>
+      <div class="prose-grid">
         <div>
           <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z"/><path d="M14 2v6h6"/></svg>Open files, not a walled garden</h3>
           <p>Every map is published in the format it was recorded in — GPX, KML or KMZ — alongside a GeoJSON conversion. Download it, open it in GaiaGPS, Garmin BaseCamp, CalTopo or QGIS. Nothing here is locked to this site.</p>
@@ -139,15 +154,15 @@
   -->
 
   <section class="section" id="roadmap" data-editable="roadmap">
-    <div class="wrap">
+    <div class="wrap" data-editable-body>
       <div class="section-head">
         <h2>Where this is going</h2>
-        <p>The library first, then the app.</p>
+        <p>What is shipped, what is next, and what is further out.</p>
       </div>
-      <ul class="roadmap" data-editable-body>
+      <ul class="roadmap">
         <li>
           <span class="phase shipped">Shipped</span>
-          <span><b>A map-first site</b><span class="detail">The map is the homepage. Switchable topo, imagery and street basemaps with stackable overlays, distance and elevation stats, and a shareable URL for any view — with this library a click away.</span></span>
+          <span><b>A map-first site</b><span class="detail">The map is the homepage. Switchable topo, imagery and street basemaps with stackable overlays, distance and elevation stats, and a shareable URL for any view.</span></span>
         </li>
         <li>
           <span class="phase shipped">Shipped</span>
@@ -178,7 +193,7 @@
 <footer class="site-footer">
   <div class="wrap">
     <div class="footer-main">
-      <p><b id="footer-name">American Byways Maps</b><br>
+      <p><b id="footer-name">Fieldstop</b><br>
       <span id="footer-tagline">Field maps, tracks and waypoints from the road.</span></p>
       <p style="font-size:.82rem">Basemap and overlay tiles are served by USGS, Esri and the OpenStreetMap community under their own terms. Track data is published by <span id="footer-holder">American Byways</span>.</p>
     </div>

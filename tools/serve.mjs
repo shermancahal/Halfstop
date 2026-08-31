@@ -67,7 +67,7 @@ const server = createServer(async (request, response) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`American Byways Maps — serving ${ROOT}`);
-  console.log(`  http://localhost:${PORT}/          library`);
+  console.log(`Fieldstop — serving ${ROOT}`);
+  console.log(`  http://localhost:${PORT}/          landing page`);
   console.log(`  http://localhost:${PORT}/map.html  viewer`);
 });

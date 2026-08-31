@@ -352,7 +352,7 @@ export function regionDefinition(region, { styleURL = '', pixelRatio = 2 } = {})
  * Versioned, because the app that reads this does not exist yet and will want
  * to know what it is looking at.
  */
-export function buildManifest(regions, { styleURL = '', pixelRatio = 2, kind = 'raster', app = 'American Byways GPS' } = {}) {
+export function buildManifest(regions, { styleURL = '', pixelRatio = 2, kind = 'raster', app = 'Fieldstop' } = {}) {
   return {
     format: 'american-byways-offline',
     version: 1,

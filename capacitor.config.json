@@ -1,6 +1,6 @@
 {
   "appId": "com.americanbyways.gps",
-  "appName": "American Byways GPS",
+  "appName": "Fieldstop",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"

@@ -8,8 +8,8 @@
  */
 
 export const SITE = {
-  name: 'American Byways GPS',
-  shortName: 'AB GPS',
+  name: 'Fieldstop',
+  shortName: 'Fieldstop',
   tagline: 'Field maps, tracks and waypoints from the road.',
   description:
     'A public library of GPS tracks, routes and waypoints exported from GaiaGPS — '

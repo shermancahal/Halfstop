@@ -1,22 +1,26 @@
-# American Byways GPS
+# Fieldstop
 
-A hosted library and browser viewer for GPS maps exported from GaiaGPS, built as
-a subsidiary site of [American Byways](https://americanbyways.com).
+A back-roads atlas and trip planner that works with no signal, built as a
+subsidiary site of [American Byways](https://americanbyways.com).
 
-The site opens directly into the map. Three things live here:
+Three pages:
 
-1. **The map** (`index.html`) — the homepage. A Mapbox-ready map with switchable
-   topo, imagery and street basemaps, stackable overlays, distance and elevation
-   statistics, and a shareable URL for any view. It will open a GPX, KML, KMZ or
-   GeoJSON file straight from your own computer.
-2. **Folders** — your own organisation of saved waypoints and tracks, built
+1. **The map** (`map.html`) — a Mapbox-ready map with switchable topo, imagery
+   and street basemaps, stackable overlays, public land and airspace, weather,
+   distance and elevation statistics, and a shareable URL for any view. It will
+   open a GPX, KML, KMZ or GeoJSON file straight from your own computer.
+2. **The landing page** (`index.html`) and **help** (`faq.html`) — prose, and
+   editable in place by a signed-in editor.
+3. **Folders** — your own organisation of saved waypoints and tracks, built
    inside the map. Import waypoints out of any file into a folder, move them
    between folders, and export a folder back out as GPX.
-3. **The library** (`library.html`) — a searchable catalogue of published maps,
-   each downloadable in its original GPX/KML/KMZ form.
 
-`map.html` redirects to the homepage, preserving any query and hash, so older
-links keep working.
+`index.html` forwards to `map.html` when a link carries `?m=`, `?b=` or a
+`#view`, so shared links that pointed at the root keep working.
+
+The published-map catalogue is still built (`data/catalog.json`) and still read
+by the map, but the library page that listed it is commented out of
+`index.html` rather than deleted. Uncommenting that section brings it back.
 
 The whole thing is static: HTML, CSS and ES modules with no framework, no
 bundler and no runtime dependencies. `npm` is used only for the local dev server
@@ -30,7 +34,7 @@ and the catalogue build script, both of which are plain Node.
 npm start           # serves the site at http://localhost:8080
 ```
 
-That opens on the map. The catalogue is at `/library.html`.
+That opens on the landing page; the map is at `/map.html`.
 
 The site uses ES modules and `fetch()`, so it needs a real origin — opening
 `index.html` from the filesystem will not work.
@@ -356,14 +360,14 @@ For iOS and Android store builds, see **`docs/mobile-app.md`**.
 ## How it is put together
 
 ```
-index.html                  the map — the homepage
-library.html                the published-map catalogue
-map.html                    redirect to the homepage (legacy links)
+index.html                  the landing page (and a redirect for legacy links)
+map.html                    the map — the application
+faq.html                    help and FAQ
 assets/
   css/site.css              design tokens, shared chrome, landing page
   css/viewer.css            the viewer's app shell
   js/config.js              ← branding, Mapbox token, basemaps, overlays
-  js/home.js                library page: catalogue rendering and filters
+  js/home.js                landing page: branding and editable prose
   js/viewer.js              the map application
   js/lib/
     xml.js                  dependency-free XML parser (browser + Node)
@@ -411,9 +415,9 @@ Mapbox later is a config change rather than a rewrite. That is what makes the
 
 ## Where this is going
 
-- **Shipped** — map-first homepage, hosted library, client-side GPX/KML/KMZ
-  parsing, stackable overlays, elevation profiles, shareable views, and folders
-  for organising saved waypoints with GPX export.
+- **Shipped** — a map-first site, client-side GPX/KML/KMZ parsing, stackable
+  overlays, elevation profiles, shareable views, and folders for organising
+  saved waypoints with GPX export.
 - **Next** — Mapbox vector styles, 3D terrain and Mapbox Studio layers behind the
   existing engine abstraction.
 - **Shipped** — installable as an app. A web manifest and a service worker mean

@@ -3286,14 +3286,19 @@ if (!external) {
       await offlinePage.locator('.layer-row').count() > 0, true);
 
     /*
-     * The homepage carries the catalogue now that the viewer has moved to
-     * map.html, and the help page is new. Both have to survive offline for the
-     * same reason the map does: a precache is only worth having if it covers
-     * the pages somebody reaches for.
+     * The homepage and the help page have to survive offline for the same
+     * reason the map does: a precache is only worth having if it covers the
+     * pages somebody reaches for.
+     *
+     * #roadmap rather than #catalog-grid, which is what this used to look for.
+     * The catalogue is commented out of index.html now, so that locator would
+     * count 0 whether the page came out of the cache or never arrived at all -
+     * a check that cannot fail for the right reason and cannot pass for it
+     * either. #roadmap is markup the page always ships.
      */
     await offlinePage.goto(new URL('./', URL_UNDER_TEST).href, { waitUntil: 'load' });
     check('and so does the homepage, which was never visited online',
-      await offlinePage.locator('#catalog-grid').count(), 1);
+      await offlinePage.locator('#roadmap').count(), 1);
 
     /*
      * Deliberately after the homepage, because the order is the test.
