@@ -37,7 +37,7 @@ const MAX_LEN = 4;
  * state's own marker — which is how Michigan's county roads came to be drawn
  * on the M diamond that belongs to its state routes.
  */
-export const SHIELD_DESIGNS = ['interstate', 'us', 'state', 'circle', 'default', 'scenic', 'forest'];
+export const SHIELD_DESIGNS = ['interstate', 'us', 'state', 'circle', 'county', 'default', 'scenic', 'forest'];
 
 /*
  * Two designs chosen by the road's number rather than by Mapbox's `shield`.
@@ -387,6 +387,9 @@ const COLOURS = {
   // what an unsigned numbered road looks like on most state maps and is
   // deliberately not any state's own shape.
   circle: { fill: '#ffffff', stroke: '#3d3225', text: '#1c1c1c' },
+  // A county route's own marker. Same ink and paper as the circle it began
+  // as; the difference is that this one is allowed to become an oval.
+  county: { fill: '#ffffff', stroke: '#3d3225', text: '#1c1c1c' },
   default: { fill: '#fbf7ee', stroke: '#64513b', text: '#3a3026' },
   // The brown of a recreation sign, which is the whole point of both.
   scenic: { fill: RECREATION_BROWN, stroke: '#ffffff', text: '#ffffff' },
@@ -833,6 +836,26 @@ export function rasterizeShield(design, length, { pixelRatio = 2 } = {}) {
     ctx.strokeStyle = colours.stroke;
     ctx.lineWidth = 1.2;
     ctx.stroke();
+  } else if (design === 'county') {
+    /*
+     * An ellipse filling the whole box, which is the one place this atlas
+     * deliberately lets a round sign go oval.
+     *
+     * West Virginia numbers its secondary routes in fractions - CR 11/5 off
+     * CR 11 - and four characters in a marker pinned to its own height come
+     * out at seven pixels inside a twenty-pixel circle. The real signs are
+     * wider than they are tall for exactly this reason. Two characters still
+     * land 26x24, which reads round; the oval only appears when the number
+     * needs it.
+     */
+    ctx.beginPath();
+    ctx.ellipse(width / 2, HEIGHT / 2, width / 2 - 1, HEIGHT / 2 - 1, 0, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.fillStyle = colours.fill;
+    ctx.fill();
+    ctx.strokeStyle = colours.stroke;
+    ctx.lineWidth = 1.3;
+    ctx.stroke();
   } else if (design === 'circle') {
     // Round, and drawn to the shield's height rather than its width, so a
     // three-character number widens the box without turning the circle into an
@@ -872,6 +895,15 @@ export function rasterizeShield(design, length, { pixelRatio = 2 } = {}) {
  */
 const NOMINAL_TEXT = 11 * SHIELD_SCALE;
 
+/*
+ * How wide a digit runs, as a fraction of the font size.
+ *
+ * The shields are drawn in a system sans at tabular-ish widths, where a digit
+ * is a little over half its size. Used only to decide whether a number fits a
+ * marker that can widen; everything else is measured off real artwork.
+ */
+const DIGIT_ADVANCE = 0.58;
+
 /**
  * The smallest the number is allowed to get, whatever the shield.
  *
@@ -904,6 +936,20 @@ export function shieldTextSize(design, length) {
    * narrows on the same terms as the measured branch below, from the same
    * nominal size at two characters.
    */
+  /*
+   * The oval is sized from its width, which is the whole reason it is an oval.
+   *
+   * Every other drawn marker shrinks its number as the number gets longer,
+   * because the shape cannot grow. This one grows - 26 to 40 pixels across as
+   * the ref goes from two characters to four - so shrinking as well would give
+   * up the room twice and put "11/5" at seven pixels inside a sign with space
+   * for thirteen.
+   */
+  if (design === 'county') {
+    const usable = shieldWidth(Math.max(MIN_LEN, Math.min(MAX_LEN, length))) - 6;
+    const byWidth = usable / (Math.max(2, length) * DIGIT_ADVANCE);
+    return Math.max(MIN_TEXT, Math.min(NOMINAL_TEXT, byWidth, HEIGHT * 0.62));
+  }
   if (!box) {
     const room = drawnState(design)?.name ? NOMINAL_TEXT * 0.82 : NOMINAL_TEXT;
     // Never larger than it was: two characters keep the size they have always
@@ -1257,8 +1303,17 @@ function networkArms(field, valueFor) {
   return ['case',
     ['==', net, 'US:I'], valueFor('interstate'),
     ['==', net, 'US:US'], valueFor('us'),
-    // Any other US network is somebody's state or county route.
-    ['==', ['slice', net, 0, 3], 'US:'], stateArms(net, valueFor),
+    /*
+     * A county route before a state one, because it is the longer value and
+     * the state test would swallow it.
+     *
+     * `US:WV` and `US:WV:County` sit side by side in the same tile over Clay
+     * County, and taking two characters off both made every county route wear
+     * the state's square. WV signs its secondaries in circles, and in
+     * fractions - CR 11/5 - which is why they get a marker that can widen.
+     */
+    ['==', ['slice', net, 0, 3], 'US:'],
+    ['case', COUNTY_ROUTE, valueFor('county'), stateArms(net, valueFor)],
     valueFor(UNCLAIMED)];
 }
 
@@ -1303,6 +1358,20 @@ function stateArms(net, valueFor) {
   }
   return ['match', ['slice', net, 3, 5], ...arms, fallback];
 }
+
+/*
+ * Whether a network names a county system rather than a state one.
+ *
+ * The third component, when there is one. OSM writes it as `County` in West
+ * Virginia and `Secondary` elsewhere, and both mean the same thing: a road the
+ * county numbers, signed differently from the state's own routes. Tested on
+ * the network the arm is already looking at, so a state whose data uses
+ * neither word is unaffected.
+ */
+const COUNTY_ROUTE = ['any',
+  ['==', ['slice', ['coalesce', ['get', 'network'], ''], 5], ':County'],
+  ['==', ['slice', ['coalesce', ['get', 'network'], ''], 5], ':Secondary'],
+];
 
 /** Whether a design is a state route marker — a state's own, or the generic. */
 function isStateDesign(design) {

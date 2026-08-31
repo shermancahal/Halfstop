@@ -1446,12 +1446,16 @@ test('shields: the marker comes from the road, not from where the map is looking
   assert.equal(evaluate(image, at('CA:ON')), 'abmap-shield-circle-3');
 
   /*
-   * `US:WV:Secondary` is a real network value, and slicing to the end of the
-   * string rather than to two characters looks up a state called
-   * "WV:Secondary" — falling through to the generic rectangle for every signed
-   * secondary route in the state, which is most of the rural network here.
+   * A network can carry a third component, and slicing to the end of the
+   * string rather than to two characters would look up a state called
+   * "WV:Truck" and fall through to the generic rectangle.
+   *
+   * I first wrote this assertion with `US:WV:Secondary` and expected the
+   * state's own square, having guessed at what the third component meant. The
+   * tile says otherwise - see the county test below - so the case that
+   * exercises the slice has to be one the county rule does not claim.
    */
-  assert.equal(evaluate(image, at('US:WV:Secondary')), 'abmap-shield-st-WV-3');
+  assert.equal(evaluate(image, at('US:WV:Truck')), 'abmap-shield-st-WV-3');
 
   // The clear space is measured from each state's own artwork, so the number
   // has to be placed for the marker actually drawn.
@@ -1492,4 +1496,50 @@ test('shields: every state with a marker can be reached from its network value',
       `${code} does not reach its own marker`,
     );
   }
+});
+
+test('shields: a county route is a circle, and an oval when the number is a fraction', async () => {
+  /*
+   * Reported from Clay County: county routes were wearing West Virginia's
+   * square. The tile over Clay carries both networks side by side —
+   *
+   *   network  US:WV, US:WV:County
+   *
+   * — so the two are separable, and taking two characters off each made them
+   * the same. West Virginia signs its secondaries in circles and numbers them
+   * in fractions, CR 11/5 hanging off CR 11, which is four characters in a
+   * marker every other design would have shrunk to fit.
+   */
+  const { evaluate } = await import('./helpers/expression.mjs');
+  const { shieldImageExpression, shieldTextSize, shieldDisplayWidth } =
+    await import('../assets/js/lib/route-shields.js');
+
+  const image = shieldImageExpression('WV', {
+    length: ['length', ['coalesce', ['get', 'shield_text'], '']],
+    network: 'network',
+  });
+  const at = (network, text) => ({ properties: { network, shield_text: text } });
+
+  assert.equal(evaluate(image, at('US:WV', '16')), 'abmap-shield-st-WV-2',
+    'a state route keeps the state marker');
+  assert.equal(evaluate(image, at('US:WV:County', '11')), 'abmap-shield-county-2',
+    'a county route was drawn as the state square');
+  assert.equal(evaluate(image, at('US:WV:County', '11/5')), 'abmap-shield-county-4');
+
+  // `Secondary` is the same idea under a different word, which other states use.
+  assert.equal(evaluate(image, at('US:VA:Secondary', '617')), 'abmap-shield-county-3');
+
+  // The nationals must not be caught by a rule about third components.
+  assert.equal(evaluate(image, at('US:I', '77')), 'abmap-shield-interstate-2');
+
+  /*
+   * And the point of the oval: the marker widens, so the number must not
+   * shrink to fit a width it no longer has. Four characters in the round
+   * circle come out at 7.8px; here they keep the full size.
+   */
+  assert.ok(shieldDisplayWidth(4) > shieldDisplayWidth(2), 'the box has to widen for this to mean anything');
+  assert.ok(shieldTextSize('county', 4) > shieldTextSize('circle', 4) * 1.5,
+    'a fraction in an oval should not be shrunk like one in a circle');
+  assert.equal(shieldTextSize('county', 2), shieldTextSize('circle', 2),
+    'two characters read the same in both, which is what keeps it looking round');
 });
