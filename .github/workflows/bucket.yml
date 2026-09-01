@@ -1,0 +1,155 @@
+name: Look in the bucket
+
+# What is actually in R2, and — only when asked, by exact name — remove one
+# object from it.
+#
+# Two questions this answers that nothing else could:
+#
+#   1. Are the credentials still good? Rolling an R2 API token invalidates the
+#      old key pair, and until now the only thing that used the credentials was
+#      cut-archive, which spends an hour cutting a multi-gigabyte extract before
+#      it ever tries to authenticate. Finding out the token was stale at the end
+#      of that is the wrong end of the run. This asks in about five seconds.
+#
+#   2. What is in there? Old probe extracts accumulate — a bucket with
+#      byways.pmtiles and three abandoned experiments in it costs money and
+#      tells nobody which one the site reads.
+#
+# Listing is the default and takes no arguments. Deleting is opt-in, one exact
+# key at a time, with two guards described where they are enforced.
+
+on:
+  workflow_dispatch:
+    inputs:
+      prefix:
+        description: >-
+          Only list keys starting with this. Leave empty for everything — a
+          bucket for one project has tens of objects, not thousands.
+        required: false
+        type: string
+      delete:
+        description: >-
+          Remove this exact key. No wildcards, no prefixes, no recursion: type
+          the whole name as the listing shows it. Leave empty to only look.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  bucket:
+    name: Ask the bucket
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ask it
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          # The same reason cut-archive sets it: recent AWS CLI versions add a
+          # checksum header that several S3-compatible stores reject.
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          ACCOUNT: ${{ secrets.R2_ACCOUNT_ID }}
+          BUCKET: ${{ vars.R2_BUCKET }}
+          PREFIX: ${{ inputs.prefix }}
+          DOOMED: ${{ inputs.delete }}
+          # Read so the guard below can refuse to delete the archive the site
+          # is actually serving.
+          LIVE: ${{ vars.PROTOMAPS_ARCHIVE }}
+        run: |
+          set -euo pipefail
+
+          for name in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY ACCOUNT BUCKET; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is not set. See docs/protomaps.md — the three R2 values are Secrets, the bucket name is a Variable."
+              exit 1
+            fi
+          done
+
+          # The account id, however it was pasted. Same normalisation as
+          # cut-archive.yml, and for the same reason: the R2 page shows the
+          # Account ID and the S3 endpoint next to each other, the endpoint is
+          # the one that looks like it belongs in a field called endpoint, and
+          # the value is masked in the log so getting it wrong names nothing.
+          ACCOUNT="$(printf '%s' "$ACCOUNT" | tr -d '[:space:]')"
+          ACCOUNT="${ACCOUNT#https://}"
+          ACCOUNT="${ACCOUNT#http://}"
+          ACCOUNT="${ACCOUNT%%/*}"
+          ACCOUNT="${ACCOUNT%.r2.cloudflarestorage.com}"
+          if ! printf '%s' "$ACCOUNT" | grep -Eq '^[0-9a-f]{32}$'; then
+            echo "::error::R2_ACCOUNT_ID is not a Cloudflare account ID. After trimming it is ${#ACCOUNT} characters; an account ID is 32 lowercase hex digits."
+            exit 1
+          fi
+          ENDPOINT="https://${ACCOUNT}.r2.cloudflarestorage.com"
+
+          echo "## In \`${BUCKET}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+          # A failure here is the answer to question 1, so it is named rather
+          # than left as a bare CLI error: a rolled token fails exactly here.
+          if ! aws s3 ls "s3://${BUCKET}/${PREFIX}" \
+                 --endpoint-url "$ENDPOINT" --human-readable 2>list-error.txt \
+                 | tee listing.txt; then
+            cat list-error.txt
+            cat list-error.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::The bucket refused the listing. If the API token was rolled, the three R2 secrets on this repository are still the old pair — see docs/protomaps.md step 3."
+            exit 1
+          fi
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -z "${DOOMED:-}" ]; then
+            echo "Nothing was deleted — no key was given."
+            exit 0
+          fi
+
+          # ---------------------------------------------------------- deleting
+          #
+          # Guard one: never the archive the site is serving.
+          #
+          # PROTOMAPS_ARCHIVE is a whole URL and this is a key, so the
+          # comparison is against its last path segment. Deleting that object
+          # does not fail loudly — the site goes on asking for it and every
+          # visitor gets a blank basemap, which is the worst kind of outage
+          # because nothing anywhere reports it.
+          LIVE_KEY="${LIVE##*/}"
+          if [ -n "$LIVE_KEY" ] && [ "$DOOMED" = "$LIVE_KEY" ]; then
+            echo "::error::\`${DOOMED}\` is the archive PROTOMAPS_ARCHIVE points at. Deleting it blanks the basemap for every visitor. Point that variable somewhere else first if you really mean to remove this."
+            exit 1
+          fi
+
+          # Guard two: it has to be there already.
+          #
+          # A typo in a key name deletes nothing and S3 reports success for it,
+          # so without this a misspelling reads exactly like a job well done —
+          # and the object you meant to remove is still sitting there.
+          if ! aws s3api head-object --bucket "$BUCKET" --key "$DOOMED" \
+                 --endpoint-url "$ENDPOINT" > doomed.json 2>/dev/null; then
+            echo "::error::There is no \`${DOOMED}\` in ${BUCKET}. Check the spelling against the listing above; a delete of a key that is not there succeeds and removes nothing."
+            exit 1
+          fi
+
+          SIZE="$(node -e 'console.log(JSON.parse(require("fs").readFileSync("doomed.json","utf8")).ContentLength)')"
+          WHEN="$(node -e 'console.log(JSON.parse(require("fs").readFileSync("doomed.json","utf8")).LastModified)')"
+          echo "Deleting ${DOOMED} — ${SIZE} bytes, last modified ${WHEN}"
+
+          aws s3api delete-object --bucket "$BUCKET" --key "$DOOMED" \
+            --endpoint-url "$ENDPOINT" > /dev/null
+
+          # Asked rather than assumed, because delete-object returns 204 for a
+          # key that was never there and for one it removed alike.
+          if aws s3api head-object --bucket "$BUCKET" --key "$DOOMED" \
+               --endpoint-url "$ENDPOINT" > /dev/null 2>&1; then
+            echo "::error::\`${DOOMED}\` is still in the bucket after the delete."
+            exit 1
+          fi
+
+          {
+            echo ""
+            echo "Deleted \`${DOOMED}\` — ${SIZE} bytes, last modified ${WHEN}. Confirmed gone."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Deleted ${DOOMED}. Confirmed gone."

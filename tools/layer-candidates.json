@@ -850,27 +850,11 @@
     "note": "Which font names the Protomaps font server actually serves, which decides whether the Protomaps basemap has any labels on it at all. Eight names were probed while working that out; two answered and they are the two the style now asks for (see PROTOMAPS_SCHEMA.font in byways-style.js). The other six are settled negatives and were removed - a probe that 404s every week teaches you to skip the report it is in. The find is the fontstack name the server writes into the header of the .pbf it returns, so this fails if the server starts answering 200 with something that is not the font asked for."
   },
   {
-    "id": "pages:archive",
-    "expect": "data",
-    "range": "bytes=0-127",
-    "url": "https://pub-6c1c3dd7850440d1ac8f426e4be7ad61.r2.dev/byways.pmtiles",
-    "find": "(PMTiles)",
-    "note": "The archive as the site actually serves it. The deploy going green says a file was uploaded; this says a browser can read it - a 206, the PMTiles magic in the first bytes, and CORS. Deployed and works are different claims and only one of them is worth making. Asked of R2 rather than of the Pages path it used to sit on: the extract outgrew what Pages will serve and moved, so the old URL 404s by design and was failing here every week for it. Which host the site actually reads is a separate question, and pages:archive-config is the one that asks it."
-  },
-  {
-    "id": "pages:archive-tile",
-    "expect": "data",
-    "range": "bytes=200000-200127",
-    "url": "https://pub-6c1c3dd7850440d1ac8f426e4be7ad61.r2.dev/byways.pmtiles",
-    "find": "([\\s\\S]{8})",
-    "note": "A slice from inside the tile data rather than the header, because reading tiles is the whole point and a host that truncates a bytes=0-N response would pass the probe above without supporting ranges at all. Asked of R2 rather than of the Pages path it used to sit on: the extract outgrew what Pages will serve and moved, so the old URL 404s by design and was failing here every week for it. Which host the site actually reads is a separate question, and pages:archive-config is the one that asks it."
-  },
-  {
     "id": "pages:archive-config",
     "expect": "data",
     "url": "https://shermancahal.github.io/Map/assets/js/token.js",
     "find": "ABMAP_PROTOMAPS_ARCHIVE = '([^']*)'",
-    "note": "What the deployed site is configured to read. The archive can be present and the config still empty, in which case Byways Topo goes on drawing from Mapbox and the extract is a file nobody asks for."
+    "note": "What the deployed site is configured to read. The archive can be present and the config still empty, in which case Byways Topo goes on drawing from Mapbox and the extract is a file nobody asks for.\n\nWhether that URL is readable is asked by the 'Check a map archive' workflow, run with no url: it reads PROTOMAPS_ARCHIVE and probes Range, CORS and compression against whatever the variable currently says. Two candidates here used to ask the same thing with the bucket URL frozen into this file, which is one copy of a fact that moves - and it moved the first time somebody changed the public base. One source of truth, and it is the variable."
   },
   {
     "id": "wild:usfs-dollysods",

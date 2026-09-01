@@ -212,6 +212,46 @@ it, so the run can read back what it just uploaded. It was called
 `PROTOMAPS_PUBLIC_BASE` for about an hour, which read just as naturally as the
 site's own address and duly got asked about.
 
+### Rolling the token, later
+
+The credential is the one thing here with a lifetime. When you re-issue it —
+Cloudflare's *Manage API tokens* → the token → **Roll**, which mints a new key
+pair and invalidates the old one — the three GitHub **Secrets** are still the
+old pair until you paste the new ones in. Nothing breaks at that moment: the
+site reads the archive over a *public* URL and never sees the token. What
+breaks is the next upload, and only when it gets there.
+
+That used to mean finding out at the wrong end of an hour: `cut-archive` cuts a
+multi-gigabyte extract before it authenticates. **Look in the bucket** answers
+it in about five seconds — run it with no inputs and it lists what is in the
+bucket, or names the credentials as the problem if the listing is refused.
+
+Two variables are worth keeping straight while you are in there, because they
+look like the same value and are not:
+
+| | |
+| --- | --- |
+| `R2_PUBLIC_BASE` | the bucket's public URL. Used by `cut-archive` to read back what it just uploaded. |
+| `PROTOMAPS_ARCHIVE` | the full archive URL **the site actually reads**. It is written into `token.js` at deploy time. |
+
+Changing the first does not change the second, and changing the second does
+nothing to the live site until a deploy runs. If a basemap goes blank after a
+bucket change, that pair is the first thing to look at — and *Check a map
+archive*, run with no url, reads `PROTOMAPS_ARCHIVE` and says whether a browser
+can still read what it points at.
+
+### Removing something from the bucket
+
+**Look in the bucket** takes a `delete` input: one exact key, no wildcards and
+no prefixes. It refuses two things on purpose — a key that is not already there
+(a delete of a missing key succeeds and removes nothing, so a typo otherwise
+reads as a job well done) and the key `PROTOMAPS_ARCHIVE` points at (removing
+that blanks the basemap for every visitor and nothing anywhere reports it).
+
+The Cloudflare dashboard does the same job with no credentials at all, and for
+a one-off that is the shorter path. The workflow earns its place when you want
+the deletion in the run log next to what was in the bucket before it.
+
 ### 5. Run it · *GitHub*
 
 **Actions → Cut a map archive → Run workflow.**

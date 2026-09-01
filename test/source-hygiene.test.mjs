@@ -241,20 +241,42 @@ test('the bucket credentials never reach a workflow that writes the site', async
    * catastrophic for a key that can write to a bucket, and the difference
    * between the two is one line of YAML written by somebody in a hurry.
    *
-   * So the rule is by name: only the workflow that uploads may mention them.
+   * So the rule is an allowlist by name - the two workflows whose whole job is
+   * the bucket - plus the property the allowlist exists to protect: a workflow
+   * holding these must not also be one that writes the client config. The name
+   * check alone would let a third workflow be added to the list by the same
+   * person in the same hurry; the property check is what actually says why.
    */
   const dir = '.github/workflows';
-  const ALLOWED = 'cut-archive.yml';
+  const SECRETS = ['R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_ACCOUNT_ID'];
+  const ALLOWED = ['bucket.yml', 'cut-archive.yml'];
   const offenders = [];
+  const holders = [];
+
   for (const name of await readdir(dir)) {
-    if (!/\.ya?ml$/.test(name) || name === ALLOWED) continue;
+    if (!/\.ya?ml$/.test(name)) continue;
     const text = await readFile(path.join(dir, name), 'utf8');
-    for (const secret of ['R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_ACCOUNT_ID']) {
-      if (text.includes(secret)) offenders.push(`${name} mentions ${secret}`);
+    const mentions = SECRETS.filter((secret) => text.includes(secret));
+    if (!mentions.length) continue;
+    holders.push(name);
+    if (!ALLOWED.includes(name)) {
+      for (const secret of mentions) offenders.push(`${name} mentions ${secret}`);
+    }
+    /*
+     * The part that is about consequences rather than about filenames. A
+     * workflow that both holds a bucket credential and writes token.js is one
+     * line of YAML away from serving it to every visitor.
+     */
+    if (/window\.ABMAP_/.test(text)) {
+      offenders.push(`${name} holds a bucket credential and writes the client config`);
     }
   }
+
   assert.deepEqual(offenders, [],
-    `only ${ALLOWED} may reference the bucket credentials`);
+    `only ${ALLOWED.join(' and ')} may reference the bucket credentials, and neither may write token.js`);
+  // And the allowlist is a list of files that exist, so a rename cannot
+  // quietly widen it to nothing.
+  assert.deepEqual(holders.sort(), ALLOWED);
 });
 
 test('nothing writes a bucket credential into the client config', async () => {
