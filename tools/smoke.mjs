@@ -258,6 +258,21 @@ FullscreenControl:class{},Popup,LngLatBounds:Bounds,
 Marker:class{setLngLat(){return this}addTo(){return this}remove(){return this}}};
 window.mapboxgl=window.maplibregl;`;
 
+/*
+ * A picture of one element, when asked for.
+ *
+ * Off by default - it is not a check and nothing here compares images. It is
+ * for the case this suite cannot cover, which is whether a card that passes
+ * every assertion actually looks right:
+ *
+ *   SMOKE_SHOTS=/tmp/shots npm run smoke
+ */
+const shot = async (locator, name) => {
+  if (!process.env.SMOKE_SHOTS) return;
+  await mkdir(process.env.SMOKE_SHOTS, { recursive: true });
+  await locator.screenshot({ path: path.join(process.env.SMOKE_SHOTS, `${name}.png`) });
+};
+
 const failures = [];
 const check = (label, actual, expected) => {
   const ok = JSON.stringify(actual) === JSON.stringify(expected);
@@ -2297,7 +2312,9 @@ check('an undesignated route is called closed, not unrestricted',
 check('and it never claims the absence of a rule is permission',
   /no restriction|unrestricted|permitted/i.test(closed), false);
 
-await page.locator('.identify-card .identify-dismiss').click();
+await shot(page.locator('.identify-card .popup-tail'), 'identify-full');
+
+await page.locator('.identify-card .identify-close').click();
 await page.waitForTimeout(200);
 for (const name of ['Forest roads (MVUM)', 'BLM routes']) {
   await page.locator('.layer-row', { hasText: name }).locator('input[type=checkbox]').uncheck();
@@ -2305,17 +2322,18 @@ for (const name of ['Forest roads (MVUM)', 'BLM routes']) {
 await page.waitForTimeout(400);
 
 /*
- * The card with nothing on it, and the mark that sat in its sentence.
+ * The card with nothing on it, and the way out of it.
  *
- * Room for the close mark was reserved by naming the lines a found feature
- * draws - the title, the first group's source and designation. The one card
- * that draws none of them is this one, a bare paragraph in the body, and the
- * × landed in the middle of its first line. Reported from the phone.
+ * This card is the one that draws none of the lines a found feature draws - no
+ * title, no source, no designation, just a paragraph saying nothing was there.
+ * A close mark in the corner had nothing to sit beside on it and landed in the
+ * middle of the first sentence; a labelled Close on the last row cannot, and
+ * matches the bar a dropped pin has always had.
  *
- * Measured as geometry rather than as a class list: the rule could be present
- * and still not reach this paragraph, which is exactly the bug. Every line box
- * of the text is compared against the mark's own box, so a fix that only moves
- * the first line off it does not pass either.
+ * Measured as geometry rather than as a class list. Two buttons of the same
+ * width on one line is the whole of what was asked for, and a grid that has
+ * quietly gone back to thirds still has both buttons present and both classes
+ * on the row.
  */
 await page.evaluate(() => {
   window.__rendered = [];
@@ -2327,27 +2345,35 @@ await page.waitForTimeout(900);
 const empty = await page.evaluate(() => {
   const card = document.querySelector('.identify-card');
   const text = card?.querySelector('.identify-body > p');
-  const mark = card?.querySelector('.identify-dismiss');
-  if (!text || !mark) return { found: false };
+  const row = [...(card?.querySelectorAll('.popup-row') || [])].pop();
+  if (!text || !row) return { found: false };
+  const buttons = [...row.children].map((node) => ({
+    label: node.textContent.trim(),
+    width: Math.round(node.getBoundingClientRect().width),
+  }));
   const range = document.createRange();
   range.selectNodeContents(text);
-  const box = mark.getBoundingClientRect();
-  // A pixel of slack at each edge: touching corners is not text under a mark.
-  const hit = [...range.getClientRects()].some((line) => line.right > box.left + 1
-    && line.left < box.right - 1 && line.bottom > box.top + 1 && line.top < box.bottom - 1);
-  return { found: true, hit, lines: range.getClientRects().length };
+  const lines = [...range.getClientRects()];
+  // Nothing is allowed to sit on the sentence, whatever it is.
+  const covered = [...card.querySelectorAll('button, a')].some((node) => {
+    const box = node.getBoundingClientRect();
+    return lines.some((line) => line.right > box.left + 1 && line.left < box.right - 1
+      && line.bottom > box.top + 1 && line.top < box.bottom - 1);
+  });
+  return { found: true, buttons, covered, lines: lines.length };
 });
 check('a tap that finds nothing still says so', empty.found, true);
-check('and its sentence wraps beside the close mark, not under it', empty.hit, false);
-check('which takes more than one line, so the check is looking at wrapped text',
+check('and offers the two ways on from it, labelled',
+  empty.buttons?.map((b) => b.label), ['Details', 'Close']);
+check('as two boxes of the same width',
+  empty.buttons?.[0].width === empty.buttons?.[1].width, true);
+check('with nothing sitting on the sentence above them', empty.covered, false);
+check('which takes more than one line, so the card is laid out at a card\'s width',
   empty.lines > 1, true);
 
-/*
- * The identify card's close is a mark in the corner now, not the second button
- * in a bar. The bar still exists on the pin and feature popups, which is why
- * the selectors above it still find one.
- */
-await page.locator('.identify-card .identify-dismiss').click();
+await shot(page.locator('.identify-card'), 'identify-empty');
+
+await page.locator('.identify-card .identify-close').click();
 await page.waitForTimeout(200);
 
 /*
@@ -2995,7 +3021,7 @@ check('in the same card a tap on the map would open', landed.source, 'Place');
 check('with the spot marked', landed.marked, [-83.58, 35.65]);
 check('and the list put away', landed.list, true);
 
-await page.evaluate(() => { document.querySelector('.identify-card .identify-dismiss')?.click(); });
+await page.evaluate(() => { document.querySelector('.identify-card .identify-close')?.click(); });
 await page.fill('#place-search', '');
 await page.waitForTimeout(200);
 

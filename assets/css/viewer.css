@@ -1637,7 +1637,7 @@ html, body { height: 100%; overflow: hidden; }
 .app.is-probing .mapboxgl-canvas-container { cursor: crosshair; }
 
 /* What a tap turned out to be sitting on. */
-.identify-card { min-width: 244px; position: relative; }
+.identify-card { min-width: 244px; }
 /*
  * Everything you can do about the place, under one line and in two rows: what
  * this app can do with it, then who else can take you to it.
@@ -1648,11 +1648,21 @@ html, body { height: 100%; overflow: hidden; }
  * the card, which is capped at 340px over a map.
  */
 .popup-tail { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line); }
-.popup-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.popup-row { display: grid; gap: 6px; }
 .popup-row + .popup-row { margin-top: 6px; }
-.popup-row .button {
-  width: 100%; justify-content: center; text-align: center;
-  font-size: .78rem; line-height: 1.15; padding: 6px 4px; text-decoration: none;
+.popup-row .button { width: 100%; justify-content: center; text-decoration: none; }
+/*
+ * Three across is the tight case; one or two is the roomy one.
+ *
+ * A row of three over a 340px card has no width for icon-beside-label, so the
+ * icon goes above and the label wraps under it. A row of two does have the
+ * room, and taking it means Details and Close on an identify card look like
+ * Details and Close on a dropped pin, which is the same pair of buttons.
+ */
+.popup-row-tight { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.popup-row-wide { grid-template-columns: repeat(var(--popup-cols, 2), minmax(0, 1fr)); }
+.popup-row-tight .button {
+  text-align: center; font-size: .78rem; line-height: 1.15; padding: 6px 4px;
 }
 .popup-row .button-with-icon { gap: 4px; }
 /*
@@ -1666,33 +1676,22 @@ html, body { height: 100%; overflow: hidden; }
 .popup-row .button span {
   overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere;
 }
-.popup-row .button-with-icon { flex-direction: column; gap: 3px; }
+/* Stacked only where the width forces it. A row of two has room for the icon
+   beside the label; a row of three does not. */
+.popup-row-tight .button-with-icon { flex-direction: column; gap: 3px; }
 .popup-row .button svg { width: 13px; height: 13px; flex: none; }
 /* The save picker drops below both rows, full width. */
 .popup-tail .popup-save-panel { margin-top: 8px; }
-/* Dismissing the card is not a thing you do with the place, so it is a mark in
-   the corner rather than a third of a row. */
-.identify-dismiss {
-  position: absolute; top: -2px; right: -2px; z-index: 1;
-  display: grid; place-items: center; width: 24px; height: 24px;
-  padding: 0; border: 0; border-radius: 50%; cursor: pointer;
-  background: transparent; color: var(--ink-3);
-}
-.identify-dismiss:hover { background: var(--paper-2); color: var(--ink); }
-.identify-dismiss svg { width: 14px; height: 14px; }
 /*
- * Room for it, so the top line does not run under the mark.
+ * No corner mark, and so no gutter to keep clear of one.
  *
- * The list used to name only the lines a found feature draws, so the one card
- * with no feature on it - the empty state, a paragraph straight into the body
- * - put the mark through the middle of its first sentence. The body's own
- * first paragraph is now covered by position rather than by class, so the
- * next kind of opening line does not have to be remembered here.
+ * The × lived at the top right for a while, which meant every line that could
+ * be the card's first one had to reserve 22px on its right - the title, the
+ * first group's source and designation, and the empty state's paragraph, which
+ * was forgotten and got the mark laid through the middle of its first
+ * sentence. Close is a labelled button on the last row now, like every other
+ * popup in the app, and none of that reserving is needed.
  */
-.identify-card .identify-title,
-.identify-card .identify-body > p:first-child,
-.identify-card .identify-group:first-child .identify-source,
-.identify-card .identify-group:first-child .identify-designation { padding-right: 22px; }
 /* Only ever on screen on its own, while the services answer, so it carries no
    gap below it for content that is not there yet. */
 .identify-title {

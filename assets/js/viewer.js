@@ -6598,22 +6598,24 @@ function showIdentifyResults(position, groups, { pending = false } = {}) {
    * Close on a row, then the navigation links, then Add to Trip and Save to
    * folder on rows of their own. Four rules' worth of vertical space on a card
    * that has to sit over a map, and no sense of which things were alternatives.
-   * They are all one thing - what next - so they are one block, in two rows:
-   * what this app can do with the place, then who else can take you to it.
+   * They are all one thing - what next - so they are one block: what this app
+   * can do with the place, then who else can take you to it, then out.
    *
-   * Close is a mark in the corner rather than a button in the row. It is not a
-   * thing you do with the place, it is dismissing the card, and giving it a
-   * third of a row said otherwise.
+   * Close is a button on the last row, the way it is on a dropped pin. It spent
+   * a while as a mark in the corner on the reasoning that dismissing a card is
+   * not a thing you do with the place - true of the card and false of the app,
+   * where every other popup ends in a labelled Close and this one did not.
+   * Consistency is worth more here than the distinction, and the corner mark
+   * had to fight the text beside it for room in any case.
    */
-  const dismiss = el('button', {
-    class: 'identify-dismiss', type: 'button',
-    title: 'Close', 'aria-label': 'Close',
-    html: icons.close,
-    // The mark goes with the card. Left behind it is a dot on the map with
+  const closing = labelledButton(icons.close, 'Close', {
+    tone: 'ghost',
+    title: 'Close this card',
+    // The mark on the map goes with the card. Left behind it is a dot with
     // nothing on screen saying what it is.
     onclick: () => { popup.remove(); setProbeMark(null); },
-  });
-  content.prepend(dismiss);
+  }, '');
+  closing.classList.add('identify-close');
 
   const doing = [
     labelledButton(icons.info, 'Details', {
@@ -6644,15 +6646,40 @@ function showIdentifyResults(position, groups, { pending = false } = {}) {
     ? directionsFor([position.lng ?? position[0], position.lat ?? position[1]])
     : [];
 
+  /*
+   * Close is always the last thing on the card, and on a card that found
+   * nothing it shares its line with Details.
+   *
+   * A tap on empty ground has only one other button, so the two sit side by
+   * side at full width - the shape a dropped pin's bar has always had, which
+   * is the point: the same pair of buttons should not look like two different
+   * things in two different popups. When there is a place to act on, the rows
+   * above are three across and Close takes the line below rather than a third
+   * of one, so it stays the last thing rather than moving up beside a save.
+   */
+  const rows = [];
+  const closingRow = [closing];
+  if (going.length || doing.length >= 3) {
+    rows.push({ items: doing, tight: true });
+    if (going.length) {
+      rows.push({
+        tight: true,
+        items: going.map((one) => el('a', {
+          class: 'button button-ghost button-small button-with-icon',
+          href: one.url,
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          html: `${icons.compass}<span>${escapeHTML(one.label)}</span>`,
+        })),
+      });
+    }
+  } else {
+    closingRow.unshift(...doing);
+  }
+  rows.push({ items: closingRow, tight: false });
+
   content.append(el('div', { class: 'popup-tail' }, [
-    el('div', { class: 'popup-row' }, doing),
-    going.length ? el('div', { class: 'popup-row' }, going.map((one) => el('a', {
-      class: 'button button-ghost button-small button-with-icon',
-      href: one.url,
-      target: '_blank',
-      rel: 'noopener noreferrer',
-      html: `${icons.compass}<span>${escapeHTML(one.label)}</span>`,
-    }))) : null,
+    ...rows.map((row) => popupRow(row.items, row.tight)),
     savePanel,
   ]));
 
@@ -7784,6 +7811,23 @@ function labelledButton(icon, label, { onclick, title = '', tone = 'secondary' }
   // own place in the header, so they keep the id that named it.
   if (id) button.id = id;
   return button;
+}
+
+/*
+ * One row of a popup's tail.
+ *
+ * Tight rows are three columns whatever they hold, so the rows of a card line
+ * up with each other; the label wraps inside its cell and the icon sits above
+ * it, because three cells over a 340px card is not enough width for
+ * icon-beside-label. A wide row is sized to its own contents and laid out the
+ * way the rest of the app lays out a pair of buttons - side by side, icon
+ * beside label, at the size a button normally is.
+ */
+function popupRow(items, tight) {
+  return el('div', {
+    class: `popup-row ${tight ? 'popup-row-tight' : 'popup-row-wide'}`,
+    style: tight ? '' : `--popup-cols:${items.length}`,
+  }, items);
 }
 
 /** A plain section heading, with the same mark the collapsible ones carry. */
