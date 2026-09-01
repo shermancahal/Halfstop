@@ -35,6 +35,21 @@ const BODY_COLOUR = ['match', ['get', 'body'], 'moon', '#3d6ea8', 'core', '#7b4f
 const LABEL_COLOUR = ['match', ['get', 'body'], 'moon', '#274b75', 'core', '#57327d', '#8f5206'];
 const LINE_WIDTH = ['interpolate', ['linear'], ['zoom'], 8, 4.2, 14, 6];
 
+/*
+ * The drive is amber, not the brand's clay red.
+ *
+ * Reported: over West Virginia the route was invisible, because US and state
+ * routes are drawn in almost exactly that red and the suggested drive
+ * disappeared into the roads it was suggesting. Amber is nowhere in the road
+ * palette, so nothing on the basemap competes with it, and it holds up on both
+ * the light topo tan and the dark theme's green.
+ *
+ * The casing is dark rather than the white it was, because yellow on white
+ * over pale ground is mush. Dark under amber reads on either theme.
+ */
+const TRIP_COLOUR = '#ffc21a';
+const TRIP_CASING = '#3d2c00';
+
 /** Sources every runtime layer needs, all of them initially empty. */
 export function runtimeSources() {
   return [FOLDER_SOURCE, REGION_SOURCE, LIGHT_SOURCE, STORM_SOURCE, SCRATCH_HIGHLIGHT, SCRATCH_CURSOR,
@@ -272,8 +287,8 @@ export function runtimeLayers({ labels = true, font } = {}) {
     id: 'trip-route-casing', type: 'line', source: TRIP_SOURCE, filter: IS_LINE,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': '#ffffff',
-      'line-opacity': 0.75,
+      'line-color': TRIP_CASING,
+      'line-opacity': 0.85,
       'line-width': ['interpolate', ['linear'], ['zoom'], 6, 5, 14, 11],
     },
       },
@@ -281,7 +296,7 @@ export function runtimeLayers({ labels = true, font } = {}) {
     id: 'trip-route-line', type: 'line', source: TRIP_SOURCE, filter: IS_LINE,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': '#b4441f',
+      'line-color': TRIP_COLOUR,
       'line-width': ['interpolate', ['linear'], ['zoom'], 6, 2.4, 14, 6],
     },
       },
@@ -297,7 +312,9 @@ export function runtimeLayers({ labels = true, font } = {}) {
     id: 'trip-walk-line', type: 'line', source: TRIP_SOURCE, filter: ['all', IS_LINE, ['get', 'walk']],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': '#3f6212',
+      // The same amber, because it is the same trip. The dashes and the width
+      // are what say it is not the driving.
+      'line-color': TRIP_COLOUR,
       'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1.8, 14, 3.4],
       'line-dasharray': [1.5, 1.5],
     },

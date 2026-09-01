@@ -6638,7 +6638,16 @@ function identifiedFeature(position, groups) {
   const named = groups.find((group) => group.named && group.designation)
     || groups.find((group) => group.designation)
     || groups[0];
-  const source = groups.find((group) => group.source)?.source || '';
+  /*
+   * The source of the name, not of whichever group came first.
+   *
+   * This took the first group that had a source at all, which is a different
+   * group from the one that supplied the name whenever a tap lands on more
+   * than one thing. Reported from a waterfall saved as "Rocky Fork Creek" and
+   * described as "From Road." - the water layer named it and the road layer
+   * underneath it got the credit.
+   */
+  const source = named?.source || '';
   return {
     type: 'Feature',
     geometry: { type: 'Point', coordinates: [position.lng ?? position[0], position.lat ?? position[1]] },
@@ -8698,6 +8707,9 @@ function showTripRoute(route, stops) {
   source.setData(route ? routeGeoJSON(route, stops) : { type: 'FeatureCollection', features: [] });
 }
 
+/** Whether anything is drawn for this folder right now. */
+const tripRouteFor = (folderId) => (tripRoute?.folderId === folderId ? tripRoute.route : null);
+
 /**
  * Ask the router for this folder's drive and draw it.
  *
@@ -8716,9 +8728,20 @@ async function drawTripRoute(folder, stops, button) {
       return;
     }
     tripRoute = { folderId: folder.id, route, stops };
+    const drawn = routeGeoJSON(route, stops);
     showTripRoute(route, stops);
-    const box = route.legs.flatMap((leg) => leg.coordinates)
-      .reduce((bounds, position) => extendBounds(bounds, position), emptyBounds());
+    /*
+     * Measured off the geometry that was just drawn, rather than folded by hand
+     * over every leg's coordinates.
+     *
+     * The hand-folded version referenced emptyBounds and extendBounds, neither
+     * of which this file imports - so pressing the button threw
+     * "emptyBounds is not defined", the route never appeared, and the only sign
+     * was a toast. Every part of it had been exercised in a browser except the
+     * button itself. geojsonBounds is already imported and takes exactly the
+     * collection that was handed to the map.
+     */
+    const box = geojsonBounds(drawn);
     if (boundsAreValid(box)) fitTo(box);
     renderFoldersTab();
   } catch (error) {

@@ -927,7 +927,7 @@ html, body { height: 100%; overflow: hidden; }
    geometry are the same statement made twice. */
 .trip-walk-note {
   margin: 6px 0 0; padding-left: 9px; font-size: .82rem; color: var(--ink-2);
-  border-left: 2px dashed #3f6212;
+  border-left: 2px dashed #b58200;
 }
 
 .trip-days { list-style: none; margin: 9px 0 0; padding: 0; display: grid; gap: 7px; }
