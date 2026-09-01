@@ -2286,7 +2286,12 @@ check('an undesignated route is called closed, not unrestricted',
 check('and it never claims the absence of a rule is permission',
   /no restriction|unrestricted|permitted/i.test(closed), false);
 
-await page.locator('.identify-card .popup-bar button').nth(1).click();
+/*
+ * The identify card's close is a mark in the corner now, not the second button
+ * in a bar. The bar still exists on the pin and feature popups, which is why
+ * the selectors above it still find one.
+ */
+await page.locator('.identify-card .identify-dismiss').click();
 await page.waitForTimeout(200);
 for (const name of ['Forest roads (MVUM)', 'BLM routes']) {
   await page.locator('.layer-row', { hasText: name }).locator('input[type=checkbox]').uncheck();
@@ -2938,7 +2943,7 @@ check('in the same card a tap on the map would open', landed.source, 'Place');
 check('with the spot marked', landed.marked, [-83.58, 35.65]);
 check('and the list put away', landed.list, true);
 
-await page.evaluate(() => { document.querySelector('.identify-card .popup-bar button:last-child')?.click(); });
+await page.evaluate(() => { document.querySelector('.identify-card .identify-dismiss')?.click(); });
 await page.fill('#place-search', '');
 await page.waitForTimeout(200);
 
