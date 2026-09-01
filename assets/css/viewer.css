@@ -1595,7 +1595,53 @@ html, body { height: 100%; overflow: hidden; }
 .app.is-probing .mapboxgl-canvas-container { cursor: crosshair; }
 
 /* What a tap turned out to be sitting on. */
-.identify-card { min-width: 244px; }
+.identify-card { min-width: 244px; position: relative; }
+/*
+ * Everything you can do about the place, under one line and in two rows: what
+ * this app can do with it, then who else can take you to it.
+ *
+ * Three equal columns rather than flex, so the two rows line up with each
+ * other - a row of three over a row of three that did not share edges read as
+ * six unrelated buttons. Labels wrap inside their button instead of widening
+ * the card, which is capped at 340px over a map.
+ */
+.popup-tail { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line); }
+.popup-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.popup-row + .popup-row { margin-top: 6px; }
+.popup-row .button {
+  width: 100%; justify-content: center; text-align: center;
+  font-size: .78rem; line-height: 1.15; padding: 6px 4px; text-decoration: none;
+}
+.popup-row .button-with-icon { gap: 4px; }
+/*
+ * Wrapped, not truncated.
+ *
+ * button-with-icon ellipses its label, which is right for a row that must not
+ * widen and wrong for a grid cell with height to spare: three cells across a
+ * 340px card gave "Add to T…", "Save to …", "Apple M…". Two short lines say
+ * the whole word.
+ */
+.popup-row .button span {
+  overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere;
+}
+.popup-row .button-with-icon { flex-direction: column; gap: 3px; }
+.popup-row .button svg { width: 13px; height: 13px; flex: none; }
+/* The save picker drops below both rows, full width. */
+.popup-tail .popup-save-panel { margin-top: 8px; }
+/* Dismissing the card is not a thing you do with the place, so it is a mark in
+   the corner rather than a third of a row. */
+.identify-dismiss {
+  position: absolute; top: -2px; right: -2px; z-index: 1;
+  display: grid; place-items: center; width: 24px; height: 24px;
+  padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  background: transparent; color: var(--ink-3);
+}
+.identify-dismiss:hover { background: var(--paper-2); color: var(--ink); }
+.identify-dismiss svg { width: 14px; height: 14px; }
+/* Room for it, so a long name does not run under the mark. */
+.identify-card .identify-title,
+.identify-card .identify-group:first-child .identify-source,
+.identify-card .identify-group:first-child .identify-designation { padding-right: 22px; }
 /* Only ever on screen on its own, while the services answer, so it carries no
    gap below it for content that is not there yet. */
 .identify-title {
@@ -1781,10 +1827,20 @@ html, body { height: 100%; overflow: hidden; }
    how much golden hour there is relative to the twilight either side — and a
    list of times does not show that at all. */
 .sky-bar {
-  position: relative; display: flex; height: 13px; margin: 2px 0 4px;
-  border-radius: 3px; overflow: hidden;
+  /*
+   * `overflow: visible`, and the rounding moved onto the bands.
+   *
+   * The now marker has to stand above and below the bar to be findable, and
+   * clipping it to the bar is what made it a two-pixel sliver among a dozen
+   * coloured ones. The bands carry the rounded ends now, so the bar still
+   * looks the same.
+   */
+  position: relative; display: flex; height: 13px; margin: 7px 0 4px;
+  border-radius: 3px; overflow: visible;
   border: 1px solid var(--line);
 }
+.sky-band:first-child { border-radius: 2px 0 0 2px; }
+.sky-band:last-child { border-radius: 0 2px 2px 0; }
 .sky-band { display: block; min-width: 1px; }
 .sky-band.is-astronomical { background: #1b2440; }
 .sky-band.is-nautical     { background: #2c3f6b; }
@@ -1796,10 +1852,29 @@ html, body { height: 100%; overflow: hidden; }
 
 /* Where we are in the day. Without it the bar is a diagram; with it, it is a
    clock you can read in one glance. */
+/*
+ * Findable against any band, which is the whole difficulty.
+ *
+ * The bands run from near-black at midnight to pale blue at noon, so no single
+ * colour contrasts with all of them - a dark line vanishes into night and a
+ * pale one vanishes into day. A white core inside a dark halo reads against
+ * both, and the tab above it is what the eye actually lands on: at a glance the
+ * bar is a clock with a hand, rather than a diagram with a hairline in it.
+ */
 .sky-now {
-  position: absolute; top: -2px; bottom: -2px; width: 2px;
-  background: var(--ink); box-shadow: 0 0 0 1px rgba(255, 255, 255, .7);
-  transform: translateX(-1px);
+  position: absolute; top: -5px; bottom: -5px; width: 3px;
+  background: #fff;
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .85);
+  border-radius: 2px;
+  transform: translateX(-1.5px);
+  pointer-events: none;
+}
+/* A cap at the top, because at this size a triangle reads as a smudge. */
+.sky-now::before {
+  content: ""; position: absolute; left: 50%; top: -3px;
+  width: 9px; height: 3px; transform: translateX(-50%);
+  border-radius: 2px;
+  background: #fff; box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .85);
 }
 
 .sky-bar-ends {

@@ -6583,50 +6583,69 @@ function showIdentifyResults(position, groups, { pending = false } = {}) {
   }
 
   /*
-   * Directions to what the tap found, once there is something to go to.
+   * Everything you can do about this place, under one line.
    *
-   * Not while pending, and not on empty ground - offering to navigate to a
-   * tap that found nothing is offering to navigate to a coordinate, which is
-   * true and useless.
+   * It used to be three stacked blocks with a rule above the first: Details and
+   * Close on a row, then the navigation links, then Add to Trip and Save to
+   * folder on rows of their own. Four rules' worth of vertical space on a card
+   * that has to sit over a map, and no sense of which things were alternatives.
+   * They are all one thing - what next - so they are one block, in two rows:
+   * what this app can do with the place, then who else can take you to it.
+   *
+   * Close is a mark in the corner rather than a button in the row. It is not a
+   * thing you do with the place, it is dismissing the card, and giving it a
+   * third of a row said otherwise.
    */
-  if (!pending && groups.length) {
-    const row = directionsRow(
-      [position.lng ?? position[0], position.lat ?? position[1]],
-      { title: 'Go' },
-    );
-    if (row) content.append(row);
-  }
+  const dismiss = el('button', {
+    class: 'identify-dismiss', type: 'button',
+    title: 'Close', 'aria-label': 'Close',
+    html: icons.close,
+    // The mark goes with the card. Left behind it is a dot on the map with
+    // nothing on screen saying what it is.
+    onclick: () => { popup.remove(); setProbeMark(null); },
+  });
+  content.prepend(dismiss);
 
-  content.append(el('div', { class: 'popup-bar' }, [
+  const doing = [
     labelledButton(icons.info, 'Details', {
       tone: 'ghost',
       onclick: () => { popup.remove(); showPointDetails(position); },
     }),
-    labelledButton(icons.close, 'Close', {
-      tone: 'ghost',
-      // The mark goes with the card. Left behind it is a dot on the map with
-      // nothing on screen saying what it is.
-      onclick: () => { popup.remove(); setProbeMark(null); },
-    }),
-  ]));
+  ];
+  let savePanel = null;
 
   /*
-   * And the one action this card was missing.
+   * The save belongs where the naming is.
    *
    * A trailhead used to answer a tap with two cards on top of each other: this
    * one, naming it and listing its attributes, and a second from the overlay's
-   * own layer that knew almost nothing about it but had the save button. The
-   * reader had to notice that the useful card and the actionable card were
-   * different cards.
+   * own layer that knew almost nothing about it but had the save button.
    *
-   * So the save comes here, where the naming already is. Only once the answer
-   * has arrived - offering to save "Looking…" would be its own small lie - and
-   * only when something was actually found, because a tap on empty ground has
-   * nothing to name.
+   * Only once the answer has arrived - offering to save "Looking…" would be
+   * its own small lie - and only when something was found, because a tap on
+   * empty ground has nothing to name.
    */
   if (!pending && groups.length) {
-    content.append(saveToFolderActions(identifiedFeature(position, groups), popup));
+    const parts = saveToFolderParts(identifiedFeature(position, groups), popup);
+    doing.push(...parts.actions);
+    savePanel = parts.panel;
   }
+
+  const going = !pending && groups.length
+    ? directionsFor([position.lng ?? position[0], position.lat ?? position[1]])
+    : [];
+
+  content.append(el('div', { class: 'popup-tail' }, [
+    el('div', { class: 'popup-row' }, doing),
+    going.length ? el('div', { class: 'popup-row' }, going.map((one) => el('a', {
+      class: 'button button-ghost button-small button-with-icon',
+      href: one.url,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+      html: `${icons.compass}<span>${escapeHTML(one.label)}</span>`,
+    }))) : null,
+    savePanel,
+  ]));
 
   popup.setDOMContent(content).addTo(state.map);
   return { popup, body };
@@ -6670,7 +6689,20 @@ function identifiedFeature(position, groups) {
     properties: {
       kind: 'waypoint',
       name: named?.designation || named?.source || 'Dropped pin',
-      description: source && source !== named?.designation ? `From ${source}.` : '',
+      /*
+       * Only when the source says something the name does not.
+       *
+       * Reported: a waterfall saved as "Rocky Fork Creek" with "From Road."
+       * underneath it. Two faults in one line. The source was taken from the
+       * first group that had one rather than from the group that named the
+       * thing - fixed above - and even corrected it would have read "From
+       * Water.", which is the basemap's own category for the layer that just
+       * supplied the name. An agency is worth naming, because it says where a
+       * claim about the ground came from. A basemap category is not.
+       */
+      description: source && !named?.basemap && source !== named?.designation
+        ? `From ${source}.`
+        : '',
       icon: DEFAULT_PIN_ICON,
     },
   };
@@ -6904,6 +6936,15 @@ function describeMapFeature(feature) {
 
   return {
     source: kind.source,
+    /*
+     * From the basemap, not from an agency.
+     *
+     * The difference matters when a pin is saved: "From Forest Service MVUM"
+     * tells you where a claim came from and is worth keeping, while
+     * "From Road." is the basemap's own word for the layer that already
+     * supplied the name, and says nothing at all.
+     */
+    basemap: true,
     designation: name || (specific ? words(humaniseValue(specific)) : '') || kind.source,
     // Only where the tile actually carried one. The fallbacks below it are a
     // class spelled as a word — "Track" — which names a kind of thing and not
@@ -7162,7 +7203,19 @@ function openPopupEditor(host, props, popup) {
 }
 
 /** Actions for a feature that is not yet in a folder: pick one and save. */
+/**
+ * The same two actions, as pieces rather than a block.
+ *
+ * The identify card wants them on one row beside Details, and the other two
+ * callers want them stacked as they were. Returning the parts lets each
+ * compose, rather than every caller unpicking a div somebody else built.
+ */
 function saveToFolderActions(feature, popup) {
+  const { actions, panel } = saveToFolderParts(feature, popup);
+  return el('div', { class: 'popup-actions popup-save' }, [...actions, panel]);
+}
+
+function saveToFolderParts(feature, popup) {
   /*
    * One button, and the choice only after it is pressed.
    *
@@ -7239,7 +7292,7 @@ function saveToFolderActions(feature, popup) {
    * then the next one coming up; if there is no trip there is no button.
    */
   const trip = plannableTrip();
-  const children = [opener, panel];
+  const children = [opener];
   if (trip) {
     const send = labelledButton(icons.route, `Add to ${trip.name}`, {
       tone: 'ghost',
@@ -7254,7 +7307,7 @@ function saveToFolderActions(feature, popup) {
     children.unshift(send);
   }
 
-  return el('div', { class: 'popup-actions popup-save' }, children);
+  return { actions: children.filter((node) => node !== panel), panel };
 }
 
 /**
