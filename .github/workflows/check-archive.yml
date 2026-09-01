@@ -15,8 +15,11 @@ on:
   workflow_dispatch:
     inputs:
       url:
-        description: 'The .pmtiles URL — e.g. https://pub-xxxx.r2.dev/byways.pmtiles'
-        required: true
+        description: >-
+          The .pmtiles URL — e.g. https://pub-xxxx.r2.dev/byways.pmtiles. Leave
+          empty to check the archive this site is actually configured to use,
+          from the PROTOMAPS_ARCHIVE repository variable.
+        required: false
         type: string
       tile:
         description: >-
@@ -41,11 +44,28 @@ jobs:
 
       # No install: the checker is written against the reader in this repo and
       # that has no dependencies, which is the point of having written it out.
+      # Falls back to the configured archive, so checking your own bucket does
+      # not require pasting your own URL back at yourself - and so a run can
+      # ask about the file the site is really serving rather than one somebody
+      # typed from memory.
+      - name: Which archive
+        id: which
+        env:
+          CONFIGURED: ${{ vars.PROTOMAPS_ARCHIVE }}
+        run: |
+          URL="${{ inputs.url }}"
+          [ -n "$URL" ] || URL="$CONFIGURED"
+          if [ -z "$URL" ]; then
+            echo "No url given and PROTOMAPS_ARCHIVE is not set." >&2
+            exit 2
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
       - name: Check it
         id: check
         run: |
           set -o pipefail
-          node tools/check-archive.mjs "${{ inputs.url }}" 2>&1 | tee report.txt
+          node tools/check-archive.mjs "${{ steps.which.outputs.url }}" 2>&1 | tee report.txt
 
       - name: Look inside a tile
         # Always, not only when the host check passed. They answer different
@@ -54,7 +74,7 @@ jobs:
         # time this mattered, the host check tripped over its own bug and took
         # the tile reading down with it.
         if: ${{ always() && inputs.tile != '' }}
-        run: node tools/inspect-archive.mjs "${{ inputs.url }}" "${{ inputs.tile }}" 2>&1 | tee -a report.txt
+        run: node tools/inspect-archive.mjs "${{ steps.which.outputs.url }}" "${{ inputs.tile }}" 2>&1 | tee -a report.txt
 
       - name: Put the answer in the summary
         if: always()
