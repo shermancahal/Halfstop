@@ -1,7 +1,7 @@
 /**
  * Ask a JSON service what shape its answer is.
  *
- *   node tools/probe-json.mjs <url> [--depth 4] [--post '<body>']
+ *   node tools/probe-json.mjs <url> [--depth 4] [--chars 6000] [--post '<body>']
  *
  * check-layers answers "did this endpoint reply the way we expected", which is
  * the right question once you know what to expect. This answers the one before
@@ -24,7 +24,7 @@ const flag = (name, fallback) => {
 };
 
 if (!url) {
-  console.error('Usage: node tools/probe-json.mjs <url> [--depth 4] [--post \'{"a":1}\']');
+  console.error('Usage: node tools/probe-json.mjs <url> [--depth 4] [--chars 6000] [--post \'{"a":1}\']');
   process.exit(2);
 }
 
@@ -74,6 +74,25 @@ console.log(`${text.length} bytes\n`);
 try {
   for (const line of describe(JSON.parse(text))) console.log(`  ${line}`);
 } catch (error) {
-  console.log(`Not JSON (${error.message}). First 400 characters:\n`);
-  console.log(text.slice(0, 400));
+  /*
+   * Not everything worth asking about answers in JSON.
+   *
+   * The first version printed 400 characters, which is a page's <head> and
+   * nothing else - useless for the question that actually needed it, which was
+   * what a service's terms of use say. So a non-JSON answer is stripped to its
+   * text and printed at length: crude tag removal rather than a parser, which
+   * is enough to read prose out of a policy page and is not trying to be more.
+   */
+  const chars = Number(flag('chars', 6000));
+  const plain = text
+    .replace(/<(script|style|head|nav|footer)[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n\s*\n\s*\n+/g, '\n\n')
+    .trim();
+  console.log(`Not JSON (${error.message}). As text, first ${chars} characters:\n`);
+  console.log(plain.slice(0, chars));
+  if (plain.length > chars) console.log(`\n… ${plain.length - chars} more characters`);
 }

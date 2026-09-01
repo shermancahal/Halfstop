@@ -22,6 +22,10 @@ on:
         description: 'How far down to describe the structure. Default 4.'
         required: false
         type: string
+      chars:
+        description: 'For a non-JSON answer, how much of its text to print. Default 6000.'
+        required: false
+        type: string
       post:
         description: 'A JSON body to POST. Leave empty for a GET.'
         required: false
@@ -46,6 +50,7 @@ jobs:
           set -o pipefail
           node tools/probe-json.mjs "${{ inputs.url }}" \
             ${{ inputs.depth && format('--depth {0}', inputs.depth) || '' }} \
+            ${{ inputs.chars && format('--chars {0}', inputs.chars) || '' }} \
             ${{ inputs.post && format('--post ''{0}''', inputs.post) || '' }} \
             2>&1 | tee report.txt
 
