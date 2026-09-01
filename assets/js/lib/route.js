@@ -25,6 +25,7 @@
  */
 
 import { haversine } from './geo.js';
+import { ROUTING } from '../config.js';
 
 const METRES_PER_MILE = 1609.344;
 
@@ -185,4 +186,112 @@ export function routeGeoJSON(route) {
         geometry: { type: 'LineString', coordinates: leg.coordinates },
       })),
   };
+}
+
+
+/* ------------------------------------------------------------------ asking */
+
+/**
+ * The request body, which is the whole of what Valhalla needs.
+ *
+ * One request for the whole trip rather than one per leg. That is not a
+ * micro-optimisation: the published limit is one request per second, so an
+ * eight-stop trip asked leg by leg would take eight seconds and spend the
+ * budget of eight other people's routes. Valhalla returns a leg per pair from
+ * a single call, which is exactly what the planner wants anyway.
+ */
+export function routeBody(stops, { costing = 'auto', units = 'miles' } = {}) {
+  return {
+    locations: stops.map((stop) => ({
+      lat: stop.position[1],
+      lon: stop.position[0],
+      // Every stop is somewhere you get out, so none of them is a via point.
+      type: 'break',
+    })),
+    costing,
+    directions_options: { units },
+  };
+}
+
+/*
+ * One request at a time, and never faster than the limit.
+ *
+ * A promise chain rather than a timer: each call waits for the one before it
+ * and then for whatever is left of the interval, so a person dragging a stop
+ * around cannot outrun the queue no matter how fast they drag. Module-level
+ * because the limit belongs to the service, not to any one map or panel.
+ */
+let queue = Promise.resolve();
+let lastAt = 0;
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Run `job` when the service is next willing to hear from us. */
+export function throttled(job, { minIntervalMs = ROUTING.minIntervalMs } = {}) {
+  const run = queue.then(async () => {
+    const since = Date.now() - lastAt;
+    if (since < minIntervalMs) await wait(minIntervalMs - since);
+    lastAt = Date.now();
+    return job();
+  });
+  // The queue must not stop at the first failure, so it carries on from a
+  // settled promise while the caller still sees the rejection.
+  queue = run.then(() => {}, () => {});
+  return run;
+}
+
+/**
+ * Ask for a route and read the answer.
+ *
+ * A plain GET with the request in the query string, because that is a
+ * CORS-simple request: no custom headers, so no preflight. Valhalla's docs
+ * suggest published apps send an X-Client-Id, but that is not a simple header
+ * and would make every request depend on the service answering an OPTIONS it
+ * may not - a failure that is total and looks exactly like the router being
+ * down. The identification the FOSSGIS terms actually require is the browser's
+ * own User-Agent and Referer, which a browser sends and a page cannot forge.
+ */
+export async function fetchRoute(stops, {
+  url = ROUTING.url,
+  costing = 'auto',
+  units = 'miles',
+  walkInMetres = WALK_IN_METRES,
+  signal,
+  fetcher = fetch,
+} = {}) {
+  if (!Array.isArray(stops) || stops.length < 2) {
+    return {
+      ok: false,
+      message: 'A route needs at least two stops.',
+      legs: [],
+      totals: { miles: 0, minutes: 0 },
+      stops: (stops || []).map(() => ({ offRoadMetres: null, walkIn: false, walkMinutes: 0 })),
+    };
+  }
+
+  const body = routeBody(stops, { costing, units });
+  const target = `${url}?json=${encodeURIComponent(JSON.stringify(body))}`;
+
+  const response = await throttled(() => fetcher(target, { signal }));
+  /*
+   * Valhalla answers a refusal with a JSON body and a 400, so the body is read
+   * either way - "No path could be found for input" is a far better thing to
+   * put on screen than the status code that carried it.
+   */
+  let json = null;
+  try {
+    json = await response.json();
+  } catch {
+    json = null;
+  }
+  if (!json) {
+    return {
+      ok: false,
+      message: `The routing service answered ${response.status} with nothing readable.`,
+      legs: [],
+      totals: { miles: 0, minutes: 0 },
+      stops: stops.map(() => ({ offRoadMetres: null, walkIn: false, walkMinutes: 0 })),
+    };
+  }
+  return readRoute(json, stops, { walkInMetres });
 }

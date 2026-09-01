@@ -126,6 +126,51 @@ export const PROTOMAPS_MAXZOOM = Number(readGlobal('ABMAP_PROTOMAPS_MAXZOOM')) |
  */
 export const MAP_ENGINE = 'auto';
 
+/**
+ * Where to ask for a road route.
+ *
+ * A URL rather than a hard-coded host, and deliberately so: FOSSGIS's own terms
+ * say "the URLs of our services should not be hardcoded into the app", and
+ * every route the trip planner draws is one of their requests. Setting
+ * ABMAP_ROUTING_URL in token.js points this at your own Valhalla instead,
+ * which is a deploy-time change rather than a code one.
+ *
+ * The default is the FOSSGIS demo server, which is right for development and
+ * for a quiet site. It is NOT right for a product. Their terms, verbatim:
+ * "Commercial use is only permitted if the use of the services does not
+ * constitute a substantial part of an online offering", "Websites with high
+ * traffic volumes are generally not permitted to use our services", and for
+ * the routing servers specifically, "Maximum one request per second". A trip
+ * planner's routing is a substantial part of the offering, so anything with a
+ * paid or ad-supported tier needs its own server first. Valhalla is open
+ * source and speaks the same API, so that day is this string changing.
+ *
+ * See docs/routing.md.
+ */
+export const ROUTING = {
+  url: readGlobal('ABMAP_ROUTING_URL') || 'https://valhalla1.openstreetmap.de/route',
+  /*
+   * One request per second, because that is the published limit.
+   *
+   * Enforced in the client rather than trusted to good behaviour: a person
+   * dragging a stop around generates a request per drag, and the limit is not
+   * a suggestion. A little over a second, so clock jitter cannot put two
+   * requests inside the same second.
+   */
+  minIntervalMs: 1100,
+  /*
+   * Required by the terms, and shown wherever a route is.
+   *
+   * The fixthemap link is not decoration: it is how somebody who finds the
+   * routing wrong about a road can go and fix the road, for everybody. That is
+   * the deal OSM data comes with.
+   */
+  attribution: 'Routing by <a href="https://valhalla.github.io/valhalla/" target="_blank" rel="noopener noreferrer">Valhalla</a>. '
+    + 'Data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors '
+    + '(<a href="https://opendatacommons.org/licenses/odbl/index.html" target="_blank" rel="noopener noreferrer">ODbL</a>) — '
+    + '<a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener noreferrer">report an error</a>.',
+};
+
 /** Default camera when nothing else is specified. Centred on the Appalachians. */
 export const DEFAULT_VIEW = { center: [-84.28, 35.96], zoom: 6.4 };
 
@@ -148,11 +193,11 @@ const KY_RASTER = 'https://kyraster.ky.gov/arcgis/rest/services';
    which is what MapWV draws from. mapwv.gov itself answers 404 to the service
    directory; this host answers with CORS open. */
 const WV_GIS = 'https://services.wvgis.wvu.edu/arcgis/rest/services';
-const WV_ATTRIBUTION = 'Imagery and elevation \u00a9 <a href="https://wvgis.wvu.edu/">WV GIS Technical Center</a>'
+const WV_ATTRIBUTION = 'Imagery and elevation © <a href="https://wvgis.wvu.edu/">WV GIS Technical Center</a>'
   + ' / West Virginia University';
 /* Tennessee's statewide base mapping programme, through TNMap. */
 const TN_GIS = 'https://tnmap.tn.gov/arcgis/rest/services';
-const TN_ATTRIBUTION = 'Imagery \u00a9 <a href="https://www.tn.gov/finance/sts-gis.html">Tennessee STS GIS</a>';
+const TN_ATTRIBUTION = 'Imagery © <a href="https://www.tn.gov/finance/sts-gis.html">Tennessee STS GIS</a>';
 const KY_ATTRIBUTION = 'Imagery and elevation © <a href="https://kyfromabove.ky.gov/">KyFromAbove</a>'
   + ' / Commonwealth of Kentucky';
 
@@ -724,7 +769,7 @@ export const OVERLAYS = [
       + 'movements — are NOTAMs and are not in this layer; use the link on any feature to '
       + 'check the current list before you fly. Amber is designated wilderness and Park '
       + 'Service land: flying over is not itself prohibited, but taking off, landing or '
-      + 'operating from the ground there is \u2014 so amber means find somewhere else to '
+      + 'operating from the ground there is — so amber means find somewhere else to '
       + 'stand, not somewhere else to fly.',
     group: 'Airspace',
     name: 'Restrictions & advisories',
@@ -1951,7 +1996,7 @@ export const OVERLAYS = [
     },
     opacity: 0.55,
     enabled: false,
-    attribution: 'Recreation data \u00a9 <a href=\"https://www.michigan.gov/dnr\">Michigan DNR</a>',
+    attribution: 'Recreation data © <a href=\"https://www.michigan.gov/dnr\">Michigan DNR</a>',
   },
   {
     legend: [{ color: '#2E7D32', label: 'Site: State forest campgrounds' }],
@@ -1970,7 +2015,7 @@ export const OVERLAYS = [
     },
     opacity: 0.55,
     enabled: false,
-    attribution: 'Recreation data \u00a9 <a href=\"https://www.michigan.gov/dnr\">Michigan DNR</a>',
+    attribution: 'Recreation data © <a href=\"https://www.michigan.gov/dnr\">Michigan DNR</a>',
   },
   {
     legend: [{ color: '#2E7D32', label: 'Area: Wildlife management areas' }],
@@ -2007,7 +2052,7 @@ export const OVERLAYS = [
     },
     opacity: 0.55,
     enabled: false,
-    attribution: 'Dispersed recreation \u00a9 <a href=\"https://www.tva.com/\">Tennessee Valley Authority</a>',
+    attribution: 'Dispersed recreation © <a href=\"https://www.tva.com/\">Tennessee Valley Authority</a>',
   },
   {
     id: 'pa-parks',
@@ -2023,7 +2068,7 @@ export const OVERLAYS = [
     maxzoom: 16,
     opacity: 0.85,
     enabled: false,
-    attribution: 'Parks \u00a9 <a href=\"https://www.dcnr.pa.gov/\">Pennsylvania DCNR</a>',
+    attribution: 'Parks © <a href=\"https://www.dcnr.pa.gov/\">Pennsylvania DCNR</a>',
   },
   {
     id: 'vt-routes',
@@ -2039,7 +2084,7 @@ export const OVERLAYS = [
     maxzoom: 16,
     opacity: 0.85,
     enabled: false,
-    attribution: 'Travel routes \u00a9 <a href=\"https://anr.vermont.gov/\">Vermont Agency of Natural Resources</a>',
+    attribution: 'Travel routes © <a href=\"https://anr.vermont.gov/\">Vermont Agency of Natural Resources</a>',
   },
   {
     legend: [{ color: '#6D4C41', label: 'Route: Park & forest maintained roads' }],
@@ -2058,7 +2103,7 @@ export const OVERLAYS = [
     },
     opacity: 0.55,
     enabled: false,
-    attribution: 'Roads \u00a9 <a href=\"https://dnr.maryland.gov/\">Maryland DNR</a>',
+    attribution: 'Roads © <a href=\"https://dnr.maryland.gov/\">Maryland DNR</a>',
   },
   {
     legend: [{ color: '#2E7D32', label: 'Area: State parks' }],
@@ -2076,7 +2121,7 @@ export const OVERLAYS = [
     },
     opacity: 0.55,
     enabled: false,
-    attribution: 'Parks \u00a9 <a href=\"https://fwp.mt.gov/\">Montana Fish, Wildlife & Parks</a>',
+    attribution: 'Parks © <a href=\"https://fwp.mt.gov/\">Montana Fish, Wildlife & Parks</a>',
   },
   {
     legend: [{ color: '#2E7D32', label: 'Area: Wildlife management areas' }],
@@ -2094,7 +2139,7 @@ export const OVERLAYS = [
     },
     opacity: 0.55,
     enabled: false,
-    attribution: 'Wildlife management areas \u00a9 <a href=\"https://tpwd.texas.gov/\">Texas Parks and Wildlife</a>',
+    attribution: 'Wildlife management areas © <a href=\"https://tpwd.texas.gov/\">Texas Parks and Wildlife</a>',
   },
   {
     legend: [{ color: '#C62828', label: 'Site: State parks' }],
@@ -2112,7 +2157,7 @@ export const OVERLAYS = [
     },
     opacity: 0.55,
     enabled: false,
-    attribution: 'Closures \u00a9 <a href=\"https://dnr.wisconsin.gov/\">Wisconsin DNR</a>',
+    attribution: 'Closures © <a href=\"https://dnr.wisconsin.gov/\">Wisconsin DNR</a>',
   },
   {
     /*
@@ -2178,7 +2223,7 @@ export const OVERLAYS = [
     maxzoom: 16,
     opacity: 0.85,
     enabled: false,
-    attribution: 'Recreation \u00a9 <a href=\"https://www.iowadnr.gov/\">Iowa DNR</a>',
+    attribution: 'Recreation © <a href=\"https://www.iowadnr.gov/\">Iowa DNR</a>',
   },
   {
     legend: [{ color: '#2E7D32', label: 'Area: State forests' }],
@@ -2196,7 +2241,7 @@ export const OVERLAYS = [
     },
     opacity: 0.55,
     enabled: false,
-    attribution: 'State forests \u00a9 <a href=\"https://www.fdacs.gov/Divisions-Offices/Florida-Forest-Service\">Florida Forest Service</a>',
+    attribution: 'State forests © <a href=\"https://www.fdacs.gov/Divisions-Offices/Florida-Forest-Service\">Florida Forest Service</a>',
   },
   {
     legend: [{ color: '#2E7D32', label: 'Area: DEEP property' }],
@@ -2214,7 +2259,7 @@ export const OVERLAYS = [
     },
     opacity: 0.55,
     enabled: false,
-    attribution: 'DEEP property \u00a9 <a href=\"https://portal.ct.gov/deep\">Connecticut DEEP</a>',
+    attribution: 'DEEP property © <a href=\"https://portal.ct.gov/deep\">Connecticut DEEP</a>',
   },
   {
     legend: [{ color: '#2E7D32', label: 'Area: Protected & recreational open space' }],
@@ -2232,7 +2277,7 @@ export const OVERLAYS = [
     },
     opacity: 0.55,
     enabled: false,
-    attribution: 'Open space \u00a9 <a href=\"https://www.mass.gov/orgs/massgis-bureau-of-geographic-information\">MassGIS</a>',
+    attribution: 'Open space © <a href=\"https://www.mass.gov/orgs/massgis-bureau-of-geographic-information\">MassGIS</a>',
   },
   {
     id: 'hi-trails',
@@ -2248,7 +2293,7 @@ export const OVERLAYS = [
     maxzoom: 16,
     opacity: 0.85,
     enabled: false,
-    attribution: 'Trails \u00a9 <a href=\"https://hawaiitrails.hawaii.gov/\">Na Ala Hele</a>, Hawaii DLNR',
+    attribution: 'Trails © <a href=\"https://hawaiitrails.hawaii.gov/\">Na Ala Hele</a>, Hawaii DLNR',
   },
   {
     legend: [{ color: '#2E7D32', label: 'Area: State park boundaries' }],
@@ -2266,7 +2311,7 @@ export const OVERLAYS = [
     },
     opacity: 0.55,
     enabled: false,
-    attribution: 'Parks \u00a9 <a href=\"https://dnrec.delaware.gov/\">Delaware DNREC</a>',
+    attribution: 'Parks © <a href=\"https://dnrec.delaware.gov/\">Delaware DNREC</a>',
   },
   {
     legend: [{ color: '#2E7D32', label: 'Site: CPW facilities' }],
@@ -2285,7 +2330,7 @@ export const OVERLAYS = [
     },
     opacity: 0.55,
     enabled: false,
-    attribution: 'Administered land \u00a9 <a href=\"https://cpw.state.co.us/\">Colorado Parks and Wildlife</a>',
+    attribution: 'Administered land © <a href=\"https://cpw.state.co.us/\">Colorado Parks and Wildlife</a>',
   },
   {
     legend: [{ color: '#2E7D32', label: 'Area: State park management areas' }],
@@ -2303,7 +2348,7 @@ export const OVERLAYS = [
     },
     opacity: 0.55,
     enabled: false,
-    attribution: 'Parks \u00a9 <a href=\"https://stateparks.utah.gov/\">Utah State Parks</a>',
+    attribution: 'Parks © <a href=\"https://stateparks.utah.gov/\">Utah State Parks</a>',
   },
   {
     legend: [{ color: '#2E7D32', label: 'Area: Wildlife management areas' }],
@@ -2321,7 +2366,7 @@ export const OVERLAYS = [
     },
     opacity: 0.55,
     enabled: false,
-    attribution: 'Recreation \u00a9 <a href=\"https://www.travelok.com/state-parks\">Oklahoma Tourism and Recreation</a>',
+    attribution: 'Recreation © <a href=\"https://www.travelok.com/state-parks\">Oklahoma Tourism and Recreation</a>',
   },
   {
     legend: [{ color: '#2E7D32', label: 'Area: State parks' }],
@@ -2339,7 +2384,7 @@ export const OVERLAYS = [
     },
     opacity: 0.55,
     enabled: false,
-    attribution: 'Parks \u00a9 <a href=\"https://southcarolinaparks.com/\">South Carolina State Parks</a>',
+    attribution: 'Parks © <a href=\"https://southcarolinaparks.com/\">South Carolina State Parks</a>',
   },
   {
     legend: [{ color: '#2E7D32', label: 'Area: State forest' }],
@@ -2357,7 +2402,7 @@ export const OVERLAYS = [
     },
     opacity: 0.55,
     enabled: false,
-    attribution: 'State forest \u00a9 <a href=\"https://www.gis.nd.gov/\">North Dakota GIS Hub</a>',
+    attribution: 'State forest © <a href=\"https://www.gis.nd.gov/\">North Dakota GIS Hub</a>',
   },
   {
     legend: [{ color: '#2E7D32', label: 'Area: State park boundaries' }],
@@ -2375,7 +2420,7 @@ export const OVERLAYS = [
     },
     opacity: 0.55,
     enabled: false,
-    attribution: 'Parks \u00a9 <a href=\"https://wyoparks.wyo.gov/\">Wyoming State Parks</a>',
+    attribution: 'Parks © <a href=\"https://wyoparks.wyo.gov/\">Wyoming State Parks</a>',
   },
   {
     legend: [{ color: '#2E7D32', label: 'Site: State parks' }],
@@ -2394,7 +2439,7 @@ export const OVERLAYS = [
     },
     opacity: 0.55,
     enabled: false,
-    attribution: 'Parks \u00a9 <a href=\"https://gfp.sd.gov/\">South Dakota Game, Fish and Parks</a>',
+    attribution: 'Parks © <a href=\"https://gfp.sd.gov/\">South Dakota Game, Fish and Parks</a>',
   },
   {
     legend: [{ color: '#2E7D32', label: 'Area: State parks & WMAs' }],
@@ -2412,7 +2457,7 @@ export const OVERLAYS = [
     },
     opacity: 0.55,
     enabled: false,
-    attribution: 'Parks and WMAs \u00a9 <a href=\"https://www.mdwfp.com/\">Mississippi Wildlife, Fisheries and Parks</a>',
+    attribution: 'Parks and WMAs © <a href=\"https://www.mdwfp.com/\">Mississippi Wildlife, Fisheries and Parks</a>',
   },
   {
     legend: [{ color: '#2E7D32', label: 'Area: State parks' }],
@@ -2430,7 +2475,7 @@ export const OVERLAYS = [
     },
     opacity: 0.55,
     enabled: false,
-    attribution: 'Parks \u00a9 <a href=\"https://www.arkansasstateparks.com/\">Arkansas State Parks</a>',
+    attribution: 'Parks © <a href=\"https://www.arkansasstateparks.com/\">Arkansas State Parks</a>',
   },
   {
     legend: [{ color: '#2E7D32', label: 'Area: Park areas' }],
@@ -2448,7 +2493,7 @@ export const OVERLAYS = [
     },
     opacity: 0.55,
     enabled: false,
-    attribution: 'Parks \u00a9 <a href=\"https://outdoornebraska.gov/\">Nebraska Game and Parks</a>',
+    attribution: 'Parks © <a href=\"https://outdoornebraska.gov/\">Nebraska Game and Parks</a>',
   },
   {
     legend: [{ color: '#2E7D32', label: 'Site: Bureau of Parks & Lands sites' }],
@@ -2467,7 +2512,7 @@ export const OVERLAYS = [
     },
     opacity: 0.55,
     enabled: false,
-    attribution: 'Public lands \u00a9 <a href=\"https://www.maine.gov/dacf/parks/\">Maine Bureau of Parks and Lands</a>',
+    attribution: 'Public lands © <a href=\"https://www.maine.gov/dacf/parks/\">Maine Bureau of Parks and Lands</a>',
   },
 ];
 

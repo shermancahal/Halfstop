@@ -154,3 +154,165 @@ test('route: the drawable geometry is one feature per leg', () => {
   assert.equal(routeGeoJSON({ legs: [{ coordinates: [] }] }).features.length, 0);
   assert.deepEqual(routeGeoJSON(null).features, []);
 });
+
+/* ------------------------------------------------------------------ asking */
+
+test('route: one request carries the whole trip, not one per leg', async () => {
+  const { routeBody } = await import('../assets/js/lib/route.js');
+  const stops = [
+    { position: [-83.37, 36.71] },
+    { position: [-83.02, 36.75] },
+    { position: [-82.80, 36.90] },
+  ];
+  const body = routeBody(stops);
+
+  /*
+   * Three stops, one request. The published limit is one request per second,
+   * so a trip asked leg by leg would take as many seconds as it has legs and
+   * spend the budget of that many other people's routes.
+   */
+  assert.equal(body.locations.length, 3);
+  assert.deepEqual(body.locations[0], { lat: 36.71, lon: -83.37, type: 'break' });
+  assert.equal(body.costing, 'auto');
+  assert.equal(body.directions_options.units, 'miles');
+
+  // lat/lon, not the [lon, lat] the rest of this codebase uses. Getting this
+  // pair the wrong way round routes somewhere in the Indian Ocean and reports
+  // no error at all.
+  assert.equal(body.locations[1].lat, 36.75);
+  assert.equal(body.locations[1].lon, -83.02);
+});
+
+test('route: requests are serialised and spaced to the published limit', async () => {
+  const { throttled } = await import('../assets/js/lib/route.js');
+
+  /*
+   * The limit is one request per second and it is not a suggestion.
+   *
+   * Enforced here rather than trusted to good behaviour: dragging a stop about
+   * generates a request per drag. Tested with a small interval so the suite
+   * does not take seconds, since what is being checked is the spacing rule
+   * rather than the particular number.
+   */
+  const at = [];
+  const started = Date.now();
+  await Promise.all([1, 2, 3].map(() => throttled(
+    () => { at.push(Date.now() - started); return 'done'; },
+    { minIntervalMs: 60 },
+  )));
+
+  assert.equal(at.length, 3);
+  for (let i = 1; i < at.length; i += 1) {
+    assert.ok(at[i] - at[i - 1] >= 55,
+      `requests ${i - 1} and ${i} were ${at[i] - at[i - 1]}ms apart, under the limit`);
+  }
+});
+
+test('route: one failure does not wedge the queue behind it', async () => {
+  const { throttled } = await import('../assets/js/lib/route.js');
+
+  /*
+   * The queue chains each call onto the last, so a rejection that was not
+   * caught inside the chain would leave every later request waiting on a
+   * promise that never settles - routing would work once, fail once, and then
+   * be silently dead for the rest of the session.
+   */
+  const failed = throttled(() => Promise.reject(new Error('service said no')), { minIntervalMs: 1 });
+  await assert.rejects(failed, /service said no/);
+
+  const after = await throttled(() => 'still working', { minIntervalMs: 1 });
+  assert.equal(after, 'still working');
+});
+
+test('route: a refusal is read from the body, not guessed from the status', async () => {
+  const { fetchRoute } = await import('../assets/js/lib/route.js');
+
+  /*
+   * Valhalla answers a refusal with a 400 and a JSON body that says why. The
+   * sentence in the body is a far better thing to show than the status code
+   * that carried it.
+   */
+  const fetcher = async () => ({
+    status: 400,
+    json: async () => ({ error: 'No path could be found for input' }),
+  });
+  const route = await fetchRoute(
+    [{ position: [0, 0] }, { position: [1, 1] }],
+    { fetcher, walkInMetres: 400 },
+  );
+  assert.equal(route.ok, false);
+  assert.match(route.message, /No path could be found/);
+});
+
+test('route: an unreadable answer says so rather than throwing', async () => {
+  const { fetchRoute } = await import('../assets/js/lib/route.js');
+  const fetcher = async () => ({
+    status: 502,
+    json: async () => { throw new Error('not JSON'); },
+  });
+  const route = await fetchRoute([{ position: [0, 0] }, { position: [1, 1] }], { fetcher });
+  assert.equal(route.ok, false);
+  assert.match(route.message, /502/);
+  assert.deepEqual(route.legs, []);
+});
+
+test('route: fewer than two stops is not a request worth making', async () => {
+  const { fetchRoute } = await import('../assets/js/lib/route.js');
+  let called = 0;
+  const fetcher = async () => { called += 1; return { status: 200, json: async () => ({}) }; };
+
+  const none = await fetchRoute([], { fetcher });
+  const one = await fetchRoute([{ position: [0, 0] }], { fetcher });
+
+  assert.equal(none.ok, false);
+  assert.equal(one.ok, false);
+  assert.equal(called, 0, 'the service was asked to route a trip with no legs');
+});
+
+test('route: the endpoint is configurable, and required by the terms to be', async () => {
+  const { fetchRoute } = await import('../assets/js/lib/route.js');
+  const { ROUTING } = await import('../assets/js/config.js');
+
+  /*
+   * FOSSGIS's own terms say the URLs of their services should not be hardcoded
+   * into the app, and their limits mean anything with a paid tier needs its own
+   * Valhalla. Both of those are the same requirement: this has to be a setting.
+   */
+  assert.ok(ROUTING.url, 'no default routing endpoint is configured');
+  assert.equal(ROUTING.minIntervalMs >= 1000, true,
+    'the throttle is faster than the one-request-per-second limit');
+  assert.match(ROUTING.attribution, /openstreetmap\.org\/fixthemap/,
+    'the terms require a link users can report data errors through');
+
+  let asked = '';
+  const fetcher = async (url) => {
+    asked = url;
+    return { status: 200, json: async () => ({ error: 'nope' }) };
+  };
+  await fetchRoute([{ position: [0, 0] }, { position: [1, 1] }],
+    { fetcher, url: 'https://valhalla.example.test/route' });
+  assert.ok(asked.startsWith('https://valhalla.example.test/route?json='),
+    `the configured endpoint was ignored: ${asked}`);
+});
+
+test('route: the request is CORS-simple, so no preflight can fail it', async () => {
+  const { fetchRoute } = await import('../assets/js/lib/route.js');
+
+  /*
+   * A GET with the query in the URL and no custom headers.
+   *
+   * Valhalla's docs suggest published apps send an X-Client-Id. That is not a
+   * CORS-simple header, so it would make every request depend on the service
+   * answering an OPTIONS - a failure that is total and looks exactly like the
+   * router being down. What the FOSSGIS terms actually require is the
+   * browser's own User-Agent and Referer, which a page cannot set anyway.
+   */
+  let options = null;
+  const fetcher = async (_url, init) => {
+    options = init;
+    return { status: 200, json: async () => ({ error: 'nope' }) };
+  };
+  await fetchRoute([{ position: [0, 0] }, { position: [1, 1] }], { fetcher });
+  assert.equal(options?.headers, undefined, 'a custom header would trigger a preflight');
+  assert.ok(!options?.method || options.method === 'GET');
+});
