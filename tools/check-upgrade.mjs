@@ -82,9 +82,13 @@ const SITE = `http://127.0.0.1:${server.address().port}/Map/`;
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 const context = await browser.newContext();
 /*
- * Everything third-party is refused rather than reached for. The map library
- * comes from a CDN and is not part of this question; letting the request out
- * would make the check depend on a network it does not need.
+ * Everything third-party is refused rather than reached for: a check that
+ * depends on a network it does not need is a check that fails for reasons that
+ * are not its subject.
+ *
+ * The map library is no longer among the refused - it is served from this
+ * origin now - so this check exercises a page that really can finish starting
+ * up, which is closer to what it was always trying to ask about.
  */
 await context.route('**/*', (route) => (
   route.request().url().startsWith(new URL(SITE).origin)

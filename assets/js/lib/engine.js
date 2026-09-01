@@ -15,10 +15,31 @@ import { openTileStore } from './pmtiles-store.js';
 const MAPLIBRE_VERSION = '4.7.1';
 const MAPBOX_VERSION = '3.7.0';
 
+/*
+ * MapLibre is served from this origin; Mapbox is not, and cannot be.
+ *
+ * MapLibre used to come from unpkg, which cost three things that only showed
+ * up where this app is meant to work. The service worker could not cache it -
+ * it is cross-origin, and the worker deliberately touches nothing cross-origin
+ * but downloaded tiles - so a first load with no signal had no map library and
+ * drew no map, with only the browser's own evictable HTTP cache in the way. It
+ * sat on the critical path behind a cold DNS lookup, TCP connection and TLS
+ * handshake to a host the page had no other reason to talk to. And unpkg could
+ * serve any code it liked into the app; pinning a version narrows that without
+ * closing it. Vendored under assets/, it is precached with everything else.
+ *
+ * Mapbox GL stays on api.mapbox.com because it is proprietary and its terms
+ * require Mapbox to serve it. It loads only for somebody who has configured a
+ * token, which means somebody who has accepted those terms.
+ *
+ * The version is in the path rather than a query, so an upgrade is a new URL
+ * that the service worker precaches as a new file - and tools/vendor-maplibre.mjs
+ * deletes the old directory so the previous megabyte does not ship beside it.
+ */
 const SOURCES = {
   maplibre: {
-    js: `https://unpkg.com/maplibre-gl@${MAPLIBRE_VERSION}/dist/maplibre-gl.js`,
-    css: `https://unpkg.com/maplibre-gl@${MAPLIBRE_VERSION}/dist/maplibre-gl.css`,
+    js: `assets/vendor/maplibre-gl-${MAPLIBRE_VERSION}/maplibre-gl.js`,
+    css: `assets/vendor/maplibre-gl-${MAPLIBRE_VERSION}/maplibre-gl.css`,
     global: 'maplibregl',
   },
   mapbox: {

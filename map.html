@@ -19,14 +19,15 @@
 <meta name="apple-mobile-web-app-title" content="Fieldstop">
 <meta name="mobile-web-app-capable" content="yes">
 <!--
-  The connections the map needs, opened during the HTML parse.
+  The connections the map may still need, opened during the HTML parse.
 
-  None of these hosts is knowable from the markup alone - which GL library
-  loads is decided at runtime from the basemap and whether a token is
-  configured - so this cannot preload the file, only the connection to it. That
-  is most of the win anyway: DNS, TCP and TLS to a cold host is the expensive
-  part on a phone, and it was all happening after a megabyte of ES modules had
-  been fetched and evaluated.
+  MapLibre is no longer among them: it is served from this origin now, over the
+  connection that already fetched this page. What is left are the two hosts the
+  map can reach for and this markup cannot predict, because which of them it
+  needs is decided at runtime from the basemap and whether a token is
+  configured. So this preloads the connection rather than the file, which is
+  most of the win on a phone anyway - DNS, TCP and TLS to a cold host is the
+  expensive part.
 
   An unused preconnect costs one idle socket the browser closes shortly after,
   which is the right trade against guessing wrong and paying a full handshake
@@ -90,7 +91,6 @@
 <link rel="modulepreload" href="assets/js/lib/trip-plan.js">
 <link rel="modulepreload" href="assets/js/lib/ui.js">
 <link rel="modulepreload" href="assets/js/lib/xml.js">
-<link rel="preconnect" href="https://unpkg.com" crossorigin>
 <link rel="preconnect" href="https://api.mapbox.com" crossorigin>
 <link rel="preconnect" href="https://protomaps.github.io" crossorigin>
 <link rel="stylesheet" href="assets/css/site.css">

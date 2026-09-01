@@ -378,6 +378,8 @@ assets/
     geo.js                  haversine, bounds, simplification, formatting
     engine.js               Mapbox GL / MapLibre GL loader and style builder
     catalog.js  ui.js  icons.js
+  vendor/
+    maplibre-gl-<version>/  MapLibre GL itself — see "The map library lives here"
 data/
   maps/                     published map files (+ optional .meta.json sidecars)
   catalog.json              generated — do not edit by hand
@@ -410,6 +412,33 @@ function.
 same surface, so the site works today with no account and no key, and adopting
 Mapbox later is a config change rather than a rewrite. That is what makes the
 "long term, move to Mapbox with custom layers" path cheap.
+
+**The map library lives here, in `assets/vendor/`.** It used to be fetched from
+unpkg at runtime, and that cost the one thing this app is for. The service
+worker deliberately touches nothing cross-origin except tiles somebody chose to
+download, so it could not cache the library — which meant a first load with no
+signal had no map library and drew no map, with only the browser's own
+evictable HTTP cache in the way. It also sat on the critical path behind a cold
+DNS lookup, TCP connection and TLS handshake to a host the page had no other
+reason to talk to, and unpkg could serve any code it liked into the app.
+Vendored, it is precached with everything else. Loading the built site with
+every cross-origin request refused now draws a map; before, the library never
+arrived at all.
+
+To change version, edit `MAPLIBRE_VERSION` in `assets/js/lib/engine.js` and run:
+
+```bash
+npm run vendor      # fetches that version from the npm registry, drops the old one
+```
+
+A test fails if the two ever disagree, because the symptom otherwise is a 404
+on the one file without which nothing draws, and nothing in the source looks
+wrong.
+
+**Mapbox GL is deliberately not vendored.** It is proprietary and its terms
+require Mapbox to serve it, so it stays on `api.mapbox.com` and loads only for
+somebody who has configured a token — which is somebody who has accepted those
+terms. A test checks that too, in the opposite direction.
 
 ---
 

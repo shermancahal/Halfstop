@@ -1,9 +1,9 @@
 {
-  "name": "american-byways-maps",
+  "name": "fieldstop",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A hosted library and browser viewer for GPS maps exported from GaiaGPS, published as a subsidiary site of American Byways.",
+  "description": "A back-roads atlas and trip planner that works with no signal, published as a subsidiary site of American Byways.",
   "engines": {
     "node": ">=18"
   },
@@ -11,6 +11,7 @@
     "start": "node tools/serve.mjs",
     "build": "node tools/build-catalog.mjs",
     "build:icons": "node tools/build-app-icons.mjs",
+    "vendor": "node tools/vendor-maplibre.mjs",
     "check": "node tools/build-catalog.mjs --check",
     "dist": "node tools/build-dist.mjs --zip",
     "dist:app": "node tools/build-dist.mjs --app",
