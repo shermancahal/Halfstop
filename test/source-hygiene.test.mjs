@@ -350,3 +350,49 @@ test('every docs/ reference in the source points at a file that exists', async (
 
   assert.deepEqual(dangling, [], 'a comment sends the reader to a page that is not there');
 });
+
+test('no engine-specific class name is written into the app’s own markup', async () => {
+  /*
+   * The schema seam again, in the one place nothing was checking.
+   *
+   * The map-tools control group was built with the literal class
+   * `mapboxgl-ctrl mapboxgl-ctrl-group`. Under Mapbox that is right. Under
+   * MapLibre it names nothing at all — MapLibre's stylesheet styles
+   * `.maplibregl-ctrl` — so the group had none of the stacking a control needs,
+   * the canvas sat over it, and every click went to the map instead. All three
+   * buttons in it were dead on the default basemap while looking exactly like
+   * buttons, which is why it was reported as "the orange one doesn't do
+   * anything" rather than as a bug.
+   *
+   * Both prefixes are refused, not just Mapbox's: hard-coding MapLibre's would
+   * be the identical mistake pointing the other way, and this app is written to
+   * run on either. The class has to come from the engine that actually loaded.
+   *
+   * Comments may say either name, because explaining this is exactly what the
+   * comment above the fix does.
+   */
+  const roots = ['assets/js'];
+  const offenders = [];
+
+  const walk = async (dir) => {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) { await walk(full); continue; }
+      if (!/\.m?js$/.test(entry.name)) continue;
+
+      const source = (await readFile(full, 'utf8'))
+        .replace(/\/\*[\s\S]*?\*\//g, ' ')
+        .replace(/(^|[^:])\/\/.*$/gm, '$1');
+
+      for (const [, quoted] of source.matchAll(/['"`]([^'"`\n]*(?:mapboxgl|maplibregl)-[^'"`\n]*)['"`]/g)) {
+        // A template that builds the prefix from the engine is the fix, not the bug.
+        if (quoted.includes('${')) continue;
+        offenders.push(`${full}: ${quoted}`);
+      }
+    }
+  };
+  for (const root of roots) await walk(root);
+
+  assert.deepEqual(offenders, [],
+    'a control or element named for one engine is invisible to the other');
+});

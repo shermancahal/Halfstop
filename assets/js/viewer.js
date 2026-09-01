@@ -511,7 +511,22 @@ async function main() {
    */
   state.map.addControl({
     onAdd: () => {
-      const group = el('div', { class: 'mapboxgl-ctrl mapboxgl-ctrl-group map-tools' });
+      /*
+       * The engine's own class names, not Mapbox's under every engine.
+       *
+       * This said `mapboxgl-ctrl mapboxgl-ctrl-group` always. Under Mapbox that
+       * is correct and under MapLibre it names nothing: MapLibre's stylesheet
+       * styles `.maplibregl-ctrl`, and a control group carrying neither sits
+       * behind the canvas, which then swallows every click. All three buttons -
+       * identify, drop a pin, take a picture - were dead on the default
+       * basemap, and looked exactly like buttons, which is how it went
+       * unreported for so long.
+       *
+       * Another Mapbox-era decision carried across the schema seam. Taken from
+       * the engine that actually loaded rather than assumed.
+       */
+      const prefix = state.engine === 'mapbox' ? 'mapboxgl' : 'maplibregl';
+      const group = el('div', { class: `${prefix}-ctrl ${prefix}-ctrl-group map-tools` });
 
       /*
        * Inspecting first, and on by default.
