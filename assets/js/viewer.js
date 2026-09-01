@@ -56,6 +56,7 @@ import {
 } from './lib/sky.js';
 import { activeAlerts, describeMotion, alertsToGeoJSON } from './lib/storms.js';
 import { fetchRoute, routeGeoJSON } from './lib/route.js';
+import { directionsFor, googleTripURL, GOOGLE_WAYPOINT_LIMIT } from './lib/directions.js';
 import {
   runtimeLayers, runtimeSources, IS_LINE, IS_POLY, IS_POINT,
   FOLDER_SOURCE, REGION_SOURCE, LIGHT_SOURCE, STORM_SOURCE, STORM_ARROW_IMAGE, TRIP_SOURCE,
@@ -6581,6 +6582,21 @@ function showIdentifyResults(position, groups, { pending = false } = {}) {
     // docs/state-layers.md until there is somewhere better for it.
   }
 
+  /*
+   * Directions to what the tap found, once there is something to go to.
+   *
+   * Not while pending, and not on empty ground - offering to navigate to a
+   * tap that found nothing is offering to navigate to a coordinate, which is
+   * true and useless.
+   */
+  if (!pending && groups.length) {
+    const row = directionsRow(
+      [position.lng ?? position[0], position.lat ?? position[1]],
+      { title: 'Go' },
+    );
+    if (row) content.append(row);
+  }
+
   content.append(el('div', { class: 'popup-bar' }, [
     labelledButton(icons.info, 'Details', {
       tone: 'ghost',
@@ -7933,6 +7949,9 @@ function renderPinDetails(folder, item) {
   /* where it is */
   dom.details.append(locationSection([lon, lat], { recorded: recordedHeight }));
 
+  const heading = directionsRow([lon, lat]);
+  if (heading) dom.details.append(el('div', { class: 'panel-section' }, [heading]));
+
   /* where you are relative to it */
   const relative = el('div', { class: 'panel-section' }, [
     sectionTitle('From here', icons.compass),
@@ -8701,6 +8720,33 @@ function tripDayCount(trip) {
 let tripRoute = null;
 
 /** Put a route on the map, or take it off. */
+/**
+ * Hand one place to whichever navigation app somebody already trusts.
+ *
+ * All three are offered rather than sniffed for. There is no reliable way to
+ * ask a browser whether an app is installed, and a link to one somebody does
+ * not have opens that service's website - a better outcome than a button this
+ * guessed wrong about and hid.
+ *
+ * Plain links, not buttons: a link can be long-pressed, copied, and opened in
+ * whatever the reader's phone considers the right place, and none of that
+ * works through a click handler.
+ */
+function directionsRow(position, { title = 'Directions' } = {}) {
+  const options = directionsFor(position);
+  if (!options.length) return null;
+  return el('div', { class: 'directions-row' }, [
+    el('span', { class: 'directions-label', text: title }),
+    ...options.map((one) => el('a', {
+      class: 'button button-ghost button-small',
+      href: one.url,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+      text: one.label,
+    })),
+  ]);
+}
+
 function showTripRoute(route, stops) {
   const source = state.map?.getSource?.(TRIP_SOURCE);
   if (!source) return;
@@ -8793,6 +8839,18 @@ function tripPlanBlock(folder) {
 
   const drawn = tripRoute?.folderId === folder.id ? tripRoute.route : null;
 
+  /*
+   * The whole trip, to Google Maps, and only to Google Maps.
+   *
+   * Not a preference. Apple Maps has no multi-stop form in its URL scheme at
+   * all, and Waze answers a link carrying several destinations with an error
+   * rather than ignoring the extras. Google is the only one of the three whose
+   * links carry intermediate stops - so the per-stop rows offer all three and
+   * this offers one, and the help page says why rather than leaving it to look
+   * like favouritism.
+   */
+  const trip = googleTripURL(stops);
+
   block.append(el('div', { class: 'trip-route-actions' }, [
     labelledButton(icons.route, drawn ? 'Redraw the road route' : 'Draw the road route', {
       tone: 'secondary',
@@ -8802,7 +8860,30 @@ function tripPlanBlock(folder) {
       tone: 'ghost',
       onclick: () => { tripRoute = null; showTripRoute(null); renderFoldersTab(); },
     }) : null,
+    trip ? el('a', {
+      class: 'button button-ghost button-small button-with-icon',
+      href: trip.url,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+      html: `${icons.route}<span>Send to Google Maps</span>`,
+    }) : null,
   ]));
+
+  /*
+   * Said out loud, because the alternative is finding out in a car park.
+   *
+   * A Google Maps link carries nine intermediate stops. A longer trip goes over
+   * as much as fits, and a trip quietly missing its last four stops is a worse
+   * outcome than one that says it was too long to send whole.
+   */
+  if (trip?.dropped) {
+    block.append(el('p', {
+      class: 'trip-walk-note',
+      text: `A Google Maps link holds ${GOOGLE_WAYPOINT_LIMIT} stops between the start and the `
+        + `end, so it will open with the first ${trip.sent} of these ${stops.length}. `
+        + `The last ${trip.dropped} are not in it.`,
+    }));
+  }
 
   if (drawn) {
     /*

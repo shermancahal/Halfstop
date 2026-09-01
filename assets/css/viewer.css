@@ -922,6 +922,15 @@ html, body { height: 100%; overflow: hidden; }
 
 /* The road route: the button that asks for one, and what comes back. */
 .trip-route-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+/* Handing a place to a navigation app: a label and three links, wrapping on a
+   phone rather than pushing the panel wide. */
+.directions-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.directions-label {
+  font-size: .7rem; font-weight: 600; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--ink-3); margin-right: 2px;
+}
+.identify-card .directions-row { margin-top: 11px; }
+.directions-row .button { text-decoration: none; }
 .trip-measured { margin: 8px 0 0; font-size: .86rem; font-weight: 550; color: var(--ink); }
 /* Green, and matching the dashed line on the map, because the note and the
    geometry are the same statement made twice. */
