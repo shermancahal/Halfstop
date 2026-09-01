@@ -18,6 +18,81 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fieldstop">
 <meta name="mobile-web-app-capable" content="yes">
+<!--
+  The connections the map needs, opened during the HTML parse.
+
+  None of these hosts is knowable from the markup alone - which GL library
+  loads is decided at runtime from the basemap and whether a token is
+  configured - so this cannot preload the file, only the connection to it. That
+  is most of the win anyway: DNS, TCP and TLS to a cold host is the expensive
+  part on a phone, and it was all happening after a megabyte of ES modules had
+  been fetched and evaluated.
+
+  An unused preconnect costs one idle socket the browser closes shortly after,
+  which is the right trade against guessing wrong and paying a full handshake
+  on the critical path.
+-->
+<!--
+  Every module viewer.js reaches, asked for at parse time.
+
+  Without these the browser discovers the graph one layer at a time: it cannot
+  know it needs lib/xml.js until it has fetched and parsed lib/kml.js, which it
+  could not know about until viewer.js - and viewer.js is 418 KB, so the other
+  35 files were not even requested until it had arrived and been parsed.
+  Measured against the built site, that was five waves of discovery (3 files,
+  then 30, then 3, then 1, then 1); with these it is one wave of 38.
+
+  What that is worth depends entirely on the round trip, which is the point.
+  On loopback, where a request costs nothing, the moment the GL library is
+  first asked for moves 140ms -> 125ms and is barely worth the markup. With
+  60ms added to each request, which is an ordinary phone, it moves 335ms ->
+  183ms: the first module starts at 9ms instead of 102ms, and the whole graph
+  is in by 147ms instead of 320ms.
+
+  The list has to stay equal to the real import graph, so a test computes the
+  graph and fails with the exact lines to paste when the two disagree. It is
+  also deliberately unversioned: the build stamps ?v= on the files a page names
+  directly, and a preload carrying a stamp the `import` specifier does not
+  would fetch every one of these twice.
+-->
+<link rel="modulepreload" href="assets/js/config.js">
+<link rel="modulepreload" href="assets/js/lib/account.js">
+<link rel="modulepreload" href="assets/js/lib/aurora.js">
+<link rel="modulepreload" href="assets/js/lib/byways-style.js">
+<link rel="modulepreload" href="assets/js/lib/catalog.js">
+<link rel="modulepreload" href="assets/js/lib/eclipse.js">
+<link rel="modulepreload" href="assets/js/lib/editable.js">
+<link rel="modulepreload" href="assets/js/lib/engine.js">
+<link rel="modulepreload" href="assets/js/lib/folders.js">
+<link rel="modulepreload" href="assets/js/lib/geo.js">
+<link rel="modulepreload" href="assets/js/lib/gpx-write.js">
+<link rel="modulepreload" href="assets/js/lib/gpx.js">
+<link rel="modulepreload" href="assets/js/lib/icons.js">
+<link rel="modulepreload" href="assets/js/lib/kml.js">
+<link rel="modulepreload" href="assets/js/lib/kmz.js">
+<link rel="modulepreload" href="assets/js/lib/lookup.js">
+<link rel="modulepreload" href="assets/js/lib/nps-icons.js">
+<link rel="modulepreload" href="assets/js/lib/offline.js">
+<link rel="modulepreload" href="assets/js/lib/parse.js">
+<link rel="modulepreload" href="assets/js/lib/photos.js">
+<link rel="modulepreload" href="assets/js/lib/pin-icons.js">
+<link rel="modulepreload" href="assets/js/lib/place.js">
+<link rel="modulepreload" href="assets/js/lib/pmtiles-store.js">
+<link rel="modulepreload" href="assets/js/lib/pmtiles.js">
+<link rel="modulepreload" href="assets/js/lib/preview.js">
+<link rel="modulepreload" href="assets/js/lib/pwa.js">
+<link rel="modulepreload" href="assets/js/lib/route-shields.js">
+<link rel="modulepreload" href="assets/js/lib/runtime-layers.js">
+<link rel="modulepreload" href="assets/js/lib/shield-boxes.js">
+<link rel="modulepreload" href="assets/js/lib/sky.js">
+<link rel="modulepreload" href="assets/js/lib/storms.js">
+<link rel="modulepreload" href="assets/js/lib/sync.js">
+<link rel="modulepreload" href="assets/js/lib/trip-plan.js">
+<link rel="modulepreload" href="assets/js/lib/ui.js">
+<link rel="modulepreload" href="assets/js/lib/xml.js">
+<link rel="preconnect" href="https://unpkg.com" crossorigin>
+<link rel="preconnect" href="https://api.mapbox.com" crossorigin>
+<link rel="preconnect" href="https://protomaps.github.io" crossorigin>
 <link rel="stylesheet" href="assets/css/site.css">
 <link rel="stylesheet" href="assets/css/viewer.css">
 </head>

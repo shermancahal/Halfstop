@@ -164,3 +164,73 @@ test('pages: no commented-out markup closes its own comment early', async () => 
     }
   }
 });
+
+/*
+ * The module graph, discovered at parse time instead of one wave at a time.
+ *
+ * A browser cannot know map.html needs lib/xml.js until it has fetched and
+ * parsed lib/kml.js, which it could not know about until viewer.js: five
+ * sequential waves before the GL library was so much as requested. The preload
+ * links collapse that, and they are only worth having while they are complete
+ * and exact - a stale list silently goes back to discovering the missing half
+ * the slow way, and nothing on screen says so.
+ */
+const importsOf = (source) => [
+  ...source.matchAll(/^\s*import\s+(?:[\w*{},\s]+\s+from\s+)?['"](\.[^'"]+)['"]/gm),
+].map((m) => m[1]);
+
+async function moduleGraph(entry) {
+  const reached = new Set();
+  const queue = [entry];
+  while (queue.length) {
+    const file = queue.pop();
+    let source;
+    try {
+      source = await read(file);
+    } catch {
+      continue;
+    }
+    for (const specifier of importsOf(source)) {
+      const resolved = new URL(specifier, new URL(file, 'file:///')).pathname.slice(1);
+      if (reached.has(resolved)) continue;
+      reached.add(resolved);
+      queue.push(resolved);
+    }
+  }
+  return reached;
+}
+
+test('pages: the map preloads every module it will import, and only those', async () => {
+  const html = await read('map.html');
+  const declared = new Set(
+    [...html.matchAll(/<link rel="modulepreload" href="([^"]+)">/g)].map((m) => m[1]),
+  );
+  const needed = await moduleGraph('assets/js/viewer.js');
+
+  const missing = [...needed].filter((href) => !declared.has(href)).sort();
+  const extra = [...declared].filter((href) => !needed.has(href)).sort();
+  const lines = (list) => list.map((href) => `<link rel="modulepreload" href="${href}">`).join('\n');
+
+  assert.deepEqual({ missing, extra }, { missing: [], extra: [] },
+    `map.html's preload list has drifted from the import graph.\n`
+    + (missing.length ? `\nAdd:\n${lines(missing)}\n` : '')
+    + (extra.length ? `\nRemove:\n${lines(extra)}\n` : ''));
+});
+
+/*
+ * A preload only preloads if its URL is the one the import will ask for.
+ *
+ * The build stamps ?v=<hash> onto the assets a page names directly, and module
+ * specifiers inside the JavaScript are never rewritten - viewer.js still
+ * imports './lib/geo.js'. Stamp a preload and it warms a cache entry nothing
+ * reads while the real request goes out unstamped: every file fetched twice,
+ * and the optimisation becomes a straight cost. Nothing on the page would look
+ * wrong, which is why this is checked here.
+ */
+test('pages: no preload carries a cache-busting query the import will not', async () => {
+  for (const page of PAGES) {
+    for (const [, href] of (await read(page)).matchAll(/<link rel="modulepreload" href="([^"]+)">/g)) {
+      assert.ok(!href.includes('?'), `${page}: ${href} is preloaded at a URL no import requests`);
+    }
+  }
+});

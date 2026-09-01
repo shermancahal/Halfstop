@@ -429,15 +429,47 @@ async function main() {
    * started, which is exactly what CI caught and a local run did not.
    */
   const stampedHrefs = new Set();
+  const stamp = (text) => text.replace(/(src|href)="(assets\/[^"?#]+\.(?:js|css))"/g, (match, attr, href) => {
+    const version = versions.get(href);
+    if (!version) return match;
+    stampedHrefs.add(href);
+    return `${attr}="${href}?v=${version}"`;
+  });
   for (const page of html) {
-    page.text = page.text.replace(/(src|href)="(assets\/[^"?#]+\.(?:js|css))"/g, (match, attr, href) => {
-      const version = versions.get(href);
-      if (!version) return match;
-      stampedHrefs.add(href);
-      return `${attr}="${href}?v=${version}"`;
-    });
+    /*
+     * A modulepreload keeps the URL the `import` will actually ask for.
+     *
+     * Tag by tag rather than href by href, because a preload is only a preload
+     * if the two URLs match exactly. Module specifiers inside the JavaScript
+     * are never rewritten - viewer.js still imports './lib/geo.js' - so
+     * stamping the preload would point it at a URL nothing else requests, and
+     * every one of those files would be fetched twice: once warming a cache
+     * entry nobody reads, once for real. The preload would be a straight cost.
+     */
+    page.text = page.text.replace(/<(?:script|link)\b[^>]*>/g, (tag) => (
+      /\brel="modulepreload"/.test(tag) ? tag : stamp(tag)));
   }
   const stamped = stampedHrefs.size;
+
+  /*
+   * Checked here because here is the only place it can go wrong.
+   *
+   * The preload lists live in the source HTML and a test keeps them matching
+   * the import graph, but that test reads the source - the double-fetch this
+   * prevents is created by this function and exists only in the built output.
+   * A stamped preload warms a cache entry nothing reads while the real request
+   * goes out unstamped, so every module is fetched twice and the page looks
+   * exactly right while doing it. Refusing to write the build is the only
+   * honest failure available.
+   */
+  for (const page of html) {
+    const stampedPreloads = [...page.text.matchAll(/<link rel="modulepreload" href="([^"]*)">/g)]
+      .map(([, href]) => href).filter((href) => href.includes('?'));
+    if (stampedPreloads.length) {
+      throw new Error(`${page.name}: ${stampedPreloads.length} modulepreload href(s) were `
+        + `cache-busted, so every one would be fetched twice: ${stampedPreloads[0]}`);
+    }
+  }
 
   for (const page of html) staged.push({ name: page.name, data: encoderFor(page.text) });
   staged.push(...assets);

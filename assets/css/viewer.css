@@ -1577,9 +1577,11 @@ html, body { height: 100%; overflow: hidden; }
 
 /* What a tap turned out to be sitting on. */
 .identify-card { min-width: 244px; }
+/* Only ever on screen on its own, while the services answer, so it carries no
+   gap below it for content that is not there yet. */
 .identify-title {
   font-family: var(--font-serif); font-size: 1.02rem; font-weight: 600;
-  margin: 0 0 9px; color: var(--ink);
+  margin: 0; color: var(--ink);
 }
 .identify-group + .identify-group { margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--line); }
 /* Action links under an identify card - they wrap rather than widening the

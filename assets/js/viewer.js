@@ -446,6 +446,12 @@ async function main() {
    * Mapbox's data and reserved to Mapbox's renderer — so "which engine" is
    * downstream of "which map", and asking in the other order picks the engine
    * before there is anything to pick it for.
+   *
+   * Hoisting this call to the top of main() to overlap the library's download
+   * with the panel wiring was tried and measured at no difference: main() does
+   * not run at all until the whole module graph has been fetched and
+   * evaluated, and the wiring it would have overlapped with is microseconds.
+   * The load-time win is in the preload links in map.html, not here.
    */
   const initial = readURL();
   state.basemapId = initial.basemap || defaultBasemapId();
@@ -6508,7 +6514,16 @@ function showIdentifyResults(position, groups, { pending = false } = {}) {
     .setLngLat(position);
   state.dropPopup = popup;
 
-  content.append(el('h3', { class: 'identify-title', text: pending ? 'Looking…' : 'On this spot' }));
+  /*
+   * The heading is the wait, and only the wait.
+   *
+   * "On this spot" restated the card the reader is already looking at, and it
+   * cost a line of a popup capped at 340px sitting over the map - the groups
+   * below name what was found far better than a heading can. "Looking…" is a
+   * different thing: while the services answer it is the only content there
+   * is, and without it a tap reads as a tap that did nothing.
+   */
+  if (pending) content.append(el('h3', { class: 'identify-title', text: 'Looking…' }));
   const body = el('div', { class: 'identify-body' });
   content.append(body);
 
