@@ -85,6 +85,37 @@ The switch is the `ROUTING_URL` variable. What it points at is the decision, and
 - **Nothing yet.** Staying on FOSSGIS while the site is quiet and free is within
   what they ask. It is only the tiers that force the question.
 
+### Could it run on Cloudflare, beside the R2 bucket?
+
+The obvious question, since the map archive already lives in R2. Two answers:
+
+**Workers: no.** Memory is capped at 128 MB per isolate on both the free and
+paid plans, and there is no Linux toolchain — Workers run V8 isolates, not
+native binaries. Valhalla is a C++ service that memory-maps a routing graph
+running to gigabytes for a region. It is not close.
+
+Nor does putting the graph in R2 and range-requesting it help, the way the
+PMTiles archive does. A tile read is one range request and one answer; a route
+is a graph traversal that touches many tiles in sequence, each one a round trip
+before the next can be chosen. The access pattern is the opposite of the one
+range requests are good at.
+
+**Containers: technically yes**, and worth pricing when the day comes. They went
+generally available in April 2026 and need the Workers Paid plan at $5/month,
+which includes an allowance of memory, vCPU-minutes and disk-hours, with idle
+containers billed for memory and storage rather than CPU. That is the same
+ballpark as a small VPS, on the account this project already uses.
+
+Two things to check before believing it, neither of which has been checked here:
+whether a regional graph fits the included disk and memory allowances or runs
+into overage, and how a container that scales to zero behaves when the first
+request has to start a service that memory-maps gigabytes. A cold start measured
+in tens of seconds would be worse than the shared server it replaced.
+
+**None of this is a cost today.** FOSSGIS is free, and free is what this is.
+The point of `ROUTING_URL` is that the question can be answered later, once
+there is traffic worth sizing against, without touching code.
+
 ## If you do self-host
 
 Cut the routing graph and the basemap from **the same OSM extract, on the same
