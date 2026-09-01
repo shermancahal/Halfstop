@@ -2459,6 +2459,9 @@ html, body { height: 100%; overflow: hidden; }
 .settings-account #account-panel { margin-top: -2px; }
 /* Account errors quote a URL, and a URL does not break at spaces. */
 #account-panel .hint { overflow-wrap: anywhere; }
+/* One plan, and a sentence saying whether that is the plan or the moment. */
+.plan-name { font-size: .9rem; font-weight: 600; color: var(--ink); }
+.plan-note { margin: 3px 0 0; font-size: .74rem; line-height: 1.45; color: var(--ink-2); }
 
 /* ==========================================================================
    One "Open a file" block, and foldable detail sections

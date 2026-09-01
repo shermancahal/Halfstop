@@ -1624,6 +1624,23 @@ check('while System hands the decision back to the device', await page.evaluate(
 
 check('the account sits in the same menu',
   await page.locator('#settings-panel #account-panel').count(), 1);
+
+/*
+ * The plan, which is one plan and includes everything.
+ *
+ * Checked for the words rather than the element, because the failure worth
+ * catching is not "the block vanished" — it is a build that quietly starts
+ * gating something. "Free" with a sentence saying so is the honest state of
+ * this project, and the day it stops being true this check is what has to be
+ * changed on purpose.
+ */
+const plan = await page.evaluate(() => ({
+  name: document.querySelector('#settings-panel .plan-name')?.textContent.trim(),
+  note: document.querySelector('#settings-panel .plan-note')?.textContent.trim(),
+}));
+check('the plan is named where the account is', plan.name, 'Free');
+check('and says whether that is the plan or the moment',
+  /free while Fieldstop is being built/.test(plan.note || ''), true);
 await shot(page.locator('#settings-panel'), 'settings-menu');
 await page.keyboard.press('Escape');
 await page.waitForTimeout(200);

@@ -57,6 +57,7 @@ import {
 } from './lib/sky.js';
 import { activeAlerts, describeMotion, alertsToGeoJSON } from './lib/storms.js';
 import { fetchRoute, routeGeoJSON } from './lib/route.js';
+import { can, gateReason, planSummary } from './lib/tiers.js';
 import {
   RV_CAVEAT, RV_RANGES, normaliseProfile, isRV, routingFor, profileRows,
   explainFailure, readDimension, showDimension, showWeight, shortTonsToTonnes,
@@ -2471,6 +2472,23 @@ function wireSettingsMenu() {
         dom.account,
       ]));
     }
+
+    /*
+     * The plan, said plainly, where the account is.
+     *
+     * There is one plan and it includes everything, which is worth a line
+     * rather than nothing: "free" is only reassuring if somebody says it, and a
+     * reader who has been asked to sign in has reasonably wondered what it is
+     * going to cost. It also gives the tier machinery a home in the interface
+     * before there is anything to sell, so the day a second plan exists this is
+     * a list that grew rather than a panel that appeared.
+     */
+    const plan = planSummary(state.account?.user || null);
+    drop.append(el('div', { class: 'settings-account' }, [
+      el('div', { class: 'settings-label', text: 'Plan' }),
+      el('div', { class: 'plan-name', text: plan.name }),
+      el('p', { class: 'plan-note', text: plan.note }),
+    ]));
   };
 
   trigger.addEventListener('click', (event) => {
@@ -9097,6 +9115,21 @@ const tripRouteFor = (folderId) => (tripRoute?.folderId === folderId ? tripRoute
  * is worth knowing about - it usually means a stop is somewhere no road goes.
  */
 async function drawTripRoute(folder, stops, button) {
+  /*
+   * Asked before the request, not after it.
+   *
+   * This is the one gate that guards a bill: the road route is a call to a
+   * routing service, and an RV route is the same call with more work behind it.
+   * Both are open today - `can` returns true for everything while BILLING.live
+   * is false - and the point of asking anyway is that the question has one
+   * spelling and one home. It is not a check: nothing here stops anyone, and
+   * the server in front of the router is what would.
+   */
+  if (!can('roadRoute')) {
+    toast(gateReason('roadRoute'), { tone: 'error' });
+    return;
+  }
+
   button.disabled = true;
   const said = button.textContent;
   button.textContent = 'Asking…';
@@ -9195,6 +9228,7 @@ function saveVehicleProfile(patch) {
 function rvAdvisory(profile) {
   const vehicle = normaliseProfile(profile);
   if (!isRV(vehicle)) return null;
+  if (!can('rvRouting')) return null;
   const metric = state.units === 'metric';
 
   return el('div', { class: 'rv-advisory' }, [
@@ -9224,6 +9258,9 @@ function vehicleKnobs() {
   const choice = (kind, label, note) => el('button', {
     class: `settings-choice${vehicle.kind === kind ? ' is-on' : ''}`,
     type: 'button', title: note,
+    // Open today. The gate is asked rather than assumed so that closing it is
+    // one edit in tiers.js and not a search through this file.
+    disabled: kind === 'rv' && !can('rvRouting'),
     text: label,
     onclick: () => {
       if (vehicle.kind === kind) return;

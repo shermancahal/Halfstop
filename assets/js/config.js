@@ -172,6 +172,20 @@ export const ROUTING = {
 };
 
 /** Default camera when nothing else is specified. Centred on the Appalachians. */
+/**
+ * Whether any of the plan machinery is switched on.
+ *
+ * `live: false` means every feature is offered to everybody, which is the true
+ * state of this project and not a placeholder to be quietly flipped. Turning it
+ * on is not the work — the work is the server-side half, because everything in
+ * assets/js/lib/tiers.js runs on the reader's computer and can be edited there.
+ * See the note at the top of that file; it is the same kind of thing as
+ * SITE.editors and carries the same warning.
+ */
+export const BILLING = {
+  live: false,
+};
+
 export const DEFAULT_VIEW = { center: [-84.28, 35.96], zoom: 6.4 };
 
 /** 'imperial' or 'metric'. Users can flip this in the viewer; this is the default. */
