@@ -355,6 +355,10 @@ copy does not serve you yesterday's app.
 
 For iOS and Android store builds, see **`docs/mobile-app.md`**.
 
+For how the trip planner draws a route — which server, what its terms allow, and
+why there are no turn-by-turn directions and no offline routing — see
+**`docs/routing.md`**.
+
 ---
 
 ## How it is put together

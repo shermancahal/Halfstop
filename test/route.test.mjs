@@ -346,3 +346,44 @@ test('route: the walk is drawn, dashed and separate from the drive', async () =>
   assert.equal(parked.features.filter((f) => f.properties.walk).length, 0,
     'a roadside stop drew a walk it does not have');
 });
+
+test('route: the reader carries no turn instructions, on purpose', async () => {
+  /*
+   * A scope decision, written as a test so it is a decision rather than a
+   * thing nobody got round to.
+   *
+   * Valhalla returns a full maneuvers array - instructions, street names,
+   * verbal variants, shape indices - and this reads none of it. Turn-by-turn is
+   * Apple's and Google's ground, fought with their traffic data and their voice
+   * guidance, and GaiaGPS makes the same call: a map on CarPlay, no driving
+   * instructions. If that changes it should change deliberately, and this test
+   * is what makes somebody say so.
+   */
+  const { readRoute } = await import('../assets/js/lib/route.js');
+
+  const withManeuvers = {
+    trip: {
+      legs: [{
+        shape: REAL_SHAPE,
+        summary: { length: 10, time: 600 },
+        maneuvers: [
+          { type: 1, instruction: 'Drive east on Wilderness Road.', street_names: ['US 58'] },
+          { type: 15, instruction: 'You have arrived at your destination.' },
+        ],
+      }],
+      summary: { length: 10, time: 600 },
+      status_message: 'Found route between points',
+    },
+  };
+
+  const route = readRoute(withManeuvers, []);
+  assert.equal(route.ok, true);
+  const serialised = JSON.stringify(route);
+  assert.ok(!serialised.includes('Wilderness Road'), 'a turn instruction reached the app');
+  assert.ok(!serialised.includes('maneuver'), 'maneuvers reached the app');
+  assert.equal(route.legs[0].maneuvers, undefined);
+
+  // What it does carry is the shape and the numbers, which is the whole feature.
+  assert.ok(route.legs[0].coordinates.length > 1);
+  assert.equal(route.legs[0].miles, 10);
+});

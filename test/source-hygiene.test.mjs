@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -316,4 +317,36 @@ test('no reverse-geocode URL combines a limit with several types', async () => {
       `this URL asks for several types alongside a limit, which Mapbox rejects: ${url}`,
     );
   }
+});
+
+test('every docs/ reference in the source points at a file that exists', async () => {
+  /*
+   * Written after doing exactly this.
+   *
+   * Two files were shipped saying "See docs/routing.md" and docs/routing.md did
+   * not exist. Nothing breaks - it is a comment - which is the problem: the
+   * pointer reads as authoritative right up until somebody follows it, and the
+   * person who follows it is the one who most needed the page.
+   */
+  const roots = ['assets', 'docs', 'tools', '.github'];
+  const dangling = [];
+
+  const walk = async (dir) => {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) { await walk(full); continue; }
+      if (!/\.(js|mjs|md|yml|yaml|html)$/.test(entry.name)) continue;
+      const text = await readFile(full, 'utf8');
+      for (const ref of text.match(/docs\/[\w.-]+\.md/g) || []) {
+        if (!existsSync(ref)) dangling.push(`${full} points at ${ref}`);
+      }
+    }
+  };
+  for (const root of roots) await walk(root);
+  const readme = await readFile('README.md', 'utf8');
+  for (const ref of readme.match(/docs\/[\w.-]+\.md/g) || []) {
+    if (!existsSync(ref)) dangling.push(`README.md points at ${ref}`);
+  }
+
+  assert.deepEqual(dangling, [], 'a comment sends the reader to a page that is not there');
 });
