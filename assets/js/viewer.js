@@ -492,22 +492,15 @@ async function main() {
     preserveDrawingBuffer: true,
   });
 
-  state.map.addControl(new gl.NavigationControl({ visualizePitch: true }), 'top-right');
-  state.scaleControl = new gl.ScaleControl({ unit: state.units === 'metric' ? 'metric' : 'imperial' });
-  state.map.addControl(state.scaleControl, 'bottom-left');
-  state.map.addControl(new gl.GeolocateControl({
-    positionOptions: { enableHighAccuracy: true },
-    trackUserLocation: true,
-    showUserHeading: true,
-  }), 'top-right');
-  if (gl.FullscreenControl) state.map.addControl(new gl.FullscreenControl(), 'top-right');
-
   /*
-   * Two of our own, in the same corner and under the rest.
+   * Ours first, so the tool you use constantly is not under the ones you do not.
    *
    * A real control rather than a floating div, so it stacks with the engine's
-   * own group instead of having to be positioned against it — and so it moves
-   * with them if the corner ever changes.
+   * own group instead of having to be positioned against it - and so it moves
+   * with them if the corner ever changes. Added before the engine's, because
+   * order in the corner is order on screen: identify is the thing you press on
+   * every road you think about driving, and it was sitting at the bottom of a
+   * column of eight under zoom buttons that a touch screen makes redundant.
    */
   state.map.addControl({
     onAdd: () => {
@@ -582,6 +575,16 @@ async function main() {
     },
     onRemove: () => {},
   }, 'top-right');
+  state.map.addControl(new gl.NavigationControl({ visualizePitch: true }), 'top-right');
+  state.scaleControl = new gl.ScaleControl({ unit: state.units === 'metric' ? 'metric' : 'imperial' });
+  state.map.addControl(state.scaleControl, 'bottom-left');
+  state.map.addControl(new gl.GeolocateControl({
+    positionOptions: { enableHighAccuracy: true },
+    trackUserLocation: true,
+    showUserHeading: true,
+  }), 'top-right');
+  if (gl.FullscreenControl) state.map.addControl(new gl.FullscreenControl(), 'top-right');
+
 
   state.map.on('sourcedata', (event) => {
     if (event.sourceId && event.isSourceLoaded) noteLayerHealth(event.sourceId, true);

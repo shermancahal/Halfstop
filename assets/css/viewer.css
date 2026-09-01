@@ -279,6 +279,48 @@ html, body { height: 100%; overflow: hidden; }
 /* ---------- GL library overrides ---------- */
 
 .maplibregl-ctrl-group, .mapboxgl-ctrl-group { border-radius: var(--radius) !important; box-shadow: var(--shadow-md) !important; }
+
+/*
+ * One column in the top-right corner, not four stacks.
+ *
+ * The engine adds a group per control - zoom and compass, geolocate,
+ * fullscreen - and this app adds a fourth for identify, drop-a-pin and the
+ * camera. Four rounded slabs with gaps between them read as four unrelated
+ * things and left the app's own tools looking like something bolted on.
+ *
+ * Reported as "two sets of icons", and the person reporting it suggested this.
+ *
+ * Done in CSS over whatever the corner holds rather than by reaching into the
+ * engine's control objects: the groups are siblings in a known container, and
+ * joining siblings is what CSS is for. It also stays right if a control is
+ * added or removed later, which reaching into internals would not.
+ */
+.maplibregl-ctrl-top-right .maplibregl-ctrl-group,
+.mapboxgl-ctrl-top-right .mapboxgl-ctrl-group {
+  margin-bottom: 0 !important;
+  border-radius: 0 !important;
+}
+.maplibregl-ctrl-top-right .maplibregl-ctrl-group + .maplibregl-ctrl-group,
+.mapboxgl-ctrl-top-right .mapboxgl-ctrl-group + .mapboxgl-ctrl-group {
+  /* A hairline where two groups meet, so the column still has joints and does
+     not read as one undifferentiated strip of nine buttons. */
+  border-top: 1px solid var(--line) !important;
+}
+.maplibregl-ctrl-top-right .maplibregl-ctrl-group:first-of-type,
+.mapboxgl-ctrl-top-right .mapboxgl-ctrl-group:first-of-type {
+  border-radius: var(--radius) var(--radius) 0 0 !important;
+}
+.maplibregl-ctrl-top-right .maplibregl-ctrl-group:last-of-type,
+.mapboxgl-ctrl-top-right .mapboxgl-ctrl-group:last-of-type {
+  border-radius: 0 0 var(--radius) var(--radius) !important;
+  margin-bottom: 10px !important;
+}
+/* One group in the corner is still a rounded slab, not a strip with square
+   ends: first-of-type and last-of-type both match it. */
+.maplibregl-ctrl-top-right .maplibregl-ctrl-group:only-of-type,
+.mapboxgl-ctrl-top-right .mapboxgl-ctrl-group:only-of-type {
+  border-radius: var(--radius) !important;
+}
 .maplibregl-popup-content, .mapboxgl-popup-content {
   background: var(--popup-bg); color: var(--ink);
   border: 1px solid var(--line); border-radius: var(--radius);
