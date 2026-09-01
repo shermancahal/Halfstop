@@ -25,7 +25,7 @@ import {
   boundsAreValid, cumulativeDistances, formatDistance, formatDuration, formatElevation,
   formatTemperature, geojsonBounds, mergeBounds, padBounds,
 } from './lib/geo.js';
-import { el, escapeHTML, createToaster, downloadText, saveBlob, initTheme, formatDate } from './lib/ui.js';
+import { el, escapeHTML, createToaster, downloadText, saveBlob, applyStoredTheme, readTheme, setTheme, formatDate } from './lib/ui.js';
 import { icons } from './lib/icons.js';
 import {
   FolderStore, FOLDER_COLORS, readTrip, tripStanding, localDay,
@@ -381,7 +381,9 @@ async function main() {
   document.title = SITE.name;
   applyBranding();
   toast = createToaster(dom.toasts);
-  initTheme(document.getElementById('theme-toggle'));
+  // No toggle in this header any more - the choice lives in the settings menu
+  // with the other three - but the stored choice still has to reach the page.
+  applyStoredTheme();
   state.folders = new FolderStore();
   state.offline = new OfflineStore();
   state.offline.addEventListener('change', () => {
@@ -430,7 +432,6 @@ async function main() {
   wirePanel();
   wireFolders();
   wireDropzone();
-  wireAccountMenu();
   if (!state.folders.storage) {
     const note = document.getElementById('folder-storage-note');
     if (note) {
@@ -750,9 +751,12 @@ function cacheDom() {
   dom.importIntoFolder = document.getElementById('import-into-folder');
   dom.dropTarget = document.getElementById('drop-target');
   dom.importAsk = document.getElementById('import-ask');
-  dom.account = document.getElementById('account-panel');
-  dom.accountMenu = document.getElementById('account-menu');
-  dom.accountTrigger = document.getElementById('account-trigger');
+  /*
+   * Built here rather than written in the header, because it is no longer in
+   * the header. The settings menu adopts it on every paint; renderAccount()
+   * goes on writing into this one element wherever it has been put.
+   */
+  dom.account = el('div', { id: 'account-panel', role: 'group', 'aria-label': 'Account' });
   dom.filesBlock = document.getElementById('files-block');
   dom.offline = document.getElementById('offline-panel');
   dom.offlineCount = document.getElementById('offline-count');
@@ -2357,22 +2361,52 @@ function keepAppLayersAlive() {
  * with different answers — miles and Celsius is a perfectly ordinary pair — so
  * they are separate rows, and both are remembered.
  */
+/*
+ * Everything that is a preference rather than a place, in one menu.
+ *
+ * Each row reads and writes for itself. It used to be `state[setting.key]` on
+ * the way out and a ternary picking a storage key on the way in, which worked
+ * for exactly the two rows that lived in this app's own state object and had
+ * nowhere to put a third that does not - the theme, which is stored by the
+ * shared header code and read by two other pages.
+ */
 const SETTINGS = [
   {
-    key: 'units',
     label: 'Distance and elevation',
     options: [
       { value: 'imperial', label: 'Miles / feet' },
       { value: 'metric', label: 'Kilometers / meters' },
     ],
+    read: () => state.units,
+    write: (value) => { state.units = value; rememberSetting('units', value); applyUnits(); },
   },
   {
-    key: 'temperature',
     label: 'Temperature',
     options: [
       { value: 'F', label: 'Fahrenheit' },
       { value: 'C', label: 'Celsius' },
     ],
+    read: () => state.temperature,
+    write: (value) => { state.temperature = value; rememberSetting('temp', value); applyUnits(); },
+  },
+  /*
+   * Three choices, not a toggle.
+   *
+   * The header carried a sun-or-moon button that flipped between light and
+   * dark and, once pressed, could never hand the decision back to the phone.
+   * Most people set their phone to switch at dusk and want an app to follow,
+   * which is the default here and was previously a state you could only return
+   * to by clearing site data.
+   */
+  {
+    label: 'Theme',
+    options: [
+      { value: 'system', label: 'System' },
+      { value: 'light', label: 'Light' },
+      { value: 'dark', label: 'Dark' },
+    ],
+    read: readTheme,
+    write: setTheme,
   },
 ];
 
@@ -2391,18 +2425,37 @@ function wireSettingsMenu() {
   const paint = () => {
     drop.replaceChildren(...SETTINGS.map((setting) => el('div', { class: 'settings-row' }, [
       el('div', { class: 'settings-label', text: setting.label }),
-      el('div', { class: 'settings-choices' }, setting.options.map((option) => el('button', {
-        class: `settings-choice${state[setting.key] === option.value ? ' is-on' : ''}`,
+      el('div', {
+        class: 'settings-choices',
+        style: `--choices:${setting.options.length}`,
+      }, setting.options.map((option) => el('button', {
+        class: `settings-choice${setting.read() === option.value ? ' is-on' : ''}`,
         type: 'button', text: option.label,
         onclick: () => {
-          if (state[setting.key] === option.value) return;
-          state[setting.key] = option.value;
-          rememberSetting(setting.key === 'units' ? 'units' : 'temp', option.value);
-          applyUnits();
+          if (setting.read() === option.value) return;
+          setting.write(option.value);
           paint();
         },
       }))),
     ])));
+
+    /*
+     * The account, under the same button.
+     *
+     * Signing in is a preference about this device, not a place to go, and it
+     * had a whole header control of its own showing a truncated email beside
+     * five icons. Moved rather than rebuilt: this is the same #account-panel
+     * element renderAccount() has always written into, so nothing about what
+     * it says or does changes - only where it is. It has to be re-appended on
+     * every paint because replaceChildren above has just taken it out.
+     */
+    if (dom.account) {
+      dom.account.hidden = false;
+      drop.append(el('div', { class: 'settings-account' }, [
+        el('div', { class: 'settings-label', text: 'Account' }),
+        dom.account,
+      ]));
+    }
   };
 
   trigger.addEventListener('click', (event) => {
@@ -2473,40 +2526,6 @@ function applyUnits() {
   renderMapsTab();
   renderDetailsTab();
   writeURL();
-}
-
-/**
- * The account menu in the header.
- *
- * Signing in is a thing you do twice and then forget about, so it does not
- * deserve a permanent section in a panel you are reading to find a waypoint.
- * A header button says whether you are signed in; clicking it drops the rest.
- */
-function wireAccountMenu() {
-  const trigger = dom.accountTrigger;
-  const drop = dom.account;
-  if (!trigger || !drop) return;
-
-  const setOpen = (open) => {
-    drop.hidden = !open;
-    trigger.setAttribute('aria-expanded', String(open));
-  };
-
-  trigger.addEventListener('click', (event) => {
-    event.stopPropagation();
-    setOpen(drop.hidden);
-  });
-
-  // Click-away and Escape, because a dropdown that only closes by pressing the
-  // button again is a dropdown people leave open.
-  document.addEventListener('click', (event) => {
-    if (drop.hidden) return;
-    if (!dom.accountMenu?.contains(event.target)) setOpen(false);
-  });
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && !drop.hidden) { setOpen(false); trigger.focus(); }
-  });
-  drop.addEventListener('click', (event) => event.stopPropagation());
 }
 
 /* ---------------- collapsible detail sections ---------------- */
@@ -10111,19 +10130,6 @@ function renderAccount() {
   if (!dom.account) return;
   const account = state.account;
   dom.account.replaceChildren();
-
-  // The header shows state; the panel behind it holds the controls. Signed out
-  // this is one word, which is all it should ever have been — it was a whole
-  // panel section competing with folders for the reader's attention.
-  if (dom.accountMenu) dom.accountMenu.hidden = !accountsAvailable();
-  if (dom.accountTrigger) {
-    const email = account?.user?.email || '';
-    dom.accountTrigger.textContent = account?.user
-      ? (email ? email.split('@')[0].slice(0, 14) : 'Account')
-      : 'Sign in';
-    dom.accountTrigger.classList.toggle('is-in', Boolean(account?.user));
-    dom.accountTrigger.title = account?.user ? email : 'Sign in to sync folders between devices';
-  }
 
   if (!accountsAvailable()) {
     dom.account.append(el('p', {

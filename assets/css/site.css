@@ -211,6 +211,26 @@ pre code { background: none; padding: 0; }
 .nav a:hover { color: var(--ink); background: var(--paper-3); }
 .nav a.is-active { color: var(--clay); background: var(--clay-soft); }
 
+/*
+ * Home, Map and Help as marks.
+ *
+ * Three words plus a wordmark plus five map controls did not fit a phone
+ * header, and these three are the most guessable labels in the app - a house,
+ * a folded map, a question mark. The name of each is still on it, as a title
+ * for a pointer and as an aria-label for anything that is not one; a link
+ * carrying only a picture and no accessible name is a link nobody can follow.
+ */
+.nav-icons a {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; padding: 0;
+}
+.nav-icons a svg {
+  width: 18px; height: 18px;
+  fill: none; stroke: currentColor;
+}
+/* An in-page anchor rather than another page, so it stays a word. */
+.nav-icons a.nav-word { width: auto; padding: 7px 11px; }
+
 .icon-button {
   display: inline-flex; align-items: center; justify-content: center;
   width: 34px; height: 34px; padding: 0;

@@ -1532,8 +1532,8 @@ check('as an actual waypoint element', /<wpt[\s>]/.test(gpx || ''), true);
 console.log('\nUnits are chosen, applied and remembered');
 await page.click('#settings-trigger');
 await page.waitForTimeout(200);
-check('the menu offers both conversions',
-  await page.locator('.settings-choice').count(), 4);
+check('the menu offers both conversions and the three themes',
+  await page.locator('.settings-choice').count(), 7);
 await page.locator('.settings-choice', { hasText: 'Celsius' }).click();
 await page.waitForTimeout(400);
 check('Celsius sticks in the menu',
@@ -1552,7 +1552,93 @@ check('and both survive a reload',
 await page.locator('.settings-choice', { hasText: 'Fahrenheit' }).click();
 await page.locator('.settings-choice', { hasText: /Miles/ }).click();
 await page.waitForTimeout(300);
+
+/*
+ * Theme and account, behind the same button as the units.
+ *
+ * Both used to be controls of their own in a header that also carries a
+ * wordmark and five map tools, and neither is a place to go - they are things
+ * about this device. What is checked here is the part that could silently rot:
+ * the theme row has to actually move the document, and System has to be
+ * reachable again afterwards. The old header toggle could not do that at all -
+ * once pressed, the only way back to following the phone was clearing site
+ * data - so "System restores the default" is the check that would have failed
+ * before this moved.
+ */
+console.log('\nTheme and account live under the settings button');
+check('the header keeps no theme toggle of its own',
+  await page.locator('#theme-toggle').count(), 0);
+check('nor an account button beside it',
+  await page.locator('#account-trigger').count(), 0);
+
+await page.locator('.settings-choice', { hasText: 'Dark' }).click();
+await page.waitForTimeout(200);
+check('choosing Dark darkens the document',
+  await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
+await page.locator('.settings-choice', { hasText: 'Light' }).click();
+await page.waitForTimeout(200);
+check('and Light lightens it',
+  await page.evaluate(() => document.documentElement.dataset.theme), 'light');
+await page.locator('.settings-choice', { hasText: 'System' }).click();
+await page.waitForTimeout(200);
+check('while System hands the decision back to the device', await page.evaluate(() => ({
+  attribute: document.documentElement.dataset.theme ?? null,
+  stored: window.localStorage.getItem('ab-maps-theme'),
+})), { attribute: null, stored: null });
+
+check('the account sits in the same menu',
+  await page.locator('#settings-panel #account-panel').count(), 1);
+await shot(page.locator('#settings-panel'), 'settings-menu');
 await page.keyboard.press('Escape');
+await page.waitForTimeout(200);
+
+/*
+ * Three destinations as three marks, each still carrying its name.
+ *
+ * A link whose whole content is a picture has no accessible name unless one is
+ * given to it, and a header of unlabelled glyphs is unusable with a screen
+ * reader. So the names are checked, not just the count.
+ */
+check('the nav is three marks', await page.locator('.nav-icons a[href]').count(), 3);
+check('each one named for anything that cannot see a picture',
+  await page.evaluate(() => [...document.querySelectorAll('.nav-icons a')]
+    .map((node) => node.getAttribute('aria-label'))), ['Home', 'Map', 'Help']);
+check('and drawn rather than written',
+  await page.evaluate(() => [...document.querySelectorAll('.nav-icons a')]
+    .every((node) => node.querySelector('svg') && !node.textContent.trim())), true);
+await shot(page.locator('.site-header'), 'site-header');
+
+/*
+ * A picture of the sign-in form where it now lives.
+ *
+ * Off unless SMOKE_SHOTS asks for it, and on a page of its own so nothing it
+ * does reaches the run above. Accounts are configured by two globals that
+ * token.js sets, and the smoke build has neither - which is why every check in
+ * this file has only ever seen the "accounts are not set up" line, and why the
+ * form that a real deployment shows in this menu goes unlooked at. The globals
+ * are supplied here and every call to the service is failed, because the point
+ * is the layout of the form and not what happens when you fill it in.
+ */
+if (process.env.SMOKE_SHOTS && !external) {
+  const shots = await context.newPage();
+  await shots.route('**/*.supabase.co/**', (route) => route.abort());
+  // The same stub the run above uses; without it the page never gets a map
+  // library, viewer init stops before it renders anything, and the menu this
+  // is here to photograph comes out empty.
+  await shots.route('**/mapbox-gl.js*', (route) => route.fulfill({
+    status: 200, contentType: 'application/javascript', body: GL,
+  }));
+  await shots.addInitScript(() => {
+    window.ABMAP_SUPABASE_URL = 'https://smoke.supabase.co';
+    window.ABMAP_SUPABASE_KEY = 'smoke-anon-key';
+  });
+  await shots.goto(MAP_URL, { waitUntil: 'domcontentloaded' });
+  await shots.waitForTimeout(2500);
+  await shots.click('#settings-trigger');
+  await shots.waitForTimeout(400);
+  await shot(shots.locator('#settings-panel'), 'settings-signed-out');
+  await shots.close();
+}
 
 /*
  * The Milky Way band on the map, and the control that moves it.

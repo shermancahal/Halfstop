@@ -2328,19 +2328,6 @@ html, body { height: 100%; overflow: hidden; }
    Account in the header
    ========================================================================== */
 
-.account-menu { position: relative; }
-.account-menu[hidden] { display: none; }
-
-.account-trigger {
-  padding: 5px 11px; font: inherit; font-size: .82rem; font-weight: 550;
-  color: var(--ink-2); background: transparent;
-  border: 1px solid var(--line); border-radius: 999px; cursor: pointer;
-  white-space: nowrap;
-}
-.account-trigger:hover { color: var(--ink); border-color: var(--line-strong); }
-/* Signed in reads as a state, not as an invitation. */
-.account-trigger.is-in { color: var(--clay-2); background: var(--clay-soft); border-color: transparent; }
-
 .account-drop {
   position: absolute; top: calc(100% + 8px); right: 0; z-index: 60;
   width: min(300px, calc(100vw - 24px)); padding: 13px 14px;
@@ -2353,13 +2340,22 @@ html, body { height: 100%; overflow: hidden; }
 /* Units and display. One button, because distance and temperature are two
    different questions and a single mi/ft toggle only ever answered one. */
 .settings-menu { position: relative; }
-.settings-drop { width: min(268px, calc(100vw - 24px)); padding: 12px 13px; }
+/*
+ * Capped and scrollable, because this menu now carries the sign-in form as
+ * well as three rows of choices - about 630px of it on a signed-out phone,
+ * which is taller than a short landscape window.
+ */
+.settings-drop {
+  width: min(268px, calc(100vw - 24px)); padding: 12px 13px;
+  max-height: min(78vh, 640px); overflow-y: auto; overscroll-behavior: contain;
+}
 .settings-row + .settings-row { margin-top: 13px; }
 .settings-label {
   font-size: .7rem; font-weight: 650; letter-spacing: .07em;
   text-transform: uppercase; color: var(--ink-3); margin-bottom: 6px;
 }
-.settings-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+/* Sized to the row, not to two: the theme offers three. */
+.settings-choices { display: grid; grid-template-columns: repeat(var(--choices, 2), minmax(0, 1fr)); gap: 6px; }
 .settings-choice {
   font: inherit; font-size: .8rem; padding: 7px 6px; cursor: pointer;
   border: 1px solid var(--line); border-radius: var(--radius-sm);
@@ -2370,6 +2366,11 @@ html, body { height: 100%; overflow: hidden; }
 .settings-choice.is-on {
   border-color: transparent; background: var(--clay-soft); color: var(--clay-2); font-weight: 600;
 }
+/* The account, under the same button as the other preferences. */
+.settings-account { margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--line); }
+.settings-account #account-panel { margin-top: -2px; }
+/* Account errors quote a URL, and a URL does not break at spaces. */
+#account-panel .hint { overflow-wrap: anywhere; }
 
 /* ==========================================================================
    One "Open a file" block, and foldable detail sections

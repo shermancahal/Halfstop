@@ -24,34 +24,70 @@ export function el(tag, attrs = {}, children = []) {
   return node;
 }
 
+const THEME_KEY = 'ab-maps-theme';
+
+/**
+ * What the reader chose — 'system', 'light' or 'dark' — which is not the same
+ * question as what is on screen.
+ *
+ * Nothing stored means nothing was chosen, so the OS decides. That has always
+ * been the behaviour; it just had no name, which made "follow the system"
+ * impossible to offer as a choice because there was no way to go back to it.
+ */
+export function readTheme() {
+  try {
+    const stored = localStorage.getItem(THEME_KEY);
+    return stored === 'dark' || stored === 'light' ? stored : 'system';
+  } catch {
+    return 'system';   // private mode — the OS decides and nothing persists
+  }
+}
+
+/** Whether dark is what is actually showing, chosen or inherited. */
+export function isDarkNow() {
+  return document.documentElement.dataset.theme
+    ? document.documentElement.dataset.theme === 'dark'
+    : window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+export function setTheme(choice) {
+  if (choice === 'dark' || choice === 'light') {
+    document.documentElement.dataset.theme = choice;
+    try { localStorage.setItem(THEME_KEY, choice); } catch { /* nothing to persist to */ }
+  } else {
+    // Removed rather than stored as "system": the attribute's absence is what
+    // hands the decision back to prefers-color-scheme.
+    delete document.documentElement.dataset.theme;
+    try { localStorage.removeItem(THEME_KEY); } catch { /* nothing to persist to */ }
+  }
+  window.dispatchEvent(new CustomEvent('themechange', { detail: { theme: choice } }));
+}
+
+/** Put a stored choice back on the page. For pages with no theme control. */
+export function applyStoredTheme() {
+  const stored = readTheme();
+  if (stored !== 'system') document.documentElement.dataset.theme = stored;
+  return { isDark: isDarkNow };
+}
+
 /** Theme toggle backed by localStorage, defaulting to the OS preference. */
 export function initTheme(button) {
-  const KEY = 'ab-maps-theme';
-  let stored = null;
-  try { stored = localStorage.getItem(KEY); } catch { /* private mode — fall back to OS */ }
-  if (stored === 'dark' || stored === 'light') document.documentElement.dataset.theme = stored;
-
-  const isDark = () => (document.documentElement.dataset.theme
-    ? document.documentElement.dataset.theme === 'dark'
-    : window.matchMedia('(prefers-color-scheme: dark)').matches);
+  applyStoredTheme();
 
   const paint = () => {
     if (!button) return;
-    const dark = isDark();
+    const dark = isDarkNow();
     button.innerHTML = dark ? ICON_SUN : ICON_MOON;
     button.setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
     button.setAttribute('title', dark ? 'Light theme' : 'Dark theme');
   };
 
   button?.addEventListener('click', () => {
-    const next = isDark() ? 'light' : 'dark';
-    document.documentElement.dataset.theme = next;
-    try { localStorage.setItem(KEY, next); } catch { /* nothing to persist to */ }
+    setTheme(isDarkNow() ? 'light' : 'dark');
     paint();
-    window.dispatchEvent(new CustomEvent('themechange', { detail: { theme: next } }));
   });
   paint();
-  return { isDark };
+  return { isDark: isDarkNow };
 }
 
 const ICON_SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
