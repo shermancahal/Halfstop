@@ -16,6 +16,8 @@ export const LIGHT_SOURCE = 'light-directions';
 export const STORM_SOURCE = 'storm-warnings';
 export const SCRATCH_HIGHLIGHT = 'scratch-highlight';
 export const SCRATCH_CURSOR = 'scratch-cursor';
+/** The drive the trip planner worked out, when a router has drawn one. */
+export const TRIP_SOURCE = 'trip-route';
 
 /** The image drawn at the end of a storm track, built by the viewer on demand. */
 export const STORM_ARROW_IMAGE = 'abmap-storm-arrow';
@@ -35,7 +37,8 @@ const LINE_WIDTH = ['interpolate', ['linear'], ['zoom'], 8, 4.2, 14, 6];
 
 /** Sources every runtime layer needs, all of them initially empty. */
 export function runtimeSources() {
-  return [FOLDER_SOURCE, REGION_SOURCE, LIGHT_SOURCE, STORM_SOURCE, SCRATCH_HIGHLIGHT, SCRATCH_CURSOR];
+  return [FOLDER_SOURCE, REGION_SOURCE, LIGHT_SOURCE, STORM_SOURCE, SCRATCH_HIGHLIGHT, SCRATCH_CURSOR,
+    TRIP_SOURCE];
 }
 
 /**
@@ -254,6 +257,49 @@ export function runtimeLayers({ labels = true, font } = {}) {
       'text-color': LABEL_COLOUR,
       'text-halo-color': 'rgba(255,255,255,0.95)',
       'text-halo-width': 2.2,
+    },
+      },
+  /*
+   * The drive, under everything the app draws on top of it.
+   *
+   * A casing and a line, the way a road is drawn, because a single stroke over
+   * a topo basemap disappears into the contours exactly where the road is
+   * hardest to follow. Under the folder geometry deliberately: the route is
+   * context for the stops, and a saved track the reader imported should not be
+   * hidden by a suggestion.
+   */
+  {
+    id: 'trip-route-casing', type: 'line', source: TRIP_SOURCE, filter: IS_LINE,
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': '#ffffff',
+      'line-opacity': 0.75,
+      'line-width': ['interpolate', ['linear'], ['zoom'], 6, 5, 14, 11],
+    },
+      },
+  {
+    id: 'trip-route-line', type: 'line', source: TRIP_SOURCE, filter: IS_LINE,
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': '#b4441f',
+      'line-width': ['interpolate', ['linear'], ['zoom'], 6, 2.4, 14, 6],
+    },
+      },
+  /*
+   * And the bit you walk, dashed, because it is not the same claim.
+   *
+   * A pin by a waterfall gets routed to the nearest road Valhalla can reach and
+   * the response says nothing about the gap. Drawing that gap in the same solid
+   * line as the drive would assert the car goes there. Dashed, and thinner, so
+   * it reads as "and then on foot" rather than as more road.
+   */
+  {
+    id: 'trip-walk-line', type: 'line', source: TRIP_SOURCE, filter: ['all', IS_LINE, ['get', 'walk']],
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': '#3f6212',
+      'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1.8, 14, 3.4],
+      'line-dasharray': [1.5, 1.5],
     },
       },
   {

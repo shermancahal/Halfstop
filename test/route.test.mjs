@@ -316,3 +316,33 @@ test('route: the request is CORS-simple, so no preflight can fail it', async () 
   assert.equal(options?.headers, undefined, 'a custom header would trigger a preflight');
   assert.ok(!options?.method || options.method === 'GET');
 });
+
+test('route: the walk is drawn, dashed and separate from the drive', async () => {
+  const { decodePolyline, readRoute, routeGeoJSON } = await import('../assets/js/lib/route.js');
+
+  const coordinates = decodePolyline(REAL_SHAPE);
+  const near = { position: coordinates[0] };
+  const far = { position: [coordinates[0][0] + 0.02, coordinates[0][1] + 0.02] };
+  const json = fakeTrip({ shape: REAL_SHAPE });
+
+  /*
+   * Without this the map shows a line stopping at a road with the pin floating
+   * beside it and nothing joining them - which is exactly the confusion the
+   * whole walk-in mechanism exists to remove.
+   */
+  const walked = routeGeoJSON(readRoute(json, [far]), [far]);
+  const stub = walked.features.find((f) => f.properties.walk);
+  assert.ok(stub, 'a walk-in stop drew no walk');
+  assert.equal(stub.geometry.coordinates.length, 2);
+  assert.deepEqual(stub.geometry.coordinates[1], far.position,
+    'the walk should end at the pin that was dropped');
+  assert.ok(stub.properties.metres > 0);
+
+  // Every drive leg says it is not a walk, so one filter separates them and a
+  // feature cannot fall through both.
+  assert.equal(walked.features.filter((f) => f.properties.walk === false).length, 1);
+
+  const parked = routeGeoJSON(readRoute(json, [near]), [near]);
+  assert.equal(parked.features.filter((f) => f.properties.walk).length, 0,
+    'a roadside stop drew a walk it does not have');
+});

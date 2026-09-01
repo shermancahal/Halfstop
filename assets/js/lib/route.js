@@ -174,18 +174,45 @@ export function readRoute(json, stops = [], { walkInMetres = WALK_IN_METRES } = 
   };
 }
 
-/** Every leg's geometry as one GeoJSON feature collection, for drawing. */
-export function routeGeoJSON(route) {
-  return {
-    type: 'FeatureCollection',
-    features: (route?.legs || [])
-      .filter((leg) => leg.coordinates.length > 1)
-      .map((leg) => ({
-        type: 'Feature',
-        properties: { from: leg.from, to: leg.to, miles: leg.miles, minutes: leg.minutes },
-        geometry: { type: 'LineString', coordinates: leg.coordinates },
-      })),
-  };
+/**
+ * The route as drawable geometry: the drive, and the bits you walk.
+ *
+ * The walk stubs are the point of passing `stops` in. A pin by a waterfall gets
+ * routed to the nearest road Valhalla can reach, and the gap between that road
+ * and the pin is invisible in the response - so if it is not drawn, the map
+ * shows a line stopping at a road with the pin floating beside it and no
+ * explanation. Drawn dashed and marked `walk`, it says what it is.
+ *
+ * Never in the same solid stroke as the drive, because that would assert the
+ * car goes there.
+ */
+export function routeGeoJSON(route, stops = []) {
+  const features = (route?.legs || [])
+    .filter((leg) => leg.coordinates?.length > 1)
+    .map((leg) => ({
+      type: 'Feature',
+      properties: {
+        from: leg.from, to: leg.to, miles: leg.miles, minutes: leg.minutes, walk: false,
+      },
+      geometry: { type: 'LineString', coordinates: leg.coordinates },
+    }));
+
+  (route?.stops || []).forEach((stop, index) => {
+    if (!stop?.walkIn) return;
+    const from = stops[index]?.position;
+    const legs = route.legs || [];
+    const reached = index === 0
+      ? legs[0]?.coordinates?.[0]
+      : legs[index - 1]?.coordinates?.[legs[index - 1].coordinates.length - 1];
+    if (!from || !reached) return;
+    features.push({
+      type: 'Feature',
+      properties: { stop: index, walk: true, metres: stop.offRoadMetres, minutes: stop.walkMinutes },
+      geometry: { type: 'LineString', coordinates: [reached, from] },
+    });
+  });
+
+  return { type: 'FeatureCollection', features };
 }
 
 

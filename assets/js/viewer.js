@@ -11,7 +11,7 @@
 
 import {
   SITE, BASEMAPS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN, OVERLAYS,
-  DEFAULT_VIEW, DEFAULT_UNITS, TRACK_COLORS, STATE_NAMES, STATE_GROUP, PROTOMAPS_ARCHIVE,
+  DEFAULT_VIEW, DEFAULT_UNITS, TRACK_COLORS, STATE_NAMES, STATE_GROUP, PROTOMAPS_ARCHIVE, ROUTING,
   PROTOMAPS_MAXZOOM,
 } from './config.js';
 import {
@@ -55,9 +55,10 @@ import {
   moonTrack, sunTrack, milkyWayNight, bestMilkyWayNights, nightQuality, galacticCentre,
 } from './lib/sky.js';
 import { activeAlerts, describeMotion, alertsToGeoJSON } from './lib/storms.js';
+import { fetchRoute, routeGeoJSON } from './lib/route.js';
 import {
   runtimeLayers, runtimeSources, IS_LINE, IS_POLY, IS_POINT,
-  FOLDER_SOURCE, REGION_SOURCE, LIGHT_SOURCE, STORM_SOURCE, STORM_ARROW_IMAGE,
+  FOLDER_SOURCE, REGION_SOURCE, LIGHT_SOURCE, STORM_SOURCE, STORM_ARROW_IMAGE, TRIP_SOURCE,
 } from './lib/runtime-layers.js';
 import {
   landManager, forecast, weatherClass, publicLand, elevation, skyCover,
@@ -8679,6 +8680,55 @@ function tripDayCount(trip) {
  * reach from a trailhead, and because the answer that matters is "three days,
  * not a weekend", which a rough number gets right.
  */
+/*
+ * The drive the router worked out, for one folder at a time.
+ *
+ * One at a time because the map has one route layer and two trips drawn over
+ * each other is not a thing anybody asked for. Held here rather than in the
+ * folder because it is not the reader's data - it is an answer from a service,
+ * which may be stale, and which the next reload should ask for again rather
+ * than trust.
+ */
+let tripRoute = null;
+
+/** Put a route on the map, or take it off. */
+function showTripRoute(route, stops) {
+  const source = state.map?.getSource?.(TRIP_SOURCE);
+  if (!source) return;
+  source.setData(route ? routeGeoJSON(route, stops) : { type: 'FeatureCollection', features: [] });
+}
+
+/**
+ * Ask the router for this folder's drive and draw it.
+ *
+ * Errors are shown rather than swallowed. A route that quietly does not appear
+ * is indistinguishable from a route the service could not find, and the second
+ * is worth knowing about - it usually means a stop is somewhere no road goes.
+ */
+async function drawTripRoute(folder, stops, button) {
+  button.disabled = true;
+  const said = button.textContent;
+  button.textContent = 'Asking…';
+  try {
+    const route = await fetchRoute(stops);
+    if (!route.ok) {
+      toast(route.message, { tone: 'error', timeout: 8000 });
+      return;
+    }
+    tripRoute = { folderId: folder.id, route, stops };
+    showTripRoute(route, stops);
+    const box = route.legs.flatMap((leg) => leg.coordinates)
+      .reduce((bounds, position) => extendBounds(bounds, position), emptyBounds());
+    if (boundsAreValid(box)) fitTo(box);
+    renderFoldersTab();
+  } catch (error) {
+    toast(error?.message || 'The routing service could not be reached.', { tone: 'error' });
+  } finally {
+    button.disabled = false;
+    button.textContent = said;
+  }
+}
+
 function tripPlanBlock(folder) {
   const stops = tripStops(folder);
   const settings = tripSettings();
@@ -8718,10 +8768,53 @@ function tripPlanBlock(folder) {
   block.append(tripQueue(folder, plan, stops));
   block.append(tripKnobs(folder, settings));
 
+  const drawn = tripRoute?.folderId === folder.id ? tripRoute.route : null;
+
+  block.append(el('div', { class: 'trip-route-actions' }, [
+    labelledButton(icons.route, drawn ? 'Redraw the road route' : 'Draw the road route', {
+      tone: 'secondary',
+      onclick: (event) => drawTripRoute(folder, stops, event.currentTarget),
+    }),
+    drawn ? labelledButton(icons.close, 'Clear', {
+      tone: 'ghost',
+      onclick: () => { tripRoute = null; showTripRoute(null); renderFoldersTab(); },
+    }) : null,
+  ]));
+
+  if (drawn) {
+    /*
+     * The measured numbers, beside the estimate rather than instead of it.
+     *
+     * The estimate is what works with no signal and it is what the day-splitting
+     * above is built from; the route is a better number for the same thing. Both
+     * on screen, so the difference is visible - if the winding factor is badly
+     * wrong for this country, this is where somebody would notice.
+     */
+    block.append(el('p', {
+      class: 'trip-measured',
+      text: `By road: ${Math.round(drawn.totals.miles)} mi · ${spellHours(drawn.totals.minutes)} driving `
+        + `(estimated ${Math.round(plan.totals.miles)} mi).`,
+    }));
+
+    const walks = drawn.stops
+      .map((entry, index) => ({ ...entry, name: stops[index]?.name }))
+      .filter((entry) => entry.walkIn);
+    for (const walk of walks) {
+      block.append(el('p', {
+        class: 'trip-walk-note',
+        text: `${walk.name}: no road goes there. About `
+          + `${formatDistance(walk.offRoadMetres)} on foot from where the driving ends, `
+          + `which is not counted in the drive.`,
+      }));
+    }
+  }
+
   block.append(el('p', {
     class: 'source-note',
-    text: 'Distances are straight lines with a winding factor, not routes — near enough to '
-      + 'tell a weekend from a week, not near enough to navigate by.',
+    html: drawn
+      ? ROUTING.attribution
+      : 'Distances are straight lines with a winding factor, not routes — near enough to '
+        + 'tell a weekend from a week, not near enough to navigate by.',
   }));
 
   return block;
