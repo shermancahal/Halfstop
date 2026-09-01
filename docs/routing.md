@@ -44,6 +44,22 @@ its replacement.
 `token.js`, which the deploy workflows write from a `ROUTING_URL` repository
 variable. Leave it empty and you get FOSSGIS's public Valhalla.
 
+### Reachability, measured
+
+FOSSGIS did not answer from GitHub's runners on 1 September 2026 — two
+consecutive full `check-layers` runs twelve minutes apart, both failing at the
+connect level (`fetch failed`) rather than with an HTTP status.
+
+That is worth writing down and worth not over-reading. A service outage and a
+block on datacenter IP ranges look identical from a CI runner, and the app may
+reach the same host perfectly well from a home connection or a phone. So a red
+`route:valhalla-*` line in the weekly report is a prompt to check from a
+browser, not evidence that the trip planner is broken for anybody real.
+
+It is also the argument for `ROUTING_URL` being a repository variable: if this
+server does become unusable, the fix is a variable and a redeploy rather than a
+code change.
+
 **That default is right for a quiet site and wrong for a product**, and the
 reason is their terms of use, not a judgement call:
 
