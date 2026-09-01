@@ -791,10 +791,23 @@ export const OVERLAYS = [
      * the colour reserved for "do not fly" - three in ten of every warning on
      * screen, saying a thing that was not true of them.
      *
-     * D stays red, and that is deliberate rather than settled: five features,
-     * a code this probe did not identify, and red is the conservative
-     * direction for a category nobody has read. Worth identifying before
-     * anyone relies on it.
+     * D is gone, and it took two more measurements to say so.
+     *
+     * Five features, and every one of them has a null STATE and a name in ICAO
+     * form with a country prefix in brackets - the sample read "(MY)D3003B",
+     * which is a Malaysian danger area. Counted rather than eyeballed:
+     * TYPE_CODE = 'D' AND STATE IS NULL is 5 of 5, and TYPE_CODE = 'D' AND
+     * NAME LIKE '(%' is 5 of 5.
+     *
+     * So it is the ICAO designation for a danger area, it is foreign airspace,
+     * and this is a map of the United States. Drawing five Malaysian danger
+     * areas in the red reserved for a US prohibition is worse than not drawing
+     * them, so they go the way the MOAs went.
+     *
+     * The previous commit left this red and called that "the conservative
+     * direction for a category nobody has read". Conservative is the right
+     * instinct for a code that might be a prohibition; it is the wrong word
+     * for one that turned out not to be in the country.
      */
     legendNote: 'Standing and scheduled restrictions only. Same-day TFRs — fires, VIP '
       + 'movements — are NOTAMs and are not in this layer; use the link on any feature to '
@@ -826,7 +839,7 @@ export const OVERLAYS = [
           // Named rather than excluded. `<> 'MOA'` swept in every code the FAA
           // adds later at the severity reserved for a prohibition, which is
           // the wrong default for a filter nobody will revisit.
-          where: "TYPE_CODE IN ('P','R','D')",
+          where: "TYPE_CODE IN ('P','R')",
         },
         /*
          * The same service, asked a second time for the advisories.

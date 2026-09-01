@@ -1660,10 +1660,18 @@ test('layers: only prohibitions are drawn as prohibitions', async () => {
   const amberCodes = codes(amber.where || '');
 
   // Named, not excluded: every code the layer draws is one somebody chose.
-  assert.deepEqual(redCodes.slice().sort(), ['D', 'P', 'R']);
+  assert.deepEqual(redCodes.slice().sort(), ['P', 'R']);
   assert.deepEqual(amberCodes.slice().sort(), ['A', 'W']);
-  assert.equal(redCodes.includes('MOA') || amberCodes.includes('MOA'), false,
-    'military operating areas restrict nothing and should not be drawn at all');
+  /*
+   * Two codes are drawn by neither, for two different reasons. MOA restricts
+   * nothing civilian. D is the ICAO designation for a danger area and all five
+   * in this service are foreign - null STATE, an ICAO country prefix in the
+   * name - so they are not this map's airspace at all.
+   */
+  for (const code of ['MOA', 'D']) {
+    assert.equal(redCodes.includes(code) || amberCodes.includes(code), false,
+      `${code} should not be drawn by either severity`);
+  }
   // And no filter may say "everything except", which is how MOA got in.
   for (const kind of sua) assert.doesNotMatch(kind.where || '', /<>/);
 });

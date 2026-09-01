@@ -1,17 +1,17 @@
 [
   {
     "id": "sw:solar-wind-mag",
-    "note": "Bz is the leading indicator and Kp is the lagging one. A southward interplanetary field is what actually opens the door, and DSCOVR sits far enough upstream to give a quarter-hour to an hour of warning - which is the difference between a readout that says 'this quarter-day was quiet' and one that says 'go now'.",
+    "note": "Bz is the leading indicator and Kp is the lagging one. A southward interplanetary field is what opens the door, and DSCOVR sits far enough upstream to give a quarter-hour to an hour of warning. Measured, after products/solar-wind/{mag,plasma}-1-day.json started answering a flat 404 - not a transient failure, the paths are gone, and they had been red in this report every week for it. SWPC serves real-time solar wind under /json/rtsw/ now. Both replacements were probed before being written in: 200, CORS *, and the field names below read off the answer rather than remembered. Nothing in the app reads these yet; they are here so that the day the aurora card wants a leading indicator, the endpoint is known to work.",
     "expect": "data",
     "find": "\"(?:bz_gsm|bt|time_tag)\"",
-    "url": "https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json"
+    "url": "https://services.swpc.noaa.gov/json/rtsw/rtsw_mag_1m.json"
   },
   {
     "id": "sw:solar-wind-plasma",
-    "note": "Speed and density from the same spacecraft. Bz southward with a fast wind behind it is the combination worth driving for.",
+    "note": "Speed and density from the same spacecraft; Bz southward with a fast wind behind it is the combination worth driving for. The fields are proton_speed and proton_density here, not the speed and density the old product used - a find pattern carried across unchanged would have matched the substring and proved nothing. Measured, after products/solar-wind/{mag,plasma}-1-day.json started answering a flat 404 - not a transient failure, the paths are gone, and they had been red in this report every week for it. SWPC serves real-time solar wind under /json/rtsw/ now. Both replacements were probed before being written in: 200, CORS *, and the field names below read off the answer rather than remembered. Nothing in the app reads these yet; they are here so that the day the aurora card wants a leading indicator, the endpoint is known to work.",
     "expect": "data",
-    "find": "\"(?:speed|density|time_tag)\"",
-    "url": "https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json"
+    "find": "\"(?:proton_speed|proton_density|time_tag)\"",
+    "url": "https://services.swpc.noaa.gov/json/rtsw/rtsw_wind_1m.json"
   },
   {
     "id": "sw:alerts",
