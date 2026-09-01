@@ -177,11 +177,22 @@ class Bounds{constructor(w,s,e,n){this.w=w;this.s=s;this.e=e;this.n=n}
 getWest(){return this.w}getSouth(){return this.s}getEast(){return this.e}getNorth(){return this.n}
 extend(){return this}isEmpty(){return false}}
 class Src{constructor(d){this._d=d}setData(d){this._d=d}}
-class Popup{setLngLat(){return this}
+// Mounted the way GL mounts it: a .maplibregl-popup container carrying the
+// maxWidth the app asked for, with the card inside a .maplibregl-popup-content.
+// Bare on the body it was as wide as the window, so every card under test laid
+// out at 1280px instead of the 340 it gets over a map — and a line of text
+// running under the close mark, which is a wrap-width bug, could not happen
+// here at all.
+class Popup{constructor(o){this._o=o||{}}setLngLat(){return this}
 // Detaches on remove(), as the real one does. A no-op remove() left every
 // popup in the DOM, so "the close button closes it" could not be tested at
 // all — and a stale card is indistinguishable from a live one to a selector.
-setDOMContent(n){this._n=n;document.body.appendChild(n);return this}
+setDOMContent(n){const box=document.createElement('div');
+box.className='maplibregl-popup maplibregl-popup-anchor-bottom';
+if(this._o.maxWidth)box.style.maxWidth=this._o.maxWidth;
+const inner=document.createElement('div');inner.className='maplibregl-popup-content';
+inner.appendChild(n);box.appendChild(inner);
+this._n=box;document.body.appendChild(box);return this}
 addTo(){return this}remove(){this._n?.remove();return this}}
 class M extends E{constructor(o){super();window.__mapOptions=o;this._s=new Map();this._l=new Map();this._img=new Map();
 this._ready=false;window.__map=this;this._apply(o.style);
@@ -2093,7 +2104,7 @@ for (const name of ['Forest roads (MVUM)', 'BLM routes']) {
 await page.waitForTimeout(700);
 
 const tools = page.locator('.map-tool');
-check('there are three map tools under the zoom controls', await tools.count(), 3);
+check('there are two map tools under the zoom controls', await tools.count(), 2);
 // Inspecting is what you do repeatedly — every road you consider driving —
 // so the tap does that by default and the button is lit to say so. A mode
 // with no visible state is a trap.
@@ -2286,6 +2297,51 @@ check('an undesignated route is called closed, not unrestricted',
 check('and it never claims the absence of a rule is permission',
   /no restriction|unrestricted|permitted/i.test(closed), false);
 
+await page.locator('.identify-card .identify-dismiss').click();
+await page.waitForTimeout(200);
+for (const name of ['Forest roads (MVUM)', 'BLM routes']) {
+  await page.locator('.layer-row', { hasText: name }).locator('input[type=checkbox]').uncheck();
+}
+await page.waitForTimeout(400);
+
+/*
+ * The card with nothing on it, and the mark that sat in its sentence.
+ *
+ * Room for the close mark was reserved by naming the lines a found feature
+ * draws - the title, the first group's source and designation. The one card
+ * that draws none of them is this one, a bare paragraph in the body, and the
+ * × landed in the middle of its first line. Reported from the phone.
+ *
+ * Measured as geometry rather than as a class list: the rule could be present
+ * and still not reach this paragraph, which is exactly the bug. Every line box
+ * of the text is compared against the mark's own box, so a fix that only moves
+ * the first line off it does not pass either.
+ */
+await page.evaluate(() => {
+  window.__rendered = [];
+  window.__identifyNothingOpen = false;
+  window.__map.fire('click', { lngLat: { lng: -111.2, lat: 38.2 }, point: { x: 380, y: 380 },
+    originalEvent: { pointerType: 'touch', width: 40, height: 40 } });
+});
+await page.waitForTimeout(900);
+const empty = await page.evaluate(() => {
+  const card = document.querySelector('.identify-card');
+  const text = card?.querySelector('.identify-body > p');
+  const mark = card?.querySelector('.identify-dismiss');
+  if (!text || !mark) return { found: false };
+  const range = document.createRange();
+  range.selectNodeContents(text);
+  const box = mark.getBoundingClientRect();
+  // A pixel of slack at each edge: touching corners is not text under a mark.
+  const hit = [...range.getClientRects()].some((line) => line.right > box.left + 1
+    && line.left < box.right - 1 && line.bottom > box.top + 1 && line.top < box.bottom - 1);
+  return { found: true, hit, lines: range.getClientRects().length };
+});
+check('a tap that finds nothing still says so', empty.found, true);
+check('and its sentence wraps beside the close mark, not under it', empty.hit, false);
+check('which takes more than one line, so the check is looking at wrapped text',
+  empty.lines > 1, true);
+
 /*
  * The identify card's close is a mark in the corner now, not the second button
  * in a bar. The bar still exists on the pin and feature popups, which is why
@@ -2293,10 +2349,6 @@ check('and it never claims the absence of a rule is permission',
  */
 await page.locator('.identify-card .identify-dismiss').click();
 await page.waitForTimeout(200);
-for (const name of ['Forest roads (MVUM)', 'BLM routes']) {
-  await page.locator('.layer-row', { hasText: name }).locator('input[type=checkbox]').uncheck();
-}
-await page.waitForTimeout(400);
 
 /*
  * The engine's own stylesheet must not win against ours.

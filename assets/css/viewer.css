@@ -1680,8 +1680,17 @@ html, body { height: 100%; overflow: hidden; }
 }
 .identify-dismiss:hover { background: var(--paper-2); color: var(--ink); }
 .identify-dismiss svg { width: 14px; height: 14px; }
-/* Room for it, so a long name does not run under the mark. */
+/*
+ * Room for it, so the top line does not run under the mark.
+ *
+ * The list used to name only the lines a found feature draws, so the one card
+ * with no feature on it - the empty state, a paragraph straight into the body
+ * - put the mark through the middle of its first sentence. The body's own
+ * first paragraph is now covered by position rather than by class, so the
+ * next kind of opening line does not have to be remembered here.
+ */
 .identify-card .identify-title,
+.identify-card .identify-body > p:first-child,
 .identify-card .identify-group:first-child .identify-source,
 .identify-card .identify-group:first-child .identify-designation { padding-right: 22px; }
 /* Only ever on screen on its own, while the services answer, so it carries no

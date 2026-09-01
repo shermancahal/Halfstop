@@ -555,21 +555,12 @@ async function main() {
       }));
 
       /*
-       * The camera on the map, not three taps into a tab.
-       *
-       * It was in the offline panel, which is where you go to plan a download
-       * - not where you are when the map in front of you is worth keeping.
-       * Taking a picture is the one export that needs no account, no network
-       * and no tiles, and on a phone in a canyon it is often the whole answer,
-       * so it belongs where the map is.
+       * No camera here. It lived on the map for a while on the reasoning that
+       * a picture is the one export needing no account, no network and no
+       * tiles - true, and still not a reason to spend a slot in the corner
+       * twice. Download > Save as a picture is the same call, one tap further
+       * in, next to the other exports where someone looking for it will look.
        */
-      group.append(el('button', {
-        class: 'map-tool', type: 'button',
-        title: 'Save this view as a picture',
-        'aria-label': 'Save this view as a picture',
-        html: icons.camera,
-        onclick: saveMapImage,
-      }));
 
       return group;
     },
