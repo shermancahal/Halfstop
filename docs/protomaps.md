@@ -212,6 +212,69 @@ it, so the run can read back what it just uploaded. It was called
 `PROTOMAPS_PUBLIC_BASE` for about an hour, which read just as naturally as the
 site's own address and duly got asked about.
 
+### The custom domain, and what it actually needs
+
+`r2.dev` is rate-limited and Cloudflare says outright it is not for
+production. The upgrade is a custom domain — `tiles.americanbyways.com`, say —
+and the thing worth knowing before you go looking for it is that **you do not
+get it from your web host.** It is not a product anybody sells you. It is a
+subdomain of a domain you already own, and the only requirement is where its
+DNS is answered from.
+
+Cloudflare will attach a bucket to a hostname **only if that hostname's zone is
+active in the same Cloudflare account** — Cloudflare has to be the authoritative
+DNS for it, because attaching the domain means writing a record and issuing a
+certificate inside that zone.
+
+Your registrar does not change. If the domain is registered through SiteGround,
+or anywhere else, it stays registered there and they keep billing you for it.
+What changes is the **nameservers**: you add the domain as a zone in Cloudflare,
+Cloudflare gives you two nameservers, and you set those at the registrar in
+place of the current ones.
+
+**That is a bigger change than it sounds, and it is worth pausing on.**
+Nameservers are all-or-nothing for a zone: from that moment Cloudflare answers
+*every* record for the domain, not just the tile subdomain. The website's A
+records, and — the one that actually hurts — the `MX` records and the
+`SPF`/`DKIM`/`DMARC` `TXT` records that make email deliverable. Cloudflare's
+onboarding scans the existing zone and imports what it can find, and what it
+misses is usually mail. So: export or screenshot the full record list from the
+current DNS host first, compare it against what Cloudflare imported, and fix
+the gaps *before* changing the nameservers.
+
+If you would rather not move the whole zone, there are two smaller answers.
+Delegating just the one subdomain to Cloudflare with `NS` records at the parent
+is the tidy one, and I have not verified what Cloudflare's current plans allow
+there — check it rather than taking this paragraph for it. The other is to do
+nothing: `r2.dev` is fine at the traffic this site has, and the limit is a
+reason to move later rather than today.
+
+#### Once the zone is on Cloudflare
+
+R2 → the bucket → **Settings → Custom Domains → Connect Domain**, and give it
+the hostname. Cloudflare writes the record and issues the certificate.
+
+Then three things on this side, and the third is the one people forget:
+
+1. `R2_PUBLIC_BASE` → `https://tiles.example.com`
+2. `PROTOMAPS_ARCHIVE` → `https://tiles.example.com/byways.pmtiles`
+3. **A deploy.** `PROTOMAPS_ARCHIVE` is written into `token.js` at build time,
+   so changing the variable does nothing to the live site until a deploy runs.
+
+*Look in the bucket* warns if you change one of the first two and not the
+other, which is the mistake this pair invites.
+
+#### And one consequence that is easy to miss
+
+Downloaded offline regions are keyed by the archive URL they came from — see
+`regionTileKeys` in `assets/js/lib/offline.js`, which is deliberately written
+against the recorded URL rather than the current one. Moving the archive to a
+new hostname therefore **orphans every region anyone has already downloaded**:
+nothing errors, the reader looks under the new name, finds nothing, and asks
+the network. The map keeps working online and quietly stops working offline,
+while the tiles still occupy the space. Worth doing before there are many
+users, and worth saying out loud if there already are.
+
 ### Rolling the token, later
 
 The credential is the one thing here with a lifetime. When you re-issue it —
