@@ -239,6 +239,10 @@ jobs:
           # The depth read back from the file when one was cut, since an
           # extract can come back shallower than it was asked for.
           PROTOMAPS_MAXZOOM: ${{ steps.archive.outputs.maxzoom || vars.PROTOMAPS_MAXZOOM }}
+          # Empty means FOSSGIS's public Valhalla, which is right for a quiet
+          # site and not for a product - see token.example.js. A public URL,
+          # so a variable rather than a secret.
+          ROUTING_URL: ${{ vars.ROUTING_URL }}
         run: |
           {
             printf "window.ABMAP_MAPBOX_TOKEN = '%s';\n" "$MAPBOX_TOKEN"
@@ -246,6 +250,7 @@ jobs:
             printf "window.ABMAP_SUPABASE_KEY = '%s';\n" "$SUPABASE_KEY"
             printf "window.ABMAP_PROTOMAPS_ARCHIVE = '%s';\n" "$PROTOMAPS_ARCHIVE"
             printf "window.ABMAP_PROTOMAPS_MAXZOOM = '%s';\n" "$PROTOMAPS_MAXZOOM"
+            printf "window.ABMAP_ROUTING_URL = '%s';\n" "$ROUTING_URL"
           } > assets/js/token.js
 
           # Every value, every time. Reporting the URL's length but not the

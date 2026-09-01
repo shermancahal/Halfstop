@@ -77,3 +77,25 @@ window.ABMAP_PROTOMAPS_ARCHIVE = '';
  * disagree, so this is checkable rather than a guess you have to live with.
  */
 window.ABMAP_PROTOMAPS_MAXZOOM = '';
+
+/**
+ * Where to ask for a road route. Empty means FOSSGIS's public Valhalla.
+ *
+ * Not a secret, and not code: it is the one line that moves routing off
+ * somebody else's server and onto yours. FOSSGIS's own terms ask that their
+ * URLs not be hardcoded, which is why it is a setting at all.
+ *
+ * The default is right for development and for a quiet site, and wrong for a
+ * product. Their terms permit commercial use "only ... if the use of the
+ * services does not constitute a substantial part of an online offering", cap
+ * the routing servers at one request per second, and say plainly that websites
+ * with high traffic are not permitted. A trip planner's routing is a
+ * substantial part of the offering, so a paid or ad-supported tier needs its
+ * own Valhalla first.
+ *
+ * Self-hosting means a server you run, not something on the reader's phone:
+ * Valhalla is a C++ service over a routing graph that is hundreds of megabytes
+ * for a single state. It speaks this same API, so the switch is this string.
+ * See docs/routing.md.
+ */
+window.ABMAP_ROUTING_URL = '';

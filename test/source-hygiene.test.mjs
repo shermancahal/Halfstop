@@ -271,6 +271,11 @@ test('nothing writes a bucket credential into the client config', async () => {
     'ABMAP_MAPBOX_TOKEN',
     'ABMAP_PROTOMAPS_ARCHIVE',
     'ABMAP_PROTOMAPS_MAXZOOM',
+    // The routing endpoint. A public URL, like the archive - it is here so that
+    // moving routing off FOSSGIS's shared demo server and onto your own
+    // Valhalla is a repository variable rather than a code change, which their
+    // terms ask for and a paid tier will require.
+    'ABMAP_ROUTING_URL',
     'ABMAP_SUPABASE_KEY',
     'ABMAP_SUPABASE_URL',
   ], 'the client config gained or lost a value; every one of these is served to every visitor');
