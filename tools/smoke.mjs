@@ -357,6 +357,37 @@ const SKY_COVER = (() => {
 })();
 
 /*
+ * The rest of the gridpoint, shaped so the fog card has a night to find.
+ *
+ * Built from the same clock anchor as the sky cover above and for the same
+ * reason. The shape is deliberate rather than plausible: the hours the sky
+ * cover has clear are given a dewpoint depression of a few tenths and a light
+ * wind, which is the textbook radiation-fog night, and the clouded hours are
+ * given dry air. A fixture that fogged at every hour could not tell a card that
+ * found the peak from a card that took the first row.
+ */
+const GRID_HOURS = (() => {
+  const noon = new Date();
+  noon.setHours(12, 0, 0, 0);
+  return Array.from({ length: 48 }, (unused, index) => {
+    const validTime = `${new Date(noon.valueOf() + index * 3600000).toISOString().replace('.000Z', '+00:00')}/PT1H`;
+    // Hours 14-17 after noon are the foggy ones: evening, clear, near-saturated.
+    const foggy = index >= 14 && index <= 17;
+    return {
+      validTime,
+      temperature: foggy ? 6 : 18,
+      dewpoint: foggy ? 5.6 : 3,
+      windSpeed: foggy ? 4 : 14,
+    };
+  });
+})();
+
+const gridSeries = (field, uom) => ({
+  uom,
+  values: GRID_HOURS.map((hour) => ({ validTime: hour.validTime, value: hour[field] })),
+});
+
+/*
  * Fire perimeters, as the feature service returns them. The layer this stands
  * in for used to ask a feature service for an image — which it cannot make —
  * so it answered 400 to every tile and drew nothing, for months, without
@@ -583,7 +614,12 @@ await page.route('**/*', async (route) => {
     return route.fulfill({
       status: 200,
       contentType: 'application/geo+json',
-      body: JSON.stringify({ properties: { skyCover: { values: SKY_COVER } } }),
+      body: JSON.stringify({ properties: {
+        skyCover: { uom: 'wmoUnit:percent', values: SKY_COVER },
+        temperature: gridSeries('temperature', 'wmoUnit:degC'),
+        dewpoint: gridSeries('dewpoint', 'wmoUnit:degC'),
+        windSpeed: gridSeries('windSpeed', 'wmoUnit:km_h-1'),
+      } }),
     });
   }
   if (/alerts\/active/.test(url)) {
@@ -1712,6 +1748,46 @@ const aurora = await page.evaluate(() => ({
 }));
 check('the chance at this point is reported', /12%/.test(aurora.text), true);
 check('alongside the planetary K index', /5/.test(aurora.text), true);
+
+/*
+ * Fog, worked out here rather than read off a service.
+ *
+ * The National Weather Service publishes no fog probability, so the whole card
+ * is this app's arithmetic on the gridpoint's temperature, dewpoint, wind and
+ * sky cover. The fixture gives it a four-hour window of near-saturated air
+ * under a clear sky with a light wind and leaves every other hour dry, so a
+ * card that reported the first row rather than the peak, or that ignored an
+ * ingredient, cannot pass: it has to name radiation fog, land inside that
+ * window, and say the number came from a model rather than a forecaster.
+ */
+await page.locator('.sky-tab', { hasText: /^Fog/ }).first().click();
+await page.waitForTimeout(1200);
+const fog = await page.evaluate(() => ({
+  band: document.querySelector('.fog-band')?.textContent.trim(),
+  headline: document.querySelector('.fog-headline')?.textContent.trim(),
+  when: document.querySelector('.fog-when')?.textContent.trim(),
+  rows: [...document.querySelectorAll('.core-row')].map((node) => node.textContent.trim()).join(' | '),
+  blocks: document.querySelectorAll('.fog-block').length,
+  likely: document.querySelectorAll('.fog-block.is-likely').length,
+  hint: [...document.querySelectorAll('.hint')].map((node) => node.textContent).join(' '),
+}));
+check('the fog card reaches a verdict', /Fog (likely|possible)/.test(fog.band || ''), true);
+check('and names the kind rather than just a number', fog.headline, 'Ground fog');
+check('with the hour it peaks at', /\d+% at \d/.test(fog.when || ''), true);
+check('the reasoning is on the card, not in a footnote',
+  /dewpoint depression/i.test(fog.rows), true);
+/*
+ * The line that keeps this honest. Every number here is modelled, and a card
+ * that presented it as a published forecast would be the one real problem with
+ * shipping this feature.
+ */
+check('and it says the number is modelled, not published',
+  /modelled here from the forecast ingredients/.test(fog.rows), true);
+check('the strip covers the hours ahead', fog.blocks > 12, true);
+check('and marks only the foggy ones', fog.likely > 0 && fog.likely < fog.blocks, true);
+check('the card says which service it did the arithmetic on',
+  /gridded forecast/.test(fog.hint), true);
+await shot(page.locator('.sky-panel'), 'fog-panel');
 check('and Kp is translated into what it means here', /storm/.test(aurora.note), true);
 
 console.log('\nThe Milky Way band is drawn, and the night can be scrubbed');

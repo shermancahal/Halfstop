@@ -286,7 +286,86 @@ export function weatherClass(short = '') {
  * @returns {Promise<{ok: true, hours: {at: Date, cover: number}[]}
  *                 | {ok: false, reason: string}>}
  */
-export async function skyCover([lon, lat]) {
+export async function skyCover(position) {
+  const grid = await gridSeries(position, ['skyCover']);
+  if (!grid.ok) return grid;
+
+  const values = grid.series.skyCover;
+  if (!values?.length) return { ok: false, reason: 'no cloud cover is published for this point' };
+
+  return { ok: true, hours: values.map((row) => ({ at: row.at, cover: row.value })) };
+}
+
+/*
+ * The units NWS publishes gridpoint values in, and what this app wants them in.
+ *
+ * Every value in a gridpoint payload carries its own `uom`, so the unit is
+ * knowable rather than assumable — which matters because the obvious assumption
+ * is wrong in a way that would go unnoticed: temperatures come in Celsius even
+ * from a service whose prose forecasts are in Fahrenheit, and a dewpoint
+ * depression computed across a mismatch is a plausible-looking number that is
+ * simply not the thing it claims to be.
+ *
+ * Anything not listed is passed through unconverted, with its unit reported, so
+ * a caller can tell "this is metres" from "this is whatever the feed said".
+ */
+const UNIT_CONVERSIONS = {
+  'wmoUnit:degF': { to: 'degC', apply: (value) => (value - 32) * (5 / 9) },
+  'wmoUnit:K': { to: 'degC', apply: (value) => value - 273.15 },
+  'wmoUnit:m_s-1': { to: 'km_h-1', apply: (value) => value * 3.6 },
+  'wmoUnit:[mi_i]_h-1': { to: 'km_h-1', apply: (value) => value * 1.609344 },
+  'wmoUnit:[nmi_i]_h-1': { to: 'km_h-1', apply: (value) => value * 1.852 },
+  'wmoUnit:[mi_i]': { to: 'm', apply: (value) => value * 1609.344 },
+  'wmoUnit:km': { to: 'm', apply: (value) => value * 1000 },
+};
+
+const CANONICAL = {
+  'wmoUnit:degC': 'degC',
+  'wmoUnit:km_h-1': 'km_h-1',
+  'wmoUnit:m': 'm',
+  'wmoUnit:percent': 'percent',
+};
+
+/** One series of a gridpoint payload, expanded to hours and put into our units. */
+export function expandSeries(field) {
+  const uom = field?.uom || '';
+  const conversion = UNIT_CONVERSIONS[uom];
+  const unit = conversion?.to || CANONICAL[uom] || uom;
+  const rows = [];
+
+  for (const entry of field?.values || []) {
+    const [start, duration] = String(entry.validTime || '').split('/');
+    const from = new Date(start);
+    if (!Number.isFinite(from.valueOf())) continue;
+
+    const raw = entry.value;
+    const value = Number.isFinite(raw) ? (conversion ? conversion.apply(raw) : raw) : null;
+
+    const span = parseISODuration(duration);
+    for (let hour = 0; hour < span; hour += 1) {
+      rows.push({ at: new Date(from.valueOf() + hour * 3600000), value });
+    }
+  }
+
+  return { unit, rows };
+}
+
+/**
+ * Several gridpoint series from one fetch.
+ *
+ * The gridpoint payload is one document carrying forty-odd series, and it is
+ * the same document behind the cloud cover the Milky Way card reads and the
+ * temperature, dewpoint and wind that fog needs. Fetching it once per question
+ * would be two round trips through the point lookup for one answer, on a page
+ * that is often on a phone at the edge of coverage.
+ *
+ * @param {[number, number]} position
+ * @param {string[]} fields gridpoint property names, e.g. ['temperature']
+ * @returns {Promise<{ok: true, series: Record<string, {at: Date, value: number|null}[]>,
+ *                    units: Record<string, string>}
+ *                 | {ok: false, reason: string}>}
+ */
+export async function gridSeries([lon, lat], fields) {
   const point = await fetchJSON(`${WEATHER_ROOT}/points/${lat.toFixed(4)},${lon.toFixed(4)}`);
 
   if (!point.ok) {
@@ -302,22 +381,69 @@ export async function skyCover([lon, lat]) {
   const grid = await fetchJSON(gridURL);
   if (!grid.ok) return { ok: false, reason: grid.reason };
 
-  const values = grid.data?.properties?.skyCover?.values || [];
-  if (!values.length) return { ok: false, reason: 'no cloud cover is published for this point' };
-
-  const hours = [];
-  for (const entry of values) {
-    const [start, duration] = String(entry.validTime || '').split('/');
-    const from = new Date(start);
-    if (!Number.isFinite(from.valueOf())) continue;
-
-    const span = parseISODuration(duration);
-    for (let hour = 0; hour < span; hour += 1) {
-      hours.push({ at: new Date(from.valueOf() + hour * 3600000), cover: entry.value ?? null });
-    }
+  const properties = grid.data?.properties || {};
+  const series = {};
+  const units = {};
+  for (const field of fields) {
+    const expanded = expandSeries(properties[field]);
+    series[field] = expanded.rows;
+    units[field] = expanded.unit;
   }
 
-  return { ok: true, hours };
+  return { ok: true, series, units };
+}
+
+/**
+ * Everything fog is worked out from, on one timeline.
+ *
+ * Zipped here rather than in the fog model, because lining up four series that
+ * each publish their own run-length-encoded intervals is a property of this
+ * feed, not of meteorology — and the model is far easier to test against plain
+ * rows than against four interleaved interval lists.
+ *
+ * `visibility` is asked for and very often absent: most land grids do not
+ * publish it. That is not an error, and a missing series simply leaves the
+ * hour's visibility null, which the model reads as "no forecaster has said".
+ */
+export async function fogIngredients(position) {
+  const grid = await gridSeries(position,
+    ['temperature', 'dewpoint', 'windSpeed', 'skyCover', 'visibility']);
+  if (!grid.ok) return grid;
+
+  /*
+   * Every hour carries every key, whether or not the grid published the series.
+   *
+   * A missing series would otherwise leave the key absent rather than null.
+   * The model reads both the same way — neither is a finite number — but one of
+   * them prints as a row with a hole in it when something goes wrong, and the
+   * shape of a row should not depend on which optional series this particular
+   * office happens to publish.
+   */
+  const FIELDS = [
+    ['temperature', 'temperatureC'],
+    ['dewpoint', 'dewpointC'],
+    ['windSpeed', 'windKmh'],
+    ['skyCover', 'skyPercent'],
+    ['visibility', 'visibilityM'],
+  ];
+
+  const byHour = new Map();
+  const row = (at) => {
+    const stamp = at.valueOf();
+    if (!byHour.has(stamp)) {
+      byHour.set(stamp, { at, ...Object.fromEntries(FIELDS.map(([, key]) => [key, null])) });
+    }
+    return byHour.get(stamp);
+  };
+
+  for (const [field, key] of FIELDS) {
+    for (const entry of grid.series[field] || []) row(entry.at)[key] = entry.value;
+  }
+
+  const hours = [...byHour.values()].sort((a, b) => a.at - b.at);
+  if (!hours.length) return { ok: false, reason: 'no gridded forecast is published for this point' };
+
+  return { ok: true, hours, units: grid.units };
 }
 
 /**

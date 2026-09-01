@@ -22,6 +22,8 @@ import {
   parseISODuration,
   parseWMSLegend,
   arcgisLegendRows,
+  expandSeries,
+  fogIngredients,
 } from '../assets/js/lib/lookup.js';
 
 /** Replace global fetch for one test, restoring it afterwards. */
@@ -458,4 +460,115 @@ test('legend: nothing usable is an empty list, never a throw', () => {
   for (const body of [null, undefined, {}, { layers: [] }, { layers: [{ legend: [] }] }]) {
     assert.deepEqual(arcgisLegendRows(body), []);
   }
+});
+
+/* ------------------------------------------------------------------ gridpoints */
+
+/*
+ * The unit conversions, which are the part of this that fails silently.
+ *
+ * A gridpoint carries its own unit per series, and the obvious assumption is
+ * wrong in a way nothing would flag: NWS publishes temperatures in Celsius even
+ * though its prose forecasts are in Fahrenheit. A dewpoint depression computed
+ * across a mismatch is a plausible number that is not the thing it claims to
+ * be, so each conversion is pinned against a value whose answer is known.
+ */
+test('gridpoints: each unit the feed uses is converted to the one we work in', () => {
+  const series = (uom, value) => expandSeries({ uom, values: [{ validTime: '2026-10-12T00:00:00+00:00/PT1H', value }] });
+
+  assert.equal(series('wmoUnit:degC', 12).unit, 'degC');
+  assert.equal(series('wmoUnit:degC', 12).rows[0].value, 12);
+
+  const fromF = series('wmoUnit:degF', 50);
+  assert.equal(fromF.unit, 'degC');
+  assert.ok(Math.abs(fromF.rows[0].value - 10) < 1e-9);
+
+  const fromK = series('wmoUnit:K', 283.15);
+  assert.ok(Math.abs(fromK.rows[0].value - 10) < 1e-9);
+
+  const fromMs = series('wmoUnit:m_s-1', 10);
+  assert.equal(fromMs.unit, 'km_h-1');
+  assert.ok(Math.abs(fromMs.rows[0].value - 36) < 1e-9);
+
+  const fromMph = series('wmoUnit:[mi_i]_h-1', 10);
+  assert.ok(Math.abs(fromMph.rows[0].value - 16.09344) < 1e-9);
+
+  const fromMiles = series('wmoUnit:[mi_i]', 1);
+  assert.equal(fromMiles.unit, 'm');
+  assert.ok(Math.abs(fromMiles.rows[0].value - 1609.344) < 1e-9);
+});
+
+test('gridpoints: an unknown unit passes through and says so, rather than lying', () => {
+  const odd = expandSeries({ uom: 'wmoUnit:furlong', values: [{ validTime: '2026-10-12T00:00:00+00:00/PT1H', value: 3 }] });
+  assert.equal(odd.unit, 'wmoUnit:furlong');
+  assert.equal(odd.rows[0].value, 3);
+});
+
+test('gridpoints: an interval is expanded to the hours it covers, nulls included', () => {
+  const expanded = expandSeries({
+    uom: 'wmoUnit:percent',
+    values: [{ validTime: '2026-10-12T00:00:00+00:00/PT3H', value: 40 }, { validTime: '2026-10-12T03:00:00+00:00/PT1H', value: null }],
+  });
+  assert.equal(expanded.rows.length, 4);
+  assert.deepEqual(expanded.rows.map((row) => row.value), [40, 40, 40, null]);
+});
+
+const GRID_POINT = { properties: { forecastGridData: 'https://api.weather.gov/gridpoints/MRX/50,60' } };
+
+const gridPayload = (extra = {}) => ({
+  properties: {
+    temperature: { uom: 'wmoUnit:degC', values: [{ validTime: '2026-10-12T00:00:00+00:00/PT2H', value: 6 }] },
+    dewpoint: { uom: 'wmoUnit:degC', values: [{ validTime: '2026-10-12T00:00:00+00:00/PT2H', value: 5.5 }] },
+    windSpeed: { uom: 'wmoUnit:km_h-1', values: [{ validTime: '2026-10-12T00:00:00+00:00/PT2H', value: 4 }] },
+    skyCover: { uom: 'wmoUnit:percent', values: [{ validTime: '2026-10-12T00:00:00+00:00/PT2H', value: 5 }] },
+    ...extra,
+  },
+});
+
+test('gridpoints: fog ingredients arrive on one timeline', async () => {
+  await withFetch((url) => (url.includes('/points/') ? GRID_POINT : gridPayload()), async () => {
+    const result = await fogIngredients(POINT);
+    assert.equal(result.ok, true);
+    assert.equal(result.hours.length, 2);
+    assert.deepEqual(
+      { ...result.hours[0], at: result.hours[0].at.toISOString() },
+      {
+        at: '2026-10-12T00:00:00.000Z',
+        temperatureC: 6, dewpointC: 5.5, windKmh: 4, skyPercent: 5, visibilityM: null,
+      },
+    );
+  });
+});
+
+/*
+ * Most land grids publish no visibility at all. That is the normal case rather
+ * than a failure. The model reads a null and an absent key identically — the
+ * check is `Number.isFinite` either way — so this is about the shape of a row
+ * rather than about the answer: an hour should look the same whichever optional
+ * series the local office happens to publish, so that a row printed while
+ * something is going wrong has a hole in it that is visible.
+ */
+test('gridpoints: a grid with no visibility series is still usable', async () => {
+  await withFetch((url) => (url.includes('/points/') ? GRID_POINT : gridPayload()), async () => {
+    const result = await fogIngredients(POINT);
+    assert.equal(result.hours.every((hour) => hour.visibilityM === null), true);
+  });
+});
+
+test('gridpoints: a grid that does publish visibility carries it through in metres', async () => {
+  const withVis = gridPayload({
+    visibility: { uom: 'wmoUnit:m', values: [{ validTime: '2026-10-12T00:00:00+00:00/PT2H', value: 300 }] },
+  });
+  await withFetch((url) => (url.includes('/points/') ? GRID_POINT : withVis), async () => {
+    const result = await fogIngredients(POINT);
+    assert.equal(result.hours[0].visibilityM, 300);
+  });
+});
+
+test('gridpoints: outside the United States it says which service does not cover you', async () => {
+  await withFetch(() => null, async () => {
+    const result = await fogIngredients([2.35, 48.85]);
+    assert.equal(result.ok, false);
+    assert.match(result.reason, /National Weather Service/);
+  });
 });

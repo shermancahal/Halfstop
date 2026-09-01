@@ -1975,12 +1975,21 @@ html, body { height: 100%; overflow: hidden; }
    A two-column grid put five tabs on three rows; flex-basis of a third with
    room to grow gives 3 + 2, and stays right if a sixth is ever added rather
    than hard-coding where the break falls. */
+/*
+ * A grid of four, not a flex row of thirds.
+ *
+ * Three to a row put a seventh tab on a third row of its own, stretched to the
+ * full width by the flex basis and reading as a button that belonged to
+ * something else. A grid also gives every cell the same height, which is what
+ * lets the one long label wrap instead of being cut to "Milky W…".
+ */
 .sky-tabs {
-  display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 0;
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px; margin: 12px 0 0;
 }
 .sky-tab {
-  flex: 1 1 calc(33.333% - 4px); min-width: 0;
-  padding: 7px 6px; border-radius: var(--radius-sm);
+  min-width: 0;
+  padding: 7px 4px; border-radius: var(--radius-sm);
   border: 1px solid var(--line); background: var(--surface-2);
   font: inherit; font-size: .74rem; font-weight: 600; color: var(--ink-2);
   cursor: pointer; white-space: nowrap;
@@ -2284,6 +2293,54 @@ html, body { height: 100%; overflow: hidden; }
   color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums;
 }
 
+/* ---------------- fog ---------------- */
+
+/*
+ * Grey, all of it, and the band does the work.
+ *
+ * The other sky cards wash themselves in the colour of the thing they are
+ * about - a night sky, an aurora. Fog has one colour and it is the absence of
+ * colour, so the card leans on that instead of inventing a palette: the
+ * likelihood is the only thing that changes, and it changes the depth of the
+ * grey rather than its hue.
+ */
+.fog-hero {
+  padding: 11px 12px; border-radius: var(--radius-sm);
+  background: linear-gradient(140deg, #3f434a, #6b7078 60%, #8d939b);
+  color: #f2f3f4;
+}
+.fog-hero:has(.is-no) { background: linear-gradient(140deg, #2c3138, #454b54 60%, #5b626c); }
+.fog-hero:has(.is-unlikely) { background: linear-gradient(140deg, #363b43, #565c66 60%, #737a84); }
+.fog-band {
+  font-size: .67rem; font-weight: 650; letter-spacing: .08em;
+  text-transform: uppercase; color: #dfe2e6;
+}
+.fog-headline {
+  font-family: var(--font-serif); font-size: 1.16rem; line-height: 1.2; margin-top: 2px;
+}
+.fog-headline:empty { display: none; }
+.fog-when { font-size: .78rem; color: #dfe2e6; margin-top: 3px; font-variant-numeric: tabular-nums; }
+
+/*
+ * An hour a block, and an hour with no answer is a gap rather than a zero.
+ *
+ * "The grid did not publish a dewpoint for this hour" and "this hour will be
+ * clear" are different statements, and a strip that drew them the same way
+ * would be the card's one chance to mislead: a run of clear-looking hours that
+ * are actually unknown ones.
+ */
+.fog-strip-wrap { margin-top: 12px; }
+.fog-strip { display: flex; gap: 1px; height: 15px; border-radius: 4px; overflow: hidden; }
+.fog-block { flex: 1; background: var(--paper-3); }
+.fog-block.is-no { background: var(--paper-3); }
+.fog-block.is-unlikely { background: #b9c0c8; }
+.fog-block.is-possible { background: #7d8894; }
+.fog-block.is-likely { background: #4b545e; }
+.fog-block.is-unknown {
+  background: repeating-linear-gradient(135deg,
+    var(--paper-3) 0 3px, transparent 3px 6px);
+}
+
 .core-marks { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin-top: 11px; }
 .core-marks-label {
   width: 100%; font-size: .67rem; font-weight: 600; letter-spacing: .05em;
@@ -2490,10 +2547,11 @@ html, body { height: 100%; overflow: hidden; }
 .sky-tab-icon svg { width: 16px; height: 16px; }
 .sky-tab-text {
   font-size: .68rem;
-  /* Three to a row in a 320px panel is about ninety pixels a tab; the longest
-     label is "On the map", which fits, and an unexpected longer one should
-     ellipsis rather than force a fourth row. */
-  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  /* Four to a row in a 320px panel is about seventy pixels a tab, which "Milky
+     Way" does not fit on one line. Wrapped rather than ellipsed: the grid rows
+     equalise, so the second line costs the strip nothing, and a cut label is a
+     label nobody can read. */
+  max-width: 100%; white-space: normal; overflow-wrap: anywhere; line-height: 1.15;
 }
 @media (max-width: 360px) { .sky-tab-text { font-size: .62rem; } }
 

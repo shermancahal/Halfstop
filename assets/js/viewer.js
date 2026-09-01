@@ -26,6 +26,7 @@ import {
   formatTemperature, geojsonBounds, mergeBounds, padBounds,
 } from './lib/geo.js';
 import { el, escapeHTML, createToaster, downloadText, saveBlob, applyStoredTheme, readTheme, setTheme, formatDate } from './lib/ui.js';
+import { fogOutlook, nightHours, fogName, fogNote, fogBand } from './lib/fog.js';
 import { icons } from './lib/icons.js';
 import {
   FolderStore, FOLDER_COLORS, readTrip, tripStanding, localDay,
@@ -62,7 +63,7 @@ import {
   FOLDER_SOURCE, REGION_SOURCE, LIGHT_SOURCE, STORM_SOURCE, STORM_ARROW_IMAGE, TRIP_SOURCE,
 } from './lib/runtime-layers.js';
 import {
-  landManager, forecast, weatherClass, publicLand, elevation, skyCover,
+  landManager, forecast, weatherClass, publicLand, elevation, skyCover, fogIngredients,
   parseWMSLegend, arcgisLegendRows,
 } from './lib/lookup.js';
 import { registerNPSImages, npsIconSVG } from './lib/nps-icons.js';
@@ -2833,6 +2834,16 @@ function skyPanels(position, date, phases) {
     { id: 'aurora', label: 'Aurora', icon: icons.aurora },
     { id: 'eclipse', label: 'Eclipse', icon: icons.eclipse },
     /*
+     * Fog belongs beside the light, not in the weather card.
+     *
+     * It is the one weather that is a subject rather than an obstacle - a
+     * valley filling at dawn is the reason to be standing there - and it is
+     * decided by the same night that decides everything else on this row. It
+     * is also the one that will spoil a drive, which is why the freezing case
+     * is called out rather than left as a temperature.
+     */
+    { id: 'fog', label: 'Fog', icon: icons.cloud },
+    /*
      * The one tab that is a switch rather than a page.
      *
      * It used to be "On the map", which stopped telling the tabs apart once
@@ -2876,6 +2887,7 @@ function skyPanels(position, date, phases) {
   else if (open === 'milkyway') milkyWayPanel(body, position, date);
   else if (open === 'aurora') auroraPanel(body, [lon, lat]);
   else if (open === 'eclipse') eclipsePanel(body, position, date);
+  else if (open === 'fog') fogPanel(body, position, date);
   else if (open === 'lines') linesPanel(body, position, date);
 
   return open ? [row, body] : [row];
@@ -3808,6 +3820,145 @@ function nightScrubber(position) {
  * over *this* point in the next half hour. Kp alone would say "storm" to
  * somebody in Texas for whom it still means nothing.
  */
+/**
+ * Fog: how likely, of which kind, and on what evidence.
+ *
+ * The whole card is written around one fact that has to stay visible — the
+ * National Weather Service publishes no fog probability, so every number here
+ * is this app's arithmetic on the ingredients NWS does publish. That is why the
+ * reasoning sits under the headline rather than in a footnote, and why an hour
+ * that came from a published visibility says so: those are the only hours where
+ * a forecaster, rather than this code, said the word fog.
+ *
+ * Bands rather than a bare percentage in the headline, for the same reason.
+ * "62%" reads as a measurement; "possible" reads as what it is. The percentage
+ * is still there, one line down, for anyone who wants to compare two nights.
+ */
+function fogPanel(body, position, date) {
+  const [lon, lat] = position;
+
+  const hero = el('div', { class: 'fog-hero' }, [
+    el('div', { class: 'fog-band', text: 'Looking…' }),
+  ]);
+  body.append(hero);
+
+  const detail = el('div');
+  body.append(detail);
+
+  body.append(el('p', {
+    class: 'hint', style: 'margin:10px 0 0',
+    text: 'Worked out from the gridded forecast — temperature, dewpoint, wind and sky cover — '
+      + 'not read off a fog product, because there is not one. A hollow, a lake shore or a '
+      + 'snowfield will fog when this says it will not.',
+  }));
+
+  fogIngredients(position).then(
+    (result) => {
+      if (!hero.isConnected) return;
+      if (!result.ok) {
+        hero.replaceChildren(el('div', { class: 'fog-band', text: 'Not available' }));
+        detail.replaceChildren(el('p', {
+          class: 'legend-note', style: 'margin:8px 0 0',
+          text: capitalise(`${result.reason}.`),
+        }));
+        return;
+      }
+
+      const outlook = fogOutlook(nightHours(result.hours, lat, lon, sunTimes), { now: date });
+      renderFog(hero, detail, outlook);
+    },
+    () => {
+      if (!hero.isConnected) return;
+      hero.replaceChildren(el('div', { class: 'fog-band', text: 'Not available' }));
+    },
+  );
+}
+
+function renderFog(hero, detail, outlook) {
+  if (!outlook.ok) {
+    hero.replaceChildren(el('div', { class: 'fog-band', text: 'Not available' }));
+    detail.replaceChildren(el('p', {
+      class: 'legend-note', style: 'margin:8px 0 0', text: capitalise(`${outlook.reason}.`),
+    }));
+    return;
+  }
+
+  const { peak } = outlook;
+  const band = fogBand(peak.chance);
+  const name = fogName(peak);
+
+  hero.replaceChildren(
+    el('div', { class: `fog-band is-${band}`, text: band === 'no' ? 'No fog expected' : `Fog ${band}` }),
+    el('div', { class: 'fog-headline', text: band === 'no' ? '' : name }),
+    el('div', {
+      class: 'fog-when',
+      text: band === 'no'
+        ? 'Nothing in the next day and a half looks like fog.'
+        : `${peak.chance}% at ${clockTime(peak.at)}`,
+    }),
+  );
+
+  const rows = [
+    band === 'no' ? null : ['When', outlook.hours > 1
+      ? `${clockTime(outlook.from)} – ${clockTime(outlook.to)} · ${outlook.hours} hours`
+      : `around ${clockTime(peak.at)}`],
+    ['Why', capitalise(peak.why)],
+    Number.isFinite(peak.depressionC)
+      ? ['Dewpoint depression', `${peak.depressionC.toFixed(1)}°C at the peak`]
+      : null,
+    /*
+     * Named rather than implied. An hour scored from a published visibility and
+     * an hour scored from this model are different kinds of claim, and the card
+     * would be overstating itself if it presented them identically.
+     */
+    ['Evidence', outlook.forecast
+      ? 'a forecast visibility, published for this grid'
+      : 'modelled here from the forecast ingredients'],
+  ].filter(Boolean);
+
+  const note = fogNote(peak);
+
+  detail.replaceChildren(
+    el('div', { class: 'core-rows' }, rows.map(([label, value]) => el('div', { class: 'core-row' }, [
+      el('span', { class: 'core-row-label', text: label }),
+      el('span', { class: 'core-row-value', text: value }),
+    ]))),
+    note ? el('p', { class: 'legend-note', style: 'margin:9px 0 0', text: note }) : null,
+    fogStrip(outlook.rows),
+  );
+}
+
+/**
+ * The next day and a half as a strip, one block an hour.
+ *
+ * The peak answers "will it fog"; the strip answers "and then what", which is
+ * the question anyone planning a dawn actually has. Hours with no answer are
+ * drawn as a gap rather than as zero — an ingredient the grid did not publish
+ * is not the same claim as an hour that will be clear.
+ */
+function fogStrip(rows) {
+  if (!rows?.length) return null;
+
+  const blocks = rows.map((row) => {
+    const band = fogBand(row.chance);
+    const when = clockTime(row.at);
+    return el('span', {
+      class: `fog-block is-${band}`,
+      title: Number.isFinite(row.chance)
+        ? `${when} · ${row.chance}% · ${capitalise(row.why)}`
+        : `${when} · ${row.why}`,
+    });
+  });
+
+  return el('div', { class: 'fog-strip-wrap' }, [
+    el('div', { class: 'fog-strip' }, blocks),
+    el('div', { class: 'sky-bar-ends' }, [
+      el('span', { text: clockTime(rows[0].at) }),
+      el('span', { text: clockTime(rows[rows.length - 1].at) }),
+    ]),
+  ]);
+}
+
 function auroraPanel(body, position) {
   const chance = el('span', { class: 'core-row-value', text: '…' });
   const kpValue = el('span', { class: 'core-row-value', text: '…' });
