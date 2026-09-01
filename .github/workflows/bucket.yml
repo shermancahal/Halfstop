@@ -59,6 +59,12 @@ jobs:
           # Read so the guard below can refuse to delete the archive the site
           # is actually serving.
           LIVE: ${{ vars.PROTOMAPS_ARCHIVE }}
+          # The rest of the settings that describe this bucket. All Variables
+          # rather than Secrets, and every one of them a public value - a
+          # bucket name and two public URLs - so printing them is safe and is
+          # the point. The account id is NOT here: that one is a secret.
+          PUBLIC_BASE: ${{ vars.R2_PUBLIC_BASE }}
+          MAXZOOM: ${{ vars.PROTOMAPS_MAXZOOM }}
         run: |
           set -euo pipefail
 
@@ -85,6 +91,25 @@ jobs:
           fi
           ENDPOINT="https://${ACCOUNT}.r2.cloudflarestorage.com"
 
+          # ------------------------------------------------- what is configured
+          #
+          # Printed before anything else because "do I need to change
+          # anything?" is the question this workflow gets opened for, and the
+          # four values that answer it are spread across two GitHub tabs and a
+          # Cloudflare dashboard. Reading them back in one place is most of the
+          # answer; the cross-checks below are the rest.
+          {
+            echo "## Configured"
+            echo ""
+            echo "| Variable | Value |"
+            echo "| --- | --- |"
+            echo "| \`R2_BUCKET\` | \`${BUCKET}\` |"
+            echo "| \`R2_PUBLIC_BASE\` | \`${PUBLIC_BASE:-(not set)}\` |"
+            echo "| \`PROTOMAPS_ARCHIVE\` | \`${LIVE:-(not set)}\` |"
+            echo "| \`PROTOMAPS_MAXZOOM\` | \`${MAXZOOM:-(not set)}\` |"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
           echo "## In \`${BUCKET}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
@@ -101,6 +126,46 @@ jobs:
             exit 1
           fi
           echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+          # ----------------------------------------------------- cross-checks
+          #
+          # Warnings rather than failures. Every one of these describes a state
+          # that can be deliberate for a while - a bucket being moved to a
+          # custom domain is exactly this, half-done, on purpose - so the job
+          # says what it sees and lets a person decide.
+          NOTES=""
+          note() { NOTES="${NOTES}- $1"$'\n'; echo "::warning::$1"; }
+
+          # The pair that looks like one value and is two. Changing the public
+          # base does not change what the site reads, and changing what the
+          # site reads does nothing until a deploy runs.
+          if [ -n "${PUBLIC_BASE:-}" ] && [ -n "${LIVE:-}" ]; then
+            case "$LIVE" in
+              "${PUBLIC_BASE%/}"/*) ;;
+              *) note "PROTOMAPS_ARCHIVE ($LIVE) is not under R2_PUBLIC_BASE ($PUBLIC_BASE). The site reads the first; cut-archive reads back through the second. One of them is stale." ;;
+            esac
+          fi
+
+          # And the check that compares a variable against reality rather than
+          # against another variable: whatever the site is pointed at has to be
+          # an object that is actually in here.
+          if [ -n "${LIVE:-}" ]; then
+            LIVE_KEY="${LIVE##*/}"
+            if ! grep -qF " ${LIVE_KEY}" listing.txt; then
+              note "PROTOMAPS_ARCHIVE points at '${LIVE_KEY}', which is not in ${BUCKET}. The basemap will be blank unless something else is serving it."
+            fi
+          fi
+
+          if [ -z "${MAXZOOM:-}" ]; then
+            note "PROTOMAPS_MAXZOOM is not set. It has to be declared before any tile is fetched, and overstating it draws blank ground — run 'Check a map archive' with no url to read the right number out of the header."
+          fi
+
+          if [ -n "$NOTES" ]; then
+            { echo ""; echo "### Worth a look"; echo ""; printf '%s' "$NOTES"; } >> "$GITHUB_STEP_SUMMARY"
+          else
+            { echo ""; echo "Nothing inconsistent between the variables and the bucket."; } >> "$GITHUB_STEP_SUMMARY"
+            echo "Nothing inconsistent between the variables and the bucket."
+          fi
 
           if [ -z "${DOOMED:-}" ]; then
             echo "Nothing was deleted — no key was given."
