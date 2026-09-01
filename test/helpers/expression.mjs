@@ -73,6 +73,24 @@ export function evaluate(expression, feature = {}, scope = {}) {
       const to = args.length > 2 ? go(args[2]) : undefined;
       return String(input).slice(from, to);
     }
+    /*
+     * Three arguments, because that is the form the shield expressions use.
+     *
+     * GL's `index-of` takes an optional start position, and the banner rule
+     * depends on it: it looks for the *second* colon in `US:US:Alternate` by
+     * starting the search past the first. A two-argument implementation would
+     * answer 2 for that and quietly slice the whole system out as if it were a
+     * plate, which is a wrong answer rather than a missing one.
+     */
+    case 'index-of': {
+      const needle = String(go(args[0]));
+      const haystack = String(go(args[1]));
+      return haystack.indexOf(needle, args.length > 2 ? Number(go(args[2])) : 0);
+    }
+    case 'downcase':
+      return String(go(args[0])).toLowerCase();
+    case 'upcase':
+      return String(go(args[0])).toUpperCase();
     case 'concat':
       return args.map((arg) => String(go(arg))).join('');
     case 'to-string':
@@ -83,6 +101,12 @@ export function evaluate(expression, feature = {}, scope = {}) {
       const input = go(args[0]);
       return Array.isArray(input) ? input.length : String(input).length;
     }
+    case '+':
+      return args.reduce((sum, arg) => sum + Number(go(arg)), 0);
+    case '-':
+      return args.length === 1
+        ? -Number(go(args[0]))
+        : args.slice(1).reduce((left, arg) => left - Number(go(arg)), Number(go(args[0])));
     case 'max':
       return Math.max(...args.map((arg) => Number(go(arg))));
     case 'min':

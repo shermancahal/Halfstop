@@ -26,7 +26,7 @@
  */
 
 import {
-  shieldImageExpression, shieldTextColour,
+  shieldImageExpression, shieldTextColour, bannerIconOffset,
   shieldTextSizeExpression, shieldTextOffsetExpression, shieldDisplayWidth,
 } from './route-shields.js';
 
@@ -1792,6 +1792,15 @@ export function shieldLayerUpdates(state = '', { schema = MAPBOX_SCHEMA } = {}) 
         // Sized from the number it is actually carrying, exactly as the layer
         // was built — half of a concurrency is as wide as its own half.
         'icon-image': shieldImageExpression(state, { length, override: refDesign(), network }),
+        /*
+         * Rewritten with the marker, because the lift belongs to the image.
+         *
+         * A bannered image is taller, and GL centres an icon on its anchor, so
+         * without moving it up by half the plate the shield itself drops and
+         * the number - placed in ems by text-offset, which knows nothing about
+         * any of this - lands on the shield's top edge.
+         */
+        ...(network ? { 'icon-offset': bannerIconOffset(network, shift) } : {}),
         'text-size': shieldTextSizeExpression(state, 2, length, { network }),
         'text-offset': shieldTextOffsetExpression(state, 2, shift, { override: refDesign(), network }),
       },
@@ -1848,7 +1857,7 @@ function shieldLayers(state = '') {
         'symbol-spacing': ['interpolate', ['linear'], ['zoom'], 6, 170, 14, 220],
       'icon-image': shieldImageExpression(state, { length: ['length', text], override: refDesign(), network: shieldNetwork() }),
       'icon-size': 1,
-      'icon-offset': [shiftPx, 0],
+      'icon-offset': bannerIconOffset(shieldNetwork(), shiftPx),
       'icon-rotation-alignment': 'viewport',
       'text-field': text,
       'text-font': fontBold(),
@@ -1913,6 +1922,10 @@ function shieldLayers(state = '') {
         // Constant, so the number's size and offset — which are fixed per
         // shield — cannot drift out of register with the marker they sit on.
         'icon-size': 1,
+        // Half the plate's height, upwards, when there is a plate — see
+        // bannerIconOffset. Absent entirely under a schema with no network,
+        // where a banner cannot arise.
+        ...(shieldNetwork() ? { 'icon-offset': bannerIconOffset(shieldNetwork(), 0) } : {}),
         'icon-rotation-alignment': 'viewport',
         // The stripped number, not the raw ref — see `ref` above. This was the
         // one place that read `ref` straight through, which is why a single

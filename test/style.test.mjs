@@ -1457,13 +1457,27 @@ test('shields: the marker comes from the road, not from where the map is looking
    * `US:US:Business`, `US:KY` and `US:VA:Secondary`, so these are the values
    * the tiles really hold rather than ones I supposed they would.
    */
-  assert.equal(evaluate(image, at('US:US:Business')), 'abmap-shield-us-3',
+  assert.equal(evaluate(image, at('US:US:Business')), 'abmap-shield-us-3-business',
     'a bannered US route fell back to the generic marker');
-  assert.equal(evaluate(image, at('US:US:Alternate')), 'abmap-shield-us-3');
-  assert.equal(evaluate(image, at('US:I:Business')), 'abmap-shield-interstate-3');
-  // A state route with a banner already worked, and has to keep working: the
-  // state arm slices two characters, so the third component never reached it.
-  assert.equal(evaluate(image, at('US:VA:Alternate')), 'abmap-shield-st-VA-3');
+  assert.equal(evaluate(image, at('US:US:Alternate')), 'abmap-shield-us-3-alternate');
+  assert.equal(evaluate(image, at('US:I:Business')), 'abmap-shield-interstate-3-business');
+  // A state route with a banner already got the right shape: the state arm
+  // slices two characters, so the third component never reached the comparison
+  // that failed. It gets the plate too.
+  assert.equal(evaluate(image, at('US:VA:Alternate')), 'abmap-shield-st-VA-3-alternate');
+
+  /*
+   * A third component is not automatically a plate.
+   *
+   * `US:VA:Secondary` names a county system, which the archive over Lee County
+   * really does carry, and there is no SECONDARY sign to bolt above anything.
+   * Only the words in BANNERS produce one; everything else adds no suffix, so
+   * the id stays the one that was already registered.
+   */
+  assert.equal(evaluate(image, at('US:VA:Secondary')), 'abmap-shield-county-3',
+    'a county system was drawn with a banner plate');
+  assert.equal(evaluate(image, at('US:US')), 'abmap-shield-us-3',
+    'an unbannered route stopped building the id it always built');
 
   /*
    * Matched on the component boundary, not as a prefix.
@@ -1489,8 +1503,12 @@ test('shields: the marker comes from the road, not from where the map is looking
    * state's own square, having guessed at what the third component meant. The
    * tile says otherwise - see the county test below - so the case that
    * exercises the slice has to be one the county rule does not claim.
+   *
+   * TRUCK is a real plate, so this now expects one. The point of the assertion
+   * is unchanged and is the first half of the id: the state was still found by
+   * slicing two characters, not by looking up a state called "WV:Truck".
    */
-  assert.equal(evaluate(image, at('US:WV:Truck')), 'abmap-shield-st-WV-3');
+  assert.equal(evaluate(image, at('US:WV:Truck')), 'abmap-shield-st-WV-3-truck');
 
   // The clear space is measured from each state's own artwork, so the number
   // has to be placed for the marker actually drawn.
@@ -1915,4 +1933,113 @@ test('pages: an editable section that is its own body is not replaced by itself'
   applySaved(wrapped, '<i>x</i>');
   assert.equal(inner.innerHTML, '<i>x</i>');
   assert.equal(wrapped.innerHTML, '', 'the section keeps its layout; only the body changes');
+});
+
+test('shields: an image id survives being taken back apart', async () => {
+  /*
+   * The round trip, because a failure here is silent.
+   *
+   * GL asks for an image by the id the style built, and anything the parser
+   * cannot read comes back as null - which GL reports by drawing no shield.
+   * Nothing throws and nothing logs; the road just loses its marker, which
+   * looks exactly like a road that was never signed.
+   */
+  const { parseShieldImageId, shieldImageId, BANNERS } =
+    await import('../assets/js/lib/route-shields.js');
+
+  for (const design of ['us', 'interstate', 'circle', 'county', 'state', 'st-VA', 'st-WV']) {
+    for (const length of [2, 3, 4]) {
+      for (const banner of ['', ...Object.keys(BANNERS)]) {
+        const id = shieldImageId(design, length, banner);
+        assert.deepEqual(parseShieldImageId(id), { design, length, banner },
+          `${id} did not survive the round trip`);
+      }
+    }
+  }
+});
+
+test('shields: only a real banner word becomes a plate', async () => {
+  const { bannerFor, shieldImageId } = await import('../assets/js/lib/route-shields.js');
+
+  /*
+   * The archive over Lee County carries `US:VA:Secondary`, and there is no
+   * SECONDARY sign to bolt above anything - it names a county system. A third
+   * component is not automatically a plate, and treating it as one would add a
+   * suffix to an id that has an image registered under the bare name.
+   */
+  assert.equal(bannerFor('Secondary'), '');
+  assert.equal(bannerFor('County'), '');
+  assert.equal(bannerFor(''), '');
+  assert.equal(bannerFor(undefined), '');
+  assert.equal(shieldImageId('us', 3, 'Secondary'), 'abmap-shield-us-3');
+
+  // Case-folded, because the tiles capitalise and the id does not.
+  assert.equal(bannerFor('Alternate'), 'alternate');
+  assert.equal(bannerFor('ALTERNATE'), 'alternate');
+
+  /*
+   * Not inherited from Object.prototype.
+   *
+   * `BANNERS[key]` with a plain lookup answers a function for 'constructor'
+   * and 'toString', so a network component of either name would have produced
+   * an id ending in `-constructor` that nothing can draw.
+   */
+  assert.equal(bannerFor('constructor'), '');
+  assert.equal(bannerFor('toString'), '');
+});
+
+test('shields: a plate lifts the icon so the number stays on the shield', async () => {
+  const { evaluate } = await import('./helpers/expression.mjs');
+  const { bannerIconOffset, BANNER_LIFT } = await import('../assets/js/lib/route-shields.js');
+
+  const at = (net) => ({ properties: { network: net } });
+  const offset = bannerIconOffset('network', 0);
+
+  /*
+   * GL centres an icon on its anchor, so a taller image drops the shield by
+   * half the extra height - and the number, placed in ems by text-offset,
+   * knows nothing about that and would ride up onto the shield's top edge.
+   * Exactly half the lift, upwards, puts the shield back where a bare one
+   * sits and leaves every text expression alone.
+   */
+  assert.deepEqual(evaluate(offset, at('US:US:Alternate')), [0, -BANNER_LIFT / 2]);
+  assert.deepEqual(evaluate(offset, at('US:US')), [0, 0]);
+  assert.deepEqual(evaluate(offset, at('US:VA:Secondary')), [0, 0],
+    'a county system was lifted as though it had a plate');
+
+  // The concurrency halves carry a sideways shift, which the lift must keep.
+  const shifted = bannerIconOffset('network', -7);
+  assert.deepEqual(evaluate(shifted, at('US:US:Truck')), [-7, -BANNER_LIFT / 2]);
+  assert.deepEqual(evaluate(shifted, at('US:US')), [-7, 0]);
+
+  // No network field means no banner is possible, and the answer is the plain
+  // literal the duplex layers have always carried.
+  assert.deepEqual(bannerIconOffset('', -7), [-7, 0]);
+});
+
+test('shields: one id format, one parser', async () => {
+  /*
+   * There were two parsers for one format, and banners made them disagree.
+   *
+   * `parseShieldId` split on the last hyphen and read "alternate" as a length,
+   * so it answered null for every bannered id while `parseShieldImageId`
+   * answered correctly. Nothing failed loudly: a state route with a plate
+   * simply stopped being offered its real photographed blank and quietly got
+   * the drawn approximation, beside identical routes that kept theirs.
+   */
+  const { parseShieldId, parseShieldImageId, shieldImageId } =
+    await import('../assets/js/lib/route-shields.js');
+
+  for (const id of [
+    shieldImageId('us', 3), shieldImageId('st-VA', 2), shieldImageId('interstate', 4),
+    shieldImageId('st-VA', 2, 'alternate'), shieldImageId('us', 3, 'business'),
+    'abmap-shield-nonsense', 'not-a-shield-id', '',
+  ]) {
+    assert.deepEqual(parseShieldId(id), parseShieldImageId(id),
+      `the two parsers disagree about ${id || '(empty)'}`);
+  }
+
+  assert.deepEqual(parseShieldId(shieldImageId('st-VA', 2, 'alternate')),
+    { design: 'st-VA', length: 2, banner: 'alternate' },
+    'a bannered state id no longer resolves to its blank');
 });

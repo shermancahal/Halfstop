@@ -126,6 +126,33 @@ export function shieldBlankFor(design, length) {
  * Falls back to the untouched bitmap if a canvas is not available, because a
  * white scenic shield is a wrong colour and a missing one is a missing road.
  */
+/**
+ * A sign blank with its banner plate above it, as one image.
+ *
+ * Drawn at the blank's own pixel ratio rather than the drawn shields' 2, so a
+ * plate over a photographed blank is the same size on screen as a plate over a
+ * drawn one - they sit side by side on the same road.
+ */
+export function plateOnBlank(bitmap, banner, pixelRatio = BLANK_PIXEL_RATIO) {
+  if (typeof document === 'undefined') return null;
+  const plate = bannerFor(banner);
+  if (!plate) return bitmap;
+
+  const lift = Math.round(BANNER_LIFT * pixelRatio);
+  const canvas = document.createElement('canvas');
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height + lift;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  ctx.save();
+  ctx.scale(pixelRatio, pixelRatio);
+  bannerPlate(ctx, bitmap.width / pixelRatio, plate);
+  ctx.restore();
+  ctx.drawImage(bitmap, 0, lift);
+  return ctx.getImageData(0, 0, canvas.width, canvas.height);
+}
+
 export function tintBlank(bitmap, colour) {
   try {
     const canvas = typeof OffscreenCanvas === 'function'
@@ -200,9 +227,10 @@ export function shieldDesign(value = '') {
   return 'circle';
 }
 
-export function shieldImageId(design, length) {
+export function shieldImageId(design, length, banner = '') {
   const clamped = Math.max(MIN_LEN, Math.min(MAX_LEN, Math.round(length) || MIN_LEN));
-  return `abmap-shield-${design}-${clamped}`;
+  const plate = bannerFor(banner);
+  return `abmap-shield-${design}-${clamped}${plate ? `-${plate}` : ''}`;
 }
 
 /**
@@ -418,6 +446,90 @@ export const SHIELD_SCALE = 1.2;
 export const BLANK_PIXEL_RATIO = 2 / SHIELD_SCALE;
 
 const HEIGHT = 20 * SHIELD_SCALE;
+
+/*
+ * The plate bolted above a shield, and what it says.
+ *
+ * On the road these are separate signs: a US shield with ALTERNATE on a white
+ * rectangle over it. Abbreviated because the plate is drawn the width of the
+ * shield under it, which is about 26 CSS pixels - "ALTERNATE" at that width is
+ * four pixels tall and unreadable, and every one of these has a signed short
+ * form that drivers already read.
+ *
+ * Keyed by the lowercased network component so the id in the image name is the
+ * same string the expression built, and the value is what gets drawn.
+ */
+export const BANNERS = {
+  alternate: 'ALT',
+  business: 'BUS',
+  bypass: 'BYP',
+  connector: 'CONN',
+  loop: 'LOOP',
+  scenic: 'SCENIC',
+  spur: 'SPUR',
+  truck: 'TRUCK',
+};
+
+const BANNER_HEIGHT = 7 * SHIELD_SCALE;
+const BANNER_GAP = 1.5 * SHIELD_SCALE;
+
+/*
+ * How much taller a bannered image is than a bare one.
+ *
+ * Exported because the style has to move the icon up by half of it. GL centres
+ * an icon on its anchor, so growing the image upwards would otherwise drag the
+ * shield itself down by half the plate - the number, which is placed by
+ * text-offset and knows nothing about any of this, would end up sitting on the
+ * shield's top edge. Half the lift, applied to the icon only, puts the shield
+ * back exactly where an unbannered one sits and leaves every text expression
+ * alone.
+ */
+export const BANNER_LIFT = BANNER_HEIGHT + BANNER_GAP;
+
+/** The banner id for a network component, or '' when it does not name one. */
+export function bannerFor(word = '') {
+  const key = String(word).trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(BANNERS, key) ? key : '';
+}
+
+/*
+ * The plate: a white rectangle with a black keyline, like the sign.
+ *
+ * Drawn at the top of a canvas that is BANNER_LIFT taller than the shield, so
+ * everything below it is the ordinary shield drawing, untouched and unaware.
+ */
+function bannerPlate(ctx, width, banner) {
+  const text = BANNERS[banner];
+  if (!text) return;
+
+  const inset = 0.6;
+  const w = width - inset * 2;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(inset, 0, w, BANNER_HEIGHT);
+  ctx.strokeStyle = '#1c1c1c';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(inset + 0.5, 0.5, w - 1, BANNER_HEIGHT - 1);
+
+  /*
+   * Shrunk to fit rather than clipped.
+   *
+   * SCENIC is six characters over the width two digits need, so a fixed size
+   * that suits ALT runs off both ends of the plate. Measured and scaled, so
+   * the longest word is small and present rather than large and cut in half.
+   */
+  let size = BANNER_HEIGHT * 0.78;
+  ctx.font = `700 ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+  const room = w - 2.5;
+  const measured = ctx.measureText(text).width;
+  if (measured > room) {
+    size *= room / measured;
+    ctx.font = `700 ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+  }
+  ctx.fillStyle = '#1c1c1c';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, width / 2, BANNER_HEIGHT / 2 + size * 0.06);
+}
 
 function shieldWidth(length) {
   return ({ 2: 22, 3: 27, 4: 33 }[length] || 22) * SHIELD_SCALE;
@@ -754,17 +866,31 @@ const SHAPE_DECORATIONS = {
  * Returns null where there is no canvas — Node, or a browser refusing one —
  * so the caller can skip registration rather than throw.
  */
-export function rasterizeShield(design, length, { pixelRatio = 2 } = {}) {
+export function rasterizeShield(design, length, { pixelRatio = 2, banner = '' } = {}) {
   if (typeof document === 'undefined') return null;
 
+  const plate = bannerFor(banner);
+  const lift = plate ? BANNER_LIFT : 0;
   const width = shieldWidth(Math.max(MIN_LEN, Math.min(MAX_LEN, length)));
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(width * pixelRatio);
-  canvas.height = Math.round(HEIGHT * pixelRatio);
+  canvas.height = Math.round((HEIGHT + lift) * pixelRatio);
 
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
   ctx.scale(pixelRatio, pixelRatio);
+
+  /*
+   * The plate first, then everything below it draws as if it were not there.
+   *
+   * Translating past the banner means every shape function keeps taking the
+   * same (width, HEIGHT) it always did and none of them has to learn about
+   * banners - there are fourteen of them and a state table besides.
+   */
+  if (plate) {
+    bannerPlate(ctx, width, plate);
+    ctx.translate(0, lift);
+  }
 
   ctx.lineJoin = 'round';
 
@@ -1120,7 +1246,17 @@ export async function loadShieldBlank(map, id, { base = '', pixelRatio = BLANK_P
     // A style swap between the request and its answer would make this an
     // orphan; GL throws on a duplicate id, so check again on arrival.
     if (map.hasImage?.(id)) return true;
-    map.addImage(id, blank.tint ? tintBlank(bitmap, blank.tint) : bitmap, { pixelRatio });
+    const tinted = blank.tint ? tintBlank(bitmap, blank.tint) : bitmap;
+    /*
+     * A plate goes on top of the real sign, not instead of it.
+     *
+     * Declining a bannered id here would work - the drawn fallback would catch
+     * it - and would put one Virginia route on its photographed blank and the
+     * one beside it on our approximation of the same sign, on the same screen.
+     */
+    const plated = parsed.banner ? plateOnBlank(tinted, parsed.banner, pixelRatio) : tinted;
+    if (!plated) return false;
+    map.addImage(id, plated, { pixelRatio });
     return true;
   } catch {
     // The drawn fallback covers this: a missing blank is a plainer shield, not
@@ -1129,16 +1265,18 @@ export async function loadShieldBlank(map, id, { base = '', pixelRatio = BLANK_P
   }
 }
 
-/** Split `abmap-shield-st-CA-2` into its design and length. */
+/**
+ * Split `abmap-shield-st-CA-2` into its design and length.
+ *
+ * The same parse as `parseShieldImageId`, and now literally the same code.
+ * There were two of these, written for one format, and adding banners made
+ * them disagree: this one split on the last hyphen and read `alternate` as a
+ * length, so it answered null for every bannered id while the other answered
+ * correctly. Nothing failed loudly - a state route with a plate simply stopped
+ * being offered its real sign blank and quietly got the drawn approximation.
+ */
 export function parseShieldId(id) {
-  const prefix = 'abmap-shield-';
-  if (!String(id).startsWith(prefix)) return null;
-  const rest = id.slice(prefix.length);
-  const cut = rest.lastIndexOf('-');
-  if (cut < 0) return null;
-  const length = Number(rest.slice(cut + 1));
-  if (!Number.isFinite(length)) return null;
-  return { design: rest.slice(0, cut), length };
+  return parseShieldImageId(id);
 }
 
 /**
@@ -1154,15 +1292,39 @@ export function rasterizeShieldById(id, options = {}) {
   const prefix = 'abmap-shield-';
   if (!String(id).startsWith(prefix)) return null;
 
-  const rest = id.slice(prefix.length);
-  const split = rest.lastIndexOf('-');
-  if (split < 1) return null;
+  const parsed = parseShieldImageId(id);
+  if (!parsed) return null;
+  return rasterizeShield(parsed.design, parsed.length, { ...options, banner: parsed.banner });
+}
 
-  const design = rest.slice(0, split);
-  const length = Number(rest.slice(split + 1));
-  if (!Number.isFinite(length)) return null;
+/**
+ * Take an image id back apart into the drawing it names.
+ *
+ * Separate and exported because it is the one place a silent failure lives:
+ * GL asks for an id by name, and anything that cannot be parsed comes back as
+ * null, which GL reports by drawing no shield at all. Nothing throws, nothing
+ * logs, the road simply loses its marker - so the parse is checked directly
+ * rather than through a rasteriser that needs a canvas to run.
+ *
+ * Read from the right, because only the right is fixed. A design may carry a
+ * hyphen of its own (`st-VA`), so the parts are found by walking back: an
+ * optional banner, then the length, then whatever remains is the design. The
+ * first version split on the last hyphen and called that the length, which
+ * turned `abmap-shield-us-3-alternate` into `Number('alternate')` and returned
+ * null for every bannered road.
+ */
+export function parseShieldImageId(id) {
+  const prefix = 'abmap-shield-';
+  if (!String(id).startsWith(prefix)) return null;
 
-  return rasterizeShield(design, length, options);
+  const parts = String(id).slice(prefix.length).split('-');
+  const banner = bannerFor(parts[parts.length - 1]);
+  if (banner) parts.pop();
+
+  const length = Number(parts.pop());
+  const design = parts.join('-');
+  if (!Number.isFinite(length) || !design) return null;
+  return { design, length, banner };
 }
 
 /**
@@ -1408,6 +1570,47 @@ const COUNTY_ROUTE = ['any',
   ['==', ['slice', ['coalesce', ['get', 'network'], ''], 5], ':Secondary'],
 ];
 
+/*
+ * The banner component of a network, as an expression.
+ *
+ * `US:US:Alternate` names its system in the first two components and the plate
+ * in the third, so this looks past the second colon. A network with no third
+ * component, or one naming something that is not a banner - `US:VA:Secondary`
+ * is a county system, not a plate - answers the empty string, and every
+ * expression downstream is written so that means "no banner".
+ */
+export function bannerExpression(field = 'network') {
+  const net = ['var', NET];
+  return ['let', NET, ['coalesce', ['get', field], ''],
+    ['let', 'abmap_cut', ['index-of', ':', net, 3],
+      ['case',
+        ['>', ['var', 'abmap_cut'], 0],
+        ['match', ['downcase', ['slice', net, ['+', ['var', 'abmap_cut'], 1]]],
+          ...Object.keys(BANNERS).flatMap((key) => [key, key]), ''],
+        '']]];
+}
+
+/*
+ * How far to move the icon up so a plate does not push the shield down.
+ *
+ * GL centres an icon on its anchor. A bannered image is BANNER_LIFT taller, so
+ * without this the shield's own centre sits half a plate below where an
+ * unbannered one sits - and the number, placed by text-offset in ems of its
+ * own size, would ride up onto the shield's top edge. Applied to the icon
+ * alone, so every text expression stays exactly as it was.
+ *
+ * icon-size on these layers is 1, so these are plain pixels.
+ */
+export function bannerIconOffset(field = 'network', shiftPx = 0) {
+  // No network to read means no banner is possible, and the answer is the
+  // plain literal the duplex layers have always carried - not an expression
+  // that evaluates to it. The Mapbox style is byte-for-byte what it was.
+  if (!field) return [shiftPx, 0];
+  return ['case',
+    ['!=', bannerExpression(field), ''], ['literal', [shiftPx, -BANNER_LIFT / 2]],
+    ['literal', [shiftPx, 0]]];
+}
+
 /** Whether a design is a state route marker — a state's own, or the generic. */
 function isStateDesign(design) {
   return design === 'state' || String(design).startsWith('st-');
@@ -1518,6 +1721,23 @@ export function shieldImageExpression(state = '', { length = null, override = nu
      * not — under Protomaps it would resolve to the minimum width rather than
      * to nothing, which is a narrow sign rather than a missing one.
      */
+    /*
+     * And the plate, when the network names one.
+     *
+     * Spread rather than a ternary yielding '', so a schema with no network
+     * builds an array with nothing extra in it at all. An empty string appended
+     * to the concat would evaluate identically and serialise differently, which
+     * the Mapbox snapshot test caught immediately - the seam's whole point is
+     * that the Mapbox style is byte-for-byte what it was.
+     *
+     * Last, so an unbannered road builds exactly the id it always built and
+     * every image already registered still answers. Only a schema naming a
+     * network can carry a banner at all: Mapbox says what a marker looks like,
+     * not what is bolted above it.
+     */
+    ...(network ? [['let', 'abmap_plate', bannerExpression(network),
+      ['case', ['!=', ['var', 'abmap_plate'], ''],
+        ['concat', '-', ['var', 'abmap_plate']], '']]] : []),
   ];
 }
 
