@@ -1446,6 +1446,36 @@ test('shields: the marker comes from the road, not from where the map is looking
   assert.equal(evaluate(image, at('US:I')), 'abmap-shield-interstate-3');
   assert.equal(evaluate(image, at('US:US')), 'abmap-shield-us-3');
 
+  /*
+   * A banner is a component of the network, and the road underneath it is
+   * still a US route.
+   *
+   * Reported from Lee County, Virginia: US 58 ALT drawn as a plain white box.
+   * `US:US:Business` did not equal `US:US`, so it fell through to the state
+   * arm, which sliced "US" out of it, found no state by that name and took the
+   * generic fallback. The archive over that ground carries exactly `US:US`,
+   * `US:US:Business`, `US:KY` and `US:VA:Secondary`, so these are the values
+   * the tiles really hold rather than ones I supposed they would.
+   */
+  assert.equal(evaluate(image, at('US:US:Business')), 'abmap-shield-us-3',
+    'a bannered US route fell back to the generic marker');
+  assert.equal(evaluate(image, at('US:US:Alternate')), 'abmap-shield-us-3');
+  assert.equal(evaluate(image, at('US:I:Business')), 'abmap-shield-interstate-3');
+  // A state route with a banner already worked, and has to keep working: the
+  // state arm slices two characters, so the third component never reached it.
+  assert.equal(evaluate(image, at('US:VA:Alternate')), 'abmap-shield-st-VA-3');
+
+  /*
+   * Matched on the component boundary, not as a prefix.
+   *
+   * `US:USFS` is the Forest Service, a different system that happens to share
+   * five characters with `US:US`. A `startsWith` would have given every forest
+   * road a US highway shield, which is the same class of bug in the other
+   * direction and would have looked like a fix.
+   */
+  assert.notEqual(evaluate(image, at('US:USFS')), 'abmap-shield-us-3',
+    'a Forest Service route was drawn as a US highway');
+
   // A road nothing has claimed gets the plain circle, not the state's marker —
   // that is how a county road ends up wearing a state's letter.
   assert.equal(evaluate(image, at('CA:ON')), 'abmap-shield-circle-3');

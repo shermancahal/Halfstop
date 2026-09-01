@@ -1266,6 +1266,14 @@ export const shieldRegistrationReport = () => lastRegistration;
 const LOCAL = Symbol('local state design');
 
 /*
+ * The bound name for the network, so it is read once per feature.
+ *
+ * Every arm below tests it, and writing `['coalesce', ['get', field], '']` out
+ * per arm is how road-shield's text-size once reached 261 KB on its own.
+ */
+const NET = 'abmap_network';
+
+/*
  * The ref-based shield inference is out, for now.
  *
  * It read "US 40 Scenic" with shield "default" and drew a US marker, which is
@@ -1308,10 +1316,28 @@ const LOCAL = Symbol('local state design');
  * the same table the markers are, so the arms cannot drift from the shapes.
  */
 function networkArms(field, valueFor) {
-  const net = ['coalesce', ['get', field], ''];
-  return ['case',
-    ['==', net, 'US:I'], valueFor('interstate'),
-    ['==', net, 'US:US'], valueFor('us'),
+  const net = ['var', NET];
+  /*
+   * A network names its system in components, and a banner adds one.
+   *
+   * `US:US` and `US:US:Business` are the same system - one road carries a
+   * plate saying BUSINESS - so an exact comparison answered no to the second
+   * and dropped it through to the state arm, which sliced "US" out of it,
+   * found no state by that name and drew the generic rounded rectangle.
+   * Reported from Lee County, Virginia: US 58 ALT wearing a plain white box.
+   * The archive over that ground carries `US:US`, `US:US:Business`, `US:KY`
+   * and `US:VA:Secondary`, so this is measured rather than supposed.
+   *
+   * Matched on the component boundary rather than as a prefix, because
+   * `US:USFS` is a different system entirely and starts with the same five
+   * characters. Exact, or followed by a colon; nothing else counts.
+   */
+  const is = (name) => ['any',
+    ['==', net, name],
+    ['==', ['slice', net, 0, name.length + 1], `${name}:`]];
+  return ['let', NET, ['coalesce', ['get', field], ''], ['case',
+    is('US:I'), valueFor('interstate'),
+    is('US:US'), valueFor('us'),
     /*
      * A county route before a state one, because it is the longer value and
      * the state test would swallow it.
@@ -1323,7 +1349,7 @@ function networkArms(field, valueFor) {
      */
     ['==', ['slice', net, 0, 3], 'US:'],
     ['case', COUNTY_ROUTE, valueFor('county'), stateArms(net, valueFor)],
-    valueFor(UNCLAIMED)];
+    valueFor(UNCLAIMED)]];
 }
 
 /**
