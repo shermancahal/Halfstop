@@ -227,7 +227,7 @@ export function routeGeoJSON(route, stops = []) {
  * budget of eight other people's routes. Valhalla returns a leg per pair from
  * a single call, which is exactly what the planner wants anyway.
  */
-export function routeBody(stops, { costing = 'auto', units = 'miles' } = {}) {
+export function routeBody(stops, { costing = 'auto', units = 'miles', costingOptions = null } = {}) {
   return {
     locations: stops.map((stop) => ({
       lat: stop.position[1],
@@ -236,6 +236,14 @@ export function routeBody(stops, { costing = 'auto', units = 'miles' } = {}) {
       type: 'break',
     })),
     costing,
+    /*
+     * Omitted rather than sent empty when there are none.
+     *
+     * A car route has to be byte-for-byte the request it was before vehicle
+     * profiles existed: an empty costing_options is a different request, and a
+     * different request is a different cache entry at the far end for no gain.
+     */
+    ...(costingOptions ? { costing_options: costingOptions } : {}),
     directions_options: { units },
   };
 }
@@ -281,6 +289,7 @@ export function throttled(job, { minIntervalMs = ROUTING.minIntervalMs } = {}) {
 export async function fetchRoute(stops, {
   url = ROUTING.url,
   costing = 'auto',
+  costingOptions = null,
   units = 'miles',
   walkInMetres = WALK_IN_METRES,
   signal,
@@ -296,7 +305,7 @@ export async function fetchRoute(stops, {
     };
   }
 
-  const body = routeBody(stops, { costing, units });
+  const body = routeBody(stops, { costing, units, costingOptions });
   const target = `${url}?json=${encodeURIComponent(JSON.stringify(body))}`;
 
   const response = await throttled(() => fetcher(target, { signal }));

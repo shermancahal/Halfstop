@@ -57,6 +57,10 @@ import {
 } from './lib/sky.js';
 import { activeAlerts, describeMotion, alertsToGeoJSON } from './lib/storms.js';
 import { fetchRoute, routeGeoJSON } from './lib/route.js';
+import {
+  RV_CAVEAT, RV_RANGES, normaliseProfile, isRV, routingFor, profileRows,
+  explainFailure, readDimension, showDimension, showWeight, shortTonsToTonnes,
+} from './lib/rv.js';
 import { directionsFor, googleTripURL, GOOGLE_WAYPOINT_LIMIT } from './lib/directions.js';
 import {
   runtimeLayers, runtimeSources, IS_LINE, IS_POLY, IS_POINT,
@@ -219,6 +223,16 @@ const state = {
   openLayerGroups: new Set(),
   /** Which trips have their drive breakdown open, so a re-render keeps it. */
   openTripPlans: new Set(),
+  /*
+   * Which of the fold-away blocks in a folder are open, by name.
+   *
+   * Changing a knob re-renders the whole tab, and a <details> rebuilt from
+   * markup comes back shut - so setting the vehicle to RV closed the block
+   * containing the four fields you set it to RV in order to fill in. The trip
+   * plan already survived this by remembering its own state; these do it the
+   * same way rather than a second way.
+   */
+  openBlocks: new Set(),
   /** Details sections the reader has collapsed, remembered across pins. */
   closedDetailSections: new Set(readClosedSections()),
   /** Set when the chosen basemap could not render as itself, and why. */
@@ -9087,9 +9101,19 @@ async function drawTripRoute(folder, stops, button) {
   const said = button.textContent;
   button.textContent = 'Asking…';
   try {
-    const route = await fetchRoute(stops);
+    /*
+     * The vehicle decides the costing, and a car still asks exactly what it
+     * always asked. Read at press time rather than captured when the panel was
+     * built, so changing the profile and pressing Draw does the new thing.
+     */
+    const vehicle = vehicleProfile();
+    const routing = routingFor(vehicle);
+    const route = await fetchRoute(stops, {
+      costing: routing.costing,
+      costingOptions: routing.costing_options || null,
+    });
     if (!route.ok) {
-      toast(route.message, { tone: 'error', timeout: 8000 });
+      toast(explainFailure(route.message, vehicle), { tone: 'error', timeout: 12000 });
       return;
     }
     tripRoute = { folderId: folder.id, route, stops };
@@ -9115,6 +9139,157 @@ async function drawTripRoute(folder, stops, button) {
     button.disabled = false;
     button.textContent = said;
   }
+}
+
+/* ---------------- the vehicle, and what it costs to route one ---------------- */
+
+/** Attributes for a <details> that should come back the way it was left. */
+function rememberOpen(name, attrs) {
+  return {
+    ...attrs,
+    open: state.openBlocks.has(name),
+    ontoggle: (event) => {
+      if (event.target.open) state.openBlocks.add(name);
+      else state.openBlocks.delete(name);
+    },
+  };
+}
+
+const VEHICLE_KEY = 'ab-maps-vehicle';
+
+/**
+ * The vehicle, on the device rather than on the folder.
+ *
+ * How tall your RV is is a fact about you, not about this trip, and re-entering
+ * it per folder would guarantee it is wrong on most of them — the same reason
+ * the speed and stop-length knobs live here.
+ */
+function vehicleProfile() {
+  try {
+    return normaliseProfile(JSON.parse(globalThis.localStorage?.getItem(VEHICLE_KEY) || '{}'));
+  } catch {
+    return normaliseProfile(null);
+  }
+}
+
+function saveVehicleProfile(patch) {
+  const next = normaliseProfile({ ...vehicleProfile(), ...patch });
+  try {
+    globalThis.localStorage?.setItem(VEHICLE_KEY, JSON.stringify(next));
+  } catch {
+    // Storage refused; the profile lasts for this session only.
+  }
+  return next;
+}
+
+/**
+ * What the router was told, and what it could not have known.
+ *
+ * The caveat is shown in full every time rather than once on first use or
+ * behind a help link, because the thing it is warning about does not get less
+ * true on the second trip. The dimensions are spelled back out beside it for a
+ * reason of the same kind: a panel saying "routed for your RV" cannot be
+ * checked by the person reading it, and one saying 13' 6" can be checked
+ * against the door sticker in four seconds.
+ */
+function rvAdvisory(profile) {
+  const vehicle = normaliseProfile(profile);
+  if (!isRV(vehicle)) return null;
+  const metric = state.units === 'metric';
+
+  return el('div', { class: 'rv-advisory' }, [
+    el('div', { class: 'rv-advisory-head' }, [
+      el('span', { class: 'rv-advisory-mark', html: icons.alert }),
+      el('span', { text: 'Routed for your vehicle — advisory only' }),
+    ]),
+    el('div', { class: 'rv-dims' }, profileRows(vehicle, { metric }).map(([label, value]) => el('span', {
+      class: 'rv-dim', text: `${label} ${value}`,
+    }))),
+    el('p', { class: 'rv-caveat', text: RV_CAVEAT }),
+  ]);
+}
+
+/**
+ * The vehicle picker: two buttons and, for one of them, four measurements.
+ *
+ * Feet and inches by default, because that is what is printed on the sticker
+ * inside an American RV's door and converting it by hand is exactly where the
+ * mistake gets made. `12'6"`, `12 ft 6 in`, `12-6` and a bare `12` are all
+ * read; an impossible inch count is refused rather than guessed at.
+ */
+function vehicleKnobs() {
+  const vehicle = vehicleProfile();
+  const metric = state.units === 'metric';
+
+  const choice = (kind, label, note) => el('button', {
+    class: `settings-choice${vehicle.kind === kind ? ' is-on' : ''}`,
+    type: 'button', title: note,
+    text: label,
+    onclick: () => {
+      if (vehicle.kind === kind) return;
+      saveVehicleProfile({ kind });
+      renderFoldersTab();
+    },
+  });
+
+  const field = (key, label, note) => {
+    const isWeight = key === 'weightT';
+    const shown = isWeight
+      ? showWeight(vehicle[key], { metric })
+      : showDimension(vehicle[key], { metric });
+    return el('label', { class: 'trip-knob' }, [
+      el('span', { class: 'trip-knob-label', text: label }),
+      el('input', {
+        type: 'text', class: 'trip-knob-input', value: shown,
+        inputmode: metric ? 'decimal' : 'text',
+        onchange: (event) => {
+          const raw = event.target.value;
+          const value = isWeight
+            ? readWeight(raw, metric)
+            : readDimension(raw, { metric });
+          const [low, high] = RV_RANGES[key];
+          if (!Number.isFinite(value) || value < low || value > high) {
+            // Put the old value back rather than storing a number that would be
+            // silently replaced by a default at routing time.
+            event.target.value = shown;
+            toast(`That is not a ${label.toLowerCase()} this can route on — left it as ${shown}.`,
+              { tone: 'error' });
+            return;
+          }
+          saveVehicleProfile({ [key]: value });
+          renderFoldersTab();
+        },
+      }),
+      el('span', { class: 'trip-knob-note', text: note }),
+    ]);
+  };
+
+  return el('details', rememberOpen('vehicle', { class: 'trip-knobs' }), [
+    el('summary', { class: 'trip-knobs-summary', text: 'What you are driving' }),
+    el('div', { class: 'settings-choices', style: '--choices:2; margin-bottom:10px' }, [
+      choice('car', 'Car or truck', 'Routes the way it always has'),
+      choice('rv', 'RV or towing', 'Routes around limits that are recorded, and says what is not'),
+    ]),
+    vehicle.kind === 'rv'
+      ? el('div', { class: 'trip-knob-grid' }, [
+        field('heightM', 'Height', metric ? 'metres' : "feet and inches, as on the door sticker"),
+        field('widthM', 'Width', metric ? 'metres' : 'feet and inches, mirrors included'),
+        field('lengthM', 'Length', metric ? 'metres' : 'feet and inches, including what you tow'),
+        field('weightT', 'Weight', metric ? 'tonnes, loaded' : 'tons, loaded'),
+      ])
+      : el('p', {
+        class: 'hint', style: 'margin:0',
+        text: 'Switch this to RV or towing and the router will avoid the height, width and '
+          + 'weight limits that are recorded — and the panel will tell you how much is not.',
+      }),
+  ]);
+}
+
+/** A weight in whichever unit the reader is working in, as tonnes. */
+function readWeight(input, metric) {
+  const value = Number(String(input ?? '').replace(/[^\d.-]/g, ''));
+  if (!Number.isFinite(value)) return null;
+  return metric ? value : shortTonsToTonnes(value);
 }
 
 function tripPlanBlock(folder) {
@@ -9155,8 +9330,16 @@ function tripPlanBlock(folder) {
   block.append(tripDayList(plan, stops));
   block.append(tripQueue(folder, plan, stops));
   block.append(tripKnobs(folder, settings));
+  block.append(vehicleKnobs());
 
   const drawn = tripRoute?.folderId === folder.id ? tripRoute.route : null;
+  /*
+   * Above the buttons rather than under the drawn route, so it is read before
+   * the route is asked for rather than after it is on the screen looking
+   * authoritative.
+   */
+  const advisory = rvAdvisory(vehicleProfile());
+  if (advisory) block.append(advisory);
 
   /*
    * The whole trip, to Google Maps, and only to Google Maps.
@@ -9376,7 +9559,7 @@ function tripKnobs(folder, settings) {
     el('span', { class: 'trip-knob-note', text: note }),
   ]);
 
-  return el('details', { class: 'trip-knobs' }, [
+  return el('details', rememberOpen('assumes', { class: 'trip-knobs' }), [
     el('summary', { class: 'trip-knobs-summary', text: 'What this assumes' }),
     el('div', { class: 'trip-knob-grid' }, [
       knob('speedMph', 'Average speed', 'mph, door to door — gravel and gates included', { min: 5, max: 80 }),

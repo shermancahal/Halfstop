@@ -2293,6 +2293,37 @@ html, body { height: 100%; overflow: hidden; }
   color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums;
 }
 
+/* ---------------- vehicle advisory ---------------- */
+
+/*
+ * Amber, and shaped like a notice rather than a card.
+ *
+ * The thing it is saying — that a clean route is not a checked route — has to
+ * survive being read for the fortieth time on the fortieth trip, so it is not
+ * dismissible and it does not fold away. It is amber rather than red because
+ * red here would read as "this route is dangerous", which is not the claim:
+ * the claim is that the router cannot see what it cannot see.
+ */
+.rv-advisory {
+  margin-top: 11px; padding: 10px 11px;
+  border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--warn) 9%, transparent);
+}
+.rv-advisory-head {
+  display: flex; align-items: center; gap: 7px;
+  font-size: .74rem; font-weight: 650; color: var(--ink);
+}
+.rv-advisory-mark { display: inline-flex; line-height: 0; color: var(--warn); }
+.rv-advisory-mark svg { width: 15px; height: 15px; }
+.rv-dims { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.rv-dim {
+  padding: 3px 8px; border-radius: 999px; font-size: .7rem;
+  border: 1px solid var(--line); background: var(--paper);
+  color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.rv-caveat { margin: 8px 0 0; font-size: .74rem; line-height: 1.45; color: var(--ink-2); }
+
 /* ---------------- fog ---------------- */
 
 /*

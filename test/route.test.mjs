@@ -175,6 +175,12 @@ test('route: one request carries the whole trip, not one per leg', async () => {
   assert.deepEqual(body.locations[0], { lat: 36.71, lon: -83.37, type: 'break' });
   assert.equal(body.costing, 'auto');
   assert.equal(body.directions_options.units, 'miles');
+  /*
+   * And no costing_options at all, not an empty one. A car route has to be the
+   * same request it was before vehicle profiles existed — an empty object is a
+   * different body and a different cache entry at the far end for no gain.
+   */
+  assert.equal('costing_options' in body, false);
 
   // lat/lon, not the [lon, lat] the rest of this codebase uses. Getting this
   // pair the wrong way round routes somewhere in the Indian Ocean and reports
@@ -386,4 +392,15 @@ test('route: the reader carries no turn instructions, on purpose', async () => {
   // What it does carry is the shape and the numbers, which is the whole feature.
   assert.ok(route.legs[0].coordinates.length > 1);
   assert.equal(route.legs[0].miles, 10);
+});
+
+test('route: a vehicle profile rides along with the costing it belongs to', async () => {
+  const { routeBody } = await import('../assets/js/lib/route.js');
+  const { routingFor } = await import('../assets/js/lib/rv.js');
+  const stops = [{ position: [-83.37, 36.71] }, { position: [-83.02, 36.75] }];
+
+  const rv = routingFor({ kind: 'rv', heightM: 4.11, widthM: 2.6, lengthM: 10.7, weightT: 7.2 });
+  const body = routeBody(stops, { costing: rv.costing, costingOptions: rv.costing_options });
+  assert.equal(body.costing, 'truck');
+  assert.equal(body.costing_options.truck.height, 4.11);
 });

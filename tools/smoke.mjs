@@ -3099,6 +3099,92 @@ check('and the first stop cannot be moved earlier than first',
   await page.locator('.trip-stop').first().locator('.trip-move').first().isDisabled(), true);
 
 /*
+ * The vehicle, and the advisory that has to come with one.
+ *
+ * Truck costing reads OpenStreetMap, and most low bridges in the United States
+ * carry no maxheight tag — so the whole feature turns on the panel saying that
+ * out loud rather than presenting a clean route as a checked one. Which is why
+ * the caveat is checked here by its content and not by its presence: a notice
+ * that had been softened into "data may be incomplete" would still be an
+ * element with the right class on it.
+ */
+check('a car is the default, and says nothing about clearances',
+  await page.locator('.rv-advisory').count(), 0);
+
+await page.evaluate(() => {
+  const knobs = [...document.querySelectorAll('.trip-knobs-summary')]
+    .find((node) => /What you are driving/.test(node.textContent));
+  knobs.parentElement.open = true;
+});
+await page.waitForTimeout(200);
+await page.locator('.settings-choice', { hasText: 'RV or towing' }).click();
+await page.waitForTimeout(500);
+await page.evaluate(() => { document.querySelector('.trip-plan').open = true; });
+await page.waitForTimeout(300);
+
+const rv = await page.evaluate(() => ({
+  advisory: document.querySelector('.rv-advisory')?.textContent || '',
+  dims: [...document.querySelectorAll('.rv-dim')].map((node) => node.textContent.trim()),
+  fields: [...document.querySelectorAll('.trip-knob')]
+    .map((node) => node.querySelector('.trip-knob-label')?.textContent.trim()),
+}));
+check('choosing an RV puts the advisory on the trip',
+  /advisory only/i.test(rv.advisory), true);
+check('which names where the gap is', /OpenStreetMap/.test(rv.advisory), true);
+check('and says a clear route is not a clear bridge',
+  /not a promise of clearance/.test(rv.advisory), true);
+check('and points at the sign rather than at itself',
+  /the sign at the structure as the authority/.test(rv.advisory), true);
+/*
+ * Spelled back out so it can be checked against the door sticker, which is when
+ * a wrong number gets caught — before the trip rather than under the bridge.
+ */
+check('the numbers the router was given are on the card',
+  rv.dims.map((text) => text.split(' ')[0]), ['Height', 'Width', 'Length', 'Weight']);
+check('in feet and inches, as the sticker has them',
+  rv.dims.every((text) => /\d+' ?\d*"?|tons/.test(text)), true);
+check('and the fields to correct them are there',
+  ['Height', 'Width', 'Length', 'Weight'].every((label) => rv.fields.includes(label)), true);
+
+/*
+ * A height a decimal place out is a vehicle 34 metres tall, and the router
+ * answers that with a confident refusal that reads like a road problem. The
+ * field puts the old value back rather than storing something that would be
+ * silently swapped for a default at routing time.
+ */
+/*
+ * Still open, which is the point of the check as much as the height is.
+ *
+ * Changing the vehicle re-renders the folders tab, and a <details> rebuilt from
+ * markup comes back shut — so choosing RV used to close the block holding the
+ * four fields you chose RV in order to fill in.
+ */
+check('the block you are working in stays open across the change',
+  await page.locator('.trip-knobs').filter({ hasText: 'What you are driving' })
+    .evaluate((node) => node.open), true);
+
+const heightField = page.locator('.trip-knob').filter({ hasText: 'Height' }).locator('input');
+const wasHeight = await heightField.inputValue();
+await heightField.fill('340');
+await heightField.blur();
+await page.waitForTimeout(400);
+await page.evaluate(() => { document.querySelector('.trip-plan').open = true; });
+await page.waitForTimeout(200);
+check('an impossible height is refused rather than routed on',
+  await page.locator('.trip-knob').filter({ hasText: 'Height' }).locator('input').inputValue(),
+  wasHeight);
+
+await shot(page.locator('.rv-advisory'), 'rv-advisory');
+
+// Back to a car, because everything after this is about a car.
+await page.locator('.settings-choice', { hasText: 'Car or truck' }).click();
+await page.waitForTimeout(400);
+await page.evaluate(() => { document.querySelector('.trip-plan').open = true; });
+await page.waitForTimeout(200);
+check('and switching back to a car takes the advisory away',
+  await page.locator('.rv-advisory').count(), 0);
+
+/*
  * Wound forward past its end, the same trip stands itself down — once.
  * A trip you deliberately switch back on must not be switched off again by
  * the next render, which is what the retired flag is for.
