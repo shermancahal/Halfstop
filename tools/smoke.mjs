@@ -1429,7 +1429,21 @@ check('and the slider actually moved it', Number(paints.fillValue?.toFixed(3)), 
 // overlay cannot be baked into anything. It has to be added on that path too,
 // or switching to USGS Topo quietly drops it.
 await page.locator('.layer-row', { hasText: /^USGS Topo$/ }).locator('input[type=radio]').check();
-await page.waitForTimeout(1100);
+/*
+ * Waited for rather than slept through.
+ *
+ * The layer is rebuilt synchronously when the style loads, but its features
+ * come back from a fetch that starts afterwards - so a fixed pause is a race,
+ * and this one lost about one run in five with "expected 1, got 0", which reads
+ * like the overlay being dropped by the basemap switch. Waiting on the
+ * condition does not weaken the check: if the features never arrive this times
+ * out and the assertion below still fails, on the same evidence.
+ */
+await page.waitForFunction(
+  () => (window.__map?.getSource('overlay-wildfire')?._d?.features?.length ?? 0) > 0,
+  null,
+  { timeout: 8000 },
+).catch(() => {});
 const fireOnRaster = await page.evaluate(() => ({
   fill: window.__map.layerIds().includes('overlay-wildfire'),
   features: window.__map.getSource('overlay-wildfire')?._d?.features?.length ?? null,

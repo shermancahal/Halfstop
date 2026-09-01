@@ -463,10 +463,10 @@
   },
   {
     "id": "data:or-parks",
-    "note": "Asked across the whole state this time. The first attempt used a square I picked and came back empty, and an empty answer from a bad box looks exactly like an empty layer - a distinction this file has already got wrong twice. If the state itself holds nothing, the layer goes.",
+    "note": "Oregon publishes nothing here, asked across the whole state rather than a box I picked - an empty answer from a bad envelope looks exactly like an empty layer, and this file has got that wrong twice. So it is a watch rather than a failure: there is no Oregon layer because there is nothing to put in one, and the day that changes this goes red and says so.",
     "expect": "data",
-    "find": "\"(?:NAME|Name|ParkName|AreaName|PROPNAME|DESCRIPTION|site_name)\"\\s*:\\s*\"[^\"]{0,44}\"",
-    "url": "https://gis.prd.state.or.us/arcgis/rest/services/Land_Ownership/LO_STATE_PARK_STATUS/FeatureServer/0/query?where=1%3D1&geometry=-124.6,41.9,-116.4,46.3&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=5&f=json"
+    "url": "https://gis.prd.state.or.us/arcgis/rest/services/Land_Ownership/LO_STATE_PARK_STATUS/FeatureServer/0/query?where=1%3D1&geometry=-124.6,41.9,-116.4,46.3&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=5&f=json",
+    "expectEmpty": true
   },
   {
     "id": "canopy:mrlc-names",
@@ -836,20 +836,34 @@
     "note": "The same question asked for a slice from the middle of the file rather than the start. A host can answer 206 for bytes=0-N by truncating the response it was going to send anyway and still have no real range support - which would look like success on the first probe and fail on every tile after the first. The bytes returned here must not be the head of the file."
   },
   {
+    "id": "font:Noto Sans Regular",
+    "expect": "data",
+    "url": "https://protomaps.github.io/basemaps-assets/fonts/Noto%20Sans%20Regular/0-255.pbf",
+    "find": "Sans Regular",
+    "note": "Which font names the Protomaps font server actually serves, which decides whether the Protomaps basemap has any labels on it at all. Eight names were probed while working that out; two answered and they are the two the style now asks for (see PROTOMAPS_SCHEMA.font in byways-style.js). The other six are settled negatives and were removed - a probe that 404s every week teaches you to skip the report it is in. The find is the fontstack name the server writes into the header of the .pbf it returns, so this fails if the server starts answering 200 with something that is not the font asked for."
+  },
+  {
+    "id": "font:Noto Sans Medium",
+    "expect": "data",
+    "url": "https://protomaps.github.io/basemaps-assets/fonts/Noto%20Sans%20Medium/0-255.pbf",
+    "find": "Sans Medium",
+    "note": "Which font names the Protomaps font server actually serves, which decides whether the Protomaps basemap has any labels on it at all. Eight names were probed while working that out; two answered and they are the two the style now asks for (see PROTOMAPS_SCHEMA.font in byways-style.js). The other six are settled negatives and were removed - a probe that 404s every week teaches you to skip the report it is in. The find is the fontstack name the server writes into the header of the .pbf it returns, so this fails if the server starts answering 200 with something that is not the font asked for."
+  },
+  {
     "id": "pages:archive",
     "expect": "data",
     "range": "bytes=0-127",
-    "url": "https://shermancahal.github.io/Map/tiles/byways.pmtiles",
+    "url": "https://pub-6c1c3dd7850440d1ac8f426e4be7ad61.r2.dev/byways.pmtiles",
     "find": "(PMTiles)",
-    "note": "The archive as the site actually serves it. The deploy going green says a file was uploaded; this says a browser can read it - a 206, the PMTiles magic in the first bytes, and CORS. Deployed and works are different claims and only one of them is worth making."
+    "note": "The archive as the site actually serves it. The deploy going green says a file was uploaded; this says a browser can read it - a 206, the PMTiles magic in the first bytes, and CORS. Deployed and works are different claims and only one of them is worth making. Asked of R2 rather than of the Pages path it used to sit on: the extract outgrew what Pages will serve and moved, so the old URL 404s by design and was failing here every week for it. Which host the site actually reads is a separate question, and pages:archive-config is the one that asks it."
   },
   {
     "id": "pages:archive-tile",
     "expect": "data",
     "range": "bytes=200000-200127",
-    "url": "https://shermancahal.github.io/Map/tiles/byways.pmtiles",
+    "url": "https://pub-6c1c3dd7850440d1ac8f426e4be7ad61.r2.dev/byways.pmtiles",
     "find": "([\\s\\S]{8})",
-    "note": "A slice from inside the tile data rather than the header, because reading tiles is the whole point and a host that truncates a bytes=0-N response would pass the probe above without supporting ranges at all."
+    "note": "A slice from inside the tile data rather than the header, because reading tiles is the whole point and a host that truncates a bytes=0-N response would pass the probe above without supporting ranges at all. Asked of R2 rather than of the Pages path it used to sit on: the extract outgrew what Pages will serve and moved, so the old URL 404s by design and was failing here every week for it. Which host the site actually reads is a separate question, and pages:archive-config is the one that asks it."
   },
   {
     "id": "pages:archive-config",
@@ -857,69 +871,6 @@
     "url": "https://shermancahal.github.io/Map/assets/js/token.js",
     "find": "ABMAP_PROTOMAPS_ARCHIVE = '([^']*)'",
     "note": "What the deployed site is configured to read. The archive can be present and the config still empty, in which case Byways Topo goes on drawing from Mapbox and the extract is a file nobody asks for."
-  },
-  {
-    "id": "font:Noto Sans Regular",
-    "note": "The Byways style asks for Mapbox's font stack \u2014 'DIN Pro Regular', 'Arial Unicode MS Regular' \u2014 and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
-    "expect": "data",
-    "find": "Noto",
-    "url": "https://protomaps.github.io/basemaps-assets/fonts/Noto%20Sans%20Regular/0-255.pbf"
-  },
-  {
-    "id": "font:Noto Sans Medium",
-    "note": "The Byways style asks for Mapbox's font stack \u2014 'DIN Pro Regular', 'Arial Unicode MS Regular' \u2014 and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
-    "expect": "data",
-    "find": "Noto",
-    "url": "https://protomaps.github.io/basemaps-assets/fonts/Noto%20Sans%20Medium/0-255.pbf"
-  },
-  {
-    "id": "font:Noto Sans Bold",
-    "note": "The Byways style asks for Mapbox's font stack \u2014 'DIN Pro Regular', 'Arial Unicode MS Regular' \u2014 and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
-    "expect": "data",
-    "find": "Noto",
-    "url": "https://protomaps.github.io/basemaps-assets/fonts/Noto%20Sans%20Bold/0-255.pbf"
-  },
-  {
-    "id": "font:Noto Sans Italic",
-    "note": "The Byways style asks for Mapbox's font stack \u2014 'DIN Pro Regular', 'Arial Unicode MS Regular' \u2014 and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
-    "expect": "data",
-    "find": "Noto",
-    "url": "https://protomaps.github.io/basemaps-assets/fonts/Noto%20Sans%20Italic/0-255.pbf"
-  },
-  {
-    "id": "font:NotoSans-Regular",
-    "note": "The Byways style asks for Mapbox's font stack \u2014 'DIN Pro Regular', 'Arial Unicode MS Regular' \u2014 and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
-    "expect": "data",
-    "find": "Noto",
-    "url": "https://protomaps.github.io/basemaps-assets/fonts/NotoSans-Regular/0-255.pbf"
-  },
-  {
-    "id": "font:NotoSans-Medium",
-    "note": "The Byways style asks for Mapbox's font stack \u2014 'DIN Pro Regular', 'Arial Unicode MS Regular' \u2014 and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
-    "expect": "data",
-    "find": "Noto",
-    "url": "https://protomaps.github.io/basemaps-assets/fonts/NotoSans-Medium/0-255.pbf"
-  },
-  {
-    "id": "font:NotoSans-Bold",
-    "note": "The Byways style asks for Mapbox's font stack \u2014 'DIN Pro Regular', 'Arial Unicode MS Regular' \u2014 and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
-    "expect": "data",
-    "find": "Noto",
-    "url": "https://protomaps.github.io/basemaps-assets/fonts/NotoSans-Bold/0-255.pbf"
-  },
-  {
-    "id": "font:NotoSans-Italic",
-    "note": "The Byways style asks for Mapbox's font stack \u2014 'DIN Pro Regular', 'Arial Unicode MS Regular' \u2014 and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
-    "expect": "data",
-    "find": "Noto",
-    "url": "https://protomaps.github.io/basemaps-assets/fonts/NotoSans-Italic/0-255.pbf"
-  },
-  {
-    "id": "font:Noto Sans Regular,Noto Sans Italic",
-    "note": "The Byways style asks for Mapbox's font stack \u2014 'DIN Pro Regular', 'Arial Unicode MS Regular' \u2014 and under Protomaps those go to Protomaps' font server, which 404s every one of them. That is why the Protomaps map renders roads and water and not a single label or route number. These probe which names that server actually has, because guessing is what put the Mapbox names there in the first place.",
-    "expect": "data",
-    "find": "Noto",
-    "url": "https://protomaps.github.io/basemaps-assets/fonts/Noto%20Sans%20Regular,Noto%20Sans%20Italic/0-255.pbf"
   },
   {
     "id": "wild:usfs-dollysods",
@@ -952,9 +903,9 @@
   {
     "id": "wild:sua-asapp",
     "expect": "data",
-    "find": "\"features\"\\s*:\\s*\\[\\s*\\{",
-    "note": "The same box through the app's own WHERE. If this finds a feature the layer should be drawing one over Dolly Sods and is not, which is a bug; if it comes back 'no features' while the probe above finds one, the difference is exactly the MOA exclusion and the map is behaving as designed. Asking both is the only way to tell those apart - one query alone cannot.",
-    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Special_Use_Airspace/FeatureServer/0/query?geometry=-79.44,38.93,-79.24,39.13&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=10&f=geojson&where=TYPE_CODE%20%3C%3E%20%27MOA%27"
+    "note": "The same box through the app's own WHERE, asserting the absence rather than reporting it. Over Dolly Sods the only special-use airspace is a military operating area, so the app's filter should find nothing here and the probe above should find the MOA - together they tell \"the exclusion is working\" from \"the layer is broken\", which neither can do alone. Scored the ordinary way this was red every week for being right; expectEmpty makes a service that starts answering the news.",
+    "url": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Special_Use_Airspace/FeatureServer/0/query?geometry=-79.44,38.93,-79.24,39.13&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=10&f=geojson&where=TYPE_CODE%20%3C%3E%20%27MOA%27",
+    "expectEmpty": true
   },
   {
     "id": "nps:newriver-geojson",

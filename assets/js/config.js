@@ -774,17 +774,36 @@ export const OVERLAYS = [
      * Not a stray polygon; half the warnings on screen were ones that do not
      * apply. Counted with tools/probe-service.mjs.
      *
-     * Alert (39) and Warning (212) areas are advisories too, and are still
-     * drawn in the No-fly red. That is a judgement about what this map should
-     * say rather than an oversight, and it is written here so the next reader
-     * meets it as a decision.
+     * Alert and Warning areas were red too, and are amber now.
+     *
+     * The same argument as the MOAs, and it took a second reading of my own
+     * comment to notice I had written it down as a decision and left it. An
+     * Alert area is airspace with a high volume of pilot training or unusual
+     * aerial activity: nothing is restricted, and every pilot in it carries
+     * the ordinary responsibility for seeing and avoiding. A Warning area is
+     * over water, generally beyond three nautical miles from the coast, and
+     * warns of activity hazardous to aircraft - it does not prohibit entry,
+     * and it is not ground anybody launches from.
+     *
+     * Measured over the whole layer rather than a sample, counted by the
+     * service: A 39, D 5, MOA 718, P 13, R 555, W 212, of 1,542. So Alert and
+     * Warning together are 251 of the 824 features this layer was drawing in
+     * the colour reserved for "do not fly" - three in ten of every warning on
+     * screen, saying a thing that was not true of them.
+     *
+     * D stays red, and that is deliberate rather than settled: five features,
+     * a code this probe did not identify, and red is the conservative
+     * direction for a category nobody has read. Worth identifying before
+     * anyone relies on it.
      */
     legendNote: 'Standing and scheduled restrictions only. Same-day TFRs — fires, VIP '
       + 'movements — are NOTAMs and are not in this layer; use the link on any feature to '
-      + 'check the current list before you fly. Amber is designated wilderness and Park '
-      + 'Service land: flying over is not itself prohibited, but taking off, landing or '
-      + 'operating from the ground there is — so amber means find somewhere else to '
-      + 'stand, not somewhere else to fly.',
+      + 'check the current list before you fly. Red is where flight is prohibited or '
+      + 'restricted. Amber is everything that asks for care rather than permission: '
+      + 'wilderness and Park Service land, where flying over is not itself prohibited but '
+      + 'taking off, landing or operating from the ground is — so it means find somewhere '
+      + 'else to stand, not somewhere else to fly — and alert and warning areas, which '
+      + 'restrict nothing but mark where other aircraft are doing something unusual.',
     group: 'Airspace',
     name: 'Restrictions & advisories',
     description: 'Where drones may not fly, and where you would need permission. Source: FAA, NPS, USFS',
@@ -804,7 +823,25 @@ export const OVERLAYS = [
           use: 'Prohibited or restricted airspace',
           nameField: 'NAME',
           tag: { severity: 'No fly' },
-          where: "TYPE_CODE <> 'MOA'",
+          // Named rather than excluded. `<> 'MOA'` swept in every code the FAA
+          // adds later at the severity reserved for a prohibition, which is
+          // the wrong default for a filter nobody will revisit.
+          where: "TYPE_CODE IN ('P','R','D')",
+        },
+        /*
+         * The same service, asked a second time for the advisories.
+         *
+         * Two requests rather than one filtered afterwards, because each
+         * sublayer answer carries its own severity tag and the layer caps at
+         * 300 records — sorting them out after the fetch would spend the cap
+         * on features that then get recoloured anyway.
+         */
+        {
+          layer: 'Special_Use_Airspace',
+          use: 'Alert or warning area',
+          nameField: 'NAME',
+          tag: { severity: 'Permit or caution' },
+          where: "TYPE_CODE IN ('A','W')",
         },
         {
           layer: 'National_Defense_Airspace_TFR_Areas',

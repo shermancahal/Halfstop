@@ -445,6 +445,20 @@ async function probe(entry) {
              * formed and holding nothing. Existence, shape and returning data
              * are three questions; only the third one puts a layer on a map.
              */
+            /*
+             * Unless the candidate is asking whether it is still empty.
+             *
+             * Some of these assert an absence on purpose - "the app's own
+             * WHERE finds no special-use airspace over Dolly Sods, which is
+             * the MOA exclusion working" or "Oregon still publishes no park
+             * data, so there is still no layer to add". Scored the usual way
+             * those are red every week for being right, and a report with a
+             * standing block of expected failures in it is a report people
+             * stop reading. `expectEmpty` flips the polarity: empty is the
+             * pass, and a service that starts answering is the news.
+             */
+            : (entry.expectEmpty && emptyFeatures(decoded)) ? 'ok'
+            : entry.expectEmpty ? 'no longer empty'
             : emptyFeatures(decoded) ? 'no features'
             /*
              * And a data probe that names what it expects has to find it.

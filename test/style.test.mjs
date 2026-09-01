@@ -1626,24 +1626,46 @@ test('layers: a sublayer filter reaches the service that is meant to apply it', 
   }
 });
 
-test('layers: military operating areas are excluded from the no-fly layer', async () => {
+test('layers: only prohibitions are drawn as prohibitions', async () => {
   /*
    * Pinned, because it is a decision rather than an implementation detail, and
    * because it was a comment describing behaviour the code did not have for as
    * long as the layer has existed.
    *
-   * An MOA does not restrict civilian flight. Drawing one in the red this
-   * layer reserves for prohibited airspace is not a cosmetic problem: it is
-   * the map saying "do not fly here" about somewhere you may fly.
+   * Three of the six codes in this service restrict nothing civilian. A
+   * military operating area does not; an alert area marks a lot of training
+   * traffic and restricts nothing; a warning area is over water beyond three
+   * miles and warns rather than forbids. Drawing any of them in the red this
+   * layer reserves for prohibited airspace is not cosmetic - it is the map
+   * saying "do not fly here" about somewhere you may fly.
+   *
+   * Asserted as a partition rather than as an exclusion. `<> 'MOA'` was the
+   * first fix and it left alert and warning areas red, because excluding one
+   * bad code says nothing about the others - and it would sweep in whatever
+   * the FAA adds next at the severity reserved for a prohibition.
    */
   const { OVERLAYS } = await import('../assets/js/config.js');
   const airspace = OVERLAYS.find((layer) => layer.id === 'faa-restrictions');
   assert.ok(airspace, 'the restrictions layer is gone');
 
-  const sua = airspace.query.uses.find((kind) => kind.layer === 'Special_Use_Airspace');
-  assert.ok(sua, 'special-use airspace is no longer a sublayer of the restrictions layer');
-  assert.match(sua.where || '', /TYPE_CODE\s*<>\s*'MOA'/,
-    'the MOA exclusion is missing, and the comment above it says it is there');
+  const sua = airspace.query.uses.filter((kind) => kind.layer === 'Special_Use_Airspace');
+  assert.equal(sua.length, 2, 'special-use airspace should be asked twice, once per severity');
+
+  const red = sua.find((kind) => kind.tag?.severity === 'No fly');
+  const amber = sua.find((kind) => kind.tag?.severity === 'Permit or caution');
+  assert.ok(red && amber, 'both severities should come from this service');
+
+  const codes = (where) => (where.match(/'([A-Z]+)'/g) || []).map((text) => text.slice(1, -1));
+  const redCodes = codes(red.where || '');
+  const amberCodes = codes(amber.where || '');
+
+  // Named, not excluded: every code the layer draws is one somebody chose.
+  assert.deepEqual(redCodes.slice().sort(), ['D', 'P', 'R']);
+  assert.deepEqual(amberCodes.slice().sort(), ['A', 'W']);
+  assert.equal(redCodes.includes('MOA') || amberCodes.includes('MOA'), false,
+    'military operating areas restrict nothing and should not be drawn at all');
+  // And no filter may say "everything except", which is how MOA got in.
+  for (const kind of sua) assert.doesNotMatch(kind.where || '', /<>/);
 });
 
 test('byways: every let-bound variable is a name GL will accept', async () => {
