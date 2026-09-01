@@ -1,0 +1,61 @@
+name: Probe a JSON service
+
+# Asks a service what shape its answer is, rather than whether it matches a
+# guess.
+#
+# check-layers answers "did this reply the way we expected", which is the right
+# question once you know what to expect. This is the one before it. A regex that
+# matches proves a key exists; a regex that misses cannot tell "the field is
+# absent" from "I guessed the name wrong", and this project has spent real time
+# on that difference.
+#
+# Needs the network, so it runs here.
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'The URL to fetch — the whole thing, query string included.'
+        required: true
+        type: string
+      depth:
+        description: 'How far down to describe the structure. Default 4.'
+        required: false
+        type: string
+      post:
+        description: 'A JSON body to POST. Leave empty for a GET.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Ask what is in there
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # No install: the tool is fetch and JSON.parse, both of which Node has.
+      - name: Probe it
+        run: |
+          set -o pipefail
+          node tools/probe-json.mjs "${{ inputs.url }}" \
+            ${{ inputs.depth && format('--depth {0}', inputs.depth) || '' }} \
+            ${{ inputs.post && format('--post ''{0}''', inputs.post) || '' }} \
+            2>&1 | tee report.txt
+
+      - name: Put the answer in the summary
+        if: always()
+        run: |
+          {
+            echo "### "
+            echo ""
+            echo '```'
+            cat report.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
