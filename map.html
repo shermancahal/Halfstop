@@ -218,7 +218,7 @@
             <div class="folder-actions">
               <button class="button button-secondary button-small" id="new-folder" type="button">New folder</button>
               <button class="button button-secondary button-small" id="new-trip" type="button">New trip</button>
-              <button class="button button-ghost button-small" id="import-into-folder" type="button" hidden>Add from an open file…</button>
+              <button class="button button-secondary button-small" id="import-into-folder" type="button">Import</button>
             </div>
             <div id="folder-list"></div>
           </div>
@@ -232,12 +232,12 @@
           <div class="panel-section">
             <details class="files-block" id="files-block">
               <summary class="files-summary">
-                <span>Open a file</span>
+                <span>Files on the map</span>
                 <span class="count" id="loaded-count"></span>
               </summary>
               <div class="dropzone" id="dropzone" role="button" tabindex="0">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
-                <b>Drop a file, or click to choose</b>
+                <b>Drop a file here, or click to choose</b>
                 GPX · KML · KMZ · GeoJSON
               </div>
               <input type="file" id="file-input" multiple accept=".gpx,.kml,.kmz,.geojson,.json" hidden>

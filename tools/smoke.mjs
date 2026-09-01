@@ -680,6 +680,60 @@ check('folder layers present', afterImport.folderLayers, 5);
 check('document layers present', afterImport.documentLayers > 0, true);
 
 /*
+ * Import opens a file. It does not wait to be given one.
+ *
+ * It spent a while as "Add from an open file…", hidden until a document was
+ * already loaded - so the one button in this tab about bringing data in was
+ * invisible to anyone who had not already brought some in another way. Both
+ * halves are checked, because either alone still leaves it wrong: a permanent
+ * button that opens the old picker would answer an empty tab with an error
+ * toast, which is how it came to be hidden the first time.
+ */
+await showTab('folders');
+await page.waitForTimeout(200);
+// Scoped to the tab: the offline panel builds a .folder-actions of its own.
+const actions = await page.evaluate(() => [...document.querySelectorAll('#tab-folders .folder-actions .button')]
+  .map((node) => ({ label: node.textContent.trim(), icon: Boolean(node.querySelector('svg')), hidden: node.hidden })));
+check('the folder actions are New folder, New trip and Import',
+  actions.map((a) => a.label), ['New folder', 'New trip', 'Import']);
+check('each carrying a mark of its own', actions.every((a) => a.icon), true);
+check('and Import is there before anything has been imported',
+  actions.find((a) => a.label === 'Import')?.hidden, false);
+await shot(page.locator('#tab-folders .folder-actions'), 'folder-actions');
+
+/*
+ * Filing an already-open file happens on that file's own row.
+ *
+ * Which is the question the old button asked first - "which open file?" - and
+ * the row has already answered it, so the picker opens on that file.
+ */
+await page.locator('#files-block > summary').click();
+await page.waitForTimeout(200);
+const fileRow = page.locator('#loaded-list .map-entry').first();
+check('an open file offers to file itself into a folder',
+  await fileRow.locator('[title="File this into a folder"]').count(), 1);
+await shot(fileRow, 'loaded-file-row');
+await fileRow.locator('[title="File this into a folder"]').click();
+await page.waitForTimeout(300);
+const picked = await page.evaluate(() => {
+  const picker = document.querySelector('#folder-list .picker');
+  if (!picker) return null;
+  const source = picker.querySelector('select');
+  return {
+    chosen: source.options[source.selectedIndex]?.textContent.trim(),
+    // Compared against the row rather than a literal: the claim is that the
+    // picker opens on the file you pressed, whatever that file is called.
+    row: document.querySelector('#loaded-list .map-entry .map-entry-name')?.textContent.trim(),
+  };
+});
+check('and the picker opens on the file that asked for it', picked?.chosen, picked?.row);
+check('which is a file, not an empty select', Boolean(picked?.row), true);
+await page.locator('#folder-list .picker .button-ghost').click();
+await page.waitForTimeout(200);
+await page.locator('#files-block > summary').click();
+await page.waitForTimeout(200);
+
+/*
  * Nine basemap names say almost nothing about which one you want. One tile of
  * each says it immediately — so every basemap has to have a preview, including
  * the one nothing can render server-side.

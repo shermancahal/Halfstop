@@ -7708,6 +7708,20 @@ function renderMapsTab() {
         el('div', { class: 'map-entry-meta', text: documentSummary(entry.doc) }),
       ]),
       el('div', { class: 'map-entry-actions' }, [
+        /*
+         * Filing this file into a folder, on this file's own row.
+         *
+         * This was a button at the top of the tab called "Add from an open
+         * file…", whose first question was which open file you meant - a
+         * question the row you are looking at has already answered. It is also
+         * the only way to take a file's tracks and routes rather than its
+         * waypoints, which the ask-on-open prompt does not offer.
+         */
+        el('button', {
+          class: 'icon-button', title: 'File this into a folder',
+          'aria-label': `File ${entry.name} into a folder`,
+          html: icons.folder, onclick: () => toggleImportPicker(entry.key),
+        }),
         el('button', {
           class: 'icon-button', title: 'Zoom to this map', 'aria-label': `Zoom to ${entry.name}`,
           html: icons.target, onclick: () => fitTo(entry.doc.bbox),
@@ -8729,7 +8743,36 @@ function wireFolders() {
       field?.select?.();
     });
   });
-  dom.importIntoFolder?.addEventListener('click', () => toggleImportPicker());
+  /*
+   * Import means open a file. Nothing else.
+   *
+   * It used to be "Add from an open file…", which filed things out of a
+   * document already loaded - and was hidden until one was, so the only button
+   * in this tab about bringing data in was invisible to anyone who had not
+   * already brought some in by another route. The after-the-fact case has not
+   * gone anywhere; it moved onto the rows of the files it acts on, under Files
+   * on the map, where the file you mean is the one you are pointing at.
+   *
+   * What happens next is already handled: opening a file with no standing
+   * destination asks where its waypoints should go.
+   */
+  dom.importIntoFolder?.addEventListener('click', () => dom.fileInput?.click());
+
+  // A mark apiece, so three buttons in a row are told apart before they are read.
+  withIcon(dom.newFolder, icons.folder);
+  withIcon(dom.newTrip, icons.route);
+  withIcon(dom.importIntoFolder, icons.upload);
+}
+
+/**
+ * Give a button written in the HTML the same icon-and-label shape as one built
+ * in JS, without moving it into JS to get it.
+ */
+function withIcon(button, icon) {
+  if (!button || button.querySelector('svg')) return;
+  const label = button.textContent.trim();
+  button.classList.add('button-with-icon');
+  button.innerHTML = `${icon}<span>${escapeHTML(label)}</span>`;
 }
 
 /*
@@ -9255,13 +9298,6 @@ function renderFoldersTab() {
     ? `${totals.waypoints} waypoint${totals.waypoints === 1 ? '' : 's'}${totals.tracks ? `, ${totals.tracks} track${totals.tracks === 1 ? '' : 's'}` : ''}`
     : '';
 
-  // Only offer to file from an open file when one is actually open. The button
-  // used to be permanently visible and answered a click with an error toast,
-  // which is a poor way to learn what a control is for. Its old label said
-  // "import from a map", where "a map" meant "a file you opened" — that is the
-  // app's word, not the reader's.
-  if (dom.importIntoFolder) dom.importIntoFolder.hidden = state.documents.size === 0;
-
   const existingPicker = dom.folderList.querySelector('.picker');
   dom.folderList.replaceChildren();
   if (existingPicker) dom.folderList.append(existingPicker);
@@ -9271,8 +9307,10 @@ function renderFoldersTab() {
   if (!folders.length) {
     dom.folderList.append(el('p', {
       class: 'hint',
-      html: 'No folders yet. Open a file above and you will be asked where to put it, '
-        + 'or click any point on the map and save it into one.',
+      // "Open a file above" pointed at a block that has always been below this
+      // one. Import is above it, and is now the button that opens a file.
+      html: 'No folders yet. Press Import and you will be asked where to put what is '
+        + 'in the file, or click any point on the map and save it into one.',
     }));
     return;
   }
@@ -10438,18 +10476,22 @@ function openStyleEditor(folder, itemIds, anchor) {
  * destination folder. Kept in the panel rather than a modal so the map stays
  * visible while you file things.
  */
-function toggleImportPicker() {
+function toggleImportPicker(sourceKey = '') {
   const existing = dom.folderList.querySelector('.picker');
   if (existing) { existing.remove(); return; }
 
   const documents = [...state.documents.values()];
   if (!documents.length) {
-    toast('Load or open a map first — then you can file its waypoints into a folder.', { tone: 'error' });
+    toast('Open a file first — then you can file what is in it into a folder.', { tone: 'error' });
     return;
   }
 
   const sourceSelect = el('select', { 'aria-label': 'Map to import from' },
     documents.map((entry) => el('option', { value: entry.key, text: entry.name })));
+  // Opened from a file's own row, so it starts on that file. Still a select,
+  // because changing your mind should not mean closing this and finding
+  // another row.
+  if (sourceKey && documents.some((entry) => entry.key === sourceKey)) sourceSelect.value = sourceKey;
 
   const whatSelect = el('select', { 'aria-label': 'What to import' }, [
     el('option', { value: 'waypoints', text: 'Waypoints only' }),
@@ -10512,6 +10554,9 @@ function toggleImportPicker() {
   ]);
 
   dom.folderList.prepend(picker);
+  // The row that opens this is further down the tab than the picker itself, so
+  // without this the press looks like it did nothing.
+  picker.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   sourceSelect.focus();
 }
 
