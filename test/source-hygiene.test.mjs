@@ -418,3 +418,27 @@ test('no engine-specific class name is written into the app’s own markup', asy
   assert.deepEqual(offenders, [],
     'a control or element named for one engine is invisible to the other');
 });
+
+/*
+ * The one file that must never be in the repository is not.
+ *
+ * It was, once: token.js was created through the GitHub web editor, which
+ * does not read .gitignore, and landed on a public branch with two Mapbox
+ * tokens and the Supabase key in it. Every value in that file is public by
+ * design when served from the site - but an unrestricted app token in a
+ * public repository is a different kind of public, because that is where
+ * token scrapers look. .gitignore stops `git add`; nothing stopped the web
+ * editor, and nothing here noticed. This does.
+ */
+test('token.js is not tracked by git', async () => {
+  const { execFileSync } = await import('node:child_process');
+  let tracked;
+  try {
+    tracked = execFileSync('git', ['ls-files', 'assets/js/token.js'], { encoding: 'utf8' }).trim();
+  } catch {
+    return; // no git here (a tarball, a CI that shallow-exported) - nothing to check
+  }
+  assert.equal(tracked, '',
+    'assets/js/token.js is committed. Remove it with `git rm --cached assets/js/token.js`, '
+    + 'then rotate any unrestricted token that was in it - see docs/mobile-app.md.');
+});
