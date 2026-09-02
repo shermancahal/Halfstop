@@ -157,6 +157,90 @@ npx cap open android               # Android Studio
 in the app until `npm run dist:app && npx cap sync` has run — the native project
 holds a *copy*.
 
+## 6a. The first run on a real iPhone
+
+The shortest path from this repository to the map running on a phone in your
+hand. Everything above still applies; this is the order to do it in, and what
+to look at once it is running.
+
+### Before touching the Mac
+
+1. **Decide the bundle identifier now.** `capacitor.config.json` says
+   `com.americanbyways.gps`. It is the app's permanent name to Apple: once a
+   build with it reaches App Store Connect, changing it means a different app
+   with no update path from the old one. It is free to change today and only
+   today. If the product is Fieldstop, `com.americanbyways.fieldstop` is the
+   obvious answer; if you keep `gps`, keep it on purpose.
+
+2. **Fill in `assets/js/token.js` completely.** `npm run dist:app` reads that
+   file from disk — it does not see the repository variables the website deploy
+   uses — and ships whatever is in it. The build now prints what the bundle
+   will and will not have; a line reading `accounts & sync OFF` or `MAPBOX
+   TILES (billed)` means a value is missing. All six:
+
+   | | |
+   | --- | --- |
+   | `ABMAP_MAPBOX_TOKEN` | the website's token, as before |
+   | `ABMAP_MAPBOX_TOKEN_APP` | the second, unrestricted token — §1 |
+   | `ABMAP_SUPABASE_URL`, `_KEY` | from Supabase → Settings → API; the *publishable* key |
+   | `ABMAP_PROTOMAPS_ARCHIVE` | the archive URL — the `PROTOMAPS_ARCHIVE` repository variable |
+   | `ABMAP_PROTOMAPS_MAXZOOM` | what *Check a map archive* reports; `14` for the current cut |
+   | `ABMAP_ROUTING_URL` | leave empty |
+
+### On the Mac
+
+```sh
+npm install --save-dev @capacitor/cli @capacitor/core @capacitor/ios
+npm run app:ios
+```
+
+`app:ios` builds `dist/` with the app token, creates `ios/` the first time,
+copies the bundle in, and opens Xcode. It refuses early and by name if
+something is missing rather than failing three steps in. Run it again after
+any change under `assets/` — the native project holds a copy.
+
+The first time only, add the two permission strings from §5 to
+`ios/App/App/Info.plist`. Without the location one, iOS silently denies
+geolocation and the locate button does nothing.
+
+### In Xcode
+
+- **Signing & Capabilities → Team.** A **personal team** (a free Apple ID) is
+  enough to run on your own phone by cable. The app expires after seven days
+  and has to be reinstalled, and nobody else can install it — which is fine for
+  a first look. **TestFlight**, and anyone else's phone, needs the paid
+  developer account.
+- Plug the phone in, pick it as the run target, press Run. The first time, the
+  phone asks you to trust the developer under Settings → General → VPN &
+  Device Management.
+
+### What to actually test, in this order
+
+Each of these exercises something that only a real device can prove, and each
+was reasoned about rather than measured until now.
+
+1. **The map draws.** Byways Topo, at street zoom. Blank tiles with a 401 in
+   the Xcode console means the *website's* token shipped — you ran `dist`
+   instead of `dist:app`, or `ABMAP_MAPBOX_TOKEN_APP` is empty.
+2. **Search finds a place.** That is Mapbox geocoding through the app token.
+3. **Locate works** and the map centres on you. If the prompt never appears,
+   the `Info.plist` string is missing.
+4. **Tap the map, open Photography → Fog.** That is a cross-origin request to
+   `api.weather.gov` from `capacitor://localhost`. It *should* pass — NWS sends
+   `Access-Control-Allow-Origin: *` — but "should" has not been tested from a
+   webview and this is the moment to find out.
+5. **Draw a road route on a trip.** Same question, for the router.
+6. **Sign in, save a pin, kill the app, reopen.** Persistence in the webview.
+7. **Airplane mode, reopen the app.** The shell should open — every asset is
+   local — and the panel should build. The basemap will be blank unless a
+   region was downloaded first, which is correct.
+8. **Rotate, and check the header sits below the notch.** The `--safe-*`
+   insets in `site.css`.
+
+Anything in 4 or 5 that fails is a CORS finding worth bringing back here with
+the exact console line — it is the one class of problem this repository cannot
+reproduce.
+
 ## 7. Things that behave differently inside the shell
 
 - **Service workers do not run on iOS** under the `capacitor://` scheme. That is

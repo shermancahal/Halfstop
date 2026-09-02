@@ -99,6 +99,58 @@ export function chooseToken({ source = '', wantApp = false, env = {} } = {}) {
 }
 
 /**
+ * What an app bundle will and will not have, read off token.js before it ships.
+ *
+ * `--app` reads token.js from disk, not from the repository variables the
+ * website deploy uses, and preserves whatever is in it. So a file holding only
+ * the two Mapbox lines builds cleanly and ships an app with accounts silently
+ * off, the house basemap billing Mapbox for every tile instead of reading the
+ * R2 archive, and a zoom ceiling one past what the archive holds. None of that
+ * errors. All of it is what a local build looked like the first time it was
+ * tried here.
+ *
+ * Pure, so it is testable: the caller prints. Warnings rather than refusals,
+ * because a device test with no Supabase is a legitimate thing to build - the
+ * point is that nobody builds it by accident.
+ */
+export function appPreflight(source = '') {
+  const read = (name) => {
+    const match = new RegExp(`${name}\\s*=\\s*['"]([^'"]*)['"]`).exec(source);
+    return (match ? match[1] : '').trim();
+  };
+  const has = {
+    supabaseUrl: Boolean(read('ABMAP_SUPABASE_URL')),
+    supabaseKey: Boolean(read('ABMAP_SUPABASE_KEY')),
+    archive: Boolean(read('ABMAP_PROTOMAPS_ARCHIVE')),
+    maxzoom: Boolean(read('ABMAP_PROTOMAPS_MAXZOOM')),
+    routing: Boolean(read('ABMAP_ROUTING_URL')),
+  };
+
+  const warnings = [];
+  if (!has.supabaseUrl || !has.supabaseKey) {
+    warnings.push('No Supabase config - accounts and folder sync will be OFF in this build. '
+      + 'Set ABMAP_SUPABASE_URL and ABMAP_SUPABASE_KEY (the publishable key) in assets/js/token.js.');
+  }
+  if (!has.archive) {
+    warnings.push('No ABMAP_PROTOMAPS_ARCHIVE - Byways Topo will draw from Mapbox tiles, billed per '
+      + 'tile, instead of the R2 archive. Set it to the archive URL from the PROTOMAPS_ARCHIVE '
+      + 'repository variable.');
+  } else if (!has.maxzoom) {
+    warnings.push('ABMAP_PROTOMAPS_ARCHIVE is set but ABMAP_PROTOMAPS_MAXZOOM is not - the app will '
+      + 'assume 15, and an archive cut to 14 draws blank ground past it. Set it to what '
+      + '"Check a map archive" reports.');
+  }
+
+  const notes = [];
+  if (!has.routing) {
+    notes.push('Road routing will use the FOSSGIS default. Fine for a test; see docs/routing.md '
+      + 'before a store release.');
+  }
+
+  return { has, warnings, notes };
+}
+
+/**
  * The token.js an `--app` build ships.
  *
  * The page only ever reads `ABMAP_MAPBOX_TOKEN`, so the app's value is written
@@ -568,6 +620,24 @@ async function main() {
     const archive = await createZip(staged);
     await writeFile(path.join(DIST, ZIP_NAME), archive);
     console.log(`\n  dist/${ZIP_NAME}  ${(archive.length / 1024).toFixed(0)} KB compressed`);
+  }
+
+  if (wantsApp) {
+    /*
+     * Last, after the file list, so it is the thing left on screen. A warning
+     * printed before three hundred lines of filenames is a warning nobody
+     * read.
+     */
+    const flight = appPreflight(tokenSource);
+    console.log('\nThis app bundle:');
+    console.log(`  accounts & sync   ${flight.has.supabaseUrl && flight.has.supabaseKey ? 'on' : 'OFF'}`);
+    console.log(`  house basemap     ${flight.has.archive ? 'R2 archive' : 'MAPBOX TILES (billed)'}`);
+    console.log(`  archive maxzoom   ${flight.has.maxzoom ? 'set' : (flight.has.archive ? 'NOT SET (assumes 15)' : 'n/a')}`);
+    console.log(`  road routing      ${flight.has.routing ? 'your own server' : 'FOSSGIS default'}`);
+    for (const line of flight.warnings) console.log(`\n  WARNING: ${line}`);
+    for (const line of flight.notes) console.log(`\n  note: ${line}`);
+    console.log('\nNext: npx cap sync ios && npx cap open ios   (or: npm run app:ios)');
+    return;
   }
 
   console.log('\nUpload the contents of dist/ to your web host.');

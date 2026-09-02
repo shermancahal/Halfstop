@@ -15,6 +15,8 @@
     "check": "node tools/build-catalog.mjs --check",
     "dist": "node tools/build-dist.mjs --zip",
     "dist:app": "node tools/build-dist.mjs --app",
+    "app:ios": "node tools/app.mjs ios",
+    "app:android": "node tools/app.mjs android",
     "test": "node --test test/*.test.mjs",
     "validate:style": "node tools/validate-style.mjs",
     "smoke": "node tools/smoke.mjs",

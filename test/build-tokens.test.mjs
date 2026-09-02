@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { chooseToken, appTokenFile, webTokenFile } from '../tools/build-dist.mjs';
+import { chooseToken, appTokenFile, webTokenFile, appPreflight } from '../tools/build-dist.mjs';
+import { preflight as appMachinePreflight } from '../tools/app.mjs';
 
 const FILE = `
 window.ABMAP_MAPBOX_TOKEN = 'pk.website';
@@ -125,4 +126,83 @@ test('a web build strips the app token instead of publishing it', () => {
 test('stripping is a no-op when no app token is configured', () => {
   const plain = "window.ABMAP_MAPBOX_TOKEN = 'pk.website';\n";
   assert.equal(webTokenFile(plain), plain);
+});
+
+/* ------------------------------------------------------------------ preflight */
+
+/*
+ * What a local app build ships is whatever token.js happens to hold, and the
+ * first one built here held only the two Mapbox lines: accounts silently off,
+ * the house basemap billing Mapbox per tile instead of reading the archive.
+ * Nothing errored. These pin the warnings that would have said so.
+ */
+const FULL = `
+window.ABMAP_MAPBOX_TOKEN = 'pk.website';
+window.ABMAP_MAPBOX_TOKEN_APP = 'pk.application';
+window.ABMAP_SUPABASE_URL = 'https://x.supabase.co';
+window.ABMAP_SUPABASE_KEY = 'sb_publishable_x';
+window.ABMAP_PROTOMAPS_ARCHIVE = 'https://pub-x.r2.dev/byways.pmtiles';
+window.ABMAP_PROTOMAPS_MAXZOOM = '14';
+window.ABMAP_ROUTING_URL = '';
+`;
+
+test('a complete token.js gets no warnings, only the routing note', () => {
+  const flight = appPreflight(FULL);
+  assert.deepEqual(flight.warnings, []);
+  assert.equal(flight.notes.length, 1);
+  assert.match(flight.notes[0], /FOSSGIS/);
+});
+
+test('a bare token.js is warned about by name, for each thing it will silently lack', () => {
+  const flight = appPreflight("window.ABMAP_MAPBOX_TOKEN_APP = 'pk.application';");
+  assert.equal(flight.warnings.length, 2);
+  assert.match(flight.warnings[0], /accounts and folder sync will be OFF/);
+  assert.match(flight.warnings[1], /billed per tile/);
+});
+
+test('an archive with no maxzoom is its own warning, because 15 over a 14 draws blank ground', () => {
+  const flight = appPreflight(FULL.replace("window.ABMAP_PROTOMAPS_MAXZOOM = '14';", ''));
+  assert.equal(flight.warnings.length, 1);
+  assert.match(flight.warnings[0], /assume 15/);
+});
+
+test('half a Supabase config counts as none', () => {
+  const flight = appPreflight(FULL.replace("window.ABMAP_SUPABASE_KEY = 'sb_publishable_x';", ''));
+  assert.ok(flight.warnings.some((line) => /accounts and folder sync will be OFF/.test(line)));
+});
+
+test('a routing URL of your own switches the note off', () => {
+  const flight = appPreflight(FULL.replace("ABMAP_ROUTING_URL = ''", "ABMAP_ROUTING_URL = 'https://valhalla.example'"));
+  assert.deepEqual(flight.notes, []);
+});
+
+/*
+ * The machine check, asked about machines this suite is not running on. Each
+ * problem has to carry its fix, because the reader is at a terminal wanting the
+ * next command.
+ */
+test('app: iOS on anything but a Mac is refused before anything is built', () => {
+  const problems = appMachinePreflight({ platform: 'ios', os: 'linux', hasCapacitor: true });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0].what, /only be built on a Mac/);
+  assert.match(problems[0].fix, /Xcode/);
+});
+
+test('app: android does not need a Mac', () => {
+  assert.deepEqual(appMachinePreflight({ platform: 'android', os: 'linux', hasCapacitor: true }), []);
+});
+
+test('app: a missing Capacitor names the install command', () => {
+  const problems = appMachinePreflight({ platform: 'ios', os: 'darwin', hasCapacitor: false });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0].fix, /npm install --save-dev @capacitor\/cli/);
+});
+
+test('app: an unknown platform is refused by name', () => {
+  const problems = appMachinePreflight({ platform: 'windows', os: 'darwin', hasCapacitor: true });
+  assert.match(problems[0].what, /"windows" is not a platform/);
+});
+
+test('app: a Mac with Capacitor has nothing in the way', () => {
+  assert.deepEqual(appMachinePreflight({ platform: 'ios', os: 'darwin', hasCapacitor: true }), []);
 });
