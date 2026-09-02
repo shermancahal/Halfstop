@@ -1521,6 +1521,11 @@ console.log('\nThe export takes folders as well as files');
 // It lives in the offline menu now rather than in the header — one control for
 // every way of taking the map with you, instead of three scattered ones.
 await page.click('#offline-trigger');
+await page.waitForTimeout(200);
+// The sentence above the regions used to say downloading "happens in the app"
+// - and went on saying it inside the app, above the button that does it.
+check('the region copy says what this device does, not what some other one would',
+  await page.evaluate(() => /happens in the app|a browser cannot/.test(document.querySelector('#offline-panel').textContent)), false);
 await page.waitForTimeout(300);
 check('the offline menu holds the export and the picture', await page.evaluate(() => Boolean(
   document.getElementById('download-button') && document.getElementById('snapshot-button'))), true);

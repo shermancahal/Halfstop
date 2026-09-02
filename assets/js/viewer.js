@@ -4660,11 +4660,19 @@ function renderOfflineTab() {
       }),
     ]),
     el('h3', { class: 'offline-heading', text: 'Map regions' }),
+    /*
+     * Written before the download existed, this said downloading "happens in
+     * the app" - and went on saying it inside the app, above the button that
+     * does it. What is true: the tiles are stored on this device, whichever
+     * shell it is in, and which maps can be stored is a licensing fact the
+     * row under each region spells out.
+     */
     el('p', {
       class: 'hint',
       style: 'margin:-4px 0 10px',
-      text: 'Mark the ground you want on the phone. Downloading happens in the app — a browser cannot '
-        + `store map tiles for later — so this saves the region and the zooms, capped at z${OFFLINE_MAX_ZOOM}.`,
+      text: 'Mark the ground you are heading for, then download it. The tiles stay on this device '
+        + `and the map draws with no signal, down to z${OFFLINE_MAX_ZOOM}. Byways Topo, the USGS maps `
+        + 'and the agency layers can be stored; Mapbox\u2019s own maps cannot.',
     }),
     el('div', { class: 'folder-actions' }, [
       el('button', {

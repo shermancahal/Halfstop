@@ -241,6 +241,74 @@ Anything in 4 or 5 that fails is a CORS finding worth bringing back here with
 the exact console line — it is the one class of problem this repository cannot
 reproduce.
 
+## 6b. Onto your phone, then onto your friends' phones
+
+Two different mechanisms, and the second needs money.
+
+### Your own phone, today
+
+What §6a describes: Xcode, a cable, Run. With a **free Apple ID** as the
+team this works on up to three of your own devices, the app stops opening
+after seven days, and you re-run from Xcode to renew it. Nobody else can
+install it. That is enough to find out whether the map draws, search works,
+and the fog card loads over cellular.
+
+### Anyone else: TestFlight
+
+There is no way to put an iOS app on somebody else's phone without the
+**Apple Developer Program** ($99/yr, developer.apple.com/programs). Enrolment
+takes a day or two to approve. Everything below assumes it is done and Xcode
+is signed in with that account under Settings → Accounts.
+
+1. **Decide the bundle identifier - now, for good.** `capacitor.config.json`
+   says `com.americanbyways.gps`. The first upload to App Store Connect binds
+   that string to the app record permanently; changing it later means a
+   second, unrelated app with no update path. If the product is Fieldstop,
+   `com.americanbyways.fieldstop` is the honest choice. Change it in
+   `capacitor.config.json`, run `npm run app:ios` again so the native project
+   picks it up, and check it in Xcode under the App target → General.
+
+2. **The app record.** appstoreconnect.apple.com → My Apps → **+** → New App.
+   Platform iOS, name **Fieldstop** (has to be unique on the store), primary
+   language, the bundle ID from step 1, and an SKU (any string, e.g.
+   `fieldstop-ios`). Nothing here goes public until you submit for review.
+
+3. **Three things Xcode will refuse to upload without.**
+   - An app icon set. `npm run build:icons` writes them; §4 says where they go.
+   - The location permission string in `Info.plist` (§5). Without it the
+     upload passes and the app is rejected at TestFlight review instead.
+   - An export-compliance answer. The app uses only HTTPS, which is exempt.
+     Add `ITSAppUsesNonExemptEncryption` = `NO` to `Info.plist` once, and
+     App Store Connect stops asking on every build.
+
+4. **Archive and upload.** In Xcode: pick **Any iOS Device (arm64)** as the
+   destination, then Product → **Archive**. When the Organizer opens:
+   Distribute App → **App Store Connect** → Upload, accept the defaults.
+   Processing on Apple's side takes 10-30 minutes; you get an email.
+
+5. **Testers.** App Store Connect → your app → **TestFlight** tab.
+   - **Internal testing**: add up to 100 people who have a role on your
+     App Store Connect team. No review; the build is available the moment
+     processing finishes. Right for you and one or two close testers.
+   - **External testing**: create a group, add the build, and either invite
+     people by email or turn on **Public link** and send that. The *first*
+     build in an external group goes through Beta App Review (usually under
+     a day; later builds usually do not). Up to 10,000 testers.
+
+   Testers install the **TestFlight** app from the App Store, open the
+   invitation or link there, and get Fieldstop. Builds expire after 90 days.
+
+6. **Every build after the first.** Bump the **Build** number in Xcode
+   (App target → General → Identity; App Store Connect refuses a duplicate),
+   then `npm run app:ios`, Archive, Upload, add the build to the group. The
+   version string (`0.1.0`) can stay until something is worth calling 0.2.
+
+### What testers will not get
+
+Anything that lives in `token.js` is baked into the build at `npm run
+dist:app`, so a tester sees whatever the build had. There is no remote
+config; a rotated Mapbox token means a new build for everyone.
+
 ## 7. Things that behave differently inside the shell
 
 - **Service workers do not run on iOS** under the `capacitor://` scheme. That is
