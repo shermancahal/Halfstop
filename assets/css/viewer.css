@@ -1626,6 +1626,10 @@ html, body { height: 100%; overflow: hidden; }
   text-transform: uppercase; color: var(--ink-3);
 }
 .offline-heading + .folder-actions { margin-bottom: 14px; }
+/* The picture and the download each on a line of their own; the exports
+   share one, and so do the download and the draw. */
+.offline-actions .button { flex: 1 1 0; }
+.offline-actions .button-full { flex: 1 0 100%; }
 .offline-drop .folder-actions + .offline-heading { margin-top: 4px; }
 
 /* The map's own two tools, stacked under the engine's controls. */

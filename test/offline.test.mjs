@@ -20,6 +20,7 @@ import {
   tieredPlan,
   countTieredTiles,
   mayCacheTiles, tileURLsFor, downloadTiles, clearTiles,
+  REGION_MAX_KM2, regionSizeProblem,
 } from '../assets/js/lib/offline.js';
 
 // The Cherokee National Forest, roughly — the ground this app was built for.
@@ -535,4 +536,25 @@ test('offline: a region is discarded under the archive it came from', async () =
   assert.equal(await store.has(neighbour), true,
     'an archive whose name merely begins the same must survive');
   assert.equal(await store.count(), 1);
+});
+
+/*
+ * A region is a place, not a state.
+ *
+ * The cap has to admit the ground this app is for - a national forest with the
+ * roads into it - and refuse the whole of the state around it, and say why in
+ * words that tell the reader what to do instead.
+ */
+test('offline: a national forest is a region and a state is not', () => {
+  assert.equal(regionSizeProblem(SMOKIES), '', 'the Cherokee fits');
+  assert.ok(areaKm2(SMOKIES) < REGION_MAX_KM2);
+
+  const westVirginia = { west: -82.65, south: 37.2, east: -77.7, north: 40.65 };
+  const refusal = regionSizeProblem(westVirginia);
+  assert.match(refusal, /capped/);
+  assert.match(refusal, /zoom in or draw something smaller/);
+  assert.match(refusal, /25,000/);
+
+  assert.match(regionSizeProblem(null), /not an area/);
+  assert.match(regionSizeProblem({ west: -84, south: 35, east: -84, north: 35 }), /not an area/);
 });

@@ -81,7 +81,7 @@ import {
   OfflineStore, MAX_ZOOM as OFFLINE_MAX_ZOOM, TILE_BUDGET,
   mayCacheTiles, tileURLsFor, downloadTiles, clearTiles, tileKeysFor, downloadArchiveTiles,
   regionTileKeys,
-  measureRegion, regionsToGeoJSON, formatBytes as formatTileBytes,
+  measureRegion, regionsToGeoJSON, formatBytes as formatTileBytes, regionSizeProblem,
 } from './lib/offline.js';
 import {
   putPhoto, photoURL, deletePhoto, pruneUnreferenced, fetchLinkedPhoto, formatBytes, PHOTO_TYPES,
@@ -210,6 +210,10 @@ const state = {
   accountEmail: '',
   /** { name, email } while the profile is being edited, for the same reason. */
   accountEdit: null,
+  /** The rectangle being dragged out on the map while a region is drawn. */
+  regionDraft: null,
+  /** When the last drawn region finished, so the tap that ended it is not also an identify. */
+  regionDrawnAt: 0,
   /** { folderId, itemId } for the pin the Details tab is describing. */
   selectedPin: null,
   waypointQuery: '',
@@ -2546,6 +2550,9 @@ function wireOfflineMenu() {
     // thing in here that changes, and nobody is watching it while it is shut.
     if (open) renderOfflineTab();
   };
+  // Drawing a region happens on the map, which is behind this panel: the draw
+  // mode shuts it to get at the map and opens it again with the result.
+  dom.openOffline = setOpen;
 
   trigger.addEventListener('click', (event) => {
     event.stopPropagation();
@@ -4608,6 +4615,12 @@ function refreshRegionData() {
     for (const feature of data.features) {
       feature.properties.highlight = feature.properties.id === state.highlightRegion;
     }
+    // The rectangle being dragged out, drawn like a region because it is
+    // about to be one.
+    if (state.regionDraft) {
+      const draft = regionsToGeoJSON([{ id: 'draft', name: '', bounds: state.regionDraft }]).features[0];
+      if (draft) { draft.properties.highlight = true; data.features.push(draft); }
+    }
     source.setData(data);
   } catch (error) {
     console.warn('[map] could not refresh region outlines:', error.message);
@@ -4623,6 +4636,130 @@ function refreshRegionData() {
  * you choose the ground and see the cost honestly, and export that in the shape
  * the mobile SDKs take — so the planning done here is not repeated on a phone.
  */
+/**
+ * Make a region out of a box - the screen, or a drawn rectangle - and, when
+ * asked, start fetching it.
+ *
+ * The cap is applied here and not in the store: a state's worth of tiles
+ * would download, slowly, and fill the phone with ground nobody is going to.
+ * The zooms are the full useful pyramid rather than "around the current
+ * zoom", because a region exists to be looked at closely later, whatever the
+ * map was showing when it was marked; the row lets them be trimmed.
+ *
+ * The download starts by itself only when it is small enough to be an
+ * unsurprising thing to do on a phone's connection. Past that, the region is
+ * saved and the row - which says what it weighs - waits for the press.
+ */
+const AUTO_DOWNLOAD_BYTES = 150 * 1024 * 1024;
+
+function saveRegionFrom(bounds, { download = false, name = '' } = {}) {
+  const problem = regionSizeProblem(bounds);
+  if (problem) { toast(problem, { tone: 'error', timeout: 9000 }); return null; }
+
+  const basemap = basemapById(state.basemapId);
+  const deepest = deepestUsefulZoom();
+  const region = state.offline.add({
+    name: name || `Region ${state.offline.list().length + 1}`,
+    bounds,
+    minZoom: Math.max(0, deepest - 6),
+    maxZoom: deepest,
+    basemapId: basemap?.id || '',
+    basemapName: basemap?.name || '',
+  });
+  if (!region) { toast('That could not be read as a region.', { tone: 'error' }); return null; }
+
+  state.highlightRegion = region.id;
+  refreshRegionData();
+  renderOfflineTab();
+
+  if (download) {
+    const button = dom.offline?.querySelector(`[data-region-download="${region.id}"]`);
+    const weight = measureRegion(region, currentTileKind()).bytes;
+    if (button && weight <= AUTO_DOWNLOAD_BYTES) {
+      button.click();
+    } else if (button) {
+      toast(`Saved “${region.name}” - about ${formatTileBytes(weight)}. Press Download for offline on it when you are on wifi.`, { timeout: 8000 });
+    } else {
+      toast(`Saved “${region.name}”. This map cannot be stored offline; the region says why.`, { timeout: 8000 });
+    }
+  } else {
+    toast(`Saved “${region.name}”.`);
+  }
+  return region;
+}
+
+/**
+ * Drag a rectangle on the map to mark a region.
+ *
+ * A mode, and a short one: it ends on the first drag, or on Escape. Panning
+ * is switched off while it runs so a finger on the map draws instead of
+ * moving it, and the panel that started it is shut to get out of the way and
+ * reopened with the result. Both mouse and touch, because the phone is the
+ * point and the desktop is where it is checked.
+ */
+function startRegionDraw() {
+  const map = state.map;
+  if (!map) return;
+  dom.openOffline?.(false);
+
+  const canvas = map.getCanvas?.();
+  map.dragPan?.disable?.();
+  if (canvas) canvas.style.cursor = 'crosshair';
+  toast('Drag across the map to mark the region. Escape stops.', { timeout: 6000 });
+
+  let start = null;
+  const box = (a, b) => ({
+    west: Math.min(a.lng, b.lng), east: Math.max(a.lng, b.lng),
+    south: Math.min(a.lat, b.lat), north: Math.max(a.lat, b.lat),
+  });
+  const single = (event) => !(event.originalEvent?.touches?.length > 1);
+
+  const down = (event) => {
+    if (!single(event)) return;
+    event.preventDefault?.();
+    start = event.lngLat;
+  };
+  const move = (event) => {
+    if (!start) return;
+    event.preventDefault?.();
+    state.regionDraft = box(start, event.lngLat);
+    refreshRegionData();
+  };
+  const up = (event) => {
+    if (!start) return;
+    const bounds = box(start, event.lngLat);
+    start = null;
+    finish(bounds);
+  };
+  const key = (event) => { if (event.key === 'Escape') finish(null); };
+
+  const finish = (bounds) => {
+    for (const [name, handler] of [['mousedown', down], ['mousemove', move], ['mouseup', up],
+      ['touchstart', down], ['touchmove', move], ['touchend', up]]) map.off(name, handler);
+    document.removeEventListener('keydown', key);
+    map.dragPan?.enable?.();
+    if (canvas) canvas.style.cursor = '';
+    state.regionDraft = null;
+    state.regionDrawnAt = Date.now();
+    refreshRegionData();
+    if (!bounds) return;
+
+    // A tap is not a rectangle. Said rather than silently dropped, because a
+    // tap is exactly what somebody does when they expect a corner-then-corner
+    // gesture instead of a drag.
+    if (regionSizeProblem(bounds) === 'That is not an area.') {
+      toast('Drag, rather than tap, to mark the ground you want.', { tone: 'error' });
+      return;
+    }
+    const region = saveRegionFrom(bounds, { name: `Drawn region ${state.offline.list().length + 1}` });
+    if (region) dom.openOffline?.(true);
+  };
+
+  for (const [name, handler] of [['mousedown', down], ['mousemove', move], ['mouseup', up],
+    ['touchstart', down], ['touchmove', move], ['touchend', up]]) map.on(name, handler);
+  document.addEventListener('keydown', key);
+}
+
 function renderOfflineTab() {
   if (!dom.offline) return;
   const regions = state.offline.list();
@@ -4633,9 +4770,23 @@ function renderOfflineTab() {
     dom.offlineCount.textContent = regions.length ? `${regions.length} saved` : '';
   }
 
+  /*
+   * The picture on a line of its own, the two exports sharing the next.
+   *
+   * Three labelled buttons in a 330px menu wrapped one per line, which read
+   * as three equal choices. They are not: the picture is the one that always
+   * works, and the exports are a pair.
+   */
+  const picture = labelledButton(icons.camera, 'Save as a picture', {
+    tone: 'secondary',
+    title: 'Save this view as an image — uses no map data',
+    onclick: saveMapImage,
+  }, 'snapshot-button');
+  picture.classList.add('button-full');
+
   dom.offline.append(
     el('h3', { class: 'offline-heading', text: 'On this screen' }),
-    el('div', { class: 'folder-actions' }, [
+    el('div', { class: 'folder-actions offline-actions' }, [
       /*
        * The picture first, because it is the one that always works.
        *
@@ -4643,19 +4794,20 @@ function renderOfflineTab() {
        * a canyon it is often the whole answer. The tile regions below it are
        * the heavier, app-only option.
        */
-      labelledButton(icons.camera, 'Save as a picture', {
-        tone: 'secondary',
-        title: 'Save this view as an image — uses no map data',
-        onclick: saveMapImage,
-      }, 'snapshot-button'),
-      labelledButton(icons.download, 'Export GPX', {
+      picture,
+      /*
+       * "GPX" and "GeoJSON", not "Export GPX" and "Export GeoJSON": paired
+       * on one line of a 330px menu, the longer label clipped to "Export G..."
+       * on every desktop. The mark says export; the word says which.
+       */
+      labelledButton(icons.download, 'GPX', {
         tone: 'ghost',
-        title: 'Everything on the map, in the format Garmin, Gaia and AllTrails import',
+        title: 'Export GPX — everything on the map, in the format Garmin, Gaia and AllTrails import',
         onclick: () => downloadVisible(),
       }, 'download-button'),
-      labelledButton(icons.download, 'Export GeoJSON', {
+      labelledButton(icons.download, 'GeoJSON', {
         tone: 'ghost',
-        title: 'The same features with their full properties, for another map to read',
+        title: 'Export GeoJSON — the same features with their full properties, for another map to read',
         onclick: () => downloadVisible(true),
       }),
     ]),
@@ -4674,24 +4826,26 @@ function renderOfflineTab() {
         + `and the map draws with no signal, down to z${OFFLINE_MAX_ZOOM}. Byways Topo, the USGS maps `
         + 'and the agency layers can be stored; Mapbox\u2019s own maps cannot.',
     }),
-    el('div', { class: 'folder-actions' }, [
-      el('button', {
-        class: 'button button-secondary button-small', type: 'button',
-        text: 'Save what is on screen',
-        onclick: () => {
-          const basemap = basemapById(state.basemapId);
-          const region = state.offline.add({
-            name: `Region ${state.offline.list().length + 1}`,
-            bounds: state.map.getBounds(),
-            minZoom: Math.max(0, Math.min(deepestUsefulZoom(), Math.round(state.map.getZoom()) - 3)),
-            maxZoom: Math.min(deepestUsefulZoom(), Math.max(8, Math.round(state.map.getZoom()) + 1)),
-            basemapId: basemap?.id || '',
-            basemapName: basemap?.name || '',
-          });
-          if (!region) { toast('The map view could not be read as a region.', { tone: 'error' }); return; }
-          toast(`Saved “${region.name}” from the current view.`);
-        },
-      }),
+    el('div', { class: 'folder-actions offline-actions' }, [
+      /*
+       * Two ways to say where: the screen, or a rectangle dragged out on the
+       * map. The first is the one-tap case and the download starts on its
+       * own; the second is for when the screen is the wrong shape.
+       */
+      (() => {
+        const button = labelledButton(icons.download, 'Offline download', {
+          tone: 'secondary',
+          title: 'Save what is on screen as a region and download it to this device',
+          onclick: () => saveRegionFrom(state.map.getBounds(), { download: true }),
+        }, 'region-save-button');
+        button.classList.add('button-full');
+        return button;
+      })(),
+      labelledButton(icons.pencil, 'Draw a region', {
+        tone: 'ghost',
+        title: 'Drag a rectangle on the map to mark the ground you want',
+        onclick: startRegionDraw,
+      }, 'region-draw-button'),
       /*
        * "Export for the app" is gone, and it never worked.
        *
@@ -4967,6 +5121,8 @@ function downloadRow(region) {
   const button = el('button', {
     class: 'button button-secondary button-small', type: 'button',
     text: 'Download for offline',
+    // Named so the one-tap "Offline download" above can press it for you.
+    dataset: { regionDownload: region.id },
     onclick: async () => {
       if (controller) { controller.abort(); return; }
       controller = new AbortController();
@@ -6399,6 +6555,8 @@ function bindFeatureInteractions(layerId, { popup = true } = {}) {
  */
 function wireMapClicks() {
   state.map.on('click', (event) => {
+    // The mouseup that ends a drawn region arrives here too, a moment later.
+    if (Date.now() - state.regionDrawnAt < 400) return;
     /*
      * Armed by the probe button, and disarmed by using it.
      *

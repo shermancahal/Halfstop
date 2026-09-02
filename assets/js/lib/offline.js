@@ -192,6 +192,35 @@ export function areaKm2(bounds) {
   return total;
 }
 
+/**
+ * The most ground one region may cover, in square kilometres.
+ *
+ * Not a technical limit: a download of a whole state would work, slowly, and
+ * fill the phone with tiles of ground nobody is going to. 25,000 km2 is about
+ * 160 km on a side - a national forest and the roads to it, a long weekend's
+ * driving. West Virginia is 62,000; the whole of it is three regions, and
+ * having to choose three is the point.
+ */
+export const REGION_MAX_KM2 = 25000;
+
+/**
+ * Why a box may not be a region, in a sentence, or '' when it may.
+ *
+ * Checked at the two places a region is made from a gesture - the current
+ * view and a drawn rectangle - rather than inside createRegion, which is also
+ * what reads regions back from storage and must not start refusing ones that
+ * were saved before the cap existed.
+ */
+export function regionSizeProblem(bounds) {
+  const area = areaKm2(bounds);
+  if (!(area > 0)) return 'That is not an area.';
+  if (area > REGION_MAX_KM2) {
+    return `That covers ${Math.round(area).toLocaleString()} km\u00b2. A region is capped at `
+      + `${REGION_MAX_KM2.toLocaleString()} km\u00b2, about 160 km on a side - zoom in or draw something smaller.`;
+  }
+  return '';
+}
+
 /* ------------------------------------------------------------------ regions */
 
 function clampName(value, fallback) {

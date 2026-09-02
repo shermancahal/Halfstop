@@ -1530,6 +1530,42 @@ await page.waitForTimeout(300);
 check('the offline menu holds the export and the picture', await page.evaluate(() => Boolean(
   document.getElementById('download-button') && document.getElementById('snapshot-button'))), true);
 /*
+ * The layout that was asked for: the picture on a line of its own, the two
+ * exports sharing the next, and the region download full width with the same
+ * mark as the exports. Measured, because a class that wraps one button per
+ * line and a class that pairs them are indistinguishable in the DOM.
+ */
+const offlineRows = await page.evaluate(() => {
+  const at = (id) => document.getElementById(id).getBoundingClientRect();
+  const picture = at('snapshot-button');
+  const gpx = at('download-button');
+  const geo = [...document.querySelectorAll('#offline-panel button')].find((b) => /GeoJSON/.test(b.textContent)).getBoundingClientRect();
+  const save = at('region-save-button');
+  const draw = at('region-draw-button');
+  return {
+    pictureAlone: picture.bottom <= gpx.top && Math.round(picture.width) > Math.round(gpx.width) * 1.5,
+    exportsPaired: Math.abs(gpx.top - geo.top) < 2 && Math.abs(gpx.width - geo.width) < 2,
+    saveFull: Math.round(save.width) === Math.round(picture.width) && save.bottom <= draw.top,
+    saveLabel: document.getElementById('region-save-button').textContent.trim(),
+    saveMark: document.getElementById('region-save-button').querySelector('svg')?.outerHTML
+      === document.getElementById('download-button').querySelector('svg')?.outerHTML,
+    drawLabel: document.getElementById('region-draw-button').textContent.trim(),
+    // Pairing two labelled buttons in a 330px menu is exactly how a label
+    // becomes "Export G...", which the DOM cannot see and a person can.
+    clipped: [...document.querySelectorAll('#offline-panel .offline-actions .button span')]
+      .filter((span) => span.scrollWidth > span.clientWidth + 1)
+      .map((span) => `${span.textContent} (${span.scrollWidth - span.clientWidth}px over, button ${Math.round(span.parentElement.getBoundingClientRect().width)}px)`),
+  };
+});
+check('and no label is cut short to fit', offlineRows.clipped, []);
+check('the picture has a line of its own', offlineRows.pictureAlone, true);
+check('and the two exports share the next', offlineRows.exportsPaired, true);
+check('the region download is full width like the picture', offlineRows.saveFull, true);
+check('named for what it does', offlineRows.saveLabel, 'Offline download');
+check('with the same mark as the exports', offlineRows.saveMark, true);
+check('and a region can be drawn', offlineRows.drawLabel, 'Draw a region');
+await shot(page.locator('#offline-panel'), 'offline-panel');
+/*
  * Both formats, because they are for different readers.
  *
  * The default is GPX - the thing a handheld, Gaia or AllTrails will actually
