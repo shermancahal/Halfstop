@@ -1584,11 +1584,19 @@ await page.click('#settings-trigger');
 await page.waitForTimeout(200);
 check('the menu offers both conversions and the three themes',
   await page.locator('.settings-choice').count(), 7);
-await page.locator('.settings-choice', { hasText: 'Celsius' }).click();
+/*
+ * Chosen by accessible name, because the face of the button is now "\u00b0C"
+ * and "km / m" - short enough for a phone, and spelled out where a screen
+ * reader and this test look. A choice that lost its name would fail here.
+ */
+const choice = (name) => page.locator(`.settings-choice[aria-label="${name}"]`);
+await choice('Celsius').click();
 await page.waitForTimeout(400);
 check('Celsius sticks in the menu',
-  await page.locator('.settings-choice.is-on', { hasText: 'Celsius' }).count(), 1);
-await page.locator('.settings-choice', { hasText: /Kilometers/ }).click();
+  await page.locator('.settings-choice.is-on[aria-label="Celsius"]').count(), 1);
+check('and the face of the button is the short form',
+  (await choice('Celsius').textContent()).trim(), '\u00b0C');
+await choice('Kilometers and meters').click();
 await page.waitForTimeout(400);
 await page.keyboard.press('Escape');
 
@@ -1597,10 +1605,10 @@ await page.waitForTimeout(1200);
 await page.click('#settings-trigger');
 await page.waitForTimeout(300);
 check('and both survive a reload',
-  await page.locator('.settings-choice.is-on', { hasText: /Celsius|Kilometers/ }).count(), 2);
+  await page.locator('.settings-choice.is-on[aria-label="Celsius"], .settings-choice.is-on[aria-label="Kilometers and meters"]').count(), 2);
 // Back to what the rest of the run expects.
-await page.locator('.settings-choice', { hasText: 'Fahrenheit' }).click();
-await page.locator('.settings-choice', { hasText: /Miles/ }).click();
+await choice('Fahrenheit').click();
+await choice('Miles and feet').click();
 await page.waitForTimeout(300);
 
 /*
@@ -1621,15 +1629,18 @@ check('the header keeps no theme toggle of its own',
 check('nor an account button beside it',
   await page.locator('#account-trigger').count(), 0);
 
-await page.locator('.settings-choice', { hasText: 'Dark' }).click();
+// Marks, not words: each theme button is an icon carrying its name.
+check('the theme row is drawn as three marks',
+  await page.locator('.settings-choice[aria-label="System"] svg, .settings-choice[aria-label="Light"] svg, .settings-choice[aria-label="Dark"] svg').count(), 3);
+await choice('Dark').click();
 await page.waitForTimeout(200);
 check('choosing Dark darkens the document',
   await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
-await page.locator('.settings-choice', { hasText: 'Light' }).click();
+await choice('Light').click();
 await page.waitForTimeout(200);
 check('and Light lightens it',
   await page.evaluate(() => document.documentElement.dataset.theme), 'light');
-await page.locator('.settings-choice', { hasText: 'System' }).click();
+await choice('System').click();
 await page.waitForTimeout(200);
 check('while System hands the decision back to the device', await page.evaluate(() => ({
   attribute: document.documentElement.dataset.theme ?? null,
@@ -1642,19 +1653,22 @@ check('the account sits in the same menu',
 /*
  * The plan, which is one plan and includes everything.
  *
- * Checked for the words rather than the element, because the failure worth
+ * Checked for the word rather than the element, because the failure worth
  * catching is not "the block vanished" — it is a build that quietly starts
- * gating something. "Free" with a sentence saying so is the honest state of
- * this project, and the day it stops being true this check is what has to be
- * changed on purpose.
+ * gating something. "Free" is the honest state of this project, and the day
+ * it stops being true this check is what has to be changed on purpose. The
+ * sentence that used to sit under it was asked off the menu; the FAQ is where
+ * it is explained.
  */
-const plan = await page.evaluate(() => ({
-  name: document.querySelector('#settings-panel .plan-name')?.textContent.trim(),
-  note: document.querySelector('#settings-panel .plan-note')?.textContent.trim(),
-}));
+const plan = await page.evaluate(() => {
+  const name = document.querySelector('#settings-panel .plan-name');
+  return {
+    name: name?.textContent.trim(),
+    block: name?.parentElement.textContent.replace(/\s+/g, ' ').trim(),
+  };
+});
 check('the plan is named where the account is', plan.name, 'Free');
-check('and says whether that is the plan or the moment',
-  /free while Fieldstop is being built/.test(plan.note || ''), true);
+check('and nothing is written under it', plan.block, 'PlanFree');
 await shot(page.locator('#settings-panel'), 'settings-menu');
 await page.keyboard.press('Escape');
 await page.waitForTimeout(200);
@@ -1705,6 +1719,100 @@ if (process.env.SMOKE_SHOTS && !external) {
   await shots.waitForTimeout(400);
   await shot(shots.locator('#settings-panel'), 'settings-signed-out');
   await shots.close();
+}
+
+/*
+ * The account, signed in, without a server.
+ *
+ * supabase-js is fetched from a CDN the moment a project is configured, so a
+ * fake of that one module - a session already there, a table with nothing in
+ * it - is enough to draw the signed-in card. What is checked is the layout
+ * that was asked for: the name on a line of its own, the address under it, an
+ * edit that opens a form already filled in, the sync line, and two buttons
+ * each carrying a mark. It was one row with the address cut off at "sherm..."
+ * and nothing here could have said so.
+ */
+if (!external) {
+  console.log('\nThe signed-in account reads top to bottom');
+  const signed = await context.newPage();
+  await signed.route('**/*.supabase.co/**', (route) => route.abort());
+  await signed.route('**/mapbox-gl.js*', (route) => route.fulfill({
+    status: 200, contentType: 'application/javascript', body: GL,
+  }));
+  // A predicate rather than a glob: the library's URL ends in "@2.45.4/+esm",
+  // and a glob star stops at the slash, so the pattern quietly matched nothing
+  // and the import went to the real network. A module import is also a CORS
+  // fetch, hence the header - without it the browser refuses the fake.
+  await signed.route((url) => url.href.includes('@supabase/supabase-js'), (route) => route.fulfill({
+    status: 200, contentType: 'application/javascript',
+    headers: { 'Access-Control-Allow-Origin': '*' },
+    body: `export function createClient() {
+      const user = { id: 'u1', email: 'sherman@example.com', user_metadata: { display_name: 'Sherman Cahal' } };
+      const table = {
+        select() { return { async eq() { return { data: [], error: null }; } }; },
+        async upsert() { return { error: null }; },
+      };
+      return {
+        from() { return table; },
+        auth: {
+          async getSession() { return { data: { session: { user } } }; },
+          onAuthStateChange() { return { data: { subscription: { unsubscribe() {} } } }; },
+          async updateUser(attributes) {
+            Object.assign(user.user_metadata, attributes.data || {});
+            return { data: { user }, error: null };
+          },
+          async signOut() {},
+        },
+      };
+    }`,
+  }));
+  await signed.addInitScript(() => {
+    window.ABMAP_SUPABASE_URL = 'https://smoke.supabase.co';
+    window.ABMAP_SUPABASE_KEY = 'smoke-anon-key';
+  });
+  await signed.goto(MAP_URL, { waitUntil: 'domcontentloaded' });
+  await signed.waitForTimeout(2500);
+  await signed.click('#settings-trigger');
+  await signed.waitForFunction(() => document.querySelector('#account-panel .account-name'), null, { timeout: 5000 })
+    .catch(() => {});
+
+  const card = await signed.evaluate(() => {
+    const panel = document.querySelector('#account-panel');
+    return {
+      rows: [...panel.children].map((node) => node.className.split(' ')[0]),
+      name: panel.querySelector('.account-name')?.textContent.trim(),
+      email: panel.querySelector('.account-email')?.textContent.trim(),
+      sync: panel.querySelector('.account-meta')?.textContent.trim(),
+      buttons: [...panel.querySelectorAll('.account-actions button')]
+        .map((button) => [button.textContent.trim(), Boolean(button.querySelector('svg'))]),
+      hints: [...panel.querySelectorAll('.hint')].map((node) => node.textContent.trim()),
+    };
+  });
+  // First, so that when the card is wrong the complaint under it is in the log.
+  check('a clean sign-in has nothing to complain about', card.hints, []);
+  check('who, then the edit, then the sync line, then the buttons',
+    card.rows, ['account-who', 'button', 'account-meta', 'account-actions']);
+  check('the name is the one typed into the profile', card.name, 'Sherman Cahal');
+  check('with the address on its own line under it', card.email, 'sherman@example.com');
+  check('and the sync line counts folders', /folders? synced/.test(card.sync || ''), true);
+  check('two buttons, each with a mark', card.buttons, [['Sync now', true], ['Sign out', true]]);
+  await shot(signed.locator('#settings-panel'), 'settings-signed-in');
+
+  await signed.locator('#account-panel .account-edit').click();
+  await signed.waitForTimeout(200);
+  check('editing opens a form already filled in', await signed.evaluate(() => ({
+    name: document.querySelector('#account-panel input[aria-label="Name"]')?.value,
+    email: document.querySelector('#account-panel input[aria-label="Email"]')?.value,
+  })), { name: 'Sherman Cahal', email: 'sherman@example.com' });
+  await shot(signed.locator('#settings-panel'), 'settings-edit-profile');
+  await signed.fill('#account-panel input[aria-label="Name"]', 'S. Cahal');
+  await signed.locator('#account-panel .account-form button[type="submit"]').click();
+  await signed.waitForTimeout(400);
+  check('and saving puts the new name on the card',
+    await signed.evaluate(() => document.querySelector('#account-panel .account-name')?.textContent.trim()), 'S. Cahal');
+  check('saying so',
+    await signed.evaluate(() => document.querySelector('#account-panel .hint')?.textContent.trim()), 'Saved.');
+  await signed.close();
 }
 
 /*

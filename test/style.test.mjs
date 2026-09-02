@@ -929,6 +929,61 @@ test('byways: tracks and paths are drawn, and drawn differently from streets', (
   assert.notEqual(track.paint['line-color'], PALETTE.minor);
 });
 
+test('byways: service roads and alleys are sealed, solid, and thinner than a street', () => {
+  /*
+   * They shared the track layer, and a driveway in dashed brown read as a
+   * trail. A dash on this map means "not a road for a car", so the thing to
+   * hold is not a particular width - it is that nothing sealed is dashed, and
+   * that the smallest sealed road is still smaller than the street it leaves.
+   */
+  const style = bywaysStyle('pk.test');
+  const track = style.layers.find((l) => l.id === 'road-track');
+  const service = style.layers.find((l) => l.id === 'road-service');
+  const street = style.layers.find((l) => l.id === 'road-street');
+  assert.ok(service && street);
+  assert.equal(service.paint['line-dasharray'], undefined, 'a sealed road is never dashed');
+  assert.equal(service.paint['line-color'], PALETTE.minor);
+  assert.ok(!JSON.stringify(track.filter).includes('"service"'), 'a service road is no longer a track');
+  // The last stop of each width ramp is the widest either ever gets.
+  const widest = (layer) => layer.paint['line-width'].at(-1);
+  assert.ok(widest(service) < widest(street), 'a service road is thinner than the street it comes off');
+  // And beneath it, casing before fill, so an aisle never sits on top of the road.
+  const order = style.layers.map((l) => l.id);
+  assert.ok(order.indexOf('road-service-casing') < order.indexOf('road-service'));
+  assert.ok(order.indexOf('road-service') < order.indexOf('road-street'));
+});
+
+/*
+ * The stand-in goes up in the same tick GL asks, so it logs nothing and the
+ * road has a marker a frame earlier; the photographed blank replaces it when
+ * the PNG arrives. The registrar that runs on style load must keep the old
+ * behaviour - an image already there is left alone - so the swap is opt-in.
+ */
+test('shields: the blank replaces the drawn stand-in only when asked to', async () => {
+  const { loadShieldBlank } = await import('../assets/js/lib/route-shields.js');
+  const id = 'abmap-shield-st-TN-2';
+  const held = new Set([id]);
+  const log = [];
+  const map = {
+    hasImage: (name) => held.has(name),
+    removeImage: (name) => { log.push(['remove', name]); held.delete(name); },
+    addImage: (name) => { log.push(['add', name]); held.add(name); },
+  };
+  const saved = { fetch: globalThis.fetch, bitmap: globalThis.createImageBitmap };
+  globalThis.fetch = async () => ({ ok: true, blob: async () => ({}) });
+  globalThis.createImageBitmap = async () => ({ width: 80, height: 80 });
+  try {
+    assert.equal(await loadShieldBlank(map, id, {}), true);
+    assert.deepEqual(log, [], 'without replace, an image already there is left alone');
+
+    assert.equal(await loadShieldBlank(map, id, { replace: true }), true);
+    assert.deepEqual(log, [['remove', id], ['add', id]], 'the stand-in comes off before the blank goes on');
+  } finally {
+    globalThis.fetch = saved.fetch;
+    globalThis.createImageBitmap = saved.bitmap;
+  }
+});
+
 test('byways: contours are present, with index lines heavier than the rest', () => {
   const style = bywaysStyle('pk.test');
   const plain = style.layers.find((l) => l.id === 'contour');

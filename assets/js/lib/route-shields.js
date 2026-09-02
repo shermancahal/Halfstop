@@ -1229,15 +1229,19 @@ export function shieldTextOffsetExpression(state = '', length = 2, shiftPx = 0, 
  *
  * @param base URL prefix for the shield directory, so a page served from a
  *        subpath resolves it the same way it resolves the rest of its assets.
+ * @param replace Swap the blank in over an image already registered under
+ *        this id - the drawn stand-in the missing-image hook puts up first so
+ *        GL has something in the same tick. Off, an existing image is left
+ *        alone, which is right for the registrar that runs on style load.
  * @returns {Promise<boolean>} whether an image was added.
  */
-export async function loadShieldBlank(map, id, { base = '', pixelRatio = BLANK_PIXEL_RATIO } = {}) {
+export async function loadShieldBlank(map, id, { base = '', pixelRatio = BLANK_PIXEL_RATIO, replace = false } = {}) {
   const parsed = parseShieldId(id);
   if (!parsed) return false;
 
   const blank = shieldBlankFor(parsed.design, parsed.length);
   if (!blank) return false;
-  if (map.hasImage?.(id)) return true;
+  if (!replace && map.hasImage?.(id)) return true;
 
   try {
     const response = await fetch(`${base}${blank.url}`);
@@ -1245,7 +1249,12 @@ export async function loadShieldBlank(map, id, { base = '', pixelRatio = BLANK_P
     const bitmap = await createImageBitmap(await response.blob());
     // A style swap between the request and its answer would make this an
     // orphan; GL throws on a duplicate id, so check again on arrival.
-    if (map.hasImage?.(id)) return true;
+    if (map.hasImage?.(id)) {
+      if (!replace) return true;
+      // The stand-in comes off first. GL re-renders on the add that follows,
+      // so the swap is a frame, not a gap.
+      map.removeImage?.(id);
+    }
     const tinted = blank.tint ? tintBlank(bitmap, blank.tint) : bitmap;
     /*
      * A plate goes on top of the real sign, not instead of it.

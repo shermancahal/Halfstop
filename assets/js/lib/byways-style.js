@@ -1203,12 +1203,17 @@ function roadLayers() {
   // Tracks and unpaved roads sit under the sealed network but above terrain.
   // They are drawn dashed and in earth tones because on this map they are the
   // point, not an afterthought.
+  //
+  // Tracks only. Service roads and alleys used to share this layer, and a
+  // sealed driveway in dashed brown reads as a trail - on a map whose whole
+  // point is telling those two apart, that is the wrong thing to be wrong
+  // about. They have a solid, thinner layer of their own below.
   layers.push({
     id: 'road-track',
     type: 'line',
     source: S.source,
     'source-layer': S.layers.road,
-    filter: ['match', ['get', S.fields.roadClassField], classes('track', 'service'), true, false],
+    filter: ['match', ['get', S.fields.roadClassField], classes('track'), true, false],
     minzoom: 11,
     layout: { 'line-cap': 'butt', 'line-join': 'round' },
     paint: {
@@ -1256,6 +1261,28 @@ function roadLayers() {
     });
   }
 
+  /*
+   * Service roads and alleys: sealed, and the smallest sealed thing drawn.
+   *
+   * Solid, because everywhere else on this map a dash means "not a road for a
+   * car". Thinner than a street and drawn beneath it, so a parking aisle does
+   * not read as the road it comes off. Not until 13, where a driveway stops
+   * being noise.
+   */
+  layers.push({
+    id: 'road-service-casing',
+    type: 'line',
+    source: S.source,
+    'source-layer': S.layers.road,
+    filter: ['match', ['get', S.fields.roadClassField], classes('service'), true, false],
+    minzoom: 13,
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': PALETTE.casing,
+      'line-width': ['interpolate', ['linear'], ['zoom'], 13, 1.3, 16, 2.8, 18, 4.4],
+    },
+  });
+
   layers.push({
     id: 'road-street-casing',
     type: 'line',
@@ -1282,6 +1309,20 @@ function roadLayers() {
       paint: { 'line-color': spec.colour, 'line-width': roadWidth(className, spec.base, spec.top) },
     });
   }
+
+  layers.push({
+    id: 'road-service',
+    type: 'line',
+    source: S.source,
+    'source-layer': S.layers.road,
+    filter: ['match', ['get', S.fields.roadClassField], classes('service'), true, false],
+    minzoom: 13,
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': PALETTE.minor,
+      'line-width': ['interpolate', ['linear'], ['zoom'], 13, 0.5, 16, 1.6, 18, 2.8],
+    },
+  });
 
   layers.push({
     id: 'road-street',

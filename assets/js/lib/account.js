@@ -43,6 +43,25 @@ function returnTo() {
   return window.location.href.split('#')[0];
 }
 
+/**
+ * What to call somebody.
+ *
+ * The name they typed into the profile first; failing that, whatever Apple or
+ * Google sent along with the sign-in, which each call something different.
+ * Empty rather than the email when there is nothing, so the caller decides
+ * what an address should look like in that spot.
+ */
+export function displayName(user) {
+  const meta = user?.user_metadata || {};
+  for (const key of ['display_name', 'full_name', 'name']) {
+    const value = String(meta[key] || '').trim();
+    if (value) return value;
+  }
+  return '';
+}
+
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 let clientPromise = null;
 
 async function getClient() {
@@ -269,6 +288,48 @@ export class Account extends EventTarget {
     // Folders stay on the device after signing out. Clearing them would look
     // like data loss, and they are still this browser's own working set.
     this.setStatus('signed-out', 'Signed out. Your folders are still on this device.');
+  }
+
+  /**
+   * Change the name or the address.
+   *
+   * Only what actually changed is sent. Supabase treats a new address as a
+   * request rather than a fact - with its default settings it emails both the
+   * old and the new inbox and changes nothing until the links are opened - so
+   * sending an unchanged address back would trigger that dance for nothing.
+   * The redirect is named for the same reason every other emailed link names
+   * it: without one the link lands on whatever the project's Site URL is.
+   *
+   * @returns {{changed: boolean, emailPending: boolean}}
+   */
+  async updateProfile({ name = '', email = '' } = {}) {
+    if (!this.user) throw new Error('Sign in first.');
+
+    const nextName = String(name || '').trim();
+    const nextEmail = String(email || '').trim().toLowerCase();
+    const currentEmail = String(this.user.email || '').toLowerCase();
+    if (nextEmail && !EMAIL_SHAPE.test(nextEmail)) throw new Error('That does not look like an email address.');
+
+    const attributes = {};
+    if (nextName !== displayName(this.user)) attributes.data = { display_name: nextName };
+    const emailChanging = Boolean(nextEmail) && nextEmail !== currentEmail;
+    if (emailChanging) attributes.email = nextEmail;
+
+    if (!Object.keys(attributes).length) {
+      this.setStatus('signed-in', 'Nothing changed.');
+      return { changed: false, emailPending: false };
+    }
+
+    const client = await this.getClient();
+    const { data, error } = await client.auth.updateUser(attributes, { emailRedirectTo: returnTo() });
+    if (error) throw new Error(error.message);
+    if (data?.user) this.user = data.user;
+
+    this.setStatus('signed-in', emailChanging
+      ? `Check the inbox at ${nextEmail} - and the old one - for links to confirm the change. `
+        + 'Until both are opened, the old address is still the one that signs in.'
+      : 'Saved.');
+    return { changed: true, emailPending: emailChanging };
   }
 
   /**

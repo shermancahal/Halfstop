@@ -13,7 +13,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Account } from '../assets/js/lib/account.js';
+import { Account, displayName } from '../assets/js/lib/account.js';
 
 const folders = { list: () => [], replaceAll() {}, toGeoJSON: () => ({ features: [] }) };
 
@@ -36,6 +36,10 @@ function fakeClient({ session = null, signOutError = null } = {}) {
       async signUp(options) { calls.push(['signUp', options]); return { data: { session: null }, error: null }; },
       async signInWithOtp(options) { calls.push(['signInWithOtp', options]); return { error: null }; },
       async signInWithOAuth(options) { calls.push(['signInWithOAuth', options]); return { error: null }; },
+      async updateUser(attributes, options) {
+        calls.push(['updateUser', attributes, options]);
+        return { data: { user: null }, error: null };
+      },
       async signOut() {
         calls.push(['signOut']);
         if (signOutError) throw new Error(signOutError);
@@ -228,4 +232,76 @@ test('account: a response with no identities at all is not read as "already exis
 
   assert.equal(result.existing, undefined);
   assert.match(account.message, /check your email/i);
+});
+
+/* ------------------------------------------------------------ the profile */
+
+const signedIn = () => ({ id: 'u1', email: 'a@example.com', user_metadata: { display_name: 'Sherman' } });
+
+/*
+ * Only what changed goes to the server. Supabase treats a new address as a
+ * request - it emails both inboxes and changes nothing until the links are
+ * opened - so sending the same address back would start that for nothing.
+ */
+test('account: editing the profile sends only what changed', async () => {
+  const client = fakeClient();
+  const account = new Account(folders, { client: async () => client, configured: () => true });
+  withHash('');
+  account.user = signedIn();
+
+  const same = await account.updateProfile({ name: ' Sherman ', email: 'A@example.com' });
+  assert.deepEqual(same, { changed: false, emailPending: false });
+  assert.equal(client.calls.length, 0, 'an unchanged profile asks the server for nothing');
+  assert.match(account.message, /Nothing changed/);
+
+  const renamed = await account.updateProfile({ name: 'S. Cahal', email: 'a@example.com' });
+  assert.deepEqual(renamed, { changed: true, emailPending: false });
+  const [name, attributes, options] = client.calls.at(-1);
+  assert.equal(name, 'updateUser');
+  assert.deepEqual(attributes, { data: { display_name: 'S. Cahal' } }, 'the address was not resent');
+  assert.equal(options.emailRedirectTo, 'https://shermancahal.github.io/Map/?m=x',
+    'the confirmation link is told where to come back to, like every other emailed link');
+  assert.equal(account.message, 'Saved.');
+});
+
+test('account: a new address is a request, and the message says where the links went', async () => {
+  const client = fakeClient();
+  const account = new Account(folders, { client: async () => client, configured: () => true });
+  withHash('');
+  account.user = signedIn();
+
+  const result = await account.updateProfile({ name: 'Sherman', email: 'New@Example.com' });
+  assert.equal(result.emailPending, true);
+  const [, attributes] = client.calls.at(-1);
+  assert.deepEqual(attributes, { email: 'new@example.com' });
+  assert.match(account.message, /new@example\.com/);
+  assert.match(account.message, /old/, 'the old inbox gets a link too, and the reader has to know');
+});
+
+test('account: an address that is not one is refused before the server sees it', async () => {
+  const client = fakeClient();
+  const account = new Account(folders, { client: async () => client, configured: () => true });
+  withHash('');
+  account.user = signedIn();
+
+  await assert.rejects(() => account.updateProfile({ name: 'Sherman', email: 'not-an-address' }), /email address/);
+  assert.equal(client.calls.length, 0);
+});
+
+test('account: the profile cannot be edited signed out', async () => {
+  const account = new Account(folders, { client: async () => fakeClient(), configured: () => true });
+  await assert.rejects(() => account.updateProfile({ name: 'x' }), /Sign in first/);
+});
+
+/*
+ * Apple and Google each put the name somewhere different, and the profile
+ * form puts it somewhere else again. The typed one wins; nothing falls back to
+ * the address, because the caller decides what an address looks like there.
+ */
+test('account: a name is read from wherever the sign-in put it', () => {
+  assert.equal(displayName({ user_metadata: { display_name: 'Typed', full_name: 'From a provider' } }), 'Typed');
+  assert.equal(displayName({ user_metadata: { full_name: 'Apple Name' } }), 'Apple Name');
+  assert.equal(displayName({ user_metadata: { name: 'Google Name' } }), 'Google Name');
+  assert.equal(displayName({ user_metadata: { display_name: '   ' }, email: 'a@b.c' }), '');
+  assert.equal(displayName(null), '');
 });

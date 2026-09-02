@@ -46,7 +46,7 @@ import { shieldLayerUpdates, PALETTE, MAPBOX_SCHEMA, PROTOMAPS_SCHEMA } from './
 import { PMTilesArchive } from './lib/pmtiles.js';
 import { openTileStore } from './lib/pmtiles-store.js';
 import { previewFor, swatchSVG, tileURL } from './lib/preview.js';
-import { Account, isConfigured as accountsAvailable } from './lib/account.js';
+import { Account, isConfigured as accountsAvailable, displayName } from './lib/account.js';
 import {
   formatDD, formatDMS, formatDDM, toUTM, distanceBearing, compassPoint, reverseGeocode, searchPlaces,
 } from './lib/place.js';
@@ -208,6 +208,8 @@ const state = {
   account: null,
   /** Typed email, kept across re-renders so an error does not clear the form. */
   accountEmail: '',
+  /** { name, email } while the profile is being edited, for the same reason. */
+  accountEdit: null,
   /** { folderId, itemId } for the pin the Details tab is describing. */
   selectedPin: null,
   waypointQuery: '',
@@ -2225,17 +2227,21 @@ function healMissingImages() {
     if (!id || state.map.hasImage?.(id)) return;
 
     try {
-      // A state with a real sign blank is a PNG rather than a drawing, and
-      // arrives asynchronously. GL re-renders when an image is added, so
-      // answering late is fine.
+      /*
+       * Drawn now, photographed later.
+       *
+       * The drawing is synchronous and the sign blank is a PNG that has to be
+       * fetched. It used to wait for the PNG and draw only if there was none,
+       * which left GL with nothing at the moment it asked - so it logged
+       * "could not be loaded" for every shield on screen, and a phone's
+       * console filled with warnings about a thing that was about to work.
+       * Answering in the same tick with the drawing keeps GL quiet and puts a
+       * marker on the road a frame earlier; the blank replaces it on arrival.
+       */
       if (id.startsWith('abmap-shield-')) {
-        loadShieldBlank(state.map, id, { base: assetBase() })
-          .then((loaded) => {
-            if (loaded || state.map.hasImage?.(id)) return;
-            const drawn = rasterizeShieldById(id, { pixelRatio: 2 });
-            if (drawn) state.map.addImage(id, drawn, { pixelRatio: 2 });
-          })
-          .catch(() => {});
+        const drawn = rasterizeShieldById(id, { pixelRatio: 2 });
+        if (drawn) state.map.addImage(id, drawn, { pixelRatio: 2 });
+        loadShieldBlank(state.map, id, { base: assetBase(), replace: true }).catch(() => {});
         return;
       }
 
@@ -2387,11 +2393,19 @@ function keepAppLayersAlive() {
  * shared header code and read by two other pages.
  */
 const SETTINGS = [
+  /*
+   * Short on the button, spelled out beside it.
+   *
+   * "Miles / feet" and "Kilometers / meters" filled a phone's width and said
+   * nothing "mi / ft" does not. The full words go on the tooltip and the
+   * accessible name, which is where a screen reader looks and a thumb does
+   * not.
+   */
   {
     label: 'Distance and elevation',
     options: [
-      { value: 'imperial', label: 'Miles / feet' },
-      { value: 'metric', label: 'Kilometers / meters' },
+      { value: 'imperial', label: 'mi / ft', title: 'Miles and feet' },
+      { value: 'metric', label: 'km / m', title: 'Kilometers and meters' },
     ],
     read: () => state.units,
     write: (value) => { state.units = value; rememberSetting('units', value); applyUnits(); },
@@ -2399,8 +2413,8 @@ const SETTINGS = [
   {
     label: 'Temperature',
     options: [
-      { value: 'F', label: 'Fahrenheit' },
-      { value: 'C', label: 'Celsius' },
+      { value: 'F', label: '°F', title: 'Fahrenheit' },
+      { value: 'C', label: '°C', title: 'Celsius' },
     ],
     read: () => state.temperature,
     write: (value) => { state.temperature = value; rememberSetting('temp', value); applyUnits(); },
@@ -2413,13 +2427,16 @@ const SETTINGS = [
    * Most people set their phone to switch at dusk and want an app to follow,
    * which is the default here and was previously a state you could only return
    * to by clearing site data.
+   *
+   * Drawn as marks rather than words: a phone, a sun, a moon. The word is
+   * still there, as the tooltip and the accessible name.
    */
   {
     label: 'Theme',
     options: [
-      { value: 'system', label: 'System' },
-      { value: 'light', label: 'Light' },
-      { value: 'dark', label: 'Dark' },
+      { value: 'system', icon: icons.device, title: 'System' },
+      { value: 'light', icon: icons.sun, title: 'Light' },
+      { value: 'dark', icon: icons.moon, title: 'Dark' },
     ],
     read: readTheme,
     write: setTheme,
@@ -2446,7 +2463,10 @@ function wireSettingsMenu() {
         style: `--choices:${setting.options.length}`,
       }, setting.options.map((option) => el('button', {
         class: `settings-choice${setting.read() === option.value ? ' is-on' : ''}`,
-        type: 'button', text: option.label,
+        type: 'button',
+        title: option.title, 'aria-label': option.title,
+        'aria-pressed': String(setting.read() === option.value),
+        ...(option.icon ? { html: option.icon } : { text: option.label }),
         onclick: () => {
           if (setting.read() === option.value) return;
           setting.write(option.value);
@@ -2474,20 +2494,20 @@ function wireSettingsMenu() {
     }
 
     /*
-     * The plan, said plainly, where the account is.
+     * The plan, named and nothing more, where the account is.
      *
-     * There is one plan and it includes everything, which is worth a line
-     * rather than nothing: "free" is only reassuring if somebody says it, and a
-     * reader who has been asked to sign in has reasonably wondered what it is
-     * going to cost. It also gives the tier machinery a home in the interface
-     * before there is anything to sell, so the day a second plan exists this is
-     * a list that grew rather than a panel that appeared.
+     * One word: "free" is only reassuring if somebody says it, and a reader
+     * who has been asked to sign in has reasonably wondered what it is going
+     * to cost. The sentence that used to follow it belongs in the FAQ, not in
+     * a menu somebody opens to switch to Celsius. It also gives the tier
+     * machinery a home in the interface before there is anything to sell, so
+     * the day a second plan exists this is a line that changed rather than a
+     * panel that appeared.
      */
     const plan = planSummary(state.account?.user || null);
     drop.append(el('div', { class: 'settings-account' }, [
       el('div', { class: 'settings-label', text: 'Plan' }),
       el('div', { class: 'plan-name', text: plan.name }),
-      el('p', { class: 'plan-note', text: plan.note }),
     ]));
   };
 
@@ -10491,6 +10511,51 @@ function waypointPager(page, pages, total, from, shown) {
 /* ---------------- account ---------------- */
 
 /**
+ * The two things about an account a person can change for themselves.
+ *
+ * The draft lives in state rather than in the inputs, because the account
+ * emits 'change' whenever a background sync lands and renderAccount rebuilds
+ * everything - which would otherwise wipe a half-typed address mid-word.
+ */
+function profileForm(account) {
+  const draft = state.accountEdit;
+  const name = el('input', {
+    type: 'text', placeholder: 'Your name', autocomplete: 'name', 'aria-label': 'Name',
+    value: draft.name, maxlength: 80,
+    oninput: (event) => { draft.name = event.target.value; },
+  });
+  const email = el('input', {
+    type: 'email', placeholder: 'you@example.com', autocomplete: 'email', 'aria-label': 'Email',
+    value: draft.email,
+    oninput: (event) => { draft.email = event.target.value; },
+  });
+  const busy = (on) => { for (const node of [name, email, save, cancel]) node.disabled = on; };
+  const save = el('button', {
+    class: 'button button-primary button-small', type: 'submit', text: 'Save',
+  });
+  const cancel = el('button', {
+    class: 'button button-ghost button-small', type: 'button', text: 'Cancel',
+    onclick: () => { state.accountEdit = null; renderAccount(); },
+  });
+  return el('form', {
+    class: 'account-form',
+    onsubmit: async (event) => {
+      event.preventDefault();
+      busy(true);
+      try {
+        await account.updateProfile({ name: draft.name, email: draft.email });
+        state.accountEdit = null;
+      } catch (error) {
+        toast(error.message, { tone: 'error', timeout: 10000 });
+      } finally {
+        busy(false);
+      }
+      renderAccount();
+    },
+  }, [name, email, el('div', { class: 'account-actions' }, [save, cancel])]);
+}
+
+/**
  * Sign-in panel and sync status.
  *
  * Rendered entirely from account state so there is one source of truth for
@@ -10512,38 +10577,62 @@ function renderAccount() {
 
   if (account.user) {
     state.accountEmail = '';
+    const { user } = account;
+    const name = displayName(user);
     const totals = state.folders.totals();
-    dom.account.append(
-      el('div', { class: 'account-row' }, [
-        el('div', { class: 'account-who' }, [
-          el('div', { class: 'account-email', text: account.user.email || 'Signed in' }),
-          el('div', {
-            class: 'account-meta',
-            text: account.status === 'syncing'
-              ? 'Syncing…'
-              : `${totals.folders} folder${totals.folders === 1 ? '' : 's'} synced`
-                + (account.lastSyncAt ? ` · ${new Date(account.lastSyncAt).toLocaleTimeString()}` : ''),
-          }),
-        ]),
-        el('button', {
-          class: 'button button-secondary button-small', type: 'button',
-          text: account.status === 'syncing' ? 'Syncing…' : 'Sync now',
-          disabled: account.status === 'syncing',
-          onclick: async () => {
-            const result = await account.sync();
-            if (result) toast(describeSync(result), { tone: 'ok' });
-          },
-        }),
-        el('button', {
-          class: 'button button-ghost button-small', type: 'button', text: 'Sign out',
-          // `run` belongs to the signed-out form further down and is not in
-          // scope here; this branch has returned before it exists. signOut now
-          // swallows a failed server call and clears the device either way, so
-          // the only thing left to catch is the unexpected.
-          onclick: () => account.signOut().catch((error) => toast(error.message, { tone: 'error' })),
-        }),
-      ]),
-    );
+    const syncLine = account.status === 'syncing'
+      ? 'Syncing…'
+      : `${totals.folders} folder${totals.folders === 1 ? '' : 's'} synced`
+        + (account.lastSyncAt
+          ? ` · ${new Date(account.lastSyncAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+          : '');
+
+    /*
+     * One thing per line: who, then what can be changed, then the sync, then
+     * the two buttons. It was a single row with the address cut off at
+     * "sherm…" beside two buttons, which is the layout of a header - and this
+     * is no longer in one.
+     */
+    const who = el('div', { class: 'account-who' }, [
+      el('div', { class: 'account-name', text: name || user.email || 'Signed in' }),
+      name && user.email ? el('div', { class: 'account-email', text: user.email }) : null,
+    ]);
+
+    if (state.accountEdit) {
+      dom.account.append(who, profileForm(account));
+    } else {
+      const edit = el('button', {
+        class: 'button button-ghost button-small account-edit', type: 'button', text: 'Edit profile',
+        onclick: () => {
+          state.accountEdit = { name, email: user.email || '' };
+          renderAccount();
+        },
+      });
+      withIcon(edit, icons.pencil);
+      const syncNow = el('button', {
+        class: 'button button-secondary button-small', type: 'button',
+        text: account.status === 'syncing' ? 'Syncing…' : 'Sync now',
+        disabled: account.status === 'syncing',
+        onclick: async () => {
+          const result = await account.sync();
+          if (result) toast(describeSync(result), { tone: 'ok' });
+        },
+      });
+      withIcon(syncNow, icons.refresh);
+      const signOut = el('button', {
+        class: 'button button-ghost button-small', type: 'button', text: 'Sign out',
+        // signOut swallows a failed server call and clears the device either
+        // way, so the only thing left to catch is the unexpected.
+        onclick: () => account.signOut().catch((error) => toast(error.message, { tone: 'error' })),
+      });
+      withIcon(signOut, icons.logout);
+      dom.account.append(
+        who,
+        edit,
+        el('div', { class: 'account-meta', text: syncLine }),
+        el('div', { class: 'account-actions' }, [syncNow, signOut]),
+      );
+    }
     if (account.message) dom.account.append(el('p', { class: 'hint', text: account.message }));
     return;
   }
