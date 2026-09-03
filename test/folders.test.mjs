@@ -449,3 +449,26 @@ test('folders: a long track is thinned to the budget and a short one is left alo
   assert.equal(thinLine(short.geometry), short.geometry, 'under the cap, the same object comes back');
   assert.equal(packFeature(short, { keepTimes: true }).properties.coordTimes.length, 2);
 });
+
+/*
+ * A pin keeps the symbol word it came in with, and its picture was chosen
+ * from the table as it stood that day. Re-matching lets an old folder catch
+ * up when the table grows - and leaves alone anything that already matches,
+ * has no word, or has a word the table still does not know.
+ */
+test('folders: re-matching gives pins the symbol their imported name resolves to now', () => {
+  const store = new FolderStore({ storage: memoryStorage() });
+  const folder = store.create('Towers');
+  store.addFeatures(folder.id, [
+    { type: 'Feature', geometry: { type: 'Point', coordinates: [-81, 37] }, properties: { kind: 'waypoint', name: 'A', symbol: 'fire-lookout', icon: 'pin' } },
+    { type: 'Feature', geometry: { type: 'Point', coordinates: [-82, 37] }, properties: { kind: 'waypoint', name: 'B', symbol: 'fire-lookout', icon: 'tower' } },
+    { type: 'Feature', geometry: { type: 'Point', coordinates: [-83, 37] }, properties: { kind: 'waypoint', name: 'C', symbol: 'emoji-unicorn', icon: 'pin' } },
+    { type: 'Feature', geometry: { type: 'Point', coordinates: [-84, 37] }, properties: { kind: 'waypoint', name: 'D' } },
+  ]);
+  const resolve = (symbol) => (symbol === 'fire-lookout' ? 'tower' : null);
+  assert.equal(store.rematchIcons(folder.id, resolve), 1, 'only the stale one changes');
+  const icons = store.get(folder.id).items.map((item) => item.feature.properties.icon);
+  assert.deepEqual(icons, ['tower', 'tower', 'pin', null], 'a pin with no word keeps its nothing');
+  assert.equal(store.rematchIcons(folder.id, resolve), 0, 'a second pass finds nothing to do');
+  assert.equal(store.rematchIcons('nope', resolve), 0);
+});

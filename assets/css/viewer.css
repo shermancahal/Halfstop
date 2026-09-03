@@ -362,7 +362,7 @@ html, body { height: 100%; overflow: hidden; }
 .popup-mark {
   flex: none; width: 26px; height: 26px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
-  background: #fff; color: #2A2118; border: 2.5px solid var(--pin, var(--clay)); margin-top: 1px;
+  background: #fff; color: #2A2118; border: 2.5px solid var(--pin, #2A2118); margin-top: 1px;
 }
 .popup-mark svg { width: 15px; height: 15px; }
 .popup-title { font-family: var(--font-serif); font-size: 1.02rem; font-weight: 600; margin: 0 0 2px; line-height: 1.25; }
@@ -468,6 +468,7 @@ html, body { height: 100%; overflow: hidden; }
   display: inline-flex; align-items: center; justify-content: center; gap: 5px;
   min-width: 0; white-space: nowrap;
 }
+.editor-folder-actions { flex-wrap: wrap; }
 .editor-folder-actions .button { min-height: 36px; padding: 6px 8px; }
 .button-with-icon svg,
 .editor-folder-actions .button svg { width: 14px; height: 14px; flex: none; }
@@ -643,7 +644,7 @@ html, body { height: 100%; overflow: hidden; }
 .folder-item-icon {
   width: 20px; height: 20px; border-radius: 50%; flex: none;
   display: flex; align-items: center; justify-content: center;
-  background: #fff; color: #2A2118; border: 2px solid var(--pin, var(--clay));
+  background: #fff; color: #2A2118; border: 2px solid var(--pin, #2A2118);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, .12);
 }
 .folder-item-icon svg { display: block; }
@@ -1117,7 +1118,7 @@ html, body { height: 100%; overflow: hidden; }
 .pin-head-icon {
   width: 34px; height: 34px; border-radius: 50%; flex: none;
   display: flex; align-items: center; justify-content: center;
-  background: #fff; color: #2A2118; border: 3px solid var(--pin, var(--clay));
+  background: #fff; color: #2A2118; border: 3px solid var(--pin, #2A2118);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, .12);
 }
 .pin-description {
@@ -2126,7 +2127,7 @@ html, body { height: 100%; overflow: hidden; }
 .waypoint-mark {
   flex: none; width: 24px; height: 24px; border-radius: 999px;
   display: grid; place-items: center;
-  background: #fff; color: #2A2118; border: 2px solid var(--pin, var(--clay));
+  background: #fff; color: #2A2118; border: 2px solid var(--pin, #2A2118);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, .1);
 }
 .waypoint-body { min-width: 0; }

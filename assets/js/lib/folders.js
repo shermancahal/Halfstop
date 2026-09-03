@@ -409,6 +409,32 @@ export class FolderStore {
     return { added, skipped };
   }
 
+  /**
+   * Give every pin the symbol its imported name resolves to today.
+   *
+   * A pin keeps the symbol word it came in with - "fire-lookout", "chapel" -
+   * and the picture was chosen once, at import, from the table as it stood
+   * then. When the table grows, this lets an old folder catch up without
+   * re-importing. Pins whose word resolves to nothing, or to what they
+   * already show, are left alone; pins with no word never had one to match.
+   *
+   * @param {(symbol: string) => string|null} resolve  iconForSymbol, passed in so this module stays free of the icon set
+   * @returns {number} how many pins changed
+   */
+  rematchIcons(folderId, resolve) {
+    const folder = this.get(folderId);
+    if (!folder) return 0;
+    let changed = 0;
+    for (const item of folder.items) {
+      const props = item.feature.properties;
+      if (props.kind !== 'waypoint' || !props.symbol) continue;
+      const icon = resolve(props.symbol);
+      if (icon && icon !== props.icon) { props.icon = icon; changed += 1; }
+    }
+    if (changed) this.emit(folderId);
+    return changed;
+  }
+
   removeItem(folderId, itemId) {
     const folder = this.get(folderId);
     if (!folder) return;
@@ -627,7 +653,7 @@ export class FolderStore {
             folderColor: folder.color,
             itemId: item.id,
             // Per-item overrides win; otherwise inherit the folder's styling.
-            pinColor: pinColorFor(item.feature.properties, folder.color),
+            pinColor: pinColorFor(item.feature.properties),
             pinIcon: item.feature.properties.icon || DEFAULT_PIN_ICON,
           },
         });

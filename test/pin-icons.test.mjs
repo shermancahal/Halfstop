@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  PIN_ICONS, PIN_FAMILY, iconForSymbol, pinColorFor, getPinIcon, DEFAULT_PIN_ICON,
+  PIN_ICONS, PIN_INK, iconForSymbol, pinColorFor, getPinIcon, DEFAULT_PIN_ICON,
 } from '../assets/js/lib/pin-icons.js';
 
 /*
@@ -61,23 +61,32 @@ test('pins: an emoji Gaia wrote resolves, and an unknown one resolves to nothing
 });
 
 /*
- * The colour is the family's, so a map of mixed folders still reads: brown is
- * built, blue is water, slate is engineering. A pin's own colour beats it; the
- * folder's is the last resort, for a plain pin.
+ * The ring is the pin's own colour or ink. Never the symbol's, never the
+ * folder's: people colour pins to mean things - visited, not yet - and a
+ * colour the app chose would overwrite what they meant.
  */
-test('pins: a symbol wears its family colour unless the pin says otherwise', () => {
-  assert.equal(pinColorFor({ icon: 'tower' }, '#folder'), PIN_FAMILY.built);
-  assert.equal(pinColorFor({ icon: 'canal' }, '#folder'), PIN_FAMILY.water);
-  assert.equal(pinColorFor({ icon: 'tower', color: '#123456' }, '#folder'), '#123456');
-  assert.equal(pinColorFor({ icon: DEFAULT_PIN_ICON }, '#folder'), '#folder', 'a plain pin has no family');
-  assert.equal(pinColorFor({}, '#folder'), '#folder');
-  assert.equal(pinColorFor(null, '#folder'), '#folder');
+test('pins: the ring is the pin\'s own colour, else ink', () => {
+  assert.equal(pinColorFor({ icon: 'tower' }), PIN_INK);
+  assert.equal(pinColorFor({ icon: 'tower', color: '#2D3FC7' }), '#2D3FC7', 'an imported colour stands');
+  assert.equal(pinColorFor({}), PIN_INK);
+  assert.equal(pinColorFor(null), PIN_INK);
+  assert.equal(getPinIcon('no-such-icon').id, DEFAULT_PIN_ICON);
 });
 
-test('pins: every family colour on an icon is one of the named families', () => {
-  const families = new Set(Object.values(PIN_FAMILY));
-  for (const icon of PIN_ICONS) {
-    if (icon.color) assert.ok(families.has(icon.color), `${icon.id} has an off-family colour`);
+/*
+ * The park signs: every NPS symbol arrives as a pin of its own, prefixed so
+ * it cannot shadow a drawn icon a saved pin already names, and marked with
+ * the 22-unit grid it was drawn on so it is centred rather than cornered.
+ */
+test('pins: the park signs are in the picker, prefixed and on their grid', () => {
+  const signs = PIN_ICONS.filter((icon) => icon.group === 'Park signs');
+  assert.ok(signs.length >= 90, `${signs.length} park signs`);
+  for (const icon of signs) {
+    assert.match(icon.id, /^nps-[a-z0-9-]+$/);
+    assert.equal(icon.grid, 22);
+    assert.ok(icon.f.length > 0, `${icon.id} has no fills`);
   }
-  assert.equal(getPinIcon('no-such-icon').id, DEFAULT_PIN_ICON);
+  for (const wanted of ['nps-lookout-tower', 'nps-waterfall', 'nps-chapel', 'nps-cannon', 'nps-rail-station', 'nps-tunnel', 'nps-lighthouse', 'nps-dam']) {
+    assert.ok(signs.some((icon) => icon.id === wanted), `${wanted} missing`);
+  }
 });

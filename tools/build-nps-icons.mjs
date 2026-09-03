@@ -45,7 +45,7 @@ const WANTED = [
   { id: 'trailhead', symbol: 'trailhead', name: 'Trailhead' },
   { id: 'cabin', symbol: 'cabin', name: 'Cabin or shelter' },
   { id: 'ranger', symbol: 'ranger-station', name: 'Ranger station' },
-  { id: 'information', symbol: 'information', name: 'Visitor center' },
+  { id: 'information', symbol: 'information', name: 'Information' },
   { id: 'historic', symbol: 'historic-feature', name: 'Historic site' },
   { id: 'restroom', symbol: 'restrooms', name: 'Restrooms' },
   { id: 'water', symbol: 'drinking-water', name: 'Drinking water' },
@@ -53,6 +53,44 @@ const WANTED = [
   { id: 'parking', symbol: 'parking', name: 'Parking' },
   { id: 'fourwd', symbol: 'four-wheel-drive-road', name: 'Four-wheel-drive road' },
   { id: 'viewpoint', symbol: 'scenic-viewpoint', name: 'Scenic viewpoint' },
+];
+
+/*
+ * And the rest of what a pin can be, for the picker's "Park signs" group.
+ *
+ * Every symbol the library has for a place - a thing on the ground somebody
+ * would mark - and none of the ones for rules, facilities inside a building,
+ * or accessibility services, which belong on a sign and not on a map. The
+ * name is the library's own, spelled out.
+ */
+const SIGNS = [
+  'airfield', 'airport', 'amphitheater', 'beach-access', 'bear-viewing', 'bicycle-trail',
+  'birding-wildlife-viewing', 'boating', 'bridge', 'bus-stop', 'campfire', 'campsite', 'cannon',
+  'canoe-access', 'caving', 'cellular-signal', 'chapel', 'climbing', 'construction',
+  'cross-country-ski-trail', 'dam', 'deer-viewing', 'downhill-skiing', 'drinking-water',
+  'electric-car-charging', 'emergencies', 'entrance-station', 'falling-rocks', 'first-aid',
+  'fish-hatchery', 'fish-ladder', 'fishing', 'fishing-pier', 'flagpole', 'flower-viewing',
+  'food-service', 'gas-station', 'geyser', 'golfing', 'historic-feature', 'horseback-riding',
+  'hospital', 'hunting', 'ice-skating', 'interpretive-exhibit', 'kayaking', 'library',
+  'lighthouse', 'lodging', 'lookout-tower', 'marina', 'mechanic', 'metro-station', 'monument',
+  'motor-bike-trail', 'museum', 'photography', 'playground', 'point-of-interest', 'post-office',
+  'rail-station', 'rr-xing', 'rattlesnakes', 'river-rafting', 'rock-collecting', 'sanitary-disposal-station',
+  'scenic-viewpoint', 'sea-plane', 'self-guiding-trail', 'shelter', 'shipwreck', 'showers', 'sign',
+  'sledding', 'snowmobile-trail', 'spring', 'stable', 'stagecoach-rides', 'star-gazing', 'statue',
+  'store', 'swimming', 'telephone', 'theater', 'tidepooling', 'towing', 'trailhead', 'tunnel',
+  'vehicle-ferry', 'viewing-area', 'visitor-center', 'wading', 'waterfall', 'waterfowl',
+  'whale-viewing', 'wi-fi', 'wilderness',
+];
+
+const titled = (symbol) => symbol.split('-').map((word, at) => (at === 0 ? word[0].toUpperCase() + word.slice(1) : word))
+  .join(' ').replace(/\bRr xing\b/, 'Railroad crossing').replace(/\bWi fi\b/, 'Wi-Fi').replace(/\bRv\b/, 'RV');
+
+// The overlay's fourteen keep their short ids; everything is keyed by symbol
+// too, which is what the pin picker uses.
+const ALL = [
+  ...WANTED,
+  ...SIGNS.filter((symbol) => !WANTED.some((want) => want.symbol === symbol))
+    .map((symbol) => ({ id: symbol, symbol, name: titled(symbol) })),
 ];
 
 const numbers = (text) => (text.match(/-?\d*\.?\d+/g) || []).map(Number);
@@ -125,7 +163,7 @@ if (!root) {
 }
 
 const entries = [];
-for (const want of WANTED) {
+for (const want of ALL) {
   const file = path.join(root, 'src', 'standalone', `${want.symbol}-white-22.svg`);
   const svg = await readFile(file, 'utf8');
   const shapes = shapesOf(svg);
@@ -156,8 +194,8 @@ const body = `/**
  * work of the United States government.
  */
 
-/** @type {{id: string, name: string, f: string[]}[]} */
-export const NPS_ICONS = ${JSON.stringify(entries.map(({ id, name, f }) => ({ id, name, f })), null, 2)};
+/** @type {{id: string, symbol: string, name: string, f: string[]}[]} */
+export const NPS_ICONS = ${JSON.stringify(entries.map(({ id, symbol, name, f }) => ({ id, symbol, name, f })), null, 2)};
 
 /** The grid every path above is drawn on. */
 export const NPS_VIEWBOX = 22;
