@@ -362,7 +362,7 @@ html, body { height: 100%; overflow: hidden; }
 .popup-mark {
   flex: none; width: 26px; height: 26px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
-  color: #fff; margin-top: 1px;
+  background: #fff; color: #2A2118; border: 2.5px solid var(--pin, var(--clay)); margin-top: 1px;
 }
 .popup-mark svg { width: 15px; height: 15px; }
 .popup-title { font-family: var(--font-serif); font-size: 1.02rem; font-weight: 600; margin: 0 0 2px; line-height: 1.25; }
@@ -433,19 +433,21 @@ html, body { height: 100%; overflow: hidden; }
    ========================================================================== */
 
 .folder-actions { display: flex; gap: 7px; margin-bottom: 13px; flex-wrap: wrap; }
+/* New folder and New trip share a line; Import has the next to itself. Three
+   on one line clipped "New folder" at the panel's width. */
+#tab-folders > .panel-section > .folder-actions .button { flex: 1 1 calc(50% - 4px); }
+#tab-folders > .panel-section > .folder-actions #import-into-folder { flex: 1 0 100%; }
 
 /* One labelled button where four sixteen-pixel icons used to sit.
    Four targets inside a thumb's width, with delete beside export, is not a
    toolbar anyone should be asked to hit on a phone — the actions moved into
    the panel it opens, where they can be words. */
-.folder-menu-button {
-  display: inline-flex; align-items: center; gap: 6px; flex: none;
-  min-height: 34px; padding: 6px 11px; border-radius: var(--radius-sm);
-  border: 1px solid var(--line); background: var(--surface-2);
-  font: inherit; font-size: .76rem; font-weight: 600; color: var(--ink-2);
-  cursor: pointer;
+/* A mark, not a word: the name gets the row. */
+.folder-head .folder-menu-button {
+  width: 28px; height: 28px; flex: none; border-radius: var(--radius-sm);
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-2);
 }
-.folder-menu-button svg { width: 15px; height: 15px; }
+.folder-head .folder-menu-button svg { width: 14px; height: 14px; }
 .folder-menu-button:hover { border-color: var(--line-strong); color: var(--ink); }
 .folder-menu-button.is-armed { border-color: var(--clay); color: var(--clay); }
 
@@ -495,10 +497,6 @@ html, body { height: 100%; overflow: hidden; }
 
 .folder-head { display: flex; align-items: center; gap: 8px; padding: 8px 9px; background: var(--surface-2); }
 .folder-head:hover { background: var(--paper-2); }
-.folder-swatch {
-  width: 11px; height: 11px; border-radius: 3px; flex: none; cursor: pointer;
-  border: 1px solid rgba(0, 0, 0, .18); padding: 0; appearance: none; background: none;
-}
 .folder-disclosure {
   width: 20px; height: 20px; flex: none; padding: 0; border: 0; background: none;
   color: var(--ink-3); cursor: pointer; display: flex; align-items: center; justify-content: center;
@@ -506,14 +504,21 @@ html, body { height: 100%; overflow: hidden; }
 .folder-disclosure svg { width: 13px; height: 13px; transition: transform .12s ease; }
 .folder.is-collapsed .folder-disclosure svg { transform: rotate(-90deg); }
 
+/* A label that wraps, not a field that clips. */
 .folder-name {
-  flex: 1; min-width: 0; font-size: .89rem; font-weight: 550;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  background: none; border: 1px solid transparent; border-radius: var(--radius-sm);
-  color: var(--ink); font-family: inherit; padding: 2px 5px; margin: 0 -5px;
+  flex: 1; min-width: 0; font-size: .89rem; font-weight: 550; line-height: 1.3; text-align: left;
+  white-space: normal; overflow-wrap: anywhere;
+  background: none; border: 0; color: var(--ink); font-family: inherit; padding: 2px 0; margin: 0;
+  cursor: pointer;
 }
-.folder-name:hover { border-color: var(--line); }
-.folder-name:focus { background: var(--surface); border-color: var(--clay); outline: none; }
+.folder-name:hover { color: var(--clay-2); }
+.folder-rename {
+  width: 100%; font: inherit; font-size: .88rem; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm); padding: 7px 9px;
+}
+.editor-folder-name { display: block; }
+.editor-folder-name .style-label { display: block; margin-bottom: 4px; }
 
 .folder-count { font-size: .74rem; color: var(--ink-3); flex: none; font-variant-numeric: tabular-nums; }
 .folder-head .icon-button { width: 23px; height: 23px; flex: none; }
@@ -632,10 +637,14 @@ html, body { height: 100%; overflow: hidden; }
 .folder-item-pick { accent-color: var(--clay); width: 14px; height: 14px; flex: none; margin: 0; }
 
 /* The pin preview mirrors what is drawn on the map: glyph on a coloured disc. */
+/* The symbol in ink on white, the colour as the ring - as on the map. Fixed
+   colours on purpose: the disc is white in the dark theme too, as it is on
+   the map, so the glyph is fixed ink rather than the theme's. */
 .folder-item-icon {
-  width: 19px; height: 19px; border-radius: 50%; flex: none;
+  width: 20px; height: 20px; border-radius: 50%; flex: none;
   display: flex; align-items: center; justify-content: center;
-  color: #fff; box-shadow: 0 0 0 1.5px var(--surface), 0 0 0 2.5px rgba(0, 0, 0, .12);
+  background: #fff; color: #2A2118; border: 2px solid var(--pin, var(--clay));
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .12);
 }
 .folder-item-icon svg { display: block; }
 
@@ -1052,12 +1061,6 @@ html, body { height: 100%; overflow: hidden; }
 .trip-knob-note { grid-column: 1 / -1; font-size: .68rem; color: var(--ink-3); }
 
 /* Saved pin notes, under the row */
-.folder-item-desc {
-  margin: -3px 9px 7px 40px; padding: 0;
-  font-size: .79rem; line-height: 1.45; color: var(--ink-3);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-  overflow: hidden;
-}
 .style-desc {
   width: 100%; font: inherit; font-size: .86rem; line-height: 1.45; color: var(--ink);
   background: var(--surface); border: 1px solid var(--line-strong);
@@ -2183,7 +2186,7 @@ html, body { height: 100%; overflow: hidden; }
    only by the icon it is drawn with. */
 .folder-eye { flex: none; }
 .folder-eye.is-hidden { color: var(--ink-3); opacity: .65; }
-.folder-eye.is-hidden ~ .folder-name { opacity: .55; text-decoration: line-through; }
+.folder-head.is-hidden .folder-name { opacity: .55; text-decoration: line-through; }
 
 /* Shown when the basemap on screen is not the one that was picked. Amber
    rather than red: it is working, just not as itself. */

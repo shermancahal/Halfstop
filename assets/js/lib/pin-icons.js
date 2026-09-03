@@ -357,9 +357,12 @@ export function pinIconSVG(id, { size = 20, stroke = 1.7 } = {}) {
 /**
  * Rasterise one icon to an ImageData for map.addImage().
  *
- * Drawn white, at `pixelRatio` scale, with a soft dark shadow so the glyph still
- * reads if it ends up over a pale pin colour.
+ * Drawn in ink, at `pixelRatio` scale. It sits on a white disc whose ring
+ * carries the pin's colour, so it needs no shadow and no white - the symbol
+ * is the contrast, the colour is the edge.
  */
+export const PIN_INK = '#2A2118';
+
 export function rasterizePinIcon(id, { size = 22, pixelRatio = 2 } = {}) {
   const icon = getPinIcon(id);
   const px = Math.round(size * pixelRatio);
@@ -372,13 +375,11 @@ export function rasterizePinIcon(id, { size = 22, pixelRatio = 2 } = {}) {
 
   const scale = px / 24;
   ctx.scale(scale, scale);
-  ctx.strokeStyle = '#ffffff';
-  ctx.fillStyle = '#ffffff';
+  ctx.strokeStyle = PIN_INK;
+  ctx.fillStyle = PIN_INK;
   ctx.lineWidth = 2.1;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.shadowColor = 'rgba(0,0,0,0.45)';
-  ctx.shadowBlur = 1.6;
 
   for (const d of icon.d || []) ctx.stroke(new Path2D(d));
   for (const d of icon.f || []) ctx.fill(new Path2D(d));

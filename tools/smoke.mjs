@@ -716,6 +716,25 @@ const afterImport = await state();
 check('waypoints reached the map', afterImport.folderPoints, 2);
 // Filing takes the track too, so a drive imported on the phone syncs whole.
 check('and the track was filed with them', afterImport.folderLines, 1);
+/*
+ * The folder row: a name that wraps, a count, an eye, and one edit mark. No
+ * swatch, and no description under each pin - a folder of a hundred notes
+ * was a wall of grey text.
+ */
+const folderHead = await page.evaluate(() => {
+  const head = document.querySelector('#folder-list .folder-head');
+  return {
+    order: [...head.children].map((node) => node.className.split(' ').find((c) => c.startsWith('folder-'))),
+    swatches: document.querySelectorAll('#folder-list .folder-swatch').length,
+    editIsMark: Boolean(head.querySelector('.folder-menu-button svg')) && head.querySelector('.folder-menu-button').textContent.trim() === '',
+    descriptions: document.querySelectorAll('#folder-list .folder-item-desc').length,
+  };
+});
+check('the folder row is name, count, eye, edit', folderHead.order, ['folder-disclosure', 'folder-name', 'folder-count', 'folder-eye', 'folder-menu-button']);
+check('with no swatch beside the name', folderHead.swatches, 0);
+check('and edit as a mark rather than a word', folderHead.editIsMark, true);
+check('and nothing written under the pins', folderHead.descriptions, 0);
+await shot(page.locator('#folder-list .folder').first(), 'folder-row');
 check('folder layers present', afterImport.folderLayers, 5);
 check('document layers present', afterImport.documentLayers > 0, true);
 
@@ -733,12 +752,21 @@ await showTab('folders');
 await page.waitForTimeout(200);
 // Scoped to the tab: the offline panel builds a .folder-actions of its own.
 const actions = await page.evaluate(() => [...document.querySelectorAll('#tab-folders .folder-actions .button')]
-  .map((node) => ({ label: node.textContent.trim(), icon: Boolean(node.querySelector('svg')), hidden: node.hidden })));
+  .map((node) => ({
+    label: node.textContent.trim(), icon: Boolean(node.querySelector('svg')), hidden: node.hidden,
+    top: Math.round(node.getBoundingClientRect().top),
+    clipped: [...node.querySelectorAll('span')].some((span) => span.scrollWidth > span.clientWidth + 1),
+  })));
 check('the folder actions are New folder, New trip and Import',
   actions.map((a) => a.label), ['New folder', 'New trip', 'Import']);
 check('each carrying a mark of its own', actions.every((a) => a.icon), true);
 check('and Import is there before anything has been imported',
   actions.find((a) => a.label === 'Import')?.hidden, false);
+// Two rows: the two "new" buttons together, Import on a line of its own. Three
+// on one line cut "New folder" short at the panel's width.
+check('New folder and New trip share a line', actions[0].top === actions[1].top, true);
+check('and Import has the next to itself', actions[2].top > actions[1].top, true);
+check('with every word intact', actions.filter((a) => a.clipped).map((a) => a.label), []);
 await shot(page.locator('#tab-folders .folder-actions'), 'folder-actions');
 
 /*

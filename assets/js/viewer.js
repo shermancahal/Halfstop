@@ -2336,7 +2336,7 @@ function askWhereToFile(entries) {
     openTab('folders');
   };
 
-  const folders = state.folders.list();
+  const folders = sortedFolders();
   const names = entries.map((entry) => entry.name).join(', ');
 
   const select = folders.length
@@ -7576,7 +7576,7 @@ function showFeaturePopup(feature, lngLat, { edit = false, identity = null } = {
   const glyph = props.kind === 'waypoint' || props.icon
     ? el('span', {
       class: 'popup-mark',
-      style: `background:${props.color || props.folderColor || 'var(--clay)'}`,
+      style: `--pin:${props.color || props.folderColor || 'var(--clay)'}`,
       html: pinIconSVG(props.icon || DEFAULT_PIN_ICON, { size: 15, stroke: 2 }),
     })
     : null;
@@ -7736,7 +7736,7 @@ function saveToFolderParts(feature, popup) {
    * what either did. Now the card asks nothing until you say you want to save,
    * and then it says what each field is for.
    */
-  const folders = state.folders.list();
+  const folders = sortedFolders();
 
   const select = el('select', { class: 'popup-folder', 'aria-label': 'Folder to save into' }, [
     ...folders.map((folder) => el('option', { value: folder.id, text: folder.name })),
@@ -9120,9 +9120,15 @@ function addFolderLayers() {
       },
     });
   }
-  // A pin is three layers: a white halo, a disc carrying the pin's colour, and
-  // a white glyph on top. Splitting colour from glyph means N icons cost N map
-  // images rather than one per icon-and-colour pair.
+  /*
+   * A pin is three layers: a soft halo, a white disc with the pin's colour as
+   * its ring, and the glyph in ink on top. The glyph used to be white on a
+   * disc of the colour, and at map scale a white tower on a blue dot and a
+   * white bridge on a brown one were two dots; the symbol is the thing a
+   * person is looking for, so it gets the contrast and the colour gets the
+   * edge. Splitting colour from glyph still means N icons cost N map images
+   * rather than one per icon-and-colour pair.
+   */
   const pinColor = ['coalesce', ['get', 'pinColor'], ['get', 'folderColor'], '#b4441f'];
 
   if (!state.map.getLayer(halo)) {
@@ -9141,7 +9147,9 @@ function addFolderLayers() {
       id: point, type: 'circle', source: FOLDER_SOURCE, filter: IS_POINT,
       paint: {
         'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 7.5, 15, 11],
-        'circle-color': pinColor,
+        'circle-color': '#ffffff',
+        'circle-stroke-color': pinColor,
+        'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 8, 2.2, 15, 3],
       },
     });
     bindFeatureInteractions(point);
@@ -9949,10 +9957,22 @@ function tripBar(folder) {
   ]);
 }
 
+/**
+ * Folders in name order, however they were made.
+ *
+ * They were listed in creation order, which is the order of a person's
+ * afternoon rather than anything they can predict. Numeric-aware, so "Day 2"
+ * comes before "Day 10", and case-blind.
+ */
+function sortedFolders() {
+  return state.folders.list().slice()
+    .sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { numeric: true, sensitivity: 'base' }));
+}
+
 function renderFoldersTab() {
   if (!dom.folderList) return;
   retireFinishedTrips();
-  const folders = state.folders.list();
+  const folders = sortedFolders();
   const totals = state.folders.totals();
   dom.folderTotals.textContent = totals.folders
     ? `${totals.waypoints} waypoint${totals.waypoints === 1 ? '' : 's'}${totals.tracks ? `, ${totals.tracks} track${totals.tracks === 1 ? '' : 's'}` : ''}`
@@ -10272,7 +10292,18 @@ function renderFolder(folder) {
     dataset: { folder: folder.id },
   });
 
-  const head = el('div', { class: 'folder-head' }, [
+  /*
+   * Name, count, eye, edit. In that order and nothing else.
+   *
+   * The name used to be a one-line input beside a colour swatch, and in a
+   * 300px panel "Historic - Fire Lookout Towers" was "Historic - ...". It is
+   * a label now, and it wraps; tapping it folds the folder. Renaming moved
+   * into the editor, where there is room for a field. The swatch is gone -
+   * the colour is on every pin already, and a square beside the name said
+   * nothing a person needed - and "Edit" is a mark rather than a word, which
+   * gives the name most of the row.
+   */
+  const head = el('div', { class: `folder-head${folder.visible ? '' : ' is-hidden'}` }, [
     el('button', {
       class: 'folder-disclosure', type: 'button',
       'aria-label': folder.collapsed ? `Expand ${folder.name}` : `Collapse ${folder.name}`,
@@ -10280,10 +10311,16 @@ function renderFolder(folder) {
       html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
       onclick: () => state.folders.update(folder.id, { collapsed: !folder.collapsed }),
     }),
+    el('button', {
+      class: 'folder-name', type: 'button', text: folder.name,
+      title: folder.collapsed ? `Expand ${folder.name}` : `Collapse ${folder.name}`,
+      onclick: () => state.folders.update(folder.id, { collapsed: !folder.collapsed }),
+    }),
+    counts.total ? el('span', { class: 'folder-count', text: String(counts.total) }) : null,
     /*
      * An eye, not a checkbox. A checkbox beside a name in a list of names reads
      * as "selected", which is what the checkbox on each pin below it actually
-     * means — so the same control did two different jobs one level apart. An
+     * means - so the same control did two different jobs one level apart. An
      * eye only ever means one thing.
      */
     el('button', {
@@ -10295,37 +10332,20 @@ function renderFolder(folder) {
       html: folder.visible ? icons.eye : icons.eyeOff,
       onclick: () => state.folders.update(folder.id, { visible: !folder.visible }),
     }),
-    el('button', {
-      class: 'folder-swatch', type: 'button', style: `background:${folder.color}`,
-      title: 'Change color', 'aria-label': `Change the color of ${folder.name}`,
-      onclick: () => {
-        const next = FOLDER_COLORS[(FOLDER_COLORS.indexOf(folder.color) + 1) % FOLDER_COLORS.length];
-        state.folders.update(folder.id, { color: next });
-      },
-    }),
-    el('input', {
-      class: 'folder-name', type: 'text', value: folder.name, 'aria-label': 'Folder name',
-      onchange: (event) => state.folders.rename(folder.id, event.target.value),
-      onkeydown: (event) => { if (event.key === 'Enter') event.target.blur(); },
-    }),
-    counts.total ? el('span', { class: 'folder-count', text: String(counts.total) }) : null,
     /*
-     * One button, not four.
-     *
-     * This row carried style, zoom, export and delete as sixteen-pixel icons
-     * side by side. On a phone that is four targets inside a thumb's width,
-     * with delete next to export — the actions are now labelled buttons in the
-     * panel this opens, where there is room for words and for spacing between
-     * something reversible and something that is not.
+     * One control, not four. This row carried style, zoom, export and delete
+     * as sixteen-pixel icons side by side; the actions are labelled buttons
+     * in the panel this opens, where there is room for words and for spacing
+     * between something reversible and something that is not.
      */
     el('button', {
-      class: `folder-menu-button${chosen.length ? ' is-armed' : ''}`,
+      class: `icon-button folder-menu-button${chosen.length ? ' is-armed' : ''}`,
       type: 'button',
       title: chosen.length
         ? `Actions for the ${chosen.length} selected pin${chosen.length === 1 ? '' : 's'}`
-        : `Actions for ${folder.name}`,
-      'aria-label': `Actions for ${folder.name}`,
-      html: `${icons.brush}<span>Edit</span>`,
+        : `Rename, export or delete ${folder.name}`,
+      'aria-label': chosen.length ? `Actions for the selected pins in ${folder.name}` : `Edit ${folder.name}`,
+      html: chosen.length ? icons.brush : icons.pencil,
       onclick: (event) => openStyleEditor(
         folder,
         chosen.length ? chosen : null,
@@ -10405,8 +10425,8 @@ function renderFolderItem(folder, item) {
   const meta = isWaypoint
     ? (props.icon ? '' : props.symbol || '')
     : (props.distance_m ? formatDistance(props.distance_m, state.units) : '');
-  // Descriptions come across from GaiaGPS on most waypoints and are the whole
-  // reason a pin is worth keeping — surface them rather than hiding them in a popup.
+  // The description is on the pin's card and in its tooltip here, not under
+  // every row: a folder of a hundred notes was a wall of grey text.
   const blurb = String(props.description || '').trim();
 
   const key = selectionKey(folder.id, item.id);
@@ -10434,12 +10454,12 @@ function renderFolderItem(folder, item) {
     }),
     isWaypoint
       ? el('span', {
-        class: 'folder-item-icon', style: `background:${color}`,
+        class: 'folder-item-icon', style: `--pin:${color}`,
         html: pinIconSVG(props.icon || DEFAULT_PIN_ICON, { size: 12, stroke: 2 }),
       })
       : el('span', { class: 'folder-item-kind is-track', style: `background:${color}` }),
     el('span', {
-      class: 'folder-item-name', text: props.name, title: props.name,
+      class: 'folder-item-name', text: props.name, title: blurb ? `${props.name} — ${blurb}` : props.name,
       role: 'button', tabindex: '0',
       onclick: () => focusFolderItem(item, folder.id),
       onkeydown: (event) => { if (event.key === 'Enter') focusFolderItem(item, folder.id); },
@@ -10462,10 +10482,7 @@ function renderFolderItem(folder, item) {
     }),
   ]);
 
-  if (!blurb) return node;
-  const wrap = document.createDocumentFragment();
-  wrap.append(node, el('p', { class: 'folder-item-desc', text: blurb, title: blurb }));
-  return wrap;
+  return node;
 }
 
 /**
@@ -11017,6 +11034,19 @@ function openStyleEditor(folder, itemIds, anchor) {
   const single = Array.isArray(itemIds) && itemIds.length === 1;
   const target = single ? folder.items.find((item) => item.id === itemIds[0]) : null;
   const count = itemIds === null ? folder.items.length : itemIds.length;
+  if (!count && itemIds === null) {
+    /*
+     * An empty folder still has a name to change and a right to be deleted.
+     *
+     * The editor refused to open for a folder with nothing in it - which was
+     * right for the styling half, and left a folder made by mistake with no
+     * way out but filling it first.
+     */
+    const editor = el('div', { class: 'style-editor' }, [folderNameRow(folder), folderActionsRow(folder)]);
+    anchor.after(editor);
+    editor.querySelector('input')?.focus();
+    return;
+  }
   if (!count) {
     toast('Nothing to style — that folder is empty.', { tone: 'error' });
     return;
@@ -11146,8 +11176,36 @@ function openStyleEditor(folder, itemIds, anchor) {
    * place to offer to delete the folder it is in. Delete sits apart from the
    * others and asks first, because it is the one that cannot be undone.
    */
-  if (itemIds === null) {
-    editor.append(el('div', { class: 'picker-row editor-folder-actions' }, [
+  if (itemIds === null) editor.append(folderNameRow(folder), folderActionsRow(folder));
+
+  anchor.after(editor);
+  editor.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+/**
+ * The folder's name, as a field. It was an input in the folder's own row,
+ * where it could show one line and clipped most names; here it has the width.
+ */
+function folderNameRow(folder) {
+  return el('div', { class: 'picker-row editor-folder-name' }, [
+    el('span', { class: 'style-label', text: 'Name' }),
+    el('input', {
+      class: 'folder-rename', type: 'text', value: folder.name, 'aria-label': 'Folder name', maxlength: 80,
+      onchange: (event) => state.folders.rename(folder.id, event.target.value),
+      onkeydown: (event) => { if (event.key === 'Enter') event.target.blur(); },
+    }),
+  ]);
+}
+
+/**
+ * The folder's own actions, as words.
+ *
+ * Only when the editor is for the whole folder - styling one pin is not the
+ * place to offer to delete the folder it is in. Delete sits apart from the
+ * others and asks first, because it is the one that cannot be undone.
+ */
+function folderActionsRow(folder) {
+  return el('div', { class: 'picker-row editor-folder-actions' }, [
       // Icon plus label. Three text-only buttons could not fit the panel and
       // ran off its right edge; a mark each lets the words be short enough to
       // sit inside it.
@@ -11185,11 +11243,7 @@ function openStyleEditor(folder, itemIds, anchor) {
           state.openEditor = null;
         },
       }),
-    ]));
-  }
-
-  anchor.after(editor);
-  editor.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    ]);
 }
 
 /* ---------------- importing into folders ---------------- */
