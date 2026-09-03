@@ -717,6 +717,27 @@ check('waypoints reached the map', afterImport.folderPoints, 2);
 // Filing takes the track too, so a drive imported on the phone syncs whole.
 check('and the track was filed with them', afterImport.folderLines, 1);
 /*
+ * A waypoint still in an open file is drawn like a saved one - white disc,
+ * coloured ring, its own symbol. It used to be a bare coloured dot, so the
+ * same tower looked like two different things either side of being filed.
+ */
+const openFilePins = await page.evaluate(() => {
+  const ids = window.__map.layerIds();
+  const icon = ids.find((id) => /-point-icon$/.test(id) && !id.startsWith('folders'));
+  const disc = ids.find((id) => /-point$/.test(id) && !id.startsWith('folders'));
+  const spec = (id) => window.__map._l?.get(id) || null;
+  return {
+    icon: Boolean(icon),
+    named: spec(icon)?.layout?.['icon-image']?.[1] ?? null,
+    fill: spec(disc)?.paint?.['circle-color'] ?? null,
+    ringed: Boolean(spec(disc)?.paint?.['circle-stroke-color']),
+  };
+});
+check('an open file draws its waypoints with a symbol', openFilePins.icon, true);
+check('from the pin set', openFilePins.named, 'pin-');
+check('on a white disc', openFilePins.fill, '#ffffff');
+check('with the colour as its ring', openFilePins.ringed, true);
+/*
  * The folder row: a name that wraps, a count, an eye, and one edit mark. No
  * swatch, and no description under each pin - a folder of a hundred notes
  * was a wall of grey text.

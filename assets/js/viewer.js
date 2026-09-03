@@ -376,6 +376,7 @@ const availableBasemaps = () => BASEMAPS.filter((basemap) => {
 const sourceIdFor = (key) => `data-${key}`;
 const layerIdsFor = (key) => [
   `${key}-fill`, `${key}-fill-line`, `${key}-line-casing`, `${key}-line`, `${key}-point-halo`, `${key}-point`,
+  `${key}-point-icon`,
 ];
 
 
@@ -6401,7 +6402,7 @@ function addDocumentLayers(entry) {
   }
 
   const color = ['coalesce', ['get', 'color'], entry.color];
-  const [fill, fillLine, casing, line, halo, point] = layerIdsFor(entry.key);
+  const [fill, fillLine, casing, line, halo, point, pointIcon] = layerIdsFor(entry.key);
 
   if (!state.map.getLayer(fill)) {
     state.map.addLayer({
@@ -6436,12 +6437,26 @@ function addDocumentLayers(entry) {
       },
     });
   }
+  /*
+   * A waypoint in an open file is drawn exactly like a saved one.
+   *
+   * It was a small coloured dot with no symbol, so the same lookout tower
+   * looked like one thing while its file was open and another once it was
+   * filed - and after filing took waypoints off this layer, a half-imported
+   * map showed both conventions at once. The only difference kept is the
+   * colour: a pin with none of its own wears the file's colour here, which is
+   * what tells two open files apart, where a saved pin wears ink.
+   */
+  registerPinImages(state.map);
+
   if (!state.map.getLayer(halo)) {
     state.map.addLayer({
       id: halo, type: 'circle', source: sourceId, filter: IS_POINT,
       paint: {
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 5.5, 15, 9],
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 9, 15, 13],
         'circle-color': 'rgba(255,255,255,0.95)',
+        'circle-stroke-width': 1,
+        'circle-stroke-color': 'rgba(0,0,0,0.14)',
       },
     });
   }
@@ -6449,11 +6464,27 @@ function addDocumentLayers(entry) {
     state.map.addLayer({
       id: point, type: 'circle', source: sourceId, filter: IS_POINT,
       paint: {
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 3.2, 15, 5.5],
-        'circle-color': color,
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 7.5, 15, 11],
+        'circle-color': '#ffffff',
+        'circle-stroke-color': color,
+        'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 8, 2.2, 15, 3],
       },
     });
     bindFeatureInteractions(point);
+  }
+  if (!state.map.getLayer(pointIcon)) {
+    state.map.addLayer({
+      id: pointIcon, type: 'symbol', source: sourceId, filter: IS_POINT,
+      layout: {
+        'icon-image': ['concat', 'pin-', ['coalesce', ['get', 'icon'], DEFAULT_PIN_ICON]],
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.5, 15, 0.72],
+        // Never dropped for collision: a waypoint you cannot see is worse than
+        // two that overlap.
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+      },
+    });
+    bindFeatureInteractions(pointIcon);
   }
   if (!entry.bound) {
     bindFeatureInteractions(line);
