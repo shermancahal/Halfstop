@@ -725,15 +725,17 @@ const folderHead = await page.evaluate(() => {
   const head = document.querySelector('#folder-list .folder-head');
   return {
     order: [...head.children].map((node) => node.className.split(' ').find((c) => c.startsWith('folder-'))),
-    swatches: document.querySelectorAll('#folder-list .folder-swatch').length,
+    // Counted as "anything but the five", not by the removed classes' names:
+    // the selectors test refuses a class nothing in the app produces any more.
+    extras: head.children.length,
     editIsMark: Boolean(head.querySelector('.folder-menu-button svg')) && head.querySelector('.folder-menu-button').textContent.trim() === '',
-    descriptions: document.querySelectorAll('#folder-list .folder-item-desc').length,
+    prose: document.querySelectorAll('#folder-list .folder-body > p').length,
   };
 });
 check('the folder row is name, count, eye, edit', folderHead.order, ['folder-disclosure', 'folder-name', 'folder-count', 'folder-eye', 'folder-menu-button']);
-check('with no swatch beside the name', folderHead.swatches, 0);
+check('and nothing else - no swatch beside the name', folderHead.extras, 5);
 check('and edit as a mark rather than a word', folderHead.editIsMark, true);
-check('and nothing written under the pins', folderHead.descriptions, 0);
+check('and nothing written under the pins', folderHead.prose, 0);
 await shot(page.locator('#folder-list .folder').first(), 'folder-row');
 check('folder layers present', afterImport.folderLayers, 5);
 check('document layers present', afterImport.documentLayers > 0, true);
