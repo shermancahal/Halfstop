@@ -81,13 +81,13 @@ test('pins: the ring is the pin\'s own colour, else ink', () => {
  */
 test('pins: the park signs are in the picker, prefixed and on their grid', () => {
   const signs = PIN_ICONS.filter((icon) => icon.sign);
-  assert.ok(signs.length >= 25, `${signs.length} park signs`);
+  assert.ok(signs.length >= 15, `${signs.length} park signs`);
   for (const icon of signs) {
     assert.match(icon.id, /^nps-[a-z0-9-]+$/);
     assert.equal(icon.grid, 22);
     assert.ok(icon.f.length > 0, `${icon.id} has no fills`);
   }
-  for (const wanted of ['nps-cannon', 'nps-post-office', 'nps-golfing', 'nps-visitor-center', 'nps-fish-ladder', 'nps-rr-xing']) {
+  for (const wanted of ['nps-post-office', 'nps-golfing', 'nps-visitor-center', 'nps-fish-ladder', 'nps-towing', 'nps-amphitheater']) {
     assert.ok(signs.some((icon) => icon.id === wanted), `${wanted} missing`);
   }
 });
@@ -104,10 +104,10 @@ test('pins: park signs are filed under the same headings as the drawn set', () =
 
   const groupOf = (id) => PIN_ICONS.find((icon) => icon.id === id)?.group;
   assert.equal(groupOf('nps-golfing'), 'Recreation');
-  assert.equal(groupOf('nps-downhill-skiing'), 'Recreation');
+  assert.equal(groupOf('nps-ice-skating'), 'Recreation');
   assert.equal(groupOf('nps-fish-ladder'), 'Water', 'a fish ladder is water, wherever the picture came from');
   assert.equal(groupOf('waterfall'), 'Water');
-  assert.equal(groupOf('nps-rr-xing'), 'Ways');
+  assert.equal(groupOf('nps-towing'), 'Ways');
 
   // And nothing is left in a heading of its own by accident.
   for (const [name, icons] of groups) assert.ok(icons.length >= 3, `${name} holds only ${icons.length}`);
@@ -218,7 +218,8 @@ const DRAWN = ['tower', 'waterfall', 'forest', 'cabin', 'tent', 'campfire', 'cam
   'picnic', 'lodging', 'water', 'spring', 'ford', 'fishing', 'covered-bridge', 'peak', 'wildlife',
   'boat', 'paddle', 'swimming', 'geyser', 'bicycle', 'horse', 'climbing', 'stars', 'museum',
   'monument', 'rockfall', 'marina', 'ferry', 'bear', 'bird', 'flower', 'food', 'phone',
-  'wifi', 'airport', 'train', 'construction'];
+  'wifi', 'airport', 'train', 'construction', 'beach', 'shipwreck', 'ski', 'playground',
+  'barn', 'cannon', 'bus', 'ev', 'rr-crossing'];
 
 test('pins: a drawn symbol is one colour with its detail cut out', () => {
   const SHADED = [['wood', 'woodDark'], ['leaf', 'leafDark'], ['water', 'waterDeep'],
