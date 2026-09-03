@@ -11,7 +11,7 @@
  * working set, not a synced account — and the UI says so.
  */
 
-import { DEFAULT_PIN_ICON } from './pin-icons.js';
+import { DEFAULT_PIN_ICON, pinColorFor } from './pin-icons.js';
 import { simplify } from './geo.js';
 
 const STORAGE_KEY = 'ab-maps-folders-v1';
@@ -627,7 +627,7 @@ export class FolderStore {
             folderColor: folder.color,
             itemId: item.id,
             // Per-item overrides win; otherwise inherit the folder's styling.
-            pinColor: item.feature.properties.color || folder.color,
+            pinColor: pinColorFor(item.feature.properties, folder.color),
             pinIcon: item.feature.properties.icon || DEFAULT_PIN_ICON,
           },
         });

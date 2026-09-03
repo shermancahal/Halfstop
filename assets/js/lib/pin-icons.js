@@ -1,16 +1,34 @@
 /**
- * Pin icon set for trip planning and overlanding.
+ * The Fieldstop pin set: symbols for the places a back-roads atlas is about.
  *
  * Icons are stored as SVG path data on a 24x24 grid and rasterised at runtime
- * into map images. They are drawn in white only — the pin's colour comes from a
- * circle layer underneath, so N icons and M colours cost N images rather than
- * N x M. That is also why these are line drawings: a stroked glyph reads over
- * any circle colour, where a filled one would not.
+ * into map images, drawn in ink on a white disc whose ring carries the pin's
+ * colour - so N icons and M colours cost N images rather than N x M, and the
+ * symbol keeps the contrast while the colour keeps the edge.
+ *
+ * Each icon may carry a `color`: the colour a pin of that kind wears unless
+ * the pin or its folder says otherwise. Categories share one, so a map of
+ * mixed folders still reads - brown is built, blue is water, slate is the
+ * works of engineers, grey is what has been left behind - the way GaiaGPS's
+ * own set colours its symbols by family.
  *
  * Adding an icon: append an entry with a unique id and 24x24 path data. It
  * appears in the pin editor automatically. Ids are stored in saved folders, so
- * renaming one orphans existing pins — add a new id instead.
+ * renaming one orphans existing pins - add a new id instead.
  */
+
+/** The family colours. Named so a new icon joins a family rather than inventing a shade. */
+export const PIN_FAMILY = {
+  built: '#8A5A2B',      // buildings, historic sites, towers
+  left: '#6E6E6E',       // abandoned, ruins, cemeteries
+  health: '#C0392B',     // hospitals, first aid
+  civic: '#7B4FA0',      // schools, churches
+  works: '#4A5D6B',      // industry, mines, rail, roads, tunnels
+  water: '#2E6FB0',      // water, canals, dams, lighthouses, falls
+  land: '#2E7D4F',       // recreation, scenery, terrain
+  crossing: '#B8641E',   // bridges
+  guard: '#5B6B3A',      // military
+};
 
 /**
  * @typedef {object} PinIcon
@@ -26,9 +44,9 @@
 export const PIN_ICONS = [
   /* ---------------------------------------------------------------- camp */
   {
-    id: 'tent', name: 'Tent site', group: 'Camp',
+    id: 'tent', name: 'Tent site', group: 'Camp', color: PIN_FAMILY.land,
     d: ['M12 4 3.5 20h17L12 4Z', 'M12 4v16'],
-    sym: ['Campground', 'Camp', 'Tent', 'Campsite', 'RV Park'],
+    sym: ['Campground', 'Camp', 'Tent', 'Campsite'],
   },
   {
     id: 'camper', name: 'Camper / RV', group: 'Camp',
@@ -37,17 +55,17 @@ export const PIN_ICONS = [
     sym: ['RV', 'Trailer Head', 'RV Park'],
   },
   {
-    id: 'campfire', name: 'Campfire', group: 'Camp',
+    id: 'campfire', name: 'Campfire', group: 'Camp', color: PIN_FAMILY.land,
     d: ['M12 3c2.5 3 4 5 4 7.5a4 4 0 0 1-8 0C8 8 9.5 6 12 3Z', 'M4 20l16-4', 'M4 16l16 4'],
     sym: ['Fire', 'Campfire'],
   },
   {
-    id: 'cabin', name: 'Cabin / shelter', group: 'Camp',
+    id: 'cabin', name: 'Cabin / shelter', group: 'Camp', color: PIN_FAMILY.built,
     d: ['M3 11 12 4l9 7', 'M5 10v10h14V10', 'M10 20v-6h4v6'],
     sym: ['Lodge', 'Cabin', 'Shelter', 'Hut'],
   },
   {
-    id: 'picnic', name: 'Picnic area', group: 'Camp',
+    id: 'picnic', name: 'Picnic area', group: 'Camp', color: PIN_FAMILY.land,
     d: ['M3 9h18', 'M6 9l-2 11', 'M18 9l2 11', 'M7 15h10'],
     sym: ['Picnic Area', 'Picnic'],
   },
@@ -60,27 +78,27 @@ export const PIN_ICONS = [
 
   /* --------------------------------------------------------------- water */
   {
-    id: 'water', name: 'Water source', group: 'Water',
+    id: 'water', name: 'Water source', group: 'Water', color: PIN_FAMILY.water,
     d: ['M12 3c4 5 6 7.5 6 10a6 6 0 0 1-12 0c0-2.5 2-5 6-10Z'],
     sym: ['Drinking Water', 'Water Source', 'Water'],
   },
   {
-    id: 'spring', name: 'Spring', group: 'Water',
+    id: 'spring', name: 'Spring', group: 'Water', color: PIN_FAMILY.water,
     d: ['M12 4v7', 'M8.5 7.5 12 4l3.5 3.5', 'M3 16c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2'],
     sym: ['Spring'],
   },
   {
-    id: 'waterfall', name: 'Waterfall', group: 'Water',
+    id: 'waterfall', name: 'Waterfall', group: 'Water', color: PIN_FAMILY.water,
     d: ['M6 3v11', 'M12 3v11', 'M18 3v11', 'M3 18c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2'],
-    sym: ['Waterfall'],
+    sym: ['Waterfall', 'Falls', 'Cascade'],
   },
   {
-    id: 'ford', name: 'River crossing', group: 'Water',
+    id: 'ford', name: 'River crossing', group: 'Water', color: PIN_FAMILY.water,
     d: ['M3 8c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2', 'M3 16c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2', 'M9 3v18'],
     sym: ['Ford', 'Crossing'],
   },
   {
-    id: 'fishing', name: 'Fishing', group: 'Water',
+    id: 'fishing', name: 'Fishing', group: 'Water', color: PIN_FAMILY.water,
     d: ['M3 12c4-5 10-5 14 0-4 5-10 5-14 0Z', 'M17 12l4-3v6l-4-3'],
     f: ['M8 11.2a.9.9 0 1 0 0 1.8.9.9 0 0 0 0-1.8Z'],
     sym: ['Fishing Area', 'Fishing'],
@@ -88,7 +106,7 @@ export const PIN_ICONS = [
 
   /* -------------------------------------------------------------- terrain */
   {
-    id: 'peak', name: 'Summit', group: 'Terrain',
+    id: 'peak', name: 'Summit', group: 'Terrain', color: PIN_FAMILY.land,
     d: ['M2 20 9.5 6l4.5 8 2.5-4L22 20H2Z'],
     sym: ['Summit', 'Peak', 'Mountain'],
   },
@@ -98,31 +116,31 @@ export const PIN_ICONS = [
     sym: ['Pass', 'Gap', 'Saddle'],
   },
   {
-    id: 'viewpoint', name: 'Overlook', group: 'Terrain',
+    id: 'viewpoint', name: 'Overlook', group: 'Terrain', color: PIN_FAMILY.land,
     d: ['M2 12s3.8-6.5 10-6.5S22 12 22 12s-3.8 6.5-10 6.5S2 12 2 12Z', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z'],
     sym: ['Scenic Area', 'Overlook', 'Viewpoint', 'Vista'],
   },
   {
-    id: 'cave', name: 'Cave', group: 'Terrain',
+    id: 'cave', name: 'Cave', group: 'Terrain', color: PIN_FAMILY.land,
     d: ['M3 20V13a9 9 0 0 1 18 0v7', 'M9 20v-4a3 3 0 0 1 6 0v4'],
     sym: ['Cave'],
   },
   {
-    id: 'forest', name: 'Forest', group: 'Terrain',
+    id: 'forest', name: 'Forest', group: 'Terrain', color: PIN_FAMILY.land,
     d: ['M9 3 4 12h10L9 3Z', 'M9 12v8', 'M17 7l-3.5 6h7L17 7Z', 'M17 13v7'],
     sym: ['Forest', 'Park', 'Tree'],
   },
   {
-    id: 'wildlife', name: 'Wildlife', group: 'Terrain',
+    id: 'wildlife', name: 'Wildlife', group: 'Terrain', color: PIN_FAMILY.land,
     d: ['M6 5 4 9l3 2', 'M18 5l2 4-3 2', 'M7 11c0 4 2 8 5 8s5-4 5-8', 'M9 11h6'],
     sym: ['Animal', 'Wildlife', 'Hunting Area'],
   },
 
   /* --------------------------------------------------------------- access */
   {
-    id: 'trailhead', name: 'Trailhead', group: 'Access',
+    id: 'trailhead', name: 'Trailhead', group: 'Access', color: PIN_FAMILY.land,
     d: ['M7 21c0-6 3-6 3-11S7 5 7 3', 'M17 21c0-5-3-5-3-9s3-4 3-6'],
-    sym: ['Trail Head', 'Trailhead', 'Hiking', 'Trail'],
+    sym: ['Trailhead', 'Trail Head', 'Hiking', 'Hiker', 'Trail', 'Recreation', 'Recreation Area'],
   },
   {
     id: 'parking', name: 'Parking', group: 'Access',
@@ -151,9 +169,9 @@ export const PIN_ICONS = [
     sym: ['Rock', 'Obstacle'],
   },
   {
-    id: 'bridge', name: 'Bridge', group: 'Access',
+    id: 'bridge', name: 'Bridge', group: 'Access', color: PIN_FAMILY.crossing,
     d: ['M2 9h20', 'M3 9v10', 'M21 9v10', 'M3 15c4.5-5 13.5-5 18 0'],
-    sym: ['Bridge'],
+    sym: ['Bridge', 'Trestle Bridge', 'Truss'],
   },
   {
     id: 'junction', name: 'Junction', group: 'Access',
@@ -211,24 +229,24 @@ export const PIN_ICONS = [
 
   /* ------------------------------------------------------------- interest */
   {
-    id: 'historic', name: 'Historic site', group: 'Interest',
+    id: 'historic', name: 'Historic site', group: 'Interest', color: PIN_FAMILY.built,
     d: ['M3 20h18', 'M5 20V9l7-5 7 5v11', 'M9 20v-6h6v6'],
-    sym: ['Building', 'Historic', 'Museum', 'Monument'],
+    sym: ['Building', 'Historic', 'Historic Site', 'Museum', 'Monument', 'Landmark', 'Courthouse'],
   },
   {
-    id: 'ruins', name: 'Ruins / ghost town', group: 'Interest',
+    id: 'ruins', name: 'Ghost town / ruins', group: 'Interest', color: PIN_FAMILY.left,
     d: ['M3 21V11l4-3v4l4-3v5l4-4v4l3-2v9', 'M2 21h20'],
-    sym: ['Ghost Town', 'Ruins', 'Abandoned'],
+    sym: ['Ghost Town', 'Ruins', 'Ruin', 'Abandoned Town'],
   },
   {
-    id: 'mine', name: 'Mine', group: 'Interest',
+    id: 'mine', name: 'Mine', group: 'Interest', color: PIN_FAMILY.works,
     d: ['M4 20 14 5', 'M9.5 12.5 20 20', 'M17 4l3 3', 'M15.5 5.5 18.5 8.5'],
     sym: ['Mine', 'Mining'],
   },
   {
-    id: 'tower', name: 'Lookout tower', group: 'Interest',
+    id: 'tower', name: 'Fire lookout tower', group: 'Interest', color: PIN_FAMILY.built,
     d: ['M6 21 12 3l6 18', 'M8.2 14h7.6', 'M9.6 9h4.8', 'M4 21h16'],
-    sym: ['Tower', 'Lookout', 'Fire Tower'],
+    sym: ['Tower', 'Lookout', 'Fire Tower', 'Fire Lookout', 'Lookout Tower', 'Observation Tower'],
   },
   {
     id: 'photo', name: 'Photo spot', group: 'Interest',
@@ -255,9 +273,9 @@ export const PIN_ICONS = [
     sym: ['Private', 'No Entry', 'Restricted', 'Prohibited'],
   },
   {
-    id: 'firstaid', name: 'First aid', group: 'Hazard',
+    id: 'firstaid', name: 'First aid', group: 'Hazard', color: PIN_FAMILY.health,
     d: ['M3 7h18v12H3z', 'M12 10v6', 'M9 13h6'],
-    sym: ['Medical Facility', 'Hospital', 'First Aid'],
+    sym: ['Medical Facility', 'First Aid'],
   },
 
   /* ---------------------------------------------------------------- basic */
@@ -281,6 +299,91 @@ export const PIN_ICONS = [
     d: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M12 3v4', 'M12 17v4', 'M3 12h4', 'M17 12h4'],
     sym: ['Crosshair', 'Target'],
   },
+  /* -------------------------------------------------------------- places */
+  {
+    id: 'house', name: 'House', group: 'Places', color: PIN_FAMILY.built,
+    d: ['M3 12 12 4l9 8', 'M5 10.5V21h14V10.5', 'M10 21v-5h4v5', 'M17 5v3.5'],
+    sym: ['House', 'Home', 'Residence', 'Farmhouse'],
+  },
+  {
+    id: 'abandoned', name: 'Abandoned business', group: 'Places', color: PIN_FAMILY.left,
+    d: ['M3 21V9', 'M21 21V9', 'M2 9l2-4h16l2 4', 'M2 21h20', 'M9 21v-7h6v7', 'M9 14l6 7', 'M15 14l-6 7'],
+    sym: ['Abandoned', 'Abandoned Business', 'Derelict', 'Vacant', 'Out of Business'],
+  },
+  {
+    id: 'hospital', name: 'Hospital', group: 'Places', color: PIN_FAMILY.health,
+    d: ['M4 21V6h16v15', 'M2 21h20', 'M12 8.5v6', 'M9 11.5h6', 'M10 21v-3.5h4V21'],
+    sym: ['Hospital', 'Medical', 'Clinic', 'Asylum', 'Sanatorium'],
+  },
+  {
+    id: 'school', name: 'School', group: 'Places', color: PIN_FAMILY.civic,
+    d: ['M2 9l10-4 10 4-10 4L2 9Z', 'M6 11v5c0 1.5 3 3 6 3s6-1.5 6-3v-5', 'M22 9v5'],
+    sym: ['School', 'Schoolhouse', 'College', 'University', 'Academy'],
+  },
+  {
+    id: 'church', name: 'Church', group: 'Places', color: PIN_FAMILY.civic,
+    d: ['M12 2v5', 'M9.5 4.5h5', 'M6 21V12l6-5 6 5v9', 'M2 21h20', 'M10 21v-4h4v4'],
+    sym: ['Church', 'Chapel', 'Religious', 'Place of Worship', 'Mission', 'Temple'],
+  },
+  {
+    id: 'industry', name: 'Industry', group: 'Places', color: PIN_FAMILY.works,
+    d: ['M3 21V10l5 3v-3l5 3v-3l5 3v8', 'M2 21h20', 'M4 10V4h3v7'],
+    sym: ['Industry', 'Factory', 'Mill', 'Plant', 'Industrial', 'Furnace', 'Works'],
+  },
+  {
+    id: 'military', name: 'Military', group: 'Places', color: PIN_FAMILY.guard,
+    d: ['M12 3 4 6v6c0 4.5 3.5 7.6 8 9 4.5-1.4 8-4.5 8-9V6l-8-3Z'],
+    f: ['M12 8l1.2 2.4 2.6.4-1.9 1.8.5 2.6L12 14l-2.4 1.2.5-2.6-1.9-1.8 2.6-.4L12 8Z'],
+    sym: ['Military', 'Fort', 'Base', 'Armory', 'Battlefield', 'Bunker'],
+  },
+  {
+    id: 'cemetery', name: 'Cemetery', group: 'Places', color: PIN_FAMILY.left,
+    d: ['M6 21V9a6 6 0 0 1 12 0v12', 'M3 21h18', 'M12 8v7', 'M9 11h6'],
+    sym: ['Cemetery', 'Grave', 'Graveyard', 'Burial', 'Tomb'],
+  },
+  {
+    id: 'lighthouse', name: 'Lighthouse', group: 'Places', color: PIN_FAMILY.water,
+    d: ['M9 21l1.5-11h3L15 21', 'M8 10h8', 'M10 10V6h4v4', 'M6 21h12', 'M2.5 8h3.5', 'M18 8h3.5', 'M9.8 15.5h4.4'],
+    sym: ['Lighthouse', 'Light', 'Beacon'],
+  },
+  {
+    id: 'scenic', name: 'Scenic view', group: 'Places', color: PIN_FAMILY.land,
+    d: ['M2 20l6-9 4 6 3-4 7 7H2Z'],
+    f: ['M17.5 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z'],
+    sym: ['Scenic', 'Scenic View', 'Scenery', 'Landscape', 'View'],
+  },
+
+  /* ---------------------------------------------------------------- ways */
+  {
+    id: 'covered-bridge', name: 'Covered bridge', group: 'Ways', color: PIN_FAMILY.crossing,
+    d: ['M3 21V10l9-5 9 5v11', 'M2 21h20', 'M7 21v-7a5 5 0 0 1 10 0v7'],
+    sym: ['Covered Bridge'],
+  },
+  {
+    id: 'canal', name: 'Canal / lock', group: 'Ways', color: PIN_FAMILY.water,
+    d: ['M4 3v18', 'M20 3v18', 'M4 9l8 4 8-4', 'M7 17c1.7 1.2 3.3 1.2 5 0s3.3-1.2 5 0'],
+    sym: ['Canal', 'Lock', 'Canal Lock', 'Aqueduct'],
+  },
+  {
+    id: 'dam', name: 'Dam', group: 'Ways', color: PIN_FAMILY.water,
+    d: ['M3 21V5h5l4 16H3Z', 'M14 21h7', 'M13 10c2.5 1.5 5.5 1.5 8 0', 'M13 15c2.5 1.5 5.5 1.5 8 0'],
+    sym: ['Dam', 'Reservoir', 'Spillway'],
+  },
+  {
+    id: 'railroad', name: 'Railroad', group: 'Ways', color: PIN_FAMILY.works,
+    d: ['M7 3v18', 'M17 3v18', 'M5 7h14', 'M5 12h14', 'M5 17h14'],
+    sym: ['Railroad', 'Railway', 'Rail', 'Train', 'Depot', 'Station', 'Trestle'],
+  },
+  {
+    id: 'road', name: 'Road', group: 'Ways', color: PIN_FAMILY.works,
+    d: ['M4 21 9 3h6l5 18', 'M12 6v3', 'M12 12v3', 'M12 18v3'],
+    sym: ['Road', 'Highway', 'Old Road', 'Alignment', 'Byway'],
+  },
+  {
+    id: 'tunnel', name: 'Tunnel', group: 'Ways', color: PIN_FAMILY.works,
+    d: ['M3 21V12a9 9 0 0 1 18 0v9', 'M2 21h20', 'M7 21v-8a5 5 0 0 1 10 0v8'],
+    sym: ['Tunnel', 'Portal', 'Underpass'],
+  },
 ];
 
 export const DEFAULT_PIN_ICON = 'pin';
@@ -289,6 +392,20 @@ const BY_ID = new Map(PIN_ICONS.map((icon) => [icon.id, icon]));
 
 export function getPinIcon(id) {
   return BY_ID.get(id) || BY_ID.get(DEFAULT_PIN_ICON);
+}
+
+/**
+ * The colour a pin wears: its own, else its symbol's family, else whatever the
+ * caller falls back to - the folder's, on the map.
+ *
+ * One function, because this was resolved in five places as
+ * `props.color || folder.color` and adding the symbol's colour to each of
+ * them is how one of them gets missed.
+ */
+export function pinColorFor(props = {}, fallback = '') {
+  if (props?.color) return props.color;
+  const family = BY_ID.get(props?.icon)?.color;
+  return family || fallback;
 }
 
 export function pinIconGroups() {
@@ -307,10 +424,16 @@ export function pinIconGroups() {
  * is the only styling hint most GPX files carry, so honouring it means an
  * import arrives already looking right instead of as a field of identical dots.
  */
+/**
+ * "Fire-Lookout", "fire_lookout" and "Fire Lookout" are one name. Gaia writes
+ * the hyphenated form; a person types the spaced one; the table holds it once.
+ */
+const plainName = (name) => String(name || '').trim().toLowerCase().replace(/[-_]+/g, ' ').replace(/\s+/g, ' ');
+
 const SYMBOL_LOOKUP = (() => {
   const lookup = new Map();
   for (const icon of PIN_ICONS) {
-    for (const name of icon.sym || []) lookup.set(name.toLowerCase(), icon.id);
+    for (const name of icon.sym || []) lookup.set(plainName(name), icon.id);
   }
   return lookup;
 })();
@@ -319,9 +442,44 @@ const SYMBOL_LOOKUP = (() => {
  * Best icon for a source symbol name. Falls back to a loose word match before
  * giving up, since exporters vary ("Campground" / "Camp Area" / "campsite").
  */
+/**
+ * Gaia lets a pin be an emoji, and writes it as "emoji-" plus the character.
+ * The handful that mean a place here are named; the rest resolve to nothing
+ * and keep their emoji as the symbol text beside the plain pin.
+ */
+const EMOJI_ICONS = new Map([
+  ['\u{1F3ED}', 'industry'],   // factory
+  ['\u{1F3E5}', 'hospital'],
+  ['\u{1F3E0}', 'house'],
+  ['\u{26EA}', 'church'],
+  ['\u{1F3EB}', 'school'],
+  ['\u{1F309}', 'bridge'],
+  ['\u{1F682}', 'railroad'],   // locomotive
+  ['\u{1F6E4}', 'railroad'],   // railway track
+  ['\u{1F6E3}', 'road'],
+  ['\u{1F30A}', 'waterfall'],
+  ['\u{2693}', 'lighthouse'],
+  ['\u{1FAA6}', 'cemetery'],   // headstone
+  ['\u{26FA}', 'tent'],
+  ['\u{1F525}', 'campfire'],
+  ['\u{1F3F0}', 'historic'],   // castle
+  ['\u{1F3DA}', 'abandoned'],  // derelict house
+  ['\u{1F396}', 'military'],   // medal
+  ['\u{1F6A7}', 'hazard'],
+  ['\u{26F0}', 'peak'],
+  ['\u{1F304}', 'scenic'],     // sunrise over mountains
+]);
+
 export function iconForSymbol(symbol) {
-  const raw = String(symbol || '').trim().toLowerCase();
-  if (!raw) return null;
+  const typed = String(symbol || '').trim().toLowerCase();
+  if (!typed) return null;
+
+  if (typed.startsWith('emoji-')) {
+    // Variation selectors ride along with some emoji; the table has the bare character.
+    const character = typed.slice('emoji-'.length).replace(/[\ufe0e\ufe0f]/g, '');
+    return EMOJI_ICONS.get(character) || null;
+  }
+  const raw = plainName(typed);
 
   const exact = SYMBOL_LOOKUP.get(raw);
   if (exact) return exact;

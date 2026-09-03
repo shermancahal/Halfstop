@@ -32,7 +32,7 @@ import {
   FolderStore, FOLDER_COLORS, readTrip, tripStanding, localDay,
 } from './lib/folders.js';
 import {
-  PIN_ICONS, DEFAULT_PIN_ICON, pinIconGroups, pinIconSVG, pinImageId, registerPinImages, rasterizePinIcon,
+  PIN_ICONS, DEFAULT_PIN_ICON, pinIconGroups, pinIconSVG, pinImageId, registerPinImages, rasterizePinIcon, pinColorFor,
 } from './lib/pin-icons.js';
 import { toGPX } from './lib/gpx-write.js';
 import {
@@ -7576,7 +7576,7 @@ function showFeaturePopup(feature, lngLat, { edit = false, identity = null } = {
   const glyph = props.kind === 'waypoint' || props.icon
     ? el('span', {
       class: 'popup-mark',
-      style: `--pin:${props.color || props.folderColor || 'var(--clay)'}`,
+      style: `--pin:${pinColorFor(props, props.folderColor || 'var(--clay)')}`,
       html: pinIconSVG(props.icon || DEFAULT_PIN_ICON, { size: 15, stroke: 2 }),
     })
     : null;
@@ -8490,7 +8490,7 @@ function renderPinDetails(folder, item) {
   dom.details.append(el('div', { class: 'panel-section' }, [
     el('div', { class: 'pin-head' }, [
       el('span', {
-        class: 'pin-head-icon', style: `background:${props.color || folder.color}`,
+        class: 'pin-head-icon', style: `--pin:${pinColorFor(props, folder.color)}`,
         html: pinIconSVG(props.icon || DEFAULT_PIN_ICON, { size: 18, stroke: 1.9 }),
       }),
       el('div', { style: 'min-width:0;flex:1' }, [
@@ -10430,7 +10430,7 @@ function renderFolderItem(folder, item) {
   const blurb = String(props.description || '').trim();
 
   const key = selectionKey(folder.id, item.id);
-  const color = props.color || folder.color;
+  const color = pinColorFor(props, folder.color);
 
   const node = el('div', {
     class: `folder-item${state.selection.has(key) ? ' is-selected' : ''}`, draggable: 'true',
@@ -10710,7 +10710,7 @@ function waypointCard(folder, item) {
     onkeydown: (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); } },
   }, [
     el('span', {
-      class: 'waypoint-mark', style: `background:${props.color || folder.color}`,
+      class: 'waypoint-mark', style: `--pin:${pinColorFor(props, folder.color)}`,
       title: props.symbol || '',
       html: pinIconSVG(props.icon || DEFAULT_PIN_ICON, { size: 14, stroke: 2 }),
     }),
@@ -11093,8 +11093,8 @@ function openStyleEditor(folder, itemIds, anchor) {
   };
   colorRow.append(el('button', {
     class: 'swatch is-inherit', type: 'button', dataset: { color: '' },
-    title: 'Clear the override and use the folder color',
-    'aria-label': 'Use the folder color',
+    title: 'Clear the override and use the symbol\u2019s own colour',
+    'aria-label': 'Use the symbol\u2019s own colour',
     style: `--swatch:${folder.color}`,
     onclick: () => { chosenColor = null; colorTouched = true; paintSwatches(); },
   }));
