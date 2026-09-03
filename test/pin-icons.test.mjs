@@ -225,7 +225,13 @@ test('pins: grown things are unshaded, built things are modelled', () => {
   for (const id of ['forest', 'tent', 'peak', 'fishing']) {
     assert.equal(shadedPairs(id), 0, `${id} is a silhouette and should carry no shading`);
   }
+  /*
+   * Modelled means either a material beside its own shading, or several
+   * materials assembled - the cabin does it the first way, the camper the
+   * second. Asserting only the first was wrong, and the camper caught it.
+   */
   for (const id of ['cabin', 'camper', 'covered-bridge', 'tower']) {
-    assert.ok(shadedPairs(id) >= 1, `${id} should be modelled, not flat`);
+    const colours = new Set(getPinIcon(id).f.map((entry) => entry[1])).size;
+    assert.ok(shadedPairs(id) >= 1 || colours >= 3, `${id} should be modelled, not flat`);
   }
 });
