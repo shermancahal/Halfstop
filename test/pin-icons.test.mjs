@@ -46,7 +46,7 @@ test('pins: the names Gaia and people use land on the right picture', () => {
     hospital: 'hospital', house: 'house', factory: 'industry', industry: 'industry',
     military: 'military', school: 'school', church: 'church', cemetery: 'cemetery',
     lighthouse: 'lighthouse', canal: 'canal', lock: 'canal', dam: 'dam',
-    railroad: 'railroad', train: 'railroad', road: 'road', tunnel: 'tunnel',
+    railroad: 'railroad', train: 'train', road: 'road', tunnel: 'tunnel',
     waterfall: 'waterfall', falls: 'waterfall', scenic: 'scenic', hiking: 'trailhead',
     water: 'water', campground: 'tent',
   };
@@ -81,13 +81,13 @@ test('pins: the ring is the pin\'s own colour, else ink', () => {
  */
 test('pins: the park signs are in the picker, prefixed and on their grid', () => {
   const signs = PIN_ICONS.filter((icon) => icon.sign);
-  assert.ok(signs.length >= 50, `${signs.length} park signs`);
+  assert.ok(signs.length >= 25, `${signs.length} park signs`);
   for (const icon of signs) {
     assert.match(icon.id, /^nps-[a-z0-9-]+$/);
     assert.equal(icon.grid, 22);
     assert.ok(icon.f.length > 0, `${icon.id} has no fills`);
   }
-  for (const wanted of ['nps-cannon', 'nps-rail-station', 'nps-marina', 'nps-post-office', 'nps-golfing', 'nps-visitor-center']) {
+  for (const wanted of ['nps-cannon', 'nps-post-office', 'nps-golfing', 'nps-visitor-center', 'nps-fish-ladder', 'nps-rr-xing']) {
     assert.ok(signs.some((icon) => icon.id === wanted), `${wanted} missing`);
   }
 });
@@ -105,9 +105,9 @@ test('pins: park signs are filed under the same headings as the drawn set', () =
   const groupOf = (id) => PIN_ICONS.find((icon) => icon.id === id)?.group;
   assert.equal(groupOf('nps-golfing'), 'Recreation');
   assert.equal(groupOf('nps-downhill-skiing'), 'Recreation');
-  assert.equal(groupOf('nps-marina'), 'Water', 'a marina is water, wherever the picture came from');
+  assert.equal(groupOf('nps-fish-ladder'), 'Water', 'a fish ladder is water, wherever the picture came from');
   assert.equal(groupOf('waterfall'), 'Water');
-  assert.equal(groupOf('nps-rail-station'), 'Ways');
+  assert.equal(groupOf('nps-rr-xing'), 'Ways');
 
   // And nothing is left in a heading of its own by accident.
   for (const [name, icons] of groups) assert.ok(icons.length >= 3, `${name} holds only ${icons.length}`);
@@ -217,7 +217,8 @@ test('pins: an illustrated symbol is filled shapes, all in the palette', () => {
 const DRAWN = ['tower', 'waterfall', 'forest', 'cabin', 'tent', 'campfire', 'camper',
   'picnic', 'lodging', 'water', 'spring', 'ford', 'fishing', 'covered-bridge', 'peak', 'wildlife',
   'boat', 'paddle', 'swimming', 'geyser', 'bicycle', 'horse', 'climbing', 'stars', 'museum',
-  'monument', 'rockfall'];
+  'monument', 'rockfall', 'marina', 'ferry', 'bear', 'bird', 'flower', 'food', 'phone',
+  'wifi', 'airport', 'train', 'construction'];
 
 test('pins: a drawn symbol is one colour with its detail cut out', () => {
   const SHADED = [['wood', 'woodDark'], ['leaf', 'leafDark'], ['water', 'waterDeep'],

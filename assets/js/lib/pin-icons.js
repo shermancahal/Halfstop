@@ -111,6 +111,28 @@ const RETIRED_SIGNS = {
   'nps-museum': 'museum',
   'nps-monument': 'monument',
   'nps-falling-rocks': 'rockfall',
+  'nps-marina': 'marina',
+  'nps-vehicle-ferry': 'ferry',
+  'nps-bear-viewing': 'bear',
+  'nps-birding-wildlife-viewing': 'bird',
+  'nps-waterfowl': 'bird',
+  'nps-flower-viewing': 'flower',
+  'nps-food-service': 'food',
+  'nps-telephone': 'phone',
+  'nps-wi-fi': 'wifi',
+  'nps-airport': 'airport',
+  'nps-airfield': 'airport',
+  'nps-sea-plane': 'airport',
+  'nps-rail-station': 'train',
+  'nps-metro-station': 'train',
+  'nps-construction': 'construction',
+  'nps-information': 'ranger',
+  'nps-interpretive-exhibit': 'museum',
+  'nps-statue': 'monument',
+  'nps-self-guiding-trail': 'trailhead',
+  'nps-viewing-area': 'viewpoint',
+  'nps-wilderness': 'forest',
+  'nps-emergencies': 'firstaid',
 };
 
 const PARK_SIGNS = NPS_ICONS.filter((icon) => !RETIRED_SIGNS[`nps-${icon.symbol}`]).map((icon) => ({
@@ -259,6 +281,19 @@ export const PIN_ICONS = [
     sym: ['Geyser', 'Hot Spring', 'Thermal'],
   },
 
+  {
+    id: 'marina', name: 'Marina', group: 'Water',
+    f: [['M1.6 18.8c3.2-1.4 5.9-1.4 9.1 0 3.2 1.4 6.7 1.4 10.9 0v3.2c-4.2 1.4-7.7 1.4-10.9 0-3.2-1.4-5.9-1.4-9.1 0Z', GLYPH.water], ['M12.8 1.6 19.4 13h-6.6Zm-1.6 3.6V13H5.6ZM3 14.6h18l-2.4 4.2H5.4Z', GLYPH.ink]],
+    tags: ['marina', 'harbour', 'harbor', 'dock', 'sail', 'water'],
+    sym: ['Marina', 'Harbor', 'Harbour', 'Dock', 'Sailing'],
+  },
+  {
+    id: 'ferry', name: 'Ferry', group: 'Water',
+    f: [['M1.6 18.8c3.2-1.4 5.9-1.4 9.1 0 3.2 1.4 6.7 1.4 10.9 0v3.2c-4.2 1.4-7.7 1.4-10.9 0-3.2-1.4-5.9-1.4-9.1 0Z', GLYPH.water], ['M2.4 12.6h19.2l-2.4 5.4H4.8Zm4.4-8.4h8.4v2.8h2.4v4.2H6.8V7h2.2V4.2Zm2.2 2.8h4V6.4h-4Z', GLYPH.wood]],
+    tags: ['ferry', 'crossing', 'boat', 'water'],
+    sym: ['Vehicle Ferry', 'Ferry', 'Passenger Ferry'],
+  },
+
   /* -------------------------------------------------------------- terrain */
   {
     id: 'peak', name: 'Summit', group: 'Terrain',
@@ -295,6 +330,24 @@ export const PIN_ICONS = [
   },
 
   /* ---------------------------------------------------------- recreation */
+  {
+    id: 'bear', name: 'Bear', group: 'Recreation',
+    f: [['M6.6 3.2a2.9 2.9 0 1 0 0 5.8 2.9 2.9 0 0 0 0-5.8Zm10.8 0a2.9 2.9 0 1 0 0 5.8 2.9 2.9 0 0 0 0-5.8ZM12 5.2c-4.4 0-7.7 3.4-7.7 7.9S7.6 21.2 12 21.2s7.7-3.6 7.7-8.1S16.4 5.2 12 5.2Z', GLYPH.wood], ['M12 12.4c-2 0-3.5 1.3-3.5 3s1.5 3.1 3.5 3.1 3.5-1.4 3.5-3.1-1.5-3-3.5-3Zm0 1.4c.9 0 1.6.5 1.6 1.1s-.7 1.1-1.6 1.1-1.6-.5-1.6-1.1.7-1.1 1.6-1.1ZM8.9 9.4a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4Zm6.2 0a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4Z', GLYPH.ink]],
+    tags: ['bear', 'wildlife', 'animal', 'viewing', 'recreation'],
+    sym: ['Bear Viewing', 'Bear'],
+  },
+  {
+    id: 'bird', name: 'Birding', group: 'Recreation',
+    f: [['M1.8 16c2.6-4.8 5.6-6.2 9-4.4l1.2.7 1.2-.7c3.4-1.8 6.4-.4 9 4.4-2.4-2.5-5-2.9-7.8-1.3L12 16.2l-2.4-1.5c-2.8-1.6-5.4-1.2-7.8 1.3Zm10.4-9c1.5-2.7 3.3-3.5 5.3-2.5l.7.4.7-.4c2-1 3.8-.2 5.3 2.5-1.4-1.4-2.9-1.6-4.6-.7l-1.4.8-1.4-.8c-1.7-.9-3.2-.7-4.6.7Z', GLYPH.ink]],
+    tags: ['bird', 'birding', 'birdwatching', 'wildlife', 'recreation'],
+    sym: ['Birding Wildlife Viewing', 'Birding', 'Birdwatching', 'Waterfowl'],
+  },
+  {
+    id: 'flower', name: 'Wildflowers', group: 'Recreation',
+    f: [['M12 1.8c1.9 0 3.1 1.4 2.9 3.2 1.6-1 3.4-.6 4.3 1s.3 3.4-1.3 4.3c1.6.9 2.2 2.7 1.3 4.3s-2.7 2-4.3 1c.2 1.8-1 3.2-2.9 3.2s-3.1-1.4-2.9-3.2c-1.6 1-3.4.6-4.3-1s-.3-3.4 1.3-4.3c-1.6-.9-2.2-2.7-1.3-4.3s2.7-2 4.3-1C8.9 3.2 10.1 1.8 12 1.8Zm0 6.2a2.6 2.6 0 1 0 0 5.2 2.6 2.6 0 0 0 0-5.2Z', GLYPH.ember], ['M11.2 17.8h1.6v4.6h-1.6Zm-.6 1.4c-1.6-1.6-3.3-2.1-5.1-1.4.7 2 2.4 2.8 5.1 2.6Z', GLYPH.leaf]],
+    tags: ['flower', 'wildflower', 'bloom', 'meadow', 'recreation'],
+    sym: ['Flower Viewing', 'Wildflowers', 'Flowers'],
+  },
   {
     id: 'bicycle', name: 'Cycling', group: 'Recreation',
     f: [['M5.8 12.4a4.8 4.8 0 1 0 0 9.6 4.8 4.8 0 0 0 0-9.6Zm0 2.2a2.6 2.6 0 1 1 0 5.2 2.6 2.6 0 0 1 0-5.2Zm12.4-2.2a4.8 4.8 0 1 0 0 9.6 4.8 4.8 0 0 0 0-9.6Zm0 2.2a2.6 2.6 0 1 1 0 5.2 2.6 2.6 0 0 1 0-5.2Z', GLYPH.ink], ['M13.6 4.2h4.2v2h-2.1l.9 2.8h-6.9l-1.4 2 3.2 4.2-1.6 1.2-4.2-5.6 3-4.2h6l-.7-2.4ZM9.4 8.8h6.8l1.8 5.6-1.9.6-1.4-4.2H9.4Z', GLYPH.ink]],
@@ -410,10 +463,28 @@ export const PIN_ICONS = [
     sym: ['Dump Station'],
   },
   {
+    id: 'food', name: 'Food', group: 'Services',
+    f: [['M5.4 2.2h1.8v5.4h1.2V2.2h1.8v5.4h1.2V2.2h1.8v6.4c0 1.4-.9 2.4-2.2 2.7v10.5H7.6V11.3c-1.3-.3-2.2-1.3-2.2-2.7ZM16.6 2c1.9 1.5 2.8 3.8 2.8 6.9 0 1.9-.7 3.2-1.9 3.8v9.1h-2.2V12.7c-1.1-.6-1.7-1.8-1.7-3.6C13.6 5.9 14.7 3.4 16.6 2Z', GLYPH.ink]],
+    tags: ['food', 'restaurant', 'cafe', 'diner', 'eat', 'services'],
+    sym: ['Food Service', 'Restaurant', 'Cafe', 'Food'],
+  },
+  {
+    id: 'phone', name: 'Telephone', group: 'Services',
+    f: [['M4.8 3c1.9-.8 3.6-.2 4.6 1.7l1.4 2.6c.9 1.7.5 3.2-1.1 4.2l-.3.2c.9 1.9 2.3 3.3 4.2 4.2l.2-.3c1-1.6 2.5-2 4.2-1.1l2.6 1.4c1.9 1 2.5 2.7 1.7 4.6-.7 1.5-2 2.3-3.9 2.3-6.5 0-15.1-8.6-15.1-15.1 0-1.9.8-3.2 2.3-3.9Z', GLYPH.ink]],
+    tags: ['phone', 'telephone', 'call', 'emergency', 'services'],
+    sym: ['Telephone', 'Phone', 'Emergency Telephone'],
+  },
+  {
+    id: 'wifi', name: 'Wi-Fi', group: 'Services',
+    f: [['M12 17.2a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8Zm0-5.8c2.3 0 4.4 1 5.9 2.5l-2.2 2.2a5.2 5.2 0 0 0-7.4 0l-2.2-2.2A8.3 8.3 0 0 1 12 11.4Zm0-5.8c3.8 0 7.3 1.6 9.8 4.1l-2.2 2.2A11 11 0 0 0 12 8.6c-3.1 0-5.8 1.2-7.6 3.3L2.2 9.7A13.8 13.8 0 0 1 12 5.6Z', GLYPH.ink]],
+    tags: ['wifi', 'wi-fi', 'internet', 'wireless', 'services'],
+    sym: ['Wi-Fi', 'WiFi', 'Wireless Internet', 'Internet'],
+  },
+  {
     id: 'signal', name: 'Cell signal', group: 'Services',
     d: ['M4 20V14', 'M9.3 20V10', 'M14.7 20V6', 'M20 20V3'],
     tags: ['cell', 'phone', 'reception', 'tower'],
-    sym: ['Cell Tower', 'Signal', 'Telephone'],
+    sym: ['Cell Tower', 'Signal', 'Cell Signal'],
   },
 
   /* ------------------------------------------------------------- interest */
@@ -460,6 +531,12 @@ export const PIN_ICONS = [
     d: [['M12 3.5 22 20.5H2L12 3.5Z', GLYPH.warn], 'M12 10v4.5'],
     f: ['M12 18.3a1.05 1.05 0 1 0 0-2.1 1.05 1.05 0 0 0 0 2.1Z'],
     sym: ['Danger', 'Hazard', 'Warning'],
+  },
+  {
+    id: 'construction', name: 'Roadworks', group: 'Hazard',
+    f: [['M10.8 2.4h2.4l5.8 16.6H5ZM9.2 8.6h5.6l.9 2.6H8.3Z', GLYPH.flame], ['M2.4 19.6h19.2v2.6H2.4Z', GLYPH.ink]],
+    tags: ['construction', 'roadworks', 'closed', 'works', 'hazard'],
+    sym: ['Construction', 'Road Work', 'Roadworks'],
   },
   {
     id: 'rockfall', name: 'Falling rocks', group: 'Hazard',
@@ -607,10 +684,22 @@ export const PIN_ICONS = [
     sym: ['Dam', 'Reservoir', 'Spillway'],
   },
   {
+    id: 'airport', name: 'Airfield', group: 'Ways',
+    f: [['M12 1.4c1.1 0 2 1.3 2 3v4.9l8.4 5v2.7L14 14.4v4.8l2.6 2v1.9L12 21.7l-4.6 1.4v-1.9l2.6-2v-4.8l-8.4 2.6v-2.7l8.4-5V4.4c0-1.7.9-3 2-3Z', GLYPH.stoneDark]],
+    tags: ['airport', 'airfield', 'airstrip', 'plane', 'landing'],
+    sym: ['Airport', 'Airfield', 'Airstrip', 'Sea Plane'],
+  },
+  {
+    id: 'train', name: 'Rail station', group: 'Ways',
+    f: [['M4.4 2.6h15.2v11.6H4.4Zm2.4 2.6v4.8h10.4V5.2ZM7 15a2.7 2.7 0 1 0 0 5.4A2.7 2.7 0 0 0 7 15Zm10 0a2.7 2.7 0 1 0 0 5.4 2.7 2.7 0 0 0 0-5.4Z', GLYPH.ink], ['M1.6 21.2h20.8v1.8H1.6Z', GLYPH.stone]],
+    tags: ['train', 'rail', 'station', 'depot', 'railway'],
+    sym: ['Rail Station', 'Train Station', 'Depot', 'Metro Station', 'Train', 'Station'],
+  },
+  {
     id: 'railroad', name: 'Railroad', group: 'Ways',
     d: ['M7 3v18', 'M17 3v18', 'M5 7h14', 'M5 12h14', 'M5 17h14'],
     tags: ['rail', 'railway', 'train', 'trestle', 'depot', 'grade'],
-    sym: ['Railroad', 'Railway', 'Rail', 'Train', 'Depot', 'Station', 'Trestle'],
+    sym: ['Railroad', 'Railway', 'Rail', 'Trestle', 'Railroad Crossing'],
   },
   {
     id: 'road', name: 'Road', group: 'Ways',
