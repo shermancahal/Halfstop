@@ -330,10 +330,19 @@ export function iconForSymbol(symbol) {
   const head = raw.split(',')[0].trim();
   if (head !== raw && SYMBOL_LOOKUP.has(head)) return SYMBOL_LOOKUP.get(head);
 
+  /*
+   * The longest alias that overlaps wins, not the first.
+   *
+   * Taking the first hit in table order sent "fire lookout" to the campfire,
+   * because "fire" is listed before "lookout". The more of the reader's word
+   * an alias accounts for, the more likely it is the one they meant.
+   */
+  let best = null;
   for (const [name, id] of SYMBOL_LOOKUP) {
-    if (raw.includes(name) || name.includes(raw)) return id;
+    if (!(raw.includes(name) || name.includes(raw))) continue;
+    if (!best || name.length > best.name.length) best = { name, id };
   }
-  return null;
+  return best ? best.id : null;
 }
 
 /** Inline SVG markup for a UI button, sized to the caller's CSS. */

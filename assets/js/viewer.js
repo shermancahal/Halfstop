@@ -214,6 +214,8 @@ const state = {
   regionDraft: null,
   /** When the last drawn region finished, so the tap that ended it is not also an identify. */
   regionDrawnAt: 0,
+  /** The pointer event a feature layer has already answered, so a second layer does not answer it again. */
+  claimedTap: null,
   /** { folderId, itemId } for the pin the Details tab is describing. */
   selectedPin: null,
   waypointQuery: '',
@@ -2294,6 +2296,7 @@ function askWhereToFile(entries, waypointCount) {
     for (const entry of entries) {
       const result = state.folders.addFeatures(folderId, waypointsFrom(entry));
       added += result.added;
+      markWaypointsFiled(entry);
     }
     const folder = state.folders.get(folderId);
     toast(`Filed ${added} waypoint${added === 1 ? '' : 's'} into “${folder.name}”.`, { tone: 'ok' });
@@ -6333,11 +6336,36 @@ function addAppLayers() {
   }
 }
 
+/**
+ * What an open file draws: everything, until its waypoints have been filed.
+ *
+ * Filing copies the waypoints into a folder, and the folder draws them. Left
+ * on the file's own layer as well, every pin was two pins at one spot - two
+ * cards on a tap, and a folder that looked like it had changed nothing.
+ * Tracks and routes stay, because filing does not take them.
+ */
+function documentData(entry) {
+  if (!entry.waypointsFiled) return entry.doc.geojson;
+  return {
+    type: 'FeatureCollection',
+    features: entry.doc.geojson.features.filter((feature) => feature.properties?.kind !== 'waypoint'),
+  };
+}
+
+function markWaypointsFiled(entry) {
+  entry.waypointsFiled = true;
+  try {
+    state.map?.getSource(sourceIdFor(entry.key))?.setData(documentData(entry));
+  } catch (error) {
+    console.warn('[map] could not take filed waypoints off the file layer:', error.message);
+  }
+}
+
 function addDocumentLayers(entry) {
   if (!styleReady()) { whenStyleReady(() => addDocumentLayers(entry)); return; }
   const sourceId = sourceIdFor(entry.key);
   if (!state.map.getSource(sourceId)) {
-    state.map.addSource(sourceId, { type: 'geojson', data: entry.doc.geojson });
+    state.map.addSource(sourceId, { type: 'geojson', data: documentData(entry) });
   }
 
   const color = ['coalesce', ['get', 'color'], entry.color];
@@ -6537,7 +6565,25 @@ function bindFeatureInteractions(layerId, { popup = true } = {}) {
   if (!popup) return;
   state.map.on('click', layerId, (event) => {
     const feature = event.features?.[0];
-    if (feature) showFeaturePopup(feature, event.lngLat);
+    if (!feature) return;
+    /*
+     * One card per tap, and the saved copy's card.
+     *
+     * GL delivers a click to every layer with a feature under the point, so
+     * a waypoint that is both in an open file and filed in a folder - the
+     * usual state right after an import - opened two cards on top of each
+     * other: the file's, offering "Save to folder", over the folder's, which
+     * has Edit and Remove. The first handler to run claims the tap; and if a
+     * saved pin is among what was hit, its card is the one drawn, whichever
+     * layer this handler belongs to.
+     */
+    const tap = event.originalEvent;
+    if (tap && state.claimedTap === tap) return;
+    const live = [...state.interactiveLayers].filter((id) => state.map.getLayer(id));
+    const hits = live.length ? state.map.queryRenderedFeatures(event.point, { layers: live }) : [];
+    const chosen = hits.find((hit) => hit.properties?.itemId) || hits[0] || feature;
+    if (tap) state.claimedTap = tap;
+    showFeaturePopup(chosen, event.lngLat);
   });
 }
 
@@ -6568,14 +6614,23 @@ function wireMapClicks() {
      * one road, then the one it joins, then the one after that. Switching it
      * off after every answer would mean re-arming between each.
      */
+    /*
+     * A pin under the finger owns the tap, whatever mode is on.
+     *
+     * This check sat after the identify branch, so with identify on - which
+     * is the default - tapping a saved pin opened its card *and* asked the
+     * basemap what was under it, and the answer about the road came up over
+     * the pin's own card. The pin's handler is the one with Edit and Remove
+     * on it; the identify card is for ground nobody has marked.
+     */
+    const live = [...state.interactiveLayers].filter((id) => state.map.getLayer(id));
+    const hits = live.length ? state.map.queryRenderedFeatures(event.point, { layers: live }) : [];
+    if (hits.some((hit) => live.includes(hit.layer?.id))) return;
+
     if (state.probing) {
       probePoint([event.lngLat.lng, event.lngLat.lat], tapTolerance(event));
       return;
     }
-
-    const live = [...state.interactiveLayers].filter((id) => state.map.getLayer(id));
-    const hits = live.length ? state.map.queryRenderedFeatures(event.point, { layers: live }) : [];
-    if (hits.length) return;   // a saved pin or track owns this click
     showDropPin([event.lngLat.lng, event.lngLat.lat]);
   });
 }
@@ -7903,6 +7958,7 @@ function fileOpenedDocument(entry) {
   if (!folder) return null;
 
   const { added, skipped } = state.folders.addFeatures(folder.id, waypoints);
+  markWaypointsFiled(entry);
   // A new folder becomes the standing destination, which is what you want when
   // opening several files that belong to the same trip.
   if (choice === '__new__') { renderDropTarget(); dom.dropTarget.value = folder.id; }
@@ -10311,8 +10367,15 @@ function renderFolder(folder) {
 function renderFolderItem(folder, item) {
   const props = item.feature.properties;
   const isWaypoint = props.kind === 'waypoint';
+  /*
+   * The name gets the room. This row used to print the source file's name
+   * beside every waypoint - "historic-fire-lookout-towers", twenty-eight
+   * characters, on each of a hundred and thirty rows - and the name beside it
+   * was cut to its first letter. The symbol's word is shown only when no mark
+   * could be drawn for it, since then the word is the only clue.
+   */
   const meta = isWaypoint
-    ? (props.symbol || props.sourceName || '')
+    ? (props.icon ? '' : props.symbol || '')
     : (props.distance_m ? formatDistance(props.distance_m, state.units) : '');
   // Descriptions come across from GaiaGPS on most waypoints and are the whole
   // reason a pin is worth keeping — surface them rather than hiding them in a popup.

@@ -252,7 +252,7 @@ project(){return{x:100,y:100}}unproject(){return{lng:0,lat:0}}
 // Answers with whatever the test has staged, the way a vector basemap answers
 // with whatever is drawn under the tap. A stub that always returns nothing
 // cannot tell "we asked and there was nothing" from "we never asked".
-queryRenderedFeatures(){return window.__rendered||[]}resize(){}remove(){}}
+queryRenderedFeatures(p,o){const r=window.__rendered||[];const want=o&&o.layers;return want?r.filter(f=>!f.layer||want.includes(f.layer.id)):r}resize(){}remove(){}}
 window.maplibregl={Map:M,NavigationControl:class{},ScaleControl:class{},GeolocateControl:class{},
 FullscreenControl:class{},Popup,LngLatBounds:Bounds,
 Marker:class{setLngLat(){return this}addTo(){return this}remove(){return this}}};

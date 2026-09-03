@@ -3,7 +3,7 @@
  * viewer and the catalogue both display.
  */
 
-import { iconForSymbol } from './pin-icons.js';
+import { iconForSymbol, PIN_ICONS } from './pin-icons.js';
 import { parseGPX, looksLikeGPX } from './gpx.js';
 import { parseKML, looksLikeKML } from './kml.js';
 import { extractKMLFromKMZ } from './kmz.js';
@@ -129,6 +129,54 @@ export function summarize(geojson) {
   return stats;
 }
 
+const KNOWN_PIN_IDS = new Set(PIN_ICONS.map((icon) => icon.id));
+
+/**
+ * Read what another app called things, into what this one calls them.
+ *
+ * GeoJSON has no vocabulary for a waypoint's name, note, colour or symbol, so
+ * every exporter invents one. GaiaGPS writes `title`, `notes`, `icon` and a
+ * colour; the simplestyle convention Mapbox and GitHub render writes
+ * `marker-color`, `marker-symbol` and `description`; GPX-shaped exports carry
+ * `desc`, `cmt` and `sym`. The name was already translated; the rest arrived
+ * as dead properties, so a folder of Gaia pins came across as untitled-looking
+ * dots with their notes and colours silently left in the file.
+ *
+ * `icon` is the awkward one: here it means a resolved pin id, and in Gaia's
+ * export it is Gaia's own symbol name (or a URL to one). Anything that is not
+ * one of this app's ids is treated as a symbol to be looked up by name, which
+ * is how a GPX <sym> is handled - "fire-lookout" resolves the same way "Fire
+ * Lookout" does.
+ */
+function adoptForeignProperties(props) {
+  const text = (...candidates) => {
+    for (const value of candidates) {
+      if (typeof value === 'string' && value.trim()) return value.trim();
+    }
+    return '';
+  };
+
+  if (!props.name) props.name = text(props.title, props.Name, props.label) || 'Untitled feature';
+  if (!props.description) {
+    const found = text(props.notes, props.desc, props.Description, props.comment, props.cmt);
+    if (found) props.description = found;
+  }
+  if (!props.color) {
+    const found = text(props['marker-color'], props.colour, props.stroke);
+    if (/^#?[0-9a-f]{3,8}$/i.test(found)) props.color = found.startsWith('#') ? found : `#${found}`;
+  }
+  if (!props.symbol) {
+    const found = text(props.sym, props['marker-symbol']);
+    if (found) props.symbol = found;
+  }
+  if (typeof props.icon === 'string' && props.icon && !KNOWN_PIN_IDS.has(props.icon)) {
+    // A URL names its symbol in the last path segment: .../fire-lookout.png
+    const bare = props.icon.split('/').pop().replace(/\.[a-z0-9]+$/i, '').replace(/[-_]+/g, ' ');
+    if (!props.symbol) props.symbol = bare;
+    delete props.icon;
+  }
+}
+
 /** Normalize a plain GeoJSON file into the same document shape as GPX/KML. */
 function fromGeoJSON(text) {
   const parsed = JSON.parse(text);
@@ -146,9 +194,7 @@ function fromGeoJSON(text) {
       feature.properties.kind = type.includes('Point') ? 'waypoint'
         : type.includes('Polygon') ? 'area' : 'track';
     }
-    if (!feature.properties.name) {
-      feature.properties.name = feature.properties.title || feature.properties.Name || 'Untitled feature';
-    }
+    adoptForeignProperties(feature.properties);
     eachPosition(feature.geometry, (pos) => extendBounds(bounds, pos));
   });
 

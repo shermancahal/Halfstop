@@ -10,6 +10,7 @@ import { parseXML, childText, findDescendants, decodeEntities } from '../assets/
 import { parseGPX } from '../assets/js/lib/gpx.js';
 import { parseKML } from '../assets/js/lib/kml.js';
 import { parseMapFile, summarize } from '../assets/js/lib/parse.js';
+import { iconForSymbol } from '../assets/js/lib/pin-icons.js';
 import { extractKMLFromKMZ } from '../assets/js/lib/kmz.js';
 import {
   haversine, lineLength, elevationChange, simplify, boundsAreValid,
@@ -306,4 +307,67 @@ test('kmz: a zip with no KML entry reports a useful error', async () => {
     () => extractKMLFromKMZ(makeStoredZip('readme.txt', 'hello')),
     /No .kml document/,
   );
+});
+
+/*
+ * A GaiaGPS GeoJSON export, as it actually arrives.
+ *
+ * The name came across and nothing else did: notes, colour and symbol sat in
+ * the file under Gaia's own names and the pins landed as plain dots. Every
+ * field a person filled in over there has to be the field this app reads.
+ */
+test('geojson: a GaiaGPS export keeps its title, notes, colour and symbol', async () => {
+  const gaia = {
+    type: 'FeatureCollection',
+    features: [{
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [-81.05, 37.02] },
+      properties: {
+        title: 'Big Walker Lookout',
+        notes: 'Cab not accessible.',
+        icon: 'https://static.gaiagps.com/icons/fire-lookout.png',
+        'marker-color': 'e8542a',
+      },
+    }, {
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [-81.1, 37.1] },
+      // The simplestyle spelling, which GitHub and Mapbox render.
+      properties: { title: 'Camp', description: 'Gate locked at dusk', 'marker-symbol': 'campsite', 'marker-color': '#2E5C9A' },
+    }],
+  };
+  const doc = await parseMapFile(JSON.stringify(gaia), 'gaia.geojson');
+  const [lookout, camp] = doc.geojson.features.map((f) => f.properties);
+
+  assert.equal(lookout.name, 'Big Walker Lookout');
+  assert.equal(lookout.description, 'Cab not accessible.');
+  assert.equal(lookout.color, '#e8542a', 'a bare hex is still a colour');
+  assert.equal(lookout.icon, 'tower', 'Gaia\'s icon URL names the symbol');
+
+  assert.equal(camp.description, 'Gate locked at dusk');
+  assert.equal(camp.color, '#2E5C9A');
+  assert.equal(camp.icon, 'tent');
+});
+
+test('geojson: a pin id this app already knows is left exactly alone', async () => {
+  const doc = await parseMapFile(JSON.stringify({
+    type: 'Feature', geometry: { type: 'Point', coordinates: [0, 0] },
+    properties: { name: 'Ours', icon: 'tower', color: '#000000', description: 'kept' },
+  }), 'ours.geojson');
+  const props = doc.geojson.features[0].properties;
+  assert.equal(props.icon, 'tower');
+  assert.equal(props.symbol, undefined);
+  assert.equal(props.description, 'kept');
+});
+
+/*
+ * A symbol name is matched by the alias that explains most of it. "Fire
+ * lookout" went to the campfire because "fire" came first in the table; the
+ * word that covers more of what was typed is the one that was meant.
+ */
+test('symbols: the longest matching alias wins, not the first in the table', () => {
+  assert.equal(iconForSymbol('fire lookout'), 'tower');
+  assert.equal(iconForSymbol('Fire Tower'), 'tower');
+  assert.equal(iconForSymbol('campfire'), 'campfire');
+  assert.equal(iconForSymbol('Flag, Blue'), iconForSymbol('flag'));
+  assert.equal(iconForSymbol(''), null);
 });
