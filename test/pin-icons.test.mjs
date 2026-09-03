@@ -81,13 +81,13 @@ test('pins: the ring is the pin\'s own colour, else ink', () => {
  */
 test('pins: the park signs are in the picker, prefixed and on their grid', () => {
   const signs = PIN_ICONS.filter((icon) => icon.sign);
-  assert.ok(signs.length >= 90, `${signs.length} park signs`);
+  assert.ok(signs.length >= 50, `${signs.length} park signs`);
   for (const icon of signs) {
     assert.match(icon.id, /^nps-[a-z0-9-]+$/);
     assert.equal(icon.grid, 22);
     assert.ok(icon.f.length > 0, `${icon.id} has no fills`);
   }
-  for (const wanted of ['nps-lookout-tower', 'nps-waterfall', 'nps-chapel', 'nps-cannon', 'nps-rail-station', 'nps-tunnel', 'nps-lighthouse', 'nps-dam']) {
+  for (const wanted of ['nps-cannon', 'nps-rail-station', 'nps-marina', 'nps-post-office', 'nps-golfing', 'nps-visitor-center']) {
     assert.ok(signs.some((icon) => icon.id === wanted), `${wanted} missing`);
   }
 });
@@ -105,7 +105,7 @@ test('pins: park signs are filed under the same headings as the drawn set', () =
   const groupOf = (id) => PIN_ICONS.find((icon) => icon.id === id)?.group;
   assert.equal(groupOf('nps-golfing'), 'Recreation');
   assert.equal(groupOf('nps-downhill-skiing'), 'Recreation');
-  assert.equal(groupOf('nps-waterfall'), 'Water', 'a waterfall is water, wherever the picture came from');
+  assert.equal(groupOf('nps-marina'), 'Water', 'a marina is water, wherever the picture came from');
   assert.equal(groupOf('waterfall'), 'Water');
   assert.equal(groupOf('nps-rail-station'), 'Ways');
 
@@ -215,7 +215,9 @@ test('pins: an illustrated symbol is filled shapes, all in the palette', () => {
  * that arrives shaded fails here.
  */
 const DRAWN = ['tower', 'waterfall', 'forest', 'cabin', 'tent', 'campfire', 'camper',
-  'picnic', 'lodging', 'water', 'spring', 'ford', 'fishing', 'covered-bridge', 'peak', 'wildlife'];
+  'picnic', 'lodging', 'water', 'spring', 'ford', 'fishing', 'covered-bridge', 'peak', 'wildlife',
+  'boat', 'paddle', 'swimming', 'geyser', 'bicycle', 'horse', 'climbing', 'stars', 'museum',
+  'monument', 'rockfall'];
 
 test('pins: a drawn symbol is one colour with its detail cut out', () => {
   const SHADED = [['wood', 'woodDark'], ['leaf', 'leafDark'], ['water', 'waterDeep'],

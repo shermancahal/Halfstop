@@ -35,7 +35,7 @@ import { NPS_ICONS } from './nps-icons.js';
 
 /**
  * Every National Park Service symbol the library has for a place worth a
- * pin, as a picker group of its own.
+ * pin and the drawn set does not already cover, as a picker group of its own.
  *
  * These are the pictograms on trailhead and campground signs across the
  * country, so a reader has already learned them somewhere other than this
@@ -47,7 +47,73 @@ import { NPS_ICONS } from './nps-icons.js';
  * Their groups come from the library build, so a search that turns up both
  * kinds lists them under headings that mean the same thing.
  */
-const PARK_SIGNS = NPS_ICONS.map((icon) => ({
+/**
+ * Park signs that said the same thing as a drawn icon, and what they became.
+ *
+ * The library has a campground, a campsite and an RV campground; the drawn set
+ * has a tent and a camper that mean exactly those things and look like this
+ * app. Two pictures for one meaning is a worse picker, not a richer one, so the
+ * sign is dropped and the drawn icon is the answer.
+ *
+ * The mapping is kept rather than the ids simply deleted, because a pin saved
+ * last month may still name one: `getPinIcon` follows it so the pin keeps its
+ * meaning, and the editor selects the drawn icon it now wears.
+ */
+const RETIRED_SIGNS = {
+  'nps-campground': 'tent',
+  'nps-campsite': 'tent',
+  'nps-rv-campground': 'camper',
+  'nps-campfire': 'campfire',
+  'nps-cabin': 'cabin',
+  'nps-shelter': 'cabin',
+  'nps-lodging': 'lodging',
+  'nps-picnic-area': 'picnic',
+  'nps-drinking-water': 'water',
+  'nps-spring': 'spring',
+  'nps-waterfall': 'waterfall',
+  'nps-fishing': 'fishing',
+  'nps-dam': 'dam',
+  'nps-lighthouse': 'lighthouse',
+  'nps-caving': 'cave',
+  'nps-deer-viewing': 'wildlife',
+  'nps-scenic-viewpoint': 'viewpoint',
+  'nps-photography': 'photo',
+  'nps-trailhead': 'trailhead',
+  'nps-parking': 'parking',
+  'nps-four-wheel-drive-road': 'fourwd',
+  'nps-bridge': 'bridge',
+  'nps-tunnel': 'tunnel',
+  'nps-gas-station': 'fuel',
+  'nps-mechanic': 'mechanic',
+  'nps-store': 'store',
+  'nps-restrooms': 'restroom',
+  'nps-showers': 'shower',
+  'nps-sanitary-disposal-station': 'dump',
+  'nps-cellular-signal': 'signal',
+  'nps-ranger-station': 'ranger',
+  'nps-historic-feature': 'historic',
+  'nps-lookout-tower': 'tower',
+  'nps-chapel': 'church',
+  'nps-hospital': 'hospital',
+  'nps-first-aid': 'firstaid',
+  'nps-boat-launch': 'boat',
+  'nps-boating': 'boat',
+  'nps-canoe-access': 'paddle',
+  'nps-kayaking': 'paddle',
+  'nps-river-rafting': 'paddle',
+  'nps-swimming': 'swimming',
+  'nps-wading': 'swimming',
+  'nps-geyser': 'geyser',
+  'nps-bicycle-trail': 'bicycle',
+  'nps-horseback-riding': 'horse',
+  'nps-climbing': 'climbing',
+  'nps-star-gazing': 'stars',
+  'nps-museum': 'museum',
+  'nps-monument': 'monument',
+  'nps-falling-rocks': 'rockfall',
+};
+
+const PARK_SIGNS = NPS_ICONS.filter((icon) => !RETIRED_SIGNS[`nps-${icon.symbol}`]).map((icon) => ({
   id: `nps-${icon.symbol}`,
   name: icon.name,
   // Filed under the same headings as the drawn set rather than in one flat
@@ -168,6 +234,31 @@ export const PIN_ICONS = [
     sym: ['Fishing Area', 'Fishing'],
   },
 
+  {
+    id: 'boat', name: 'Boat launch', group: 'Water',
+    f: [['M2 17.8c3.2-1.5 5.9-1.5 9.1 0 3.2 1.5 6.7 1.5 10.9 0v3.6c-4.2 1.5-7.7 1.5-10.9 0-3.2-1.5-5.9-1.5-9.1 0Z', GLYPH.water], ['M2.6 9.8h18.8l-2.6 5.8a1.8 1.8 0 0 1-1.6 1H6.8a1.8 1.8 0 0 1-1.6-1ZM17.8 3.6h2.6v6.2h-2.6Z', GLYPH.wood]],
+    tags: ['boat', 'ramp', 'launch', 'water', 'recreation'],
+    sym: ['Boat Launch', 'Boat Ramp', 'Boating', 'Boat'],
+  },
+  {
+    id: 'paddle', name: 'Canoe / kayak', group: 'Water',
+    f: [['M1.4 10.6c1.2 5.8 5.2 8.8 10.6 8.8s9.4-3 10.6-8.8c-2.6 2.9-6.4 4.3-10.6 4.3S4 13.5 1.4 10.6Z', GLYPH.wood], ['M8.6 12.6 7.4 11.4 14.4 4.9 15.6 6.1ZM16 6.6 14 4.4 17.5 1.1 19.5 3.3Z', GLYPH.ink]],
+    tags: ['canoe', 'kayak', 'paddle', 'water', 'recreation'],
+    sym: ['Canoe Access', 'Kayaking', 'Canoe', 'Kayak', 'Paddling'],
+  },
+  {
+    id: 'swimming', name: 'Swimming', group: 'Water',
+    f: [['M1.6 16.4c3.2-1.5 5.9-1.5 9.1 0 3.2 1.5 6.7 1.5 10.9 0v3.4c-4.2 1.5-7.7 1.5-10.9 0-3.2-1.5-5.9-1.5-9.1 0Z', GLYPH.water], ['M7.4 4.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8ZM3.6 12.2h9.6l6.6-5.4 1.6 1.9-7.6 6.2H3.6Z', GLYPH.ink]],
+    tags: ['swim', 'beach', 'water', 'recreation'],
+    sym: ['Swimming', 'Swim Area', 'Beach Access', 'Wading'],
+  },
+  {
+    id: 'geyser', name: 'Geyser / hot spring', group: 'Water',
+    f: [['M8.8 17.6c-2.4-5.4-1.7-9.9 3.2-14.6 4.9 4.7 5.6 9.2 3.2 14.6Zm-4.2-.4c-1.2-2.8-.9-5.2.8-7.4 1 2.6.8 5-.8 7.4Zm14.8 0c1.2-2.8.9-5.2-.8-7.4-1 2.6-.8 5 .8 7.4Z', GLYPH.water], ['M2.4 21.8c0-2.9 4.3-4.5 9.6-4.5s9.6 1.6 9.6 4.5Z', GLYPH.stone]],
+    tags: ['geyser', 'hot spring', 'thermal', 'water'],
+    sym: ['Geyser', 'Hot Spring', 'Thermal'],
+  },
+
   /* -------------------------------------------------------------- terrain */
   {
     id: 'peak', name: 'Summit', group: 'Terrain',
@@ -203,6 +294,31 @@ export const PIN_ICONS = [
     sym: ['Animal', 'Wildlife', 'Hunting Area'],
   },
 
+  /* ---------------------------------------------------------- recreation */
+  {
+    id: 'bicycle', name: 'Cycling', group: 'Recreation',
+    f: [['M5.8 12.4a4.8 4.8 0 1 0 0 9.6 4.8 4.8 0 0 0 0-9.6Zm0 2.2a2.6 2.6 0 1 1 0 5.2 2.6 2.6 0 0 1 0-5.2Zm12.4-2.2a4.8 4.8 0 1 0 0 9.6 4.8 4.8 0 0 0 0-9.6Zm0 2.2a2.6 2.6 0 1 1 0 5.2 2.6 2.6 0 0 1 0-5.2Z', GLYPH.ink], ['M13.6 4.2h4.2v2h-2.1l.9 2.8h-6.9l-1.4 2 3.2 4.2-1.6 1.2-4.2-5.6 3-4.2h6l-.7-2.4ZM9.4 8.8h6.8l1.8 5.6-1.9.6-1.4-4.2H9.4Z', GLYPH.ink]],
+    tags: ['bike', 'bicycle', 'cycling', 'mountain bike', 'recreation'],
+    sym: ['Bicycle Trail', 'Biking', 'Bike', 'Cycling', 'Mountain Biking'],
+  },
+  {
+    id: 'horse', name: 'Horseback riding', group: 'Recreation',
+    f: [['M12.4 2 13.8 5.6 15.6 2.6 16.9 6.5c1.8 1.2 2.8 3 2.9 5.3L21 21.6H12.6c0-2.6-.6-4.8-1.8-6.6l-4.6.6c-1.4.2-2.4-.4-2.7-1.6-.3-1.3.3-2.2 1.6-2.7L11.6 4.4ZM13.6 7.6a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z', GLYPH.wood]],
+    tags: ['horse', 'equestrian', 'riding', 'stable', 'recreation'],
+    sym: ['Horseback Riding', 'Horse Trail', 'Equestrian', 'Stable'],
+  },
+  {
+    id: 'climbing', name: 'Climbing', group: 'Recreation',
+    f: [['M2.4 2.4h4.8v19.2H2.4Z', GLYPH.stoneDark], ['M14.6 2.4a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8ZM12.6 8.2h3.2l1.6 4.6 2.8 2.6-1.6 1.8-2.6-2.4-.6 2.4 2.4 4.8-2.2 1.1-2.6-5.2-3.2 4.2-1.9-1.4 3.4-4.6-1.2-3.6-2.4 1.9-1.6-2Z', GLYPH.ink], ['M12.4 9.4 7 6.2l1.2-2 5.4 3.2Z', GLYPH.ink]],
+    tags: ['climb', 'climbing', 'rock', 'bouldering', 'recreation'],
+    sym: ['Climbing', 'Rock Climbing', 'Bouldering'],
+  },
+  {
+    id: 'stars', name: 'Star gazing', group: 'Recreation',
+    f: [['M9.6 1.8 11.4 6l4.2 1.8-4.2 1.8-1.8 4.2-1.8-4.2L3.6 7.8 7.8 6ZM18.2 9.6l1 2.4 2.4 1-2.4 1-1 2.4-1-2.4-2.4-1 2.4-1ZM4.4 13.2l.8 1.8 1.8.8-1.8.8-.8 1.8-.8-1.8-1.8-.8 1.8-.8Z', GLYPH.ember], ['M1.6 21.6c1.8-3 4-4.5 6.6-4.5s4.4 1 5.4 3c1-1.4 2.4-2.1 4.2-2.1 2 0 3.7 1.2 5 3.6Z', GLYPH.stoneDark]],
+    tags: ['stars', 'night sky', 'astronomy', 'dark sky', 'recreation'],
+    sym: ['Star Gazing', 'Dark Sky', 'Astronomy'],
+  },
   /* --------------------------------------------------------------- access */
   {
     id: 'trailhead', name: 'Trailhead', group: 'Access',
@@ -305,7 +421,7 @@ export const PIN_ICONS = [
     id: 'historic', name: 'Historic site', group: 'Interest',
     d: ['M3 20h18', 'M5 20V9l7-5 7 5v11', 'M9 20v-6h6v6'],
     tags: ['building', 'landmark', 'heritage', 'monument', 'museum'],
-    sym: ['Building', 'Historic', 'Historic Site', 'Museum', 'Monument', 'Landmark', 'Courthouse'],
+    sym: ['Building', 'Historic', 'Historic Site', 'Landmark', 'Courthouse'],
   },
   {
     id: 'ruins', name: 'Ghost town / ruins', group: 'Interest',
@@ -344,6 +460,12 @@ export const PIN_ICONS = [
     d: [['M12 3.5 22 20.5H2L12 3.5Z', GLYPH.warn], 'M12 10v4.5'],
     f: ['M12 18.3a1.05 1.05 0 1 0 0-2.1 1.05 1.05 0 0 0 0 2.1Z'],
     sym: ['Danger', 'Hazard', 'Warning'],
+  },
+  {
+    id: 'rockfall', name: 'Falling rocks', group: 'Hazard',
+    f: [['M2.2 2.4h4.4l3.6 19.2H2.2Z', GLYPH.ink], ['M14.4 4.2 17.6 6l-.8 3.6-3.6.4-1.6-3.2ZM18.6 11.4l2.8 1.6-.7 3.2-3.2.3-1.4-2.8ZM12 15.6l2.4 1.4-.6 2.8-2.8.3-1.2-2.5Z', GLYPH.stone]],
+    tags: ['rockfall', 'falling rocks', 'slide', 'hazard', 'danger'],
+    sym: ['Falling Rocks', 'Rockfall', 'Rock Slide'],
   },
   {
     id: 'private', name: 'Private / no entry', group: 'Hazard',
@@ -455,6 +577,18 @@ export const PIN_ICONS = [
 
   /* ---------------------------------------------------------------- ways */
   {
+    id: 'museum', name: 'Museum', group: 'Places',
+    f: [['M12 1.8 23 8.2H1ZM3.4 9.8h2.8v9.2H3.4Zm4.8 0H11v9.2H8.2Zm4.8 0h2.8v9.2H13Zm4.8 0h2.8v9.2h-2.8Z', GLYPH.stone], ['M1.6 19.6h20.8v2.6H1.6Z', GLYPH.ink]],
+    tags: ['museum', 'gallery', 'exhibit', 'visitor center', 'historic'],
+    sym: ['Museum', 'Interpretive Exhibit', 'Gallery', 'Exhibit'],
+  },
+  {
+    id: 'monument', name: 'Monument', group: 'Places',
+    f: [['M12 1.4 14.9 6.6V17H9.1V6.6Z', GLYPH.stone], ['M6.8 17.8h10.4v1.8H6.8ZM4.4 20.2h15.2v2.2H4.4Z', GLYPH.ink]],
+    tags: ['monument', 'obelisk', 'memorial', 'statue', 'historic'],
+    sym: ['Monument', 'Memorial', 'Statue'],
+  },
+  {
     id: 'covered-bridge', name: 'Covered bridge', group: 'Ways',
     f: [['M1.4 10.4 12 3.6l10.6 6.8-1.4 2.2L12 6.6l-9.2 6ZM3.6 11.8h16.8v7.4H3.6Zm5 2.2v5.2h6.8V14Z', GLYPH.brick], ['M1.6 19.4c4.6 1.6 16.2 1.6 20.8 0v2.8c-4.6 1.6-16.2 1.6-20.8 0Z', GLYPH.water]],
     tags: ['bridge', 'crossing', 'historic', 'timber', 'kissing bridge'],
@@ -498,7 +632,18 @@ export const DEFAULT_PIN_ICON = 'pin';
 const BY_ID = new Map(PIN_ICONS.map((icon) => [icon.id, icon]));
 
 export function getPinIcon(id) {
-  return BY_ID.get(id) || BY_ID.get(DEFAULT_PIN_ICON);
+  return BY_ID.get(id) || BY_ID.get(RETIRED_SIGNS[id]) || BY_ID.get(DEFAULT_PIN_ICON);
+}
+
+/**
+ * The drawn icon a retired park sign became, if it was one.
+ *
+ * Used when a saved pin is opened so the editor selects the icon actually on
+ * the map rather than showing nothing selected, and when a pin is written back
+ * so the retired id is not carried forward for ever.
+ */
+export function resolvePinIconId(id) {
+  return RETIRED_SIGNS[id] || id;
 }
 
 /**
