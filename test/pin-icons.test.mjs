@@ -197,10 +197,35 @@ test('pins: an illustrated symbol is filled shapes, all in the palette', () => {
     const icon = getPinIcon(id);
     assert.equal(icon.id, id, `${id} is missing`);
     assert.equal(icon.d, undefined, `${id} should be drawn, not outlined`);
-    assert.ok(icon.f.length >= 2, `${id} has only ${icon.f?.length} shapes`);
+    // One is allowed: a silhouette is a single shape with its detail cut out.
+    assert.ok(icon.f.length >= 1, `${id} has no shapes`);
     assert.equal(icon.grid, undefined, `${id} stays on the 24 grid`);
     for (const entry of icon.f) {
       assert.ok(Array.isArray(entry) && palette.has(entry[1]), `${id}: ${entry[1]} is off the palette`);
     }
+  }
+});
+
+/*
+ * The two registers, asserted so a later hand does not blur them.
+ *
+ * What separates them is shading, not colour count: a tree may have a trunk
+ * and a fish a white eye, but neither carries a material *and its darker
+ * tone*, because that is what turns a cut-out shape into a modelled one. A
+ * building is the opposite - it is the shading that makes a roof read as
+ * being over a wall.
+ */
+test('pins: grown things are unshaded, built things are modelled', () => {
+  const SHADED = [['wood', 'woodDark'], ['leaf', 'leafDark'], ['water', 'waterDeep'],
+    ['stone', 'stoneDark'], ['brick', 'brickDark']];
+  const shadedPairs = (id) => {
+    const used = new Set(getPinIcon(id).f.map((entry) => entry[1]));
+    return SHADED.filter(([base, dark]) => used.has(GLYPH[base]) && used.has(GLYPH[dark])).length;
+  };
+  for (const id of ['forest', 'tent', 'peak', 'fishing']) {
+    assert.equal(shadedPairs(id), 0, `${id} is a silhouette and should carry no shading`);
+  }
+  for (const id of ['cabin', 'camper', 'covered-bridge', 'tower']) {
+    assert.ok(shadedPairs(id) >= 1, `${id} should be modelled, not flat`);
   }
 });

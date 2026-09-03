@@ -104,7 +104,7 @@ export const PIN_ICONS = [
   /* ---------------------------------------------------------------- camp */
   {
     id: 'tent', name: 'Tent site', group: 'Camp',
-    f: [['M12 3.8 2.6 20.4h18.8Z', GLYPH.leaf], ['M12 3.8 21.4 20.4H12Z', GLYPH.leafDark], ['M12 9.6 8.3 20.4h7.4Z', GLYPH.woodDark], ['M1.6 20.4h20.8v1.6H1.6Z', GLYPH.woodDark]],
+    f: [['M12 3c1.4 0 9.6 16.2 9.6 17.4 0 .8-19.2.8-19.2 0C2.4 19.2 10.6 3 12 3Zm0 8.2c-.8 0-3.8 8.4-3.8 9.2 0 .5 7.6.5 7.6 0 0-.8-3-9.2-3.8-9.2Z', GLYPH.leaf]],
     tags: ['camp', 'campground', 'campsite', 'recreation'],
     sym: ['Campground', 'Camp', 'Tent', 'Campsite'],
   },
@@ -163,7 +163,7 @@ export const PIN_ICONS = [
   },
   {
     id: 'fishing', name: 'Fishing', group: 'Water',
-    f: [['M3.6 12c3.6-4.7 9.2-4.7 12.8 0-3.6 4.7-9.2 4.7-12.8 0Z', GLYPH.water], ['M6 13.8c2.6 1.9 6.4 1.9 9-.4-2.4 1-6.4 1-9 .4Z', GLYPH.foam], ['M16.4 12 20.8 8.5v7Z', GLYPH.waterDeep], ['M8 10.9a1.15 1.15 0 1 0 0 2.3 1.15 1.15 0 0 0 0-2.3Z', GLYPH.ink]],
+    f: [['M2.8 12c3.9-5.4 9.9-5.4 13.8 0-3.9 5.4-9.9 5.4-13.8 0Zm14.6 0 4.3-3.6c.4-.3 1 0 1 .5v6.2c0 .5-.6.8-1 .5Z', GLYPH.water], ['M7.6 10.7a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6Z', GLYPH.white]],
     tags: ['fish', 'angling', 'water', 'recreation'],
     sym: ['Fishing Area', 'Fishing'],
   },
@@ -171,7 +171,7 @@ export const PIN_ICONS = [
   /* -------------------------------------------------------------- terrain */
   {
     id: 'peak', name: 'Summit', group: 'Terrain',
-    d: ['M2 20 9.5 6l4.5 8 2.5-4L22 20H2Z'],
+    f: [['M12 2.8c.9 0 4 6.2 5.6 9.2 1.5 2.9 4.4 8 3.9 8.8-.4.7-18.6.7-19 0-.5-.8 2.4-5.9 3.9-8.8C8 9 11.1 2.8 12 2.8Zm0 4.6-2.4 4.6c1.6.8 3.2.8 4.8 0Z', GLYPH.stone]],
     tags: ['summit', 'mountain', 'high point', 'recreation'],
     sym: ['Summit', 'Peak', 'Mountain'],
   },
@@ -194,7 +194,7 @@ export const PIN_ICONS = [
   },
   {
     id: 'forest', name: 'Forest', group: 'Terrain',
-    d: [['M9 3 4 12h10L9 3Z', GLYPH.leaf], ['M9 12v8', GLYPH.wood], ['M17 7l-3.5 6h7L17 7Z', GLYPH.leaf], ['M17 13v7', GLYPH.wood]],
+    f: [['M12 2.2c4.8 0 8.1 3.8 8.1 8.1 0 4.5-3.6 7.6-8.1 7.6s-8.1-3.1-8.1-7.6c0-4.3 3.3-8.1 8.1-8.1Z', GLYPH.leaf], ['M10.9 16.8h2.2v5.2h-2.2Z', GLYPH.wood]],
     sym: ['Forest', 'Park', 'Tree'],
   },
   {
