@@ -173,10 +173,34 @@ test('pins: a coloured path draws in its colour, and the rest stay ink', () => {
   }
   assert.ok(coloured >= 20, `only ${coloured} coloured paths`);
 
+  // The illustrated glyphs are filled shapes; the coloured line ones are
+  // strokes. Either way the colour has to reach the markup.
   const fire = pinIconSVG('campfire');
-  assert.ok(fire.includes(`stroke="${GLYPH.flame}"`), 'the flame is drawn in flame');
-  assert.ok(fire.includes(`stroke="${GLYPH.wood}"`), 'the logs are drawn in wood');
-  // An uncoloured glyph is untouched: no stroke attribute at all, so it
-  // inherits whatever the surrounding text colour is.
-  assert.ok(!pinIconSVG('house').includes('stroke="#'), 'an ink glyph names no colour');
+  assert.ok(fire.includes(GLYPH.flame), 'the flame is drawn in flame');
+  assert.ok(fire.includes(GLYPH.wood), 'the logs are drawn in wood');
+  assert.ok(pinIconSVG('hazard').includes(GLYPH.warn), 'a coloured stroke keeps its colour too');
+  // An uncoloured glyph is untouched: no colour named at all, so it inherits
+  // whatever the surrounding text colour is.
+  const house = pinIconSVG('house');
+  assert.ok(!house.includes('stroke="#') && !house.includes('fill="#'), 'an ink glyph names no colour');
+});
+
+/*
+ * The illustrated symbols are built from filled shapes, not outlines: a
+ * silhouette cannot show a log behind a flame. Each is drawn on the same grid
+ * as the rest, so it sits in the same disc at the same size.
+ */
+test('pins: an illustrated symbol is filled shapes, all in the palette', () => {
+  const palette = new Set(Object.values(GLYPH));
+  for (const id of ['campfire', 'tent', 'camper', 'cabin', 'picnic', 'lodging',
+    'water', 'spring', 'waterfall', 'ford', 'fishing', 'tower', 'covered-bridge']) {
+    const icon = getPinIcon(id);
+    assert.equal(icon.id, id, `${id} is missing`);
+    assert.equal(icon.d, undefined, `${id} should be drawn, not outlined`);
+    assert.ok(icon.f.length >= 2, `${id} has only ${icon.f?.length} shapes`);
+    assert.equal(icon.grid, undefined, `${id} stays on the 24 grid`);
+    for (const entry of icon.f) {
+      assert.ok(Array.isArray(entry) && palette.has(entry[1]), `${id}: ${entry[1]} is off the palette`);
+    }
+  }
 });

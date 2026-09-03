@@ -62,17 +62,39 @@ const PARK_SIGNS = NPS_ICONS.map((icon) => ({
 /**
  * The few colours a glyph may be drawn in.
  *
- * Deliberately short and deliberately muted: these are read at twenty pixels
- * over contours and woodland, where a saturated palette turns to mud and a
- * second hue inside a shape costs more legibility than it buys. A colour
- * earns its place only where it is the thing being identified - flame, water,
- * a red cross - and everything else stays ink.
+ * Muted on purpose: these are read at twenty pixels over contours and
+ * woodland, where a saturated palette turns to mud. Each material has a base
+ * and a darker tone for its shaded side, which is what makes a drawn shape
+ * read as an object rather than a silhouette - and keeping them named means a
+ * new glyph joins the same world rather than inventing a shade.
  */
 export const GLYPH = {
-  flame: '#D9660F',
+  ink: '#2A2118',
+  white: '#FFFFFF',
+
   wood: '#8A5A2B',
-  water: '#2E6FB0',
+  woodLight: '#A87142',
+  woodDark: '#6E4620',
+
+  flame: '#D9500F',
+  ember: '#F3A012',
+  spark: '#FBD54A',
+
+  water: '#4A7FA8',
+  waterDeep: '#35648A',
+  foam: '#CFE2EF',
+
   leaf: '#2E7D4F',
+  leafDark: '#23623D',
+
+  stone: '#9A958C',
+  stoneDark: '#6E6A63',
+
+  brick: '#A8442B',
+  brickDark: '#8A3520',
+
+  shell: '#E8E2D4',
+
   warn: '#D98A0B',
   aid: '#C0392B',
 };
@@ -82,69 +104,66 @@ export const PIN_ICONS = [
   /* ---------------------------------------------------------------- camp */
   {
     id: 'tent', name: 'Tent site', group: 'Camp',
-    d: [['M12 4 3.5 20h17L12 4Z', GLYPH.leaf], 'M12 4v16'],
+    f: [['M12 3.8 2.6 20.4h18.8Z', GLYPH.leaf], ['M12 3.8 21.4 20.4H12Z', GLYPH.leafDark], ['M12 9.6 8.3 20.4h7.4Z', GLYPH.woodDark], ['M1.6 20.4h20.8v1.6H1.6Z', GLYPH.woodDark]],
     tags: ['camp', 'campground', 'campsite', 'recreation'],
     sym: ['Campground', 'Camp', 'Tent', 'Campsite'],
   },
   {
     id: 'camper', name: 'Camper / RV', group: 'Camp',
-    d: ['M2 7h13a5 5 0 0 1 5 5v5H2V7Z', 'M6 10h5v3H6z', 'M2 17h20'],
-    f: ['M7.5 20a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z', 'M16.5 20a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z'],
+    f: [['M2 7.6h13.2l4.8 4.4v5.4H2Z', GLYPH.shell], ['M2 12.8h18v1.6H2Z', GLYPH.brick], ['M3.8 9.2h5.2v3.2H3.8Z', GLYPH.water], ['M15.6 9.6h2.8l1.6 1.8h-4.4Z', GLYPH.water], ['M7.4 16.4a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Zm9.2 0a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z', GLYPH.ink], ['M7.4 18.2a.7.7 0 1 0 0 1.4.7.7 0 0 0 0-1.4Zm9.2 0a.7.7 0 1 0 0 1.4.7.7 0 0 0 0-1.4Z', GLYPH.shell]],
     tags: ['rv', 'trailer', 'motorhome', 'camp', 'recreation'],
     sym: ['RV', 'Trailer Head', 'RV Park'],
   },
   {
     id: 'campfire', name: 'Campfire', group: 'Camp',
-    d: [['M12 3c2.5 3 4 5 4 7.5a4 4 0 0 1-8 0C8 8 9.5 6 12 3Z', GLYPH.flame], ['M4 20l16-4', GLYPH.wood], ['M4 16l16 4', GLYPH.wood]],
+    f: [['M3.4 17.4 19.4 13.7l.8 3.2L4.2 20.6Z', GLYPH.wood], ['M4.2 14 20.2 17.7l-.8 3.2L3.4 17.2Z', GLYPH.woodLight], ['M4.1 15.6a1.1 1.7 0 1 0 0 3.4 1.1 1.7 0 0 0 0-3.4Z', GLYPH.woodDark], ['M19.9 13.7a1 1.6 0 1 0 0 3.2 1 1.6 0 0 0 0-3.2Z', GLYPH.woodDark], ['M12 2.4c3.2 3.5 5.1 5.9 5.1 8.7a5.1 5.1 0 0 1-10.2 0c0-2.8 1.9-5.2 5.1-8.7Z', GLYPH.flame], ['M12 6.2c1.9 2.3 3 3.8 3 5.4a3 3 0 0 1-6 0c0-1.6 1.1-3.1 3-5.4Z', GLYPH.ember], ['M12 9.6c.9 1.2 1.4 1.9 1.4 2.7a1.4 1.4 0 0 1-2.8 0c0-.8.5-1.5 1.4-2.7Z', GLYPH.spark]],
     tags: ['fire', 'camp', 'ring', 'recreation'],
     sym: ['Fire', 'Campfire'],
   },
   {
     id: 'cabin', name: 'Cabin / shelter', group: 'Camp',
-    d: ['M3 11 12 4l9 7', 'M5 10v10h14V10', 'M10 20v-6h4v6'],
+    f: [['M1.8 11.9 12 4.4l10.2 7.5-1.2 1.6L12 7 3 13.5Z', GLYPH.woodDark], ['M4.4 12.6h15.2v8.2H4.4Z', GLYPH.wood], ['M4.4 15h15.2v1H4.4Zm0 2.6h15.2v1H4.4Z', GLYPH.woodDark], ['M10.2 15.4h3.6v5.4h-3.6Z', GLYPH.woodDark], ['M3 20.6h18v1.5H3Z', GLYPH.woodDark]],
     tags: ['building', 'lodge', 'shelter', 'hut', 'camp'],
     sym: ['Lodge', 'Cabin', 'Shelter', 'Hut'],
   },
   {
     id: 'picnic', name: 'Picnic area', group: 'Camp',
-    d: ['M3 9h18', 'M6 9l-2 11', 'M18 9l2 11', 'M7 15h10'],
+    f: [['M2.6 8.4h18.8v2.4H2.6Z', GLYPH.woodLight], ['M5.4 10.8h2.3L5.1 20.8H2.8Z', GLYPH.wood], ['M16.3 10.8h2.3l2.6 10h-2.3Z', GLYPH.wood], ['M4.3 14.4h15.4v1.9H4.3Z', GLYPH.wood]],
     sym: ['Picnic Area', 'Picnic'],
   },
   {
     id: 'lodging', name: 'Lodging', group: 'Camp',
-    d: ['M3 18v-9', 'M3 12h12a5 5 0 0 1 5 5v1', 'M3 18h18'],
-    f: ['M7 12a2.2 2.2 0 1 0 0-4.4A2.2 2.2 0 0 0 7 12Z'],
+    f: [['M2 7.6h2.5v13H2Z', GLYPH.woodDark], ['M4.5 12.9h16.3v4.4H4.5Z', GLYPH.shell], ['M11 12.9h9.8v4.4H11Z', GLYPH.water], ['M5.8 13.9h4.4v2.4H5.8Z', GLYPH.white], ['M4.5 17.3h1.9v3.3H4.5Zm14.4 0h1.9v3.3h-1.9Z', GLYPH.woodDark]],
     sym: ['Hotel', 'Lodging'],
   },
 
   /* --------------------------------------------------------------- water */
   {
     id: 'water', name: 'Water source', group: 'Water',
-    d: [['M12 3c4 5 6 7.5 6 10a6 6 0 0 1-12 0c0-2.5 2-5 6-10Z', GLYPH.water]],
+    f: [['M12 3.2c4.2 5.4 6.4 8.2 6.4 10.8a6.4 6.4 0 0 1-12.8 0c0-2.6 2.2-5.4 6.4-10.8Z', GLYPH.water], ['M9.4 12.4a2.8 2.8 0 0 0 2.8 4.8 3.6 3.6 0 0 1-2.8-4.8Z', GLYPH.foam]],
     sym: ['Drinking Water', 'Water Source', 'Water'],
   },
   {
     id: 'spring', name: 'Spring', group: 'Water',
-    d: [['M12 4v7', GLYPH.water], ['M8.5 7.5 12 4l3.5 3.5', GLYPH.water], ['M3 16c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2', GLYPH.water]],
+    f: [['M3.4 14.4h17.2v2.4a4.2 4.2 0 0 1-4.2 4.2H7.6a4.2 4.2 0 0 1-4.2-4.2Z', GLYPH.stone], ['M4.8 15.4h14.4v1.8a3.2 3.2 0 0 1-3.2 3.2H8a3.2 3.2 0 0 1-3.2-3.2Z', GLYPH.water], ['M11.1 8.6h1.8v6.2h-1.8Z', GLYPH.water], ['M12 2.6c1.9 2.7 2.9 4.3 2.9 5.8a2.9 2.9 0 0 1-5.8 0c0-1.5 1-3.1 2.9-5.8Z', GLYPH.water], ['M10.6 6.6a1.4 1.4 0 0 0 1.4 2.4 1.8 1.8 0 0 1-1.4-2.4Z', GLYPH.foam]],
     tags: ['water', 'seep', 'source'],
     sym: ['Spring'],
   },
   {
     id: 'waterfall', name: 'Waterfall', group: 'Water',
-    d: [['M6 3v11', GLYPH.water], ['M12 3v11', GLYPH.water], ['M18 3v11', GLYPH.water], ['M3 18c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2', GLYPH.water]],
+    f: [['M2.6 4h3.6v13.4H2.6Z', GLYPH.stoneDark], ['M17.8 4h3.6v13.4h-3.6Z', GLYPH.stoneDark], ['M2.6 3.4h18.8v2.4H2.6Z', GLYPH.stone], ['M6 5.8h12v11.6H6Z', GLYPH.water], ['M7.9 6.4h1.5v10.6H7.9Zm3.3 0h1.5v10.6h-1.5Zm3.3 0h1.5v10.6h-1.5Z', GLYPH.foam], ['M2 17.2c3.4 1.9 6.2 1.9 10 0s6.6-1.9 10 0V22H2Z', GLYPH.waterDeep], ['M7.6 16.8h8.8v1.8H7.6Z', GLYPH.foam]],
     tags: ['water', 'falls', 'cascade', 'cataract'],
     sym: ['Waterfall', 'Falls', 'Cascade'],
   },
   {
     id: 'ford', name: 'River crossing', group: 'Water',
-    d: ['M3 8c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2', 'M3 16c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2', 'M9 3v18'],
+    f: [['M2 5.8h20v2.4H2Z', GLYPH.wood], ['M6.6 22 9 8.2h6L17.4 22Z', GLYPH.wood], ['M11.4 18.6h1.3v3h-1.3Zm.4-4.4h1.3v3h-1.3Zm.4-4.4h1.3v3h-1.3Z', GLYPH.shell], ['M2 8.2h20v6.2H2Z', GLYPH.water], ['M2.8 9.6h18.4v1.2H2.8Zm0 2.6h18.4v1.2H2.8Z', GLYPH.foam]],
     tags: ['water', 'crossing', 'creek', 'stream'],
     sym: ['Ford', 'Crossing'],
   },
   {
     id: 'fishing', name: 'Fishing', group: 'Water',
-    d: [['M3 12c4-5 10-5 14 0-4 5-10 5-14 0Z', GLYPH.water], ['M17 12l4-3v6l-4-3', GLYPH.water]],
-    f: ['M8 11.2a.9.9 0 1 0 0 1.8.9.9 0 0 0 0-1.8Z'],
+    f: [['M3.6 12c3.6-4.7 9.2-4.7 12.8 0-3.6 4.7-9.2 4.7-12.8 0Z', GLYPH.water], ['M6 13.8c2.6 1.9 6.4 1.9 9-.4-2.4 1-6.4 1-9 .4Z', GLYPH.foam], ['M16.4 12 20.8 8.5v7Z', GLYPH.waterDeep], ['M8 10.9a1.15 1.15 0 1 0 0 2.3 1.15 1.15 0 0 0 0-2.3Z', GLYPH.ink]],
     tags: ['fish', 'angling', 'water', 'recreation'],
     sym: ['Fishing Area', 'Fishing'],
   },
@@ -302,7 +321,7 @@ export const PIN_ICONS = [
   },
   {
     id: 'tower', name: 'Fire lookout tower', group: 'Interest',
-    d: ['M6 21 12 3l6 18', 'M8.2 14h7.6', 'M9.6 9h4.8', 'M4 21h16'],
+    f: [['M8.4 21 11 8h2l2.6 13h-2.2L12 11.6 10.6 21Z', GLYPH.wood], ['M9.3 16.6h5.4l.3 1.5H9Zm.5-3h4.4l.3 1.5H9.5Z', GLYPH.woodDark], ['M6.6 8.6h10.8v1.6H6.6Z', GLYPH.woodDark], ['M7.4 4.9h9.2v3.9H7.4Z', GLYPH.shell], ['M8.6 5.9h6.8v2H8.6Z', GLYPH.water], ['M6.1 3.2h11.8l-1.3 1.9H7.4Z', GLYPH.brick], ['M5.6 21h12.8v1.3H5.6Z', GLYPH.woodDark]],
     tags: ['building', 'fire lookout', 'watchtower', 'historic'],
     sym: ['Tower', 'Lookout', 'Fire Tower', 'Fire Lookout', 'Lookout Tower', 'Observation Tower'],
   },
@@ -437,7 +456,7 @@ export const PIN_ICONS = [
   /* ---------------------------------------------------------------- ways */
   {
     id: 'covered-bridge', name: 'Covered bridge', group: 'Ways',
-    d: ['M3 21V10l9-5 9 5v11', 'M2 21h20', 'M7 21v-7a5 5 0 0 1 10 0v7'],
+    f: [['M2 17.6c4.4 1.5 15.6 1.5 20 0v2.4c-4.4 1.6-15.6 1.6-20 0Z', GLYPH.water], ['M4.2 10.6h15.6v7.8H4.2Z', GLYPH.brick], ['M4.2 12.4h15.6v1H4.2Zm0 2.6h15.6v1H4.2Z', GLYPH.brickDark], ['M9.4 12.6h5.2v5.8H9.4Z', GLYPH.woodDark], ['M2.6 11.2 12 5.2l9.4 6-1 1.5L12 7 3.6 12.7Z', GLYPH.woodDark], ['M3.4 18.4h17.2v1.4H3.4Z', GLYPH.woodDark]],
     tags: ['bridge', 'crossing', 'historic', 'timber', 'kissing bridge'],
     sym: ['Covered Bridge'],
   },
