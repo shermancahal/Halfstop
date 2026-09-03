@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   PIN_ICONS, PIN_INK, iconForSymbol, pinColorFor, getPinIcon, DEFAULT_PIN_ICON,
-  searchPinIcons, pinIconGroups,
+  searchPinIcons, pinIconGroups, GLYPH, pinIconSVG,
 } from '../assets/js/lib/pin-icons.js';
 
 /*
@@ -151,4 +151,32 @@ test('pins: the abandoned building is its own symbol, not the shut shop', () => 
   assert.notDeepEqual(building.d, shop.d, 'two ideas, two drawings');
   assert.equal(iconForSymbol('Abandoned Building'), 'abandoned-building');
   assert.equal(iconForSymbol('abandoned'), 'abandoned');
+});
+
+/*
+ * Colour, where colour is the thing being identified.
+ *
+ * A path may carry its own; most do not, and the ones that do must draw with
+ * it in both places a glyph is drawn - the inline SVG in the panel and the
+ * canvas that becomes a map image. A colour off the short list is a slip.
+ */
+test('pins: a coloured path draws in its colour, and the rest stay ink', () => {
+  const palette = new Set(Object.values(GLYPH));
+  let coloured = 0;
+  for (const icon of PIN_ICONS) {
+    for (const entry of [...(icon.d || []), ...(icon.f || [])]) {
+      if (!Array.isArray(entry)) continue;
+      coloured += 1;
+      assert.equal(entry.length, 2, `${icon.id}: a coloured path is [path, colour]`);
+      assert.ok(palette.has(entry[1]), `${icon.id}: ${entry[1]} is not one of the glyph colours`);
+    }
+  }
+  assert.ok(coloured >= 20, `only ${coloured} coloured paths`);
+
+  const fire = pinIconSVG('campfire');
+  assert.ok(fire.includes(`stroke="${GLYPH.flame}"`), 'the flame is drawn in flame');
+  assert.ok(fire.includes(`stroke="${GLYPH.wood}"`), 'the logs are drawn in wood');
+  // An uncoloured glyph is untouched: no stroke attribute at all, so it
+  // inherits whatever the surrounding text colour is.
+  assert.ok(!pinIconSVG('house').includes('stroke="#'), 'an ink glyph names no colour');
 });

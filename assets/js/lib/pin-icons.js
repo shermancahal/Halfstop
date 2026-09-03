@@ -25,8 +25,9 @@ import { NPS_ICONS } from './nps-icons.js';
  * @property {string} id     stable key, stored on saved pins
  * @property {string} name   label in the picker
  * @property {string} group  picker section
- * @property {string[]} d    stroked SVG paths on a 24x24 viewBox
- * @property {string[]} [f]  filled SVG paths, drawn after the stroked ones
+ * @property {(string|[string, string])[]} d    stroked SVG paths on a 24x24 viewBox,
+ *           each either the path or the path and the colour to draw it in
+ * @property {(string|[string, string])[]} [f]  filled paths, drawn after the stroked ones
  * @property {string[]} [sym] GPX <sym> / KML icon names that map to this icon
  * @property {string[]} [tags] extra words the picker's search should find it by
  * @property {number} [grid] the grid the paths are drawn on, when it is not 24
@@ -58,12 +59,30 @@ const PARK_SIGNS = NPS_ICONS.map((icon) => ({
   f: icon.f,
 }));
 
+/**
+ * The few colours a glyph may be drawn in.
+ *
+ * Deliberately short and deliberately muted: these are read at twenty pixels
+ * over contours and woodland, where a saturated palette turns to mud and a
+ * second hue inside a shape costs more legibility than it buys. A colour
+ * earns its place only where it is the thing being identified - flame, water,
+ * a red cross - and everything else stays ink.
+ */
+export const GLYPH = {
+  flame: '#D9660F',
+  wood: '#8A5A2B',
+  water: '#2E6FB0',
+  leaf: '#2E7D4F',
+  warn: '#D98A0B',
+  aid: '#C0392B',
+};
+
 /** @type {PinIcon[]} */
 export const PIN_ICONS = [
   /* ---------------------------------------------------------------- camp */
   {
     id: 'tent', name: 'Tent site', group: 'Camp',
-    d: ['M12 4 3.5 20h17L12 4Z', 'M12 4v16'],
+    d: [['M12 4 3.5 20h17L12 4Z', GLYPH.leaf], 'M12 4v16'],
     tags: ['camp', 'campground', 'campsite', 'recreation'],
     sym: ['Campground', 'Camp', 'Tent', 'Campsite'],
   },
@@ -76,7 +95,7 @@ export const PIN_ICONS = [
   },
   {
     id: 'campfire', name: 'Campfire', group: 'Camp',
-    d: ['M12 3c2.5 3 4 5 4 7.5a4 4 0 0 1-8 0C8 8 9.5 6 12 3Z', 'M4 20l16-4', 'M4 16l16 4'],
+    d: [['M12 3c2.5 3 4 5 4 7.5a4 4 0 0 1-8 0C8 8 9.5 6 12 3Z', GLYPH.flame], ['M4 20l16-4', GLYPH.wood], ['M4 16l16 4', GLYPH.wood]],
     tags: ['fire', 'camp', 'ring', 'recreation'],
     sym: ['Fire', 'Campfire'],
   },
@@ -101,18 +120,18 @@ export const PIN_ICONS = [
   /* --------------------------------------------------------------- water */
   {
     id: 'water', name: 'Water source', group: 'Water',
-    d: ['M12 3c4 5 6 7.5 6 10a6 6 0 0 1-12 0c0-2.5 2-5 6-10Z'],
+    d: [['M12 3c4 5 6 7.5 6 10a6 6 0 0 1-12 0c0-2.5 2-5 6-10Z', GLYPH.water]],
     sym: ['Drinking Water', 'Water Source', 'Water'],
   },
   {
     id: 'spring', name: 'Spring', group: 'Water',
-    d: ['M12 4v7', 'M8.5 7.5 12 4l3.5 3.5', 'M3 16c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2'],
+    d: [['M12 4v7', GLYPH.water], ['M8.5 7.5 12 4l3.5 3.5', GLYPH.water], ['M3 16c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2', GLYPH.water]],
     tags: ['water', 'seep', 'source'],
     sym: ['Spring'],
   },
   {
     id: 'waterfall', name: 'Waterfall', group: 'Water',
-    d: ['M6 3v11', 'M12 3v11', 'M18 3v11', 'M3 18c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2'],
+    d: [['M6 3v11', GLYPH.water], ['M12 3v11', GLYPH.water], ['M18 3v11', GLYPH.water], ['M3 18c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2', GLYPH.water]],
     tags: ['water', 'falls', 'cascade', 'cataract'],
     sym: ['Waterfall', 'Falls', 'Cascade'],
   },
@@ -124,7 +143,7 @@ export const PIN_ICONS = [
   },
   {
     id: 'fishing', name: 'Fishing', group: 'Water',
-    d: ['M3 12c4-5 10-5 14 0-4 5-10 5-14 0Z', 'M17 12l4-3v6l-4-3'],
+    d: [['M3 12c4-5 10-5 14 0-4 5-10 5-14 0Z', GLYPH.water], ['M17 12l4-3v6l-4-3', GLYPH.water]],
     f: ['M8 11.2a.9.9 0 1 0 0 1.8.9.9 0 0 0 0-1.8Z'],
     tags: ['fish', 'angling', 'water', 'recreation'],
     sym: ['Fishing Area', 'Fishing'],
@@ -156,12 +175,12 @@ export const PIN_ICONS = [
   },
   {
     id: 'forest', name: 'Forest', group: 'Terrain',
-    d: ['M9 3 4 12h10L9 3Z', 'M9 12v8', 'M17 7l-3.5 6h7L17 7Z', 'M17 13v7'],
+    d: [['M9 3 4 12h10L9 3Z', GLYPH.leaf], ['M9 12v8', GLYPH.wood], ['M17 7l-3.5 6h7L17 7Z', GLYPH.leaf], ['M17 13v7', GLYPH.wood]],
     sym: ['Forest', 'Park', 'Tree'],
   },
   {
     id: 'wildlife', name: 'Wildlife', group: 'Terrain',
-    d: ['M6 5 4 9l3 2', 'M18 5l2 4-3 2', 'M7 11c0 4 2 8 5 8s5-4 5-8', 'M9 11h6'],
+    d: [['M6 5 4 9l3 2', GLYPH.wood], ['M18 5l2 4-3 2', GLYPH.wood], ['M7 11c0 4 2 8 5 8s5-4 5-8', GLYPH.wood], ['M9 11h6', GLYPH.wood]],
     sym: ['Animal', 'Wildlife', 'Hunting Area'],
   },
 
@@ -303,7 +322,7 @@ export const PIN_ICONS = [
   /* --------------------------------------------------------------- hazard */
   {
     id: 'hazard', name: 'Hazard', group: 'Hazard',
-    d: ['M12 3.5 22 20.5H2L12 3.5Z', 'M12 10v4.5'],
+    d: [['M12 3.5 22 20.5H2L12 3.5Z', GLYPH.warn], 'M12 10v4.5'],
     f: ['M12 18.3a1.05 1.05 0 1 0 0-2.1 1.05 1.05 0 0 0 0 2.1Z'],
     sym: ['Danger', 'Hazard', 'Warning'],
   },
@@ -314,7 +333,7 @@ export const PIN_ICONS = [
   },
   {
     id: 'firstaid', name: 'First aid', group: 'Hazard',
-    d: ['M3 7h18v12H3z', 'M12 10v6', 'M9 13h6'],
+    d: ['M3 7h18v12H3z', ['M12 10v6', GLYPH.aid], ['M9 13h6', GLYPH.aid]],
     sym: ['Medical Facility', 'First Aid'],
   },
 
@@ -641,11 +660,26 @@ export function iconForSymbol(symbol) {
   return best ? best.id : null;
 }
 
+/**
+ * A path entry, which is either the path or the path and the colour to draw it.
+ *
+ * Written this way so an icon that wants no colour stays a list of strings -
+ * most of them do, and a uniform `{d, colour}` shape would have added a
+ * wrapper to a hundred and sixty glyphs to serve ten.
+ */
+const pathAndColour = (entry) => (Array.isArray(entry) ? entry : [entry, null]);
+
 /** Inline SVG markup for a UI button, sized to the caller's CSS. */
 export function pinIconSVG(id, { size = 20, stroke = 1.7 } = {}) {
   const icon = getPinIcon(id);
-  const strokes = (icon.d || []).map((d) => `<path d="${d}"/>`).join('');
-  const fills = (icon.f || []).map((d) => `<path d="${d}" fill="currentColor" stroke="none"/>`).join('');
+  const strokes = (icon.d || []).map((entry) => {
+    const [d, colour] = pathAndColour(entry);
+    return `<path d="${d}"${colour ? ` stroke="${colour}"` : ''}/>`;
+  }).join('');
+  const fills = (icon.f || []).map((entry) => {
+    const [d, colour] = pathAndColour(entry);
+    return `<path d="${d}" fill="${colour || 'currentColor'}" stroke="none"/>`;
+  }).join('');
   // A 22-grid glyph sits one unit in from each edge of the 24 box.
   const shift = icon.grid && icon.grid !== 24 ? (24 - icon.grid) / 2 : 0;
   const body = shift ? `<g transform="translate(${shift} ${shift})">${strokes}${fills}</g>` : `${strokes}${fills}`;
@@ -683,8 +717,16 @@ export function rasterizePinIcon(id, { size = 22, pixelRatio = 2 } = {}) {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
-  for (const d of icon.d || []) ctx.stroke(new Path2D(d));
-  for (const d of icon.f || []) ctx.fill(new Path2D(d));
+  for (const entry of icon.d || []) {
+    const [d, colour] = pathAndColour(entry);
+    ctx.strokeStyle = colour || PIN_INK;
+    ctx.stroke(new Path2D(d));
+  }
+  for (const entry of icon.f || []) {
+    const [d, colour] = pathAndColour(entry);
+    ctx.fillStyle = colour || PIN_INK;
+    ctx.fill(new Path2D(d));
+  }
 
   return ctx.getImageData(0, 0, px, px);
 }
