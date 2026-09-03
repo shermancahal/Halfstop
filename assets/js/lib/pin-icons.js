@@ -122,7 +122,7 @@ export const PIN_ICONS = [
   },
   {
     id: 'cabin', name: 'Cabin / shelter', group: 'Camp',
-    f: [['M1.8 11.9 12 4.4l10.2 7.5-1.2 1.6L12 7 3 13.5Z', GLYPH.woodDark], ['M4.4 12.6h15.2v8.2H4.4Z', GLYPH.wood], ['M4.4 15h15.2v1H4.4Zm0 2.6h15.2v1H4.4Z', GLYPH.woodDark], ['M10.2 15.4h3.6v5.4h-3.6Z', GLYPH.woodDark], ['M3 20.6h18v1.5H3Z', GLYPH.woodDark]],
+    f: [['M16.2 2.6h2.6v3l-2.6-1.9ZM12 3.4 23 11.5l-1.3 1.8L12 6.1 2.3 13.3 1 11.5ZM4.4 12.6h15.2v9.8H4.4Zm2 1.9v2.4h4.2v-2.4Zm7 0v2.4h4.2v-2.4Zm-3.1 4.3v3.6h3.4v-3.6Z', GLYPH.wood]],
     tags: ['building', 'lodge', 'shelter', 'hut', 'camp'],
     sym: ['Lodge', 'Cabin', 'Shelter', 'Hut'],
   },
@@ -151,7 +151,7 @@ export const PIN_ICONS = [
   },
   {
     id: 'waterfall', name: 'Waterfall', group: 'Water',
-    f: [['M2.6 4h3.6v13.4H2.6Z', GLYPH.stoneDark], ['M17.8 4h3.6v13.4h-3.6Z', GLYPH.stoneDark], ['M2.6 3.4h18.8v2.4H2.6Z', GLYPH.stone], ['M6 5.8h12v11.6H6Z', GLYPH.water], ['M7.9 6.4h1.5v10.6H7.9Zm3.3 0h1.5v10.6h-1.5Zm3.3 0h1.5v10.6h-1.5Z', GLYPH.foam], ['M2 17.2c3.4 1.9 6.2 1.9 10 0s6.6-1.9 10 0V22H2Z', GLYPH.waterDeep], ['M7.6 16.8h8.8v1.8H7.6Z', GLYPH.foam]],
+    f: [['M2.4 2.6h19.2v2.6c-2.4.9-4.6.7-7-.3-2.8-1.2-5.4-1.2-8.1-.1-1.3.5-2.6.7-4.1.5ZM6.2 6.6h2.1l-.4 9.6H5.8Zm4.7-.2h2.2l.1 9.8h-2.3Zm4.7.4h2.1l.5 9.4h-2.3ZM2 17.8c3.2-1.5 5.9-1.5 9.1 0 3.2 1.5 6.7 1.5 10.9 0v3.6c-4.2 1.5-7.7 1.5-10.9 0-3.2-1.5-5.9-1.5-9.1 0Z', GLYPH.water]],
     tags: ['water', 'falls', 'cascade', 'cataract'],
     sym: ['Waterfall', 'Falls', 'Cascade'],
   },
@@ -194,7 +194,7 @@ export const PIN_ICONS = [
   },
   {
     id: 'forest', name: 'Forest', group: 'Terrain',
-    f: [['M12 2.2c4.8 0 8.1 3.8 8.1 8.1 0 4.5-3.6 7.6-8.1 7.6s-8.1-3.1-8.1-7.6c0-4.3 3.3-8.1 8.1-8.1Z', GLYPH.leaf], ['M10.9 16.8h2.2v5.2h-2.2Z', GLYPH.wood]],
+    f: [['M12 1.6 8.1 7.4h1.6L6.5 12h1.9l-4 5.8h6.5v4.6h2.2v-4.6h6.5l-4-5.8h1.9l-3.2-4.6h1.6Z', GLYPH.leaf]],
     sym: ['Forest', 'Park', 'Tree'],
   },
   {
@@ -321,7 +321,7 @@ export const PIN_ICONS = [
   },
   {
     id: 'tower', name: 'Fire lookout tower', group: 'Interest',
-    f: [['M7.2 21.4 10.5 8.8h3l3.3 12.6h-3.2L12 12.4l-1.6 9Z', GLYPH.wood], ['M9 16h6l.6 2.4H8.4Z', GLYPH.woodDark], ['M5.4 8h13.2v2.4H5.4Z', GLYPH.woodDark], ['M6.8 3.4h10.4v4.8H6.8Z', GLYPH.shell], ['M8.2 4.6h7.6v2.6H8.2Z', GLYPH.water], ['M5 1.4h14l-1.8 2.6H6.8Z', GLYPH.brick], ['M4.4 21.4h15.2v2.2H4.4Z', GLYPH.woodDark]],
+    f: [['M5.2 3.1h13.6l-1.5 2.2h-1v2.2h1.1v2.1H6.6V7.5h1.1V5.3h-1ZM9.5 5.3v2.2h5V5.3ZM6.6 10.4h10.8v1.5H6.6ZM8.9 12.4h1.7l-1.2 4.1h4.2l-1.2-4.1h1.7l2.6 9h-1.8l-.6-2.1H8.7l-.6 2.1H6.3ZM9.2 17.9h5.6l.4 1.4H8.8ZM4.4 21.4h15.2v1.5H4.4Z', GLYPH.wood]],
     tags: ['building', 'fire lookout', 'watchtower', 'historic'],
     sym: ['Tower', 'Lookout', 'Fire Tower', 'Fire Lookout', 'Lookout Tower', 'Observation Tower'],
   },
@@ -695,9 +695,18 @@ export function pinIconSVG(id, { size = 20, stroke = 1.7 } = {}) {
     const [d, colour] = pathAndColour(entry);
     return `<path d="${d}"${colour ? ` stroke="${colour}"` : ''}/>`;
   }).join('');
+  /*
+   * even-odd, because the detail in a drawn symbol is a hole.
+   *
+   * A cabin's windows and a lookout's cab are subpaths inside the outline,
+   * and under the default non-zero rule whether they punch through depends
+   * on which way each was wound - which is invisible in the data and was
+   * true by luck for the two that already had holes. Stating the rule makes
+   * a hole a hole.
+   */
   const fills = (icon.f || []).map((entry) => {
     const [d, colour] = pathAndColour(entry);
-    return `<path d="${d}" fill="${colour || 'currentColor'}" stroke="none"/>`;
+    return `<path d="${d}" fill="${colour || 'currentColor'}" fill-rule="evenodd" stroke="none"/>`;
   }).join('');
   // A 22-grid glyph sits one unit in from each edge of the 24 box.
   const shift = icon.grid && icon.grid !== 24 ? (24 - icon.grid) / 2 : 0;
@@ -744,7 +753,8 @@ export function rasterizePinIcon(id, { size = 22, pixelRatio = 2 } = {}) {
   for (const entry of icon.f || []) {
     const [d, colour] = pathAndColour(entry);
     ctx.fillStyle = colour || PIN_INK;
-    ctx.fill(new Path2D(d));
+    // Same rule as the SVG above, or the map image and the panel disagree.
+    ctx.fill(new Path2D(d), 'evenodd');
   }
 
   return ctx.getImageData(0, 0, px, px);

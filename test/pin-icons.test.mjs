@@ -207,31 +207,26 @@ test('pins: an illustrated symbol is filled shapes, all in the palette', () => {
 });
 
 /*
- * The two registers, asserted so a later hand does not blur them.
+ * The drawn register, on the symbols converted to it so far.
  *
- * What separates them is shading, not colour count: a tree may have a trunk
- * and a fish a white eye, but neither carries a material *and its darker
- * tone*, because that is what turns a cut-out shape into a modelled one. A
- * building is the opposite - it is the shading that makes a roof read as
- * being over a wall.
+ * One colour, and never a material beside its own darker tone: the detail is
+ * cut out of the shape with a fill rule, not modelled with shading. The list
+ * grows as the rest are converted; asserting it over the whole set today
+ * would fail on the ones still waiting.
  */
-test('pins: grown things are unshaded, built things are modelled', () => {
+const DRAWN = ['tower', 'waterfall', 'forest', 'cabin'];
+
+test('pins: a drawn symbol is one colour with its detail cut out', () => {
   const SHADED = [['wood', 'woodDark'], ['leaf', 'leafDark'], ['water', 'waterDeep'],
     ['stone', 'stoneDark'], ['brick', 'brickDark']];
-  const shadedPairs = (id) => {
-    const used = new Set(getPinIcon(id).f.map((entry) => entry[1]));
-    return SHADED.filter(([base, dark]) => used.has(GLYPH[base]) && used.has(GLYPH[dark])).length;
-  };
-  for (const id of ['forest', 'tent', 'peak', 'fishing']) {
-    assert.equal(shadedPairs(id), 0, `${id} is a silhouette and should carry no shading`);
-  }
-  /*
-   * Modelled means either a material beside its own shading, or several
-   * materials assembled - the cabin does it the first way, the camper the
-   * second. Asserting only the first was wrong, and the camper caught it.
-   */
-  for (const id of ['cabin', 'camper', 'covered-bridge', 'tower']) {
-    const colours = new Set(getPinIcon(id).f.map((entry) => entry[1])).size;
-    assert.ok(shadedPairs(id) >= 1 || colours >= 3, `${id} should be modelled, not flat`);
+  for (const id of DRAWN) {
+    const icon = getPinIcon(id);
+    const used = new Set(icon.f.map((entry) => entry[1]));
+    assert.equal(used.size, 1, `${id} should be drawn in one colour, not ${used.size}`);
+    for (const [base, dark] of SHADED) {
+      assert.ok(!(used.has(GLYPH[base]) && used.has(GLYPH[dark])), `${id} is shaded`);
+    }
+    // A cut-out needs the rule that makes holes holes.
+    assert.ok(icon.f[0][0].includes('M'), `${id} has no path`);
   }
 });
