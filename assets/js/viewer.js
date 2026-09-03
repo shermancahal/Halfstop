@@ -32,7 +32,7 @@ import {
   FolderStore, FOLDER_COLORS, readTrip, tripStanding, localDay,
 } from './lib/folders.js';
 import {
-  PIN_ICONS, DEFAULT_PIN_ICON, pinIconGroups, pinIconSVG, pinImageId, registerPinImages, rasterizePinIcon, pinColorFor, iconForSymbol,
+  PIN_ICONS, DEFAULT_PIN_ICON, pinIconGroups, pinIconSVG, pinImageId, registerPinImages, rasterizePinIcon, pinColorFor, iconForSymbol, searchPinIcons,
 } from './lib/pin-icons.js';
 import { toGPX } from './lib/gpx-write.js';
 import {
@@ -379,6 +379,23 @@ const layerIdsFor = (key) => [
   `${key}-point-icon`,
 ];
 
+
+/*
+ * How big a pin is, at every zoom, wherever one is drawn.
+ *
+ * They were sized for finding a waypoint on a state-wide view and stayed that
+ * size when you drove into the ground they mark - at street zoom a symbol was
+ * sixteen pixels on a screen with room for forty, which is the moment the
+ * symbol matters most. They now grow with the zoom, and the glyph keeps about
+ * seven tenths of the disc so it never crowds its own ring.
+ *
+ * One definition, used by both the folder layers and an open file's, so the
+ * two cannot drift apart.
+ */
+const PIN_DISC_RADIUS = ['interpolate', ['linear'], ['zoom'], 8, 6.5, 10, 8.5, 14, 14, 17, 17];
+const PIN_HALO_RADIUS = ['interpolate', ['linear'], ['zoom'], 8, 8.5, 10, 10.5, 14, 16, 17, 19];
+const PIN_RING_WIDTH = ['interpolate', ['linear'], ['zoom'], 8, 2, 10, 2.4, 14, 3, 17, 3.4];
+const PIN_ICON_SIZE = ['interpolate', ['linear'], ['zoom'], 8, 0.42, 10, 0.54, 14, 0.89, 17, 1.08];
 
 const FOLDER_LAYERS = [
   'folders-line-casing', 'folders-line', 'folders-point-halo', 'folders-point', 'folders-point-icon',
@@ -6453,7 +6470,7 @@ function addDocumentLayers(entry) {
     state.map.addLayer({
       id: halo, type: 'circle', source: sourceId, filter: IS_POINT,
       paint: {
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 9, 15, 13],
+        'circle-radius': PIN_HALO_RADIUS,
         'circle-color': 'rgba(255,255,255,0.95)',
         'circle-stroke-width': 1,
         'circle-stroke-color': 'rgba(0,0,0,0.14)',
@@ -6464,10 +6481,10 @@ function addDocumentLayers(entry) {
     state.map.addLayer({
       id: point, type: 'circle', source: sourceId, filter: IS_POINT,
       paint: {
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 7.5, 15, 11],
+        'circle-radius': PIN_DISC_RADIUS,
         'circle-color': '#ffffff',
         'circle-stroke-color': color,
-        'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 8, 2.2, 15, 3],
+        'circle-stroke-width': PIN_RING_WIDTH,
       },
     });
     bindFeatureInteractions(point);
@@ -6477,7 +6494,7 @@ function addDocumentLayers(entry) {
       id: pointIcon, type: 'symbol', source: sourceId, filter: IS_POINT,
       layout: {
         'icon-image': ['concat', 'pin-', ['coalesce', ['get', 'icon'], DEFAULT_PIN_ICON]],
-        'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.5, 15, 0.72],
+        'icon-size': PIN_ICON_SIZE,
         // Never dropped for collision: a waypoint you cannot see is worse than
         // two that overlap.
         'icon-allow-overlap': true,
@@ -6744,23 +6761,47 @@ function showDropPin(position) {
     symbolButton.innerHTML = `${pinIconSVG(feature.properties.icon, { size: 20 })}<span>Symbol</span>`;
   };
 
-  for (const [group, choices] of pinIconGroups()) {
-    symbolGrid.append(el('p', { class: 'drop-pin-symbols-group', text: group }));
-    symbolGrid.append(el('div', { class: 'drop-pin-symbols-row' }, choices.map((choice) => el('button', {
-      class: `drop-pin-symbol-choice${choice.id === feature.properties.icon ? ' is-on' : ''}`,
-      type: 'button', title: choice.name, 'aria-label': choice.name,
-      html: pinIconSVG(choice.id, { size: 19 }),
-      onclick: (event) => {
-        feature.properties.icon = choice.id;
-        for (const node of symbolGrid.querySelectorAll('.drop-pin-symbol-choice')) {
-          node.classList.toggle('is-on', node === event.currentTarget);
-        }
-        paintSymbol();
-        symbolGrid.hidden = true;
-        symbolButton.setAttribute('aria-expanded', 'false');
-      },
-    }))));
-  }
+  // The same search as the folder editor's picker: forty words in a wheel was
+  // already awkward, and there are a hundred and seventy symbols now.
+  const symbolSearch = el('input', {
+    class: 'icon-search', type: 'search', 'aria-label': 'Search symbols',
+    placeholder: 'Search symbols \u2014 building, water, rail\u2026',
+    oninput: () => paintSymbolList(),
+  });
+  const symbolChoice = (choice) => el('button', {
+    class: `drop-pin-symbol-choice${choice.id === feature.properties.icon ? ' is-on' : ''}`,
+    type: 'button', title: choice.name, 'aria-label': choice.name,
+    html: pinIconSVG(choice.id, { size: 19 }),
+    onclick: (event) => {
+      feature.properties.icon = choice.id;
+      for (const node of symbolGrid.querySelectorAll('.drop-pin-symbol-choice')) {
+        node.classList.toggle('is-on', node === event.currentTarget);
+      }
+      paintSymbol();
+      symbolGrid.hidden = true;
+      symbolButton.setAttribute('aria-expanded', 'false');
+    },
+  });
+  const paintSymbolList = () => {
+    const query = symbolSearch.value.trim();
+    symbolGrid.replaceChildren(symbolSearch);
+    if (query) {
+      const found = searchPinIcons(query);
+      symbolGrid.append(el('p', {
+        class: 'drop-pin-symbols-group',
+        text: found.length ? `${found.length} match${found.length === 1 ? '' : 'es'}` : 'Nothing matches that',
+      }));
+      if (found.length) symbolGrid.append(el('div', { class: 'drop-pin-symbols-row' }, found.map(symbolChoice)));
+      return;
+    }
+    for (const [group, choices] of pinIconGroups()) {
+      symbolGrid.append(
+        el('p', { class: 'drop-pin-symbols-group', text: group }),
+        el('div', { class: 'drop-pin-symbols-row' }, choices.map(symbolChoice)),
+      );
+    }
+  };
+  paintSymbolList();
   paintSymbol();
   symbolButton.addEventListener('click', () => {
     symbolGrid.hidden = !symbolGrid.hidden;
@@ -9166,7 +9207,7 @@ function addFolderLayers() {
     state.map.addLayer({
       id: halo, type: 'circle', source: FOLDER_SOURCE, filter: IS_POINT,
       paint: {
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 9, 15, 13],
+        'circle-radius': PIN_HALO_RADIUS,
         'circle-color': 'rgba(255,255,255,0.95)',
         'circle-stroke-width': 1,
         'circle-stroke-color': 'rgba(0,0,0,0.14)',
@@ -9177,10 +9218,10 @@ function addFolderLayers() {
     state.map.addLayer({
       id: point, type: 'circle', source: FOLDER_SOURCE, filter: IS_POINT,
       paint: {
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 7.5, 15, 11],
+        'circle-radius': PIN_DISC_RADIUS,
         'circle-color': '#ffffff',
         'circle-stroke-color': pinColor,
-        'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 8, 2.2, 15, 3],
+        'circle-stroke-width': PIN_RING_WIDTH,
       },
     });
     bindFeatureInteractions(point);
@@ -9191,7 +9232,7 @@ function addFolderLayers() {
       id: iconLayer, type: 'symbol', source: FOLDER_SOURCE, filter: IS_POINT,
       layout: {
         'icon-image': ['concat', 'pin-', ['coalesce', ['get', 'pinIcon'], DEFAULT_PIN_ICON]],
-        'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.5, 15, 0.72],
+        'icon-size': PIN_ICON_SIZE,
         // Pins must never be dropped for collision — a hidden saved waypoint is
         // worse than an overlapping one.
         'icon-allow-overlap': true,
@@ -11142,34 +11183,59 @@ function openStyleEditor(folder, itemIds, anchor) {
 
   /* icon */
   editor.append(el('div', { class: 'style-label', text: 'Icon' }));
+  /*
+   * A search, because there are now more symbols than a grid can be scanned
+   * for. It matches the word a person would type rather than the name we gave
+   * the picture: "building" brings back the house, the church and the mill,
+   * and "rail" does not bring back every ski trail.
+   */
+  const iconSearch = el('input', {
+    class: 'icon-search', type: 'search', 'aria-label': 'Search symbols',
+    placeholder: 'Search symbols \u2014 building, water, rail\u2026',
+    oninput: () => paintList(),
+  });
   const iconWrap = el('div', { class: 'icon-picker' });
   const paintIcons = () => {
     iconWrap.querySelectorAll('.icon-choice').forEach((node) => {
       node.classList.toggle('is-chosen', node.dataset.icon === (chosenIcon || ''));
     });
   };
-  iconWrap.append(el('button', {
+  const inherit = el('button', {
     class: 'icon-choice is-inherit', type: 'button', dataset: { icon: '' },
     title: 'Clear the override and use the plain pin',
     'aria-label': 'Use the default pin icon',
     html: pinIconSVG(DEFAULT_PIN_ICON, { size: 17 }),
     onclick: () => { chosenIcon = null; iconTouched = true; paintIcons(); },
-  }));
-  for (const [group, icons] of pinIconGroups()) {
-    iconWrap.append(el('div', { class: 'icon-group-label', text: group }));
-    const grid = el('div', { class: 'icon-grid' });
-    for (const icon of icons) {
-      grid.append(el('button', {
-        class: 'icon-choice', type: 'button', dataset: { icon: icon.id },
-        title: icon.name, 'aria-label': icon.name,
-        html: pinIconSVG(icon.id, { size: 17 }),
-        onclick: () => { chosenIcon = icon.id; iconTouched = true; paintIcons(); },
+  });
+  const iconChoice = (icon) => el('button', {
+    class: 'icon-choice', type: 'button', dataset: { icon: icon.id },
+    title: icon.name, 'aria-label': icon.name,
+    html: pinIconSVG(icon.id, { size: 17 }),
+    onclick: () => { chosenIcon = icon.id; iconTouched = true; paintIcons(); },
+  });
+  const paintList = () => {
+    const query = iconSearch.value.trim();
+    iconWrap.replaceChildren(inherit);
+
+    if (query) {
+      const found = searchPinIcons(query);
+      iconWrap.append(el('div', {
+        class: 'icon-group-label',
+        text: found.length ? `${found.length} match${found.length === 1 ? '' : 'es'}` : 'Nothing matches that',
       }));
+      if (found.length) iconWrap.append(el('div', { class: 'icon-grid' }, found.map(iconChoice)));
+    } else {
+      for (const [group, icons] of pinIconGroups()) {
+        iconWrap.append(
+          el('div', { class: 'icon-group-label', text: group }),
+          el('div', { class: 'icon-grid' }, icons.map(iconChoice)),
+        );
+      }
     }
-    iconWrap.append(grid);
-  }
-  editor.append(iconWrap);
-  paintIcons();
+    paintIcons();
+  };
+  editor.append(iconSearch, iconWrap);
+  paintList();
 
   const actions = el('div', { class: 'picker-row' }, [
     el('button', {

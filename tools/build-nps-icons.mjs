@@ -82,6 +82,39 @@ const SIGNS = [
   'whale-viewing', 'wi-fi', 'wilderness',
 ];
 
+/*
+ * Which drawer each sign belongs in.
+ *
+ * A hundred and seven pictograms in one flat list is a wall, and the reader
+ * looking for "golf" should not have to scan past a fish ladder to reach it.
+ * The groups are the ones the drawn set already uses, so a search that turns
+ * up both kinds shows them under headings that mean the same thing.
+ */
+const GROUPS = {
+  Camp: ['campfire', 'campsite', 'shelter', 'lodging'],
+  Water: ['boating', 'canoe-access', 'fishing', 'fishing-pier', 'kayaking', 'marina',
+    'river-rafting', 'sea-plane', 'swimming', 'tidepooling', 'vehicle-ferry', 'wading',
+    'waterfall', 'waterfowl', 'whale-viewing', 'dam', 'fish-hatchery', 'fish-ladder',
+    'lighthouse', 'shipwreck', 'spring', 'drinking-water'],
+  Recreation: ['bicycle-trail', 'climbing', 'cross-country-ski-trail', 'downhill-skiing',
+    'golfing', 'horseback-riding', 'hunting', 'ice-skating', 'motor-bike-trail', 'playground',
+    'sledding', 'snowmobile-trail', 'star-gazing', 'self-guiding-trail', 'trailhead',
+    'viewing-area', 'scenic-viewpoint', 'photography', 'bear-viewing', 'birding-wildlife-viewing',
+    'deer-viewing', 'flower-viewing', 'rock-collecting', 'caving', 'geyser', 'wilderness'],
+  Places: ['historic-feature', 'monument', 'museum', 'statue', 'cannon', 'chapel', 'library',
+    'post-office', 'visitor-center', 'ranger-station', 'entrance-station', 'hospital',
+    'first-aid', 'lookout-tower', 'amphitheater', 'interpretive-exhibit', 'theater', 'sign',
+    'flagpole', 'stable', 'point-of-interest'],
+  Ways: ['bridge', 'tunnel', 'rail-station', 'rr-xing', 'airport', 'airfield', 'bus-stop',
+    'metro-station', 'parking', 'four-wheel-drive-road', 'towing', 'gas-station', 'mechanic',
+    'electric-car-charging'],
+  Services: ['food-service', 'store', 'showers', 'restrooms', 'telephone', 'wi-fi',
+    'cellular-signal', 'sanitary-disposal-station'],
+  Hazard: ['falling-rocks', 'rattlesnakes', 'construction', 'emergencies'],
+};
+
+const groupOf = (symbol) => Object.keys(GROUPS).find((name) => GROUPS[name].includes(symbol)) || 'Places';
+
 const titled = (symbol) => symbol.split('-').map((word, at) => (at === 0 ? word[0].toUpperCase() + word.slice(1) : word))
   .join(' ').replace(/\bRr xing\b/, 'Railroad crossing').replace(/\bWi fi\b/, 'Wi-Fi').replace(/\bRv\b/, 'RV');
 
@@ -90,7 +123,7 @@ const titled = (symbol) => symbol.split('-').map((word, at) => (at === 0 ? word[
 const ALL = [
   ...WANTED,
   ...SIGNS.filter((symbol) => !WANTED.some((want) => want.symbol === symbol))
-    .map((symbol) => ({ id: symbol, symbol, name: titled(symbol) })),
+    .map((symbol) => ({ id: symbol, symbol, name: titled(symbol), group: groupOf(symbol) })),
 ];
 
 const numbers = (text) => (text.match(/-?\d*\.?\d+/g) || []).map(Number);
@@ -162,6 +195,17 @@ if (!root) {
   process.exit(1);
 }
 
+// A symbol listed in a group but not in SIGNS is a typo that would otherwise
+// go unnoticed, since grouping falls back rather than failing.
+const grouped = Object.values(GROUPS).flat();
+const strays = grouped.filter((symbol) => !SIGNS.includes(symbol) && !WANTED.some((w) => w.symbol === symbol));
+if (strays.length) {
+  console.error(`  grouped but never built: ${strays.join(', ')}`);
+  process.exit(1);
+}
+const ungrouped = SIGNS.filter((symbol) => !grouped.includes(symbol));
+if (ungrouped.length) console.log(`  falling back to Places: ${ungrouped.join(', ')}`);
+
 const entries = [];
 for (const want of ALL) {
   const file = path.join(root, 'src', 'standalone', `${want.symbol}-white-22.svg`);
@@ -194,8 +238,8 @@ const body = `/**
  * work of the United States government.
  */
 
-/** @type {{id: string, symbol: string, name: string, f: string[]}[]} */
-export const NPS_ICONS = ${JSON.stringify(entries.map(({ id, symbol, name, f }) => ({ id, symbol, name, f })), null, 2)};
+/** @type {{id: string, symbol: string, name: string, group: string, f: string[]}[]} */
+export const NPS_ICONS = ${JSON.stringify(entries.map(({ id, symbol, name, group, f }) => ({ id, symbol, name, group: group || 'Places', f })), null, 2)};
 
 /** The grid every path above is drawn on. */
 export const NPS_VIEWBOX = 22;

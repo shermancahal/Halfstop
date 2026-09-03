@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   PIN_ICONS, PIN_INK, iconForSymbol, pinColorFor, getPinIcon, DEFAULT_PIN_ICON,
+  searchPinIcons, pinIconGroups,
 } from '../assets/js/lib/pin-icons.js';
 
 /*
@@ -79,7 +80,7 @@ test('pins: the ring is the pin\'s own colour, else ink', () => {
  * the 22-unit grid it was drawn on so it is centred rather than cornered.
  */
 test('pins: the park signs are in the picker, prefixed and on their grid', () => {
-  const signs = PIN_ICONS.filter((icon) => icon.group === 'Park signs');
+  const signs = PIN_ICONS.filter((icon) => icon.sign);
   assert.ok(signs.length >= 90, `${signs.length} park signs`);
   for (const icon of signs) {
     assert.match(icon.id, /^nps-[a-z0-9-]+$/);
@@ -89,4 +90,65 @@ test('pins: the park signs are in the picker, prefixed and on their grid', () =>
   for (const wanted of ['nps-lookout-tower', 'nps-waterfall', 'nps-chapel', 'nps-cannon', 'nps-rail-station', 'nps-tunnel', 'nps-lighthouse', 'nps-dam']) {
     assert.ok(signs.some((icon) => icon.id === wanted), `${wanted} missing`);
   }
+});
+
+/*
+ * A hundred and seventy symbols in one flat list is a wall. Every sign lands
+ * in one of the headings the drawn set already uses, and the ones that are
+ * plainly a pastime are under Recreation rather than filed with the buildings.
+ */
+test('pins: park signs are filed under the same headings as the drawn set', () => {
+  const groups = pinIconGroups();
+  assert.ok(!groups.has('Park signs'), 'the flat list is gone');
+  assert.ok(groups.has('Recreation'), 'there is somewhere for golf and skiing to live');
+
+  const groupOf = (id) => PIN_ICONS.find((icon) => icon.id === id)?.group;
+  assert.equal(groupOf('nps-golfing'), 'Recreation');
+  assert.equal(groupOf('nps-downhill-skiing'), 'Recreation');
+  assert.equal(groupOf('nps-waterfall'), 'Water', 'a waterfall is water, wherever the picture came from');
+  assert.equal(groupOf('waterfall'), 'Water');
+  assert.equal(groupOf('nps-rail-station'), 'Ways');
+
+  // And nothing is left in a heading of its own by accident.
+  for (const [name, icons] of groups) assert.ok(icons.length >= 3, `${name} holds only ${icons.length}`);
+});
+
+/*
+ * The search has to answer the word somebody types, not the name we happened
+ * to give a picture. "building" is the case that matters: nobody scrolls a
+ * grid of a hundred and seventy looking for a courthouse.
+ */
+test('pins: searching finds symbols by the word a person would type', () => {
+  const ids = (query) => searchPinIcons(query).map((icon) => icon.id);
+
+  const buildings = ids('building');
+  for (const wanted of ['house', 'church', 'school', 'hospital', 'industry', 'abandoned-building']) {
+    assert.ok(buildings.includes(wanted), `"building" should find ${wanted}`);
+  }
+  assert.ok(ids('abandoned').includes('ruins'), 'a ghost town is abandoned');
+  assert.deepEqual(ids('covered bridge'), ['covered-bridge'], 'both words have to match');
+  assert.ok(ids('fire lookout').includes('tower'));
+  assert.ok(ids('golf').includes('nps-golfing'));
+  assert.deepEqual(ids('xyzzy'), []);
+  assert.deepEqual(searchPinIcons(''), [], 'an empty query is not a match-everything');
+});
+
+/*
+ * Substring matching made "rail" find every ski *trail*, which is how a
+ * reader learns the search does not work. A term matches a word it starts.
+ */
+test('pins: a search term matches a word it starts, not any substring', () => {
+  const rail = searchPinIcons('rail').map((icon) => icon.id);
+  assert.ok(rail.includes('railroad'));
+  assert.ok(!rail.includes('nps-cross-country-ski-trail'), 'rail is not trail');
+  assert.ok(searchPinIcons('trail').map((icon) => icon.id).includes('trailhead'));
+});
+
+test('pins: the abandoned building is its own symbol, not the shut shop', () => {
+  const building = PIN_ICONS.find((icon) => icon.id === 'abandoned-building');
+  const shop = PIN_ICONS.find((icon) => icon.id === 'abandoned');
+  assert.ok(building && shop);
+  assert.notDeepEqual(building.d, shop.d, 'two ideas, two drawings');
+  assert.equal(iconForSymbol('Abandoned Building'), 'abandoned-building');
+  assert.equal(iconForSymbol('abandoned'), 'abandoned');
 });

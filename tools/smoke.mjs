@@ -734,6 +734,23 @@ const openFilePins = await page.evaluate(() => {
   };
 });
 check('an open file draws its waypoints with a symbol', openFilePins.icon, true);
+// Bigger as you zoom in: at street zoom the symbol matters most, and it was
+// the same sixteen pixels there as on a state-wide view.
+const pinGrowth = await page.evaluate(() => {
+  const spec = window.__map._l?.get('folders-point');
+  const icon = window.__map._l?.get('folders-point-icon');
+  const at = (ramp, zoom) => {
+    const stops = ramp.slice(3);
+    for (let i = 0; i < stops.length; i += 2) if (stops[i] === zoom) return stops[i + 1];
+    return null;
+  };
+  return {
+    disc: [at(spec.paint['circle-radius'], 8), at(spec.paint['circle-radius'], 14)],
+    glyph: [at(icon.layout['icon-size'], 8), at(icon.layout['icon-size'], 14)],
+  };
+});
+check('a pin grows past zoom 10', pinGrowth.disc[1] > pinGrowth.disc[0] * 1.8, true);
+check('and its symbol grows with it', pinGrowth.glyph[1] > pinGrowth.glyph[0] * 1.8, true);
 check('from the pin set', openFilePins.named, 'pin-');
 check('on a white disc', openFilePins.fill, '#ffffff');
 check('with the colour as its ring', openFilePins.ringed, true);
@@ -757,6 +774,37 @@ check('the folder row is name, count, eye, edit', folderHead.order, ['folder-dis
 check('and nothing else - no swatch beside the name', folderHead.extras, 5);
 check('and edit as a mark rather than a word', folderHead.editIsMark, true);
 check('and nothing written under the pins', folderHead.prose, 0);
+
+/*
+ * The symbol picker searches, because there are a hundred and seventy of them
+ * now and a grid that size cannot be scanned. What is checked is the word a
+ * person would actually type: "building" has to bring back the house and the
+ * church, whose names do not contain it.
+ */
+await page.locator('#folder-list .folder-menu-button').first().click();
+await page.waitForTimeout(300);
+check('the picker offers a search', await page.locator('.style-editor .icon-search').count(), 1);
+const grouped = await page.locator('.style-editor .icon-group-label').count();
+check('and groups the symbols when nothing is typed', grouped > 6, true);
+await page.fill('.style-editor .icon-search', 'building');
+await page.waitForTimeout(200);
+const buildingSearch = await page.evaluate(() => ({
+  heading: document.querySelector('.style-editor .icon-group-label')?.textContent.trim(),
+  names: [...document.querySelectorAll('.style-editor .icon-choice')].map((n) => n.getAttribute('aria-label')),
+}));
+check('a search says how many it found', /matches$/.test(buildingSearch.heading || ''), true);
+check('and finds buildings whose names are not "building"',
+  ['House', 'Church', 'School', 'Hospital'].every((name) => buildingSearch.names.includes(name)), true);
+await page.fill('.style-editor .icon-search', 'xyzzy');
+await page.waitForTimeout(200);
+check('a query that matches nothing says so',
+  await page.locator('.style-editor .icon-group-label', { hasText: 'Nothing matches that' }).count(), 1);
+await page.fill('.style-editor .icon-search', '');
+await page.waitForTimeout(200);
+check('and clearing it brings the groups back',
+  await page.locator('.style-editor .icon-group-label').count(), grouped);
+await shot(page.locator('.style-editor'), 'icon-picker');
+await page.keyboard.press('Escape');
 await shot(page.locator('#folder-list .folder').first(), 'folder-row');
 check('folder layers present', afterImport.folderLayers, 5);
 check('document layers present', afterImport.documentLayers > 0, true);

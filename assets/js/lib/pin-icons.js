@@ -28,6 +28,7 @@ import { NPS_ICONS } from './nps-icons.js';
  * @property {string[]} d    stroked SVG paths on a 24x24 viewBox
  * @property {string[]} [f]  filled SVG paths, drawn after the stroked ones
  * @property {string[]} [sym] GPX <sym> / KML icon names that map to this icon
+ * @property {string[]} [tags] extra words the picker's search should find it by
  * @property {number} [grid] the grid the paths are drawn on, when it is not 24
  */
 
@@ -41,11 +42,18 @@ import { NPS_ICONS } from './nps-icons.js';
  * strokes on 24, so each carries `grid: 22` and is nudged into the middle
  * when drawn. Ids are prefixed, since "cabin" and "trailhead" already name
  * drawn icons and a saved pin has to keep meaning what it meant.
+ *
+ * Their groups come from the library build, so a search that turns up both
+ * kinds lists them under headings that mean the same thing.
  */
 const PARK_SIGNS = NPS_ICONS.map((icon) => ({
   id: `nps-${icon.symbol}`,
   name: icon.name,
-  group: 'Park signs',
+  // Filed under the same headings as the drawn set rather than in one flat
+  // list of a hundred and seven, so somebody looking for golf does not scan
+  // past a fish ladder to reach it.
+  group: icon.group,
+  sign: true,
   grid: 22,
   f: icon.f,
 }));
@@ -56,22 +64,26 @@ export const PIN_ICONS = [
   {
     id: 'tent', name: 'Tent site', group: 'Camp',
     d: ['M12 4 3.5 20h17L12 4Z', 'M12 4v16'],
+    tags: ['camp', 'campground', 'campsite', 'recreation'],
     sym: ['Campground', 'Camp', 'Tent', 'Campsite'],
   },
   {
     id: 'camper', name: 'Camper / RV', group: 'Camp',
     d: ['M2 7h13a5 5 0 0 1 5 5v5H2V7Z', 'M6 10h5v3H6z', 'M2 17h20'],
     f: ['M7.5 20a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z', 'M16.5 20a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z'],
+    tags: ['rv', 'trailer', 'motorhome', 'camp', 'recreation'],
     sym: ['RV', 'Trailer Head', 'RV Park'],
   },
   {
     id: 'campfire', name: 'Campfire', group: 'Camp',
     d: ['M12 3c2.5 3 4 5 4 7.5a4 4 0 0 1-8 0C8 8 9.5 6 12 3Z', 'M4 20l16-4', 'M4 16l16 4'],
+    tags: ['fire', 'camp', 'ring', 'recreation'],
     sym: ['Fire', 'Campfire'],
   },
   {
     id: 'cabin', name: 'Cabin / shelter', group: 'Camp',
     d: ['M3 11 12 4l9 7', 'M5 10v10h14V10', 'M10 20v-6h4v6'],
+    tags: ['building', 'lodge', 'shelter', 'hut', 'camp'],
     sym: ['Lodge', 'Cabin', 'Shelter', 'Hut'],
   },
   {
@@ -95,22 +107,26 @@ export const PIN_ICONS = [
   {
     id: 'spring', name: 'Spring', group: 'Water',
     d: ['M12 4v7', 'M8.5 7.5 12 4l3.5 3.5', 'M3 16c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2'],
+    tags: ['water', 'seep', 'source'],
     sym: ['Spring'],
   },
   {
     id: 'waterfall', name: 'Waterfall', group: 'Water',
     d: ['M6 3v11', 'M12 3v11', 'M18 3v11', 'M3 18c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2'],
+    tags: ['water', 'falls', 'cascade', 'cataract'],
     sym: ['Waterfall', 'Falls', 'Cascade'],
   },
   {
     id: 'ford', name: 'River crossing', group: 'Water',
     d: ['M3 8c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2', 'M3 16c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2', 'M9 3v18'],
+    tags: ['water', 'crossing', 'creek', 'stream'],
     sym: ['Ford', 'Crossing'],
   },
   {
     id: 'fishing', name: 'Fishing', group: 'Water',
     d: ['M3 12c4-5 10-5 14 0-4 5-10 5-14 0Z', 'M17 12l4-3v6l-4-3'],
     f: ['M8 11.2a.9.9 0 1 0 0 1.8.9.9 0 0 0 0-1.8Z'],
+    tags: ['fish', 'angling', 'water', 'recreation'],
     sym: ['Fishing Area', 'Fishing'],
   },
 
@@ -118,6 +134,7 @@ export const PIN_ICONS = [
   {
     id: 'peak', name: 'Summit', group: 'Terrain',
     d: ['M2 20 9.5 6l4.5 8 2.5-4L22 20H2Z'],
+    tags: ['summit', 'mountain', 'high point', 'recreation'],
     sym: ['Summit', 'Peak', 'Mountain'],
   },
   {
@@ -128,11 +145,13 @@ export const PIN_ICONS = [
   {
     id: 'viewpoint', name: 'Overlook', group: 'Terrain',
     d: ['M2 12s3.8-6.5 10-6.5S22 12 22 12s-3.8 6.5-10 6.5S2 12 2 12Z', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z'],
+    tags: ['view', 'vista', 'scenic', 'overlook', 'recreation'],
     sym: ['Scenic Area', 'Overlook', 'Viewpoint', 'Vista'],
   },
   {
     id: 'cave', name: 'Cave', group: 'Terrain',
     d: ['M3 20V13a9 9 0 0 1 18 0v7', 'M9 20v-4a3 3 0 0 1 6 0v4'],
+    tags: ['cavern', 'karst', 'grotto', 'recreation'],
     sym: ['Cave'],
   },
   {
@@ -150,6 +169,7 @@ export const PIN_ICONS = [
   {
     id: 'trailhead', name: 'Trailhead', group: 'Access',
     d: ['M7 21c0-6 3-6 3-11S7 5 7 3', 'M17 21c0-5-3-5-3-9s3-4 3-6'],
+    tags: ['hike', 'hiking', 'walk', 'recreation', 'trail'],
     sym: ['Trailhead', 'Trail Head', 'Hiking', 'Hiker', 'Trail', 'Recreation', 'Recreation Area'],
   },
   {
@@ -160,17 +180,20 @@ export const PIN_ICONS = [
   {
     id: 'gate', name: 'Gate', group: 'Access',
     d: ['M3 6v14', 'M21 6v14', 'M3 9h18', 'M3 16h18', 'M3 12.5h18'],
+    tags: ['access', 'barrier'],
     sym: ['Gate'],
   },
   {
     id: 'gate-locked', name: 'Locked gate', group: 'Access',
     d: ['M4 6v14', 'M20 6v14', 'M4 9h16', 'M4 16h16', 'M9.5 14.5h5v4h-5z', 'M10.5 14.5v-1.5a1.5 1.5 0 0 1 3 0v1.5'],
+    tags: ['access', 'barrier', 'closed', 'private'],
     sym: ['Locked Gate', 'Closed'],
   },
   {
     id: 'fourwd', name: '4WD / high clearance', group: 'Access',
     d: ['M3 15h18', 'M5 15V9l3-3h6l3 4v5'],
     f: ['M7.5 19a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4Z', 'M16.5 19a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4Z'],
+    tags: ['4wd', 'four wheel drive', 'high clearance', 'offroad'],
     sym: ['Four Wheel Drive', '4WD', 'Off Road'],
   },
   {
@@ -181,6 +204,7 @@ export const PIN_ICONS = [
   {
     id: 'bridge', name: 'Bridge', group: 'Access',
     d: ['M2 9h20', 'M3 9v10', 'M21 9v10', 'M3 15c4.5-5 13.5-5 18 0'],
+    tags: ['crossing', 'span', 'trestle', 'viaduct'],
     sym: ['Bridge', 'Trestle Bridge', 'Truss'],
   },
   {
@@ -234,6 +258,7 @@ export const PIN_ICONS = [
   {
     id: 'signal', name: 'Cell signal', group: 'Services',
     d: ['M4 20V14', 'M9.3 20V10', 'M14.7 20V6', 'M20 20V3'],
+    tags: ['cell', 'phone', 'reception', 'tower'],
     sym: ['Cell Tower', 'Signal', 'Telephone'],
   },
 
@@ -241,26 +266,31 @@ export const PIN_ICONS = [
   {
     id: 'historic', name: 'Historic site', group: 'Interest',
     d: ['M3 20h18', 'M5 20V9l7-5 7 5v11', 'M9 20v-6h6v6'],
+    tags: ['building', 'landmark', 'heritage', 'monument', 'museum'],
     sym: ['Building', 'Historic', 'Historic Site', 'Museum', 'Monument', 'Landmark', 'Courthouse'],
   },
   {
     id: 'ruins', name: 'Ghost town / ruins', group: 'Interest',
     d: ['M3 21V11l4-3v4l4-3v5l4-4v4l3-2v9', 'M2 21h20'],
+    tags: ['building', 'ghost town', 'abandoned', 'derelict', 'historic'],
     sym: ['Ghost Town', 'Ruins', 'Ruin', 'Abandoned Town'],
   },
   {
     id: 'mine', name: 'Mine', group: 'Interest',
     d: ['M4 20 14 5', 'M9.5 12.5 20 20', 'M17 4l3 3', 'M15.5 5.5 18.5 8.5'],
+    tags: ['mining', 'quarry', 'shaft', 'adit', 'industry'],
     sym: ['Mine', 'Mining'],
   },
   {
     id: 'tower', name: 'Fire lookout tower', group: 'Interest',
     d: ['M6 21 12 3l6 18', 'M8.2 14h7.6', 'M9.6 9h4.8', 'M4 21h16'],
+    tags: ['building', 'fire lookout', 'watchtower', 'historic'],
     sym: ['Tower', 'Lookout', 'Fire Tower', 'Fire Lookout', 'Lookout Tower', 'Observation Tower'],
   },
   {
     id: 'photo', name: 'Photo spot', group: 'Interest',
     d: ['M3 8h4l2-3h6l2 3h4v12H3V8Z', 'M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z'],
+    tags: ['camera', 'picture', 'photography'],
     sym: ['Photo', 'Camera'],
   },
   {
@@ -292,74 +322,96 @@ export const PIN_ICONS = [
   {
     id: 'pin', name: 'Plain pin', group: 'Basic',
     d: ['M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11Z', 'M12 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z'],
+    tags: ['marker', 'generic', 'other', 'misc', 'default'],
     sym: ['Waypoint', 'Pin', 'Dot', 'Circle'],
   },
   {
     id: 'flag', name: 'Flag', group: 'Basic',
     d: ['M5 21V4', 'M5 5h12l-2.5 4L17 13H5'],
+    tags: ['marker', 'generic', 'other', 'misc'],
     sym: ['Flag', 'Flag, Blue', 'Flag, Green', 'Flag, Red'],
   },
   {
     id: 'star', name: 'Star', group: 'Basic',
     d: ['M12 3.5l2.6 5.6 6 .8-4.4 4.3 1.1 6.1-5.3-2.9-5.3 2.9 1.1-6.1L3.4 9.9l6-.8L12 3.5Z'],
+    tags: ['marker', 'favourite', 'favorite', 'generic', 'other', 'misc'],
     sym: ['Star', 'Favorite', 'Anchor'],
   },
   {
     id: 'marker', name: 'Cross-hair', group: 'Basic',
     d: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M12 3v4', 'M12 17v4', 'M3 12h4', 'M17 12h4'],
+    tags: ['generic', 'other', 'misc', 'crosshair'],
     sym: ['Crosshair', 'Target'],
   },
   /* -------------------------------------------------------------- places */
   {
     id: 'house', name: 'House', group: 'Places',
     d: ['M3 12 12 4l9 8', 'M5 10.5V21h14V10.5', 'M10 21v-5h4v5', 'M17 5v3.5'],
+    tags: ['building', 'home', 'residence', 'farmhouse', 'dwelling'],
     sym: ['House', 'Home', 'Residence', 'Farmhouse'],
   },
   {
     id: 'abandoned', name: 'Abandoned business', group: 'Places',
     d: ['M3 21V9', 'M21 21V9', 'M2 9l2-4h16l2 4', 'M2 21h20', 'M9 21v-7h6v7', 'M9 14l6 7', 'M15 14l-6 7'],
+    tags: ['building', 'store', 'shop', 'business', 'derelict', 'vacant', 'closed'],
     sym: ['Abandoned', 'Abandoned Business', 'Derelict', 'Vacant', 'Out of Business'],
+  },
+  {
+    id: 'abandoned-building', name: 'Abandoned building', group: 'Places',
+    // A building crossed out, where 'abandoned' is a storefront with its
+    // awning: one is a shut shop, the other is a boarded-up house or works.
+    d: ['M4 21V9l8-5 8 5v12', 'M2 21h20', 'M7.5 12.5l9 6', 'M16.5 12.5l-9 6'],
+    tags: ['building', 'derelict', 'boarded', 'condemned', 'empty', 'ruin', 'house', 'decay'],
+    sym: ['Abandoned Building', 'Derelict Building', 'Boarded Up', 'Condemned'],
   },
   {
     id: 'hospital', name: 'Hospital', group: 'Places',
     d: ['M4 21V6h16v15', 'M2 21h20', 'M12 8.5v6', 'M9 11.5h6', 'M10 21v-3.5h4V21'],
+    tags: ['building', 'medical', 'asylum', 'sanatorium', 'clinic'],
     sym: ['Hospital', 'Medical', 'Clinic', 'Asylum', 'Sanatorium'],
   },
   {
     id: 'school', name: 'School', group: 'Places',
     d: ['M2 9l10-4 10 4-10 4L2 9Z', 'M6 11v5c0 1.5 3 3 6 3s6-1.5 6-3v-5', 'M22 9v5'],
+    tags: ['building', 'schoolhouse', 'college', 'university'],
     sym: ['School', 'Schoolhouse', 'College', 'University', 'Academy'],
   },
   {
     id: 'church', name: 'Church', group: 'Places',
     d: ['M12 2v5', 'M9.5 4.5h5', 'M6 21V12l6-5 6 5v9', 'M2 21h20', 'M10 21v-4h4v4'],
+    tags: ['building', 'chapel', 'religious', 'worship', 'meetinghouse'],
     sym: ['Church', 'Chapel', 'Religious', 'Place of Worship', 'Mission', 'Temple'],
   },
   {
     id: 'industry', name: 'Industry', group: 'Places',
     d: ['M3 21V10l5 3v-3l5 3v-3l5 3v8', 'M2 21h20', 'M4 10V4h3v7'],
+    tags: ['building', 'factory', 'mill', 'plant', 'works', 'furnace'],
     sym: ['Industry', 'Factory', 'Mill', 'Plant', 'Industrial', 'Furnace', 'Works'],
   },
   {
     id: 'military', name: 'Military', group: 'Places',
     d: ['M12 3 4 6v6c0 4.5 3.5 7.6 8 9 4.5-1.4 8-4.5 8-9V6l-8-3Z'],
     f: ['M12 8l1.2 2.4 2.6.4-1.9 1.8.5 2.6L12 14l-2.4 1.2.5-2.6-1.9-1.8 2.6-.4L12 8Z'],
+    tags: ['building', 'fort', 'base', 'armory', 'battlefield'],
     sym: ['Military', 'Fort', 'Base', 'Armory', 'Battlefield', 'Bunker'],
   },
   {
     id: 'cemetery', name: 'Cemetery', group: 'Places',
     d: ['M6 21V9a6 6 0 0 1 12 0v12', 'M3 21h18', 'M12 8v7', 'M9 11h6'],
+    tags: ['grave', 'graveyard', 'burial', 'headstone', 'historic'],
     sym: ['Cemetery', 'Grave', 'Graveyard', 'Burial', 'Tomb'],
   },
   {
     id: 'lighthouse', name: 'Lighthouse', group: 'Places',
     d: ['M9 21l1.5-11h3L15 21', 'M8 10h8', 'M10 10V6h4v4', 'M6 21h12', 'M2.5 8h3.5', 'M18 8h3.5', 'M9.8 15.5h4.4'],
+    tags: ['building', 'beacon', 'light', 'water', 'coast'],
     sym: ['Lighthouse', 'Light', 'Beacon'],
   },
   {
     id: 'scenic', name: 'Scenic view', group: 'Places',
     d: ['M2 20l6-9 4 6 3-4 7 7H2Z'],
     f: ['M17.5 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z'],
+    tags: ['view', 'vista', 'overlook', 'landscape', 'recreation'],
     sym: ['Scenic', 'Scenic View', 'Scenery', 'Landscape', 'View'],
   },
 
@@ -367,31 +419,37 @@ export const PIN_ICONS = [
   {
     id: 'covered-bridge', name: 'Covered bridge', group: 'Ways',
     d: ['M3 21V10l9-5 9 5v11', 'M2 21h20', 'M7 21v-7a5 5 0 0 1 10 0v7'],
+    tags: ['bridge', 'crossing', 'historic', 'timber', 'kissing bridge'],
     sym: ['Covered Bridge'],
   },
   {
     id: 'canal', name: 'Canal / lock', group: 'Ways',
     d: ['M4 3v18', 'M20 3v18', 'M4 9l8 4 8-4', 'M7 17c1.7 1.2 3.3 1.2 5 0s3.3-1.2 5 0'],
+    tags: ['water', 'lock', 'towpath', 'aqueduct', 'navigation'],
     sym: ['Canal', 'Lock', 'Canal Lock', 'Aqueduct'],
   },
   {
     id: 'dam', name: 'Dam', group: 'Ways',
     d: ['M3 21V5h5l4 16H3Z', 'M14 21h7', 'M13 10c2.5 1.5 5.5 1.5 8 0', 'M13 15c2.5 1.5 5.5 1.5 8 0'],
+    tags: ['water', 'reservoir', 'spillway', 'impoundment'],
     sym: ['Dam', 'Reservoir', 'Spillway'],
   },
   {
     id: 'railroad', name: 'Railroad', group: 'Ways',
     d: ['M7 3v18', 'M17 3v18', 'M5 7h14', 'M5 12h14', 'M5 17h14'],
+    tags: ['rail', 'railway', 'train', 'trestle', 'depot', 'grade'],
     sym: ['Railroad', 'Railway', 'Rail', 'Train', 'Depot', 'Station', 'Trestle'],
   },
   {
     id: 'road', name: 'Road', group: 'Ways',
     d: ['M4 21 9 3h6l5 18', 'M12 6v3', 'M12 12v3', 'M12 18v3'],
+    tags: ['highway', 'byway', 'alignment', 'turnpike', 'route'],
     sym: ['Road', 'Highway', 'Old Road', 'Alignment', 'Byway'],
   },
   {
     id: 'tunnel', name: 'Tunnel', group: 'Ways',
     d: ['M3 21V12a9 9 0 0 1 18 0v9', 'M2 21h20', 'M7 21v-8a5 5 0 0 1 10 0v8'],
+    tags: ['portal', 'bore', 'underpass', 'railroad'],
     sym: ['Tunnel', 'Portal', 'Underpass'],
   },
   ...PARK_SIGNS,
@@ -415,6 +473,77 @@ export function getPinIcon(id) {
  */
 export function pinColorFor(props = null, fallback = PIN_INK) {
   return props?.color || fallback;
+}
+
+/**
+ * Words that stand for a family of symbols.
+ *
+ * Typing "building" should not have to match the word "building": it should
+ * bring back the house, the church, the mill and the courthouse. So the query
+ * is expanded rather than the icons being tagged with every word somebody
+ * might reach for - one table here beats forty lists spread through the set.
+ */
+export const ICON_SYNONYMS = {
+  building: ['building', 'house', 'home', 'church', 'chapel', 'school', 'hospital', 'industry',
+    'factory', 'mill', 'historic', 'ruin', 'cabin', 'lodging', 'tower', 'lighthouse', 'museum',
+    'library', 'store', 'shelter', 'station', 'office', 'theater', 'stable', 'cemetery',
+    'abandoned', 'visitor', 'ranger', 'amphitheater'],
+  abandoned: ['abandoned', 'ruin', 'ghost', 'derelict', 'vacant', 'decay', 'shipwreck'],
+  historic: ['historic', 'monument', 'museum', 'statue', 'cannon', 'ruin', 'cemetery', 'covered',
+    'stagecoach', 'shipwreck', 'tower', 'mine', 'mill'],
+  water: ['water', 'lake', 'river', 'falls', 'waterfall', 'spring', 'ford', 'fishing', 'boat',
+    'marina', 'canal', 'dam', 'swim', 'kayak', 'canoe', 'raft', 'pier', 'lighthouse', 'ferry',
+    'tidepool', 'wading', 'whale', 'waterfowl', 'fish'],
+  recreation: ['trail', 'hike', 'camp', 'ski', 'golf', 'climb', 'fish', 'swim', 'bicycle', 'bike',
+    'horse', 'playground', 'sled', 'skating', 'boat', 'kayak', 'raft', 'picnic', 'viewing',
+    'hunting', 'caving', 'star', 'scenic', 'snowmobile'],
+  rail: ['rail', 'train', 'railroad', 'tunnel', 'trestle', 'depot', 'station', 'crossing'],
+  road: ['road', 'highway', 'byway', 'bridge', 'tunnel', 'ford', 'gate', 'parking', 'four'],
+  danger: ['hazard', 'falling', 'rattlesnake', 'construction', 'emergencies', 'private', 'steep',
+    'obstacle', 'locked'],
+  food: ['food', 'store', 'picnic', 'coffee', 'restaurant', 'supplies', 'snack'],
+  sleep: ['lodging', 'cabin', 'camp', 'tent', 'shelter', 'trailer', 'campsite'],
+  car: ['fuel', 'gas', 'mechanic', 'air', 'parking', 'towing', 'charging', 'dump', 'rv'],
+};
+
+/**
+ * Every word a search should be able to find one icon by.
+ *
+ * Words, not one long string: matching a raw substring made "rail" find every
+ * ski *trail*, which is the kind of result that teaches somebody the search
+ * does not work. A term matches a word it starts - so "build" finds
+ * "building" and "rail" finds "railroad", and neither finds "trail".
+ */
+const haystack = (icon) => [icon.id, icon.name, icon.group, ...(icon.tags || []), ...(icon.sym || [])]
+  .join(' ').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+
+/**
+ * The icons a typed query should offer, in the order the picker shows them.
+ *
+ * Every typed word has to match (so "covered bridge" is narrower than either
+ * word alone), and a word matches if it or any of its synonyms appears. A
+ * name that starts with the query sorts first, because somebody typing "camp"
+ * means the campsite before the campfire ring.
+ */
+export function searchPinIcons(query, icons = PIN_ICONS) {
+  const words = String(query || '').toLowerCase().replace(/[-_]+/g, ' ').split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+
+  const matches = icons.filter((icon) => {
+    const text = haystack(icon);
+    return words.every((word) => [word, ...(ICON_SYNONYMS[word] || [])]
+      .some((term) => text.some((held) => held.startsWith(term))));
+  });
+
+  const first = words[0];
+  const rank = (icon) => {
+    const name = icon.name.toLowerCase();
+    if (name === first) return 0;
+    if (name.startsWith(first)) return 1;
+    if (name.includes(first)) return 2;
+    return 3;
+  };
+  return matches.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
 }
 
 export function pinIconGroups() {
