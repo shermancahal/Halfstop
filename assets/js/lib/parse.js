@@ -162,8 +162,20 @@ function adoptForeignProperties(props) {
     if (found) props.description = found;
   }
   if (!props.color) {
-    const found = text(props['marker-color'], props.colour, props.stroke);
+    // Gaia writes marker_color; simplestyle writes marker-color. Both, then.
+    const found = text(props.marker_color, props['marker-color'], props.colour, props.stroke);
     if (/^#?[0-9a-f]{3,8}$/i.test(found)) props.color = found.startsWith('#') ? found : `#${found}`;
+  }
+  if (!props.link) {
+    // Gaia attaches its photos as a list of URLs to its own site. The first
+    // one becomes the pin's link, which is what the photo importer follows.
+    const photo = Array.isArray(props.photos) ? props.photos.find((entry) => entry?.fullsize_url || entry?.web_url) : null;
+    const found = text(props.url, props.link_url, photo?.fullsize_url, photo?.web_url);
+    if (found) props.link = found;
+  }
+  if (!Number.isFinite(props.time)) {
+    const stamp = Date.parse(text(props.time_created, props.created, props.timestamp));
+    if (Number.isFinite(stamp)) props.time = stamp;
   }
   if (!props.symbol) {
     const found = text(props.sym, props['marker-symbol']);
@@ -195,6 +207,12 @@ function fromGeoJSON(text) {
         : type.includes('Polygon') ? 'area' : 'track';
     }
     adoptForeignProperties(feature.properties);
+    // Gaia puts the elevation in a property and leaves the coordinate flat;
+    // everything downstream reads the third coordinate.
+    const point = feature.geometry?.type === 'Point' ? feature.geometry.coordinates : null;
+    if (point && point.length === 2 && Number.isFinite(feature.properties.elevation)) {
+      point.push(feature.properties.elevation);
+    }
     eachPosition(feature.geometry, (pos) => extendBounds(bounds, pos));
   });
 

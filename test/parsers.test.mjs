@@ -322,17 +322,23 @@ test('geojson: a GaiaGPS export keeps its title, notes, colour and symbol', asyn
     features: [{
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [-81.05, 37.02] },
+      // The property names as a 2026 Gaia export actually writes them.
       properties: {
         title: 'Big Walker Lookout',
         notes: 'Cab not accessible.',
-        icon: 'https://static.gaiagps.com/icons/fire-lookout.png',
-        'marker-color': 'e8542a',
+        icon: 'fire-lookout',
+        marker_type: 'outlined-icon',
+        marker_color: '#2D3FC7',
+        marker_decoration: 'fire-lookout',
+        elevation: 599,
+        time_created: '2026-02-17T15:58:49Z',
+        photos: [{ id: 'p1', web_url: 'https://www.gaiagps.com/api/objects/photo/p1/image/375/', fullsize_url: 'https://www.gaiagps.com/api/objects/photo/p1/image/full/' }],
       },
     }, {
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [-81.1, 37.1] },
       // The simplestyle spelling, which GitHub and Mapbox render.
-      properties: { title: 'Camp', description: 'Gate locked at dusk', 'marker-symbol': 'campsite', 'marker-color': '#2E5C9A' },
+      properties: { title: 'Camp', description: 'Gate locked at dusk', 'marker-symbol': 'campsite', 'marker-color': '2E5C9A' },
     }],
   };
   const doc = await parseMapFile(JSON.stringify(gaia), 'gaia.geojson');
@@ -340,11 +346,14 @@ test('geojson: a GaiaGPS export keeps its title, notes, colour and symbol', asyn
 
   assert.equal(lookout.name, 'Big Walker Lookout');
   assert.equal(lookout.description, 'Cab not accessible.');
-  assert.equal(lookout.color, '#e8542a', 'a bare hex is still a colour');
-  assert.equal(lookout.icon, 'tower', 'Gaia\'s icon URL names the symbol');
+  assert.equal(lookout.color, '#2D3FC7', 'Gaia spells it marker_color');
+  assert.equal(lookout.icon, 'tower', 'Gaia\'s icon name resolves like a GPX <sym>');
+  assert.equal(lookout.link, 'https://www.gaiagps.com/api/objects/photo/p1/image/full/', 'the photo is the link');
+  assert.equal(lookout.time, Date.parse('2026-02-17T15:58:49Z'));
+  assert.deepEqual(doc.geojson.features[0].geometry.coordinates, [-81.05, 37.02, 599], 'elevation moves into the coordinate');
 
   assert.equal(camp.description, 'Gate locked at dusk');
-  assert.equal(camp.color, '#2E5C9A');
+  assert.equal(camp.color, '#2E5C9A', 'a bare hex is still a colour');
   assert.equal(camp.icon, 'tent');
 });
 
