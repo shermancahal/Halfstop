@@ -2283,23 +2283,55 @@ function healMissingImages() {
  * Dismissing is a real answer: features stay loaded and visible either way, and
  * the file can be filed later from the drop zone.
  */
-function askWhereToFile(entries, waypointCount) {
+/**
+ * What filing takes out of an open file: the waypoints, and the tracks and
+ * routes with them.
+ *
+ * Tracks used to stay behind on the file's layer, which meant a GPX imported
+ * on the phone reached the laptop as its pins only - the drive itself never
+ * synced, and was gone from the phone too once the app closed, since open
+ * files are not kept. Areas stay: a folder is a list of places and ways,
+ * and a boundary polygon is neither.
+ */
+const FILED_KINDS = new Set(['waypoint', 'track', 'route']);
+
+function filedFeaturesOf(entry) {
+  return entry.doc.geojson.features
+    .filter((feature) => FILED_KINDS.has(feature.properties.kind))
+    .map((feature) => ({ ...feature, properties: { ...feature.properties, sourceName: entry.name } }));
+}
+
+/** "12 waypoints and 2 tracks", for the prompt and the toast. */
+function describeFiling(entries) {
+  let waypoints = 0;
+  let lines = 0;
+  for (const entry of entries) {
+    for (const feature of entry.doc.geojson.features) {
+      const kind = feature.properties.kind;
+      if (kind === 'waypoint') waypoints += 1;
+      else if (kind === 'track' || kind === 'route') lines += 1;
+    }
+  }
+  const parts = [];
+  if (waypoints) parts.push(`${waypoints} waypoint${waypoints === 1 ? '' : 's'}`);
+  if (lines) parts.push(`${lines} track${lines === 1 ? '' : 's'}`);
+  return parts.join(' and ') || 'nothing';
+}
+
+function askWhereToFile(entries) {
   if (!dom.importAsk || !entries.length) return;
 
   const close = () => { dom.importAsk.hidden = true; dom.importAsk.replaceChildren(); };
-  const waypointsFrom = (entry) => entry.doc.geojson.features
-    .filter((feature) => feature.properties.kind === 'waypoint')
-    .map((feature) => ({ ...feature, properties: { ...feature.properties, sourceName: entry.name } }));
 
   const fileInto = (folderId) => {
     let added = 0;
     for (const entry of entries) {
-      const result = state.folders.addFeatures(folderId, waypointsFrom(entry));
+      const result = state.folders.addFeatures(folderId, filedFeaturesOf(entry));
       added += result.added;
-      markWaypointsFiled(entry);
+      markFiled(entry);
     }
     const folder = state.folders.get(folderId);
-    toast(`Filed ${added} waypoint${added === 1 ? '' : 's'} into “${folder.name}”.`, { tone: 'ok' });
+    toast(`Filed ${added} item${added === 1 ? '' : 's'} into “${folder.name}”.`, { tone: 'ok' });
     close();
     openTab('folders');
   };
@@ -2313,8 +2345,8 @@ function askWhereToFile(entries, waypointCount) {
     : null;
 
   dom.importAsk.replaceChildren(el('div', { class: 'import-ask-card' }, [
-    el('h2', { class: 'import-ask-title', text: `${waypointCount} waypoint${waypointCount === 1 ? '' : 's'} from ${names}` }),
-    el('p', { class: 'import-ask-text', text: 'Where should these go? Tracks and routes stay on the map either way.' }),
+    el('h2', { class: 'import-ask-title', text: `${describeFiling(entries)} from ${names}` }),
+    el('p', { class: 'import-ask-text', text: 'Where should these go? A folder keeps them, and syncs them if you are signed in.' }),
     el('div', { class: 'import-ask-actions' }, [
       el('button', {
         class: 'button button-primary button-small', type: 'button',
@@ -6337,23 +6369,23 @@ function addAppLayers() {
 }
 
 /**
- * What an open file draws: everything, until its waypoints have been filed.
+ * What an open file draws: everything, until it has been filed.
  *
- * Filing copies the waypoints into a folder, and the folder draws them. Left
- * on the file's own layer as well, every pin was two pins at one spot - two
- * cards on a tap, and a folder that looked like it had changed nothing.
- * Tracks and routes stay, because filing does not take them.
+ * Filing copies the waypoints, tracks and routes into a folder, and the
+ * folder draws them. Left on the file's own layer as well, every pin was two
+ * pins at one spot - two cards on a tap, and a folder that looked like it had
+ * changed nothing. Areas stay, because filing does not take them.
  */
 function documentData(entry) {
-  if (!entry.waypointsFiled) return entry.doc.geojson;
+  if (!entry.filed) return entry.doc.geojson;
   return {
     type: 'FeatureCollection',
-    features: entry.doc.geojson.features.filter((feature) => feature.properties?.kind !== 'waypoint'),
+    features: entry.doc.geojson.features.filter((feature) => !FILED_KINDS.has(feature.properties?.kind)),
   };
 }
 
-function markWaypointsFiled(entry) {
-  entry.waypointsFiled = true;
+function markFiled(entry) {
+  entry.filed = true;
   try {
     state.map?.getSource(sourceIdFor(entry.key))?.setData(documentData(entry));
   } catch (error) {
@@ -7949,16 +7981,14 @@ function fileOpenedDocument(entry) {
   const choice = dom.dropTarget?.value;
   if (!choice) return null;
 
-  const waypoints = entry.doc.geojson.features
-    .filter((feature) => feature.properties.kind === 'waypoint')
-    .map((feature) => ({ ...feature, properties: { ...feature.properties, sourceName: entry.name } }));
-  if (!waypoints.length) return null;
+  const features = filedFeaturesOf(entry);
+  if (!features.length) return null;
 
   const folder = choice === '__new__' ? state.folders.create(entry.name) : state.folders.get(choice);
   if (!folder) return null;
 
-  const { added, skipped } = state.folders.addFeatures(folder.id, waypoints);
-  markWaypointsFiled(entry);
+  const { added, skipped } = state.folders.addFeatures(folder.id, features);
+  markFiled(entry);
   // A new folder becomes the standing destination, which is what you want when
   // opening several files that belong to the same trip.
   if (choice === '__new__') { renderDropTarget(); dom.dropTarget.value = folder.id; }
@@ -8033,14 +8063,12 @@ async function handleFiles(files) {
       const added = filedInto.reduce((sum, r) => sum + r.added, 0);
       const names = [...new Set(filedInto.map((r) => r.folder.name))];
       const where = names.length === 1 ? `“${names[0]}”` : `${names.length} folders`;
-      toast(`${loaded} Filed ${added} waypoint${added === 1 ? '' : 's'} into ${where}.`, { tone: 'ok', timeout: 9000 });
+      toast(`${loaded} Filed ${added} item${added === 1 ? '' : 's'} into ${where}.`, { tone: 'ok', timeout: 9000 });
     } else {
-      const waypoints = [...state.documents.values()]
-        .filter((entry) => entry.origin === 'local')
-        .reduce((sum, entry) => sum + entry.doc.stats.waypointCount, 0);
-      if (waypoints) {
+      const fileable = opened.some((entry) => filedFeaturesOf(entry).length);
+      if (fileable) {
         // Asking beats a toast pointing at a control you have not found yet.
-        askWhereToFile(opened, waypoints);
+        askWhereToFile(opened);
         toast(loaded, { tone: 'ok', timeout: 5000 });
       } else {
         toast(`${loaded} These stay in your browser — nothing is uploaded.`, { tone: 'ok', timeout: 9000 });

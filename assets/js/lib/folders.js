@@ -12,6 +12,7 @@
  */
 
 import { DEFAULT_PIN_ICON } from './pin-icons.js';
+import { simplify } from './geo.js';
 
 const STORAGE_KEY = 'ab-maps-folders-v1';
 const NAME_LIMIT = 80;
@@ -40,11 +41,54 @@ function clampName(value, fallback) {
  * few megabytes in total. Dropping coordTimes on save keeps a folder of saved
  * points small enough to never be the reason a save fails.
  */
+/**
+ * The most points a stored track keeps.
+ *
+ * A folder lives in localStorage and travels as one row, and a day's GPS log
+ * is twenty thousand points. Two thousand draws the same line at every zoom a
+ * phone shows; what is lost is the jitter. The elevation on each kept point
+ * survives, because simplification chooses points rather than inventing them.
+ */
+export const TRACK_POINT_CAP = 2000;
+
+const countPositions = (geometry) => {
+  if (geometry?.type === 'LineString') return geometry.coordinates.length;
+  if (geometry?.type === 'MultiLineString') return geometry.coordinates.reduce((n, line) => n + line.length, 0);
+  return 0;
+};
+
+/**
+ * A line with at most TRACK_POINT_CAP points, or the geometry untouched.
+ *
+ * Tolerance is doubled until the line is under the cap: a track along a
+ * straight highway drops under it at the first pass, a switchbacked trail
+ * takes a few, and either way the result is the coarsest line that still
+ * needed no more than the budget.
+ */
+export function thinLine(geometry) {
+  const total = countPositions(geometry);
+  if (total <= TRACK_POINT_CAP) return geometry;
+  const lines = geometry.type === 'LineString' ? [geometry.coordinates] : geometry.coordinates;
+  let tolerance = 0.00002;
+  let thinned = lines;
+  for (let pass = 0; pass < 20; pass += 1) {
+    thinned = lines.map((line) => simplify(line, tolerance));
+    if (thinned.reduce((n, line) => n + line.length, 0) <= TRACK_POINT_CAP) break;
+    tolerance *= 2;
+  }
+  return geometry.type === 'LineString'
+    ? { type: 'LineString', coordinates: thinned[0] }
+    : { type: 'MultiLineString', coordinates: thinned };
+}
+
 function packFeature(feature, { keepTimes = false } = {}) {
   const props = feature.properties || {};
+  const geometry = thinLine(feature.geometry);
+  // Timestamps are one per point; a thinned line no longer has those points.
+  const thinned = geometry !== feature.geometry;
   const packed = {
     type: 'Feature',
-    geometry: feature.geometry,
+    geometry,
     properties: {
       kind: props.kind || 'waypoint',
       name: props.name || 'Untitled',
@@ -69,7 +113,7 @@ function packFeature(feature, { keepTimes = false } = {}) {
       elevation_max_m: Number.isFinite(props.elevation_max_m) ? props.elevation_max_m : null,
     },
   };
-  if (keepTimes && props.coordTimes) packed.properties.coordTimes = props.coordTimes;
+  if (keepTimes && props.coordTimes && !thinned) packed.properties.coordTimes = props.coordTimes;
   return packed;
 }
 

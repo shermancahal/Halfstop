@@ -176,3 +176,25 @@ test('store: snapshot is a copy, so the merge cannot mutate live state', () => {
   snapshot[0].name = 'Changed in the copy';
   assert.equal(store.get(created.id).name, 'Live');
 });
+
+/*
+ * A track goes through the row format whole. Folders sync as one row each and
+ * the row carries the items as JSON, so this is the whole of "do tracks sync":
+ * the line, its elevation, its stats and its name come back as they went.
+ */
+test('row: a track round-trips through the row format intact', () => {
+  const folder = {
+    id: 'f1', name: 'Drive', color: '#a33', visible: true, collapsed: false, updatedAt: 1714557600000,
+    items: [{
+      id: 'i1',
+      feature: {
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: [[-84, 36, 300], [-84.1, 36.1, 420], [-84.2, 36.05, 390]] },
+        properties: { kind: 'track', name: 'Ridge road', distance_m: 18400, ascent_m: 210 },
+      },
+    }],
+  };
+  const back = rowToFolder(folderToRow(folder, 'user-1'));
+  assert.deepEqual(back.items, folder.items);
+  assert.equal(back.name, 'Drive');
+});

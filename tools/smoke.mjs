@@ -697,6 +697,8 @@ const state = () => page.evaluate(() => {
   const ids = map.layerIds();
   return {
     folderFeatures: map.getSource('folders')?._d?.features?.length ?? null,
+    folderPoints: (map.getSource('folders')?._d?.features || []).filter((f) => f.geometry?.type === 'Point').length,
+    folderLines: (map.getSource('folders')?._d?.features || []).filter((f) => /Line/.test(f.geometry?.type || '')).length,
     folderLayers: ids.filter((id) => id.startsWith('folders')).length,
     documentLayers: ids.filter((id) => /-point$|-line$/.test(id)
       && !/^(folders|scratch|region|road)/.test(id)).length,
@@ -711,7 +713,9 @@ await page.click('#import-ask button:has-text("New folder")').catch(() => {});
 await page.waitForTimeout(700);
 
 const afterImport = await state();
-check('waypoints reached the map', afterImport.folderFeatures, 2);
+check('waypoints reached the map', afterImport.folderPoints, 2);
+// Filing takes the track too, so a drive imported on the phone syncs whole.
+check('and the track was filed with them', afterImport.folderLines, 1);
 check('folder layers present', afterImport.folderLayers, 5);
 check('document layers present', afterImport.documentLayers > 0, true);
 

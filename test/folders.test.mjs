@@ -7,7 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  FolderStore, fingerprint, packFeature, readTrip, tripStanding, localDay,
+  FolderStore, fingerprint, packFeature, readTrip, tripStanding, localDay, thinLine, TRACK_POINT_CAP,
 } from '../assets/js/lib/folders.js';
 import { toGPX } from '../assets/js/lib/gpx-write.js';
 import { parseGPX } from '../assets/js/lib/gpx.js';
@@ -418,4 +418,34 @@ test('trips: the queue can be reordered, and nothing falls out of it', () => {
   store.reorder(folder.id, ['nonsense', ids[0]]);
   assert.deepEqual(store.get(folder.id).items.map((item) => item.id).sort(), [...ids].sort());
   assert.equal(store.get(folder.id).items.length, 3);
+});
+
+/*
+ * A day's GPS log is twenty thousand points and a folder is one localStorage
+ * row, so a stored track is thinned to a budget - keeping its ends, keeping
+ * the elevation on every point it keeps, and leaving a short track exactly as
+ * it was. Timestamps cannot survive thinning, since they are one per point.
+ */
+test('folders: a long track is thinned to the budget and a short one is left alone', () => {
+  const long = [];
+  for (let i = 0; i < 12000; i += 1) {
+    // A wandering line, so simplification has real work to do.
+    long.push([-84 + i * 0.00005, 36 + Math.sin(i / 7) * 0.0004, 300 + i]);
+  }
+  const packed = packFeature({
+    type: 'Feature',
+    geometry: { type: 'LineString', coordinates: long },
+    properties: { kind: 'track', name: 'All day', coordTimes: long.map((_, i) => i) },
+  }, { keepTimes: true });
+  const kept = packed.geometry.coordinates;
+  assert.ok(kept.length <= TRACK_POINT_CAP, `${kept.length} points is over the cap`);
+  assert.ok(kept.length > 100, 'thinned, not gutted');
+  assert.deepEqual(kept[0], long[0]);
+  assert.deepEqual(kept.at(-1), long.at(-1));
+  assert.ok(kept.every((position) => position.length === 3), 'elevation rides along');
+  assert.equal(packed.properties.coordTimes, undefined, 'timestamps do not survive thinning');
+
+  const short = track('Short');
+  assert.equal(thinLine(short.geometry), short.geometry, 'under the cap, the same object comes back');
+  assert.equal(packFeature(short, { keepTimes: true }).properties.coordTimes.length, 2);
 });
