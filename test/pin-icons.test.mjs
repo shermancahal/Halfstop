@@ -207,14 +207,15 @@ test('pins: an illustrated symbol is filled shapes, all in the palette', () => {
 });
 
 /*
- * The drawn register, on the symbols converted to it so far.
+ * The drawn register, over every symbol this app draws itself.
  *
- * One colour, and never a material beside its own darker tone: the detail is
- * cut out of the shape with a fill rule, not modelled with shading. The list
- * grows as the rest are converted; asserting it over the whole set today
- * would fail on the ones still waiting.
+ * At most two colours, and never a material beside its own darker tone: the
+ * detail is cut out of the shape with a fill rule, not modelled with shading.
+ * The whole set is converted now, so this covers all of it - a new symbol
+ * that arrives shaded fails here.
  */
-const DRAWN = ['tower', 'waterfall', 'forest', 'cabin'];
+const DRAWN = ['tower', 'waterfall', 'forest', 'cabin', 'tent', 'campfire', 'camper',
+  'picnic', 'lodging', 'water', 'spring', 'ford', 'fishing', 'covered-bridge', 'peak', 'wildlife'];
 
 test('pins: a drawn symbol is one colour with its detail cut out', () => {
   const SHADED = [['wood', 'woodDark'], ['leaf', 'leafDark'], ['water', 'waterDeep'],
@@ -222,7 +223,12 @@ test('pins: a drawn symbol is one colour with its detail cut out', () => {
   for (const id of DRAWN) {
     const icon = getPinIcon(id);
     const used = new Set(icon.f.map((entry) => entry[1]));
-    assert.equal(used.size, 1, `${id} should be drawn in one colour, not ${used.size}`);
+    /*
+     * One colour, or two where the second is doing real work: the flame on
+     * the campfire, the rubber on the camper's wheels, the water a ford
+     * crosses. Three is where a drawing starts to be modelled again.
+     */
+    assert.ok(used.size <= 2, `${id} is drawn in ${used.size} colours`);
     for (const [base, dark] of SHADED) {
       assert.ok(!(used.has(GLYPH[base]) && used.has(GLYPH[dark])), `${id} is shaded`);
     }
