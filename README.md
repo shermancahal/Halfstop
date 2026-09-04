@@ -165,10 +165,16 @@ Two behaviours worth knowing:
 file. Unload the map, change the catalogue, or come back tomorrow — the folder
 is unaffected. It is your collection, not a view over someone else's data.
 
-**Folders live in this browser.** They are stored in `localStorage`: not
-uploaded, not synced, not visible to anyone else, and not carried to another
-device. The UI says so, and warns if the browser refuses storage entirely
-(private mode, blocked site data). Export as GPX to keep or move a folder.
+**Folders live in this browser.** They are stored in IndexedDB: not uploaded,
+not synced, not visible to anyone else, and not carried to another device. The
+UI says so, and warns if the browser refuses storage entirely (private mode,
+blocked site data). Export as GPX to keep or move a folder.
+
+They were in `localStorage` until a collection outgrew it — a few megabytes of
+*string* is about fifty saved tracks, and once it was full every later change
+was refused, including opening a folder. An install from before the change
+carries its collection across on first run and releases the old row.
+`localStorage` remains the fallback for a browser with no IndexedDB.
 Re-importing the same points is safe — duplicates are detected by name and
 position and skipped.
 
@@ -458,8 +464,8 @@ terms. A test checks that too, in the opposite direction.
   **Installing it as an app** below, and `docs/mobile-app.md` for the path to
   the App Store and Play Store.
 - **Later** — drawing and editing routes in the browser and exporting them back
-  out as GPX; syncing folders across devices, which is the one thing
-  `localStorage` cannot do.
+  out as GPX; syncing folders across devices, which is the one thing no store
+  inside the browser can do.
 
 ---
 

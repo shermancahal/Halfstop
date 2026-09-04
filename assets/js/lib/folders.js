@@ -7,14 +7,25 @@
  * changing, or the page being closed. It is the user's collection, not a view
  * over someone else's data.
  *
- * State persists to localStorage. That is per-browser and per-device — it is a
- * working set, not a synced account — and the UI says so.
+ * State persists to IndexedDB, with localStorage as the fallback for a browser
+ * that has no IndexedDB and as the place older versions left their data. Either
+ * way it is per-browser and per-device — a working set, not a synced account —
+ * and the UI says so.
+ *
+ * It began in localStorage alone, and that is a few megabytes of *string* for
+ * the whole collection: fifty saved tracks is enough to fill it, and once it is
+ * full every later change is refused, including opening a folder. IndexedDB has
+ * orders of magnitude more room and stores structured values without a JSON
+ * round trip, so the ceiling stops being one a person can reach by using the
+ * app as intended.
  */
 
 import { DEFAULT_PIN_ICON, pinColorFor } from './pin-icons.js';
 import { simplify } from './geo.js';
 
 const STORAGE_KEY = 'ab-maps-folders-v1';
+const VAULT_DB = 'ab-maps-folders';
+const VAULT_STORE = 'state';
 const NAME_LIMIT = 80;
 
 export const FOLDER_COLORS = [
@@ -37,17 +48,19 @@ function clampName(value, fallback) {
 /**
  * Strip a feature down to what a folder needs to keep.
  *
- * Imported tracks can carry tens of thousands of timestamps; localStorage has a
- * few megabytes in total. Dropping coordTimes on save keeps a folder of saved
- * points small enough to never be the reason a save fails.
+ * Imported tracks can carry tens of thousands of timestamps, and one per point
+ * is the largest thing a track holds. Dropping coordTimes on save keeps a
+ * folder of saved points small, which matters for what has to be read back,
+ * written out and pushed to sync, not only for what it costs on disk.
  */
 /**
  * The most points a stored track keeps.
  *
- * A folder lives in localStorage and travels as one row, and a day's GPS log
- * is twenty thousand points. Two thousand draws the same line at every zoom a
- * phone shows; what is lost is the jitter. The elevation on each kept point
- * survives, because simplification chooses points rather than inventing them.
+ * A folder travels as one row - to storage, to a GPX export, over sync - and a
+ * day's GPS log is twenty thousand points. Two thousand draws the same line at
+ * every zoom a phone shows; what is lost is the jitter. The elevation on each
+ * kept point survives, because simplification chooses points rather than
+ * inventing them.
  */
 export const TRACK_POINT_CAP = 2000;
 
@@ -81,11 +94,42 @@ export function thinLine(geometry) {
     : { type: 'MultiLineString', coordinates: thinned };
 }
 
+/**
+ * Six decimal places of longitude is eleven centimetres.
+ *
+ * A GPS fix arrives as a double and serialises as seventeen digits, which
+ * claims a precision of nanometres for a reading good to a few metres. Rounding
+ * halves what a track costs to store and changes nothing anybody can see. The
+ * third number is elevation in metres, where a tenth is already generous.
+ */
+const roundPosition = (position) => (Array.isArray(position)
+  ? position.map((n, axis) => (Number.isFinite(n)
+    ? Math.round(n * (axis < 2 ? 1e6 : 10)) / (axis < 2 ? 1e6 : 10)
+    : n))
+  : position);
+
+function roundCoordinates(value, depth) {
+  if (depth === 0) return roundPosition(value);
+  return Array.isArray(value) ? value.map((child) => roundCoordinates(child, depth - 1)) : value;
+}
+
+const COORD_DEPTH = {
+  Point: 0, MultiPoint: 1, LineString: 1, MultiLineString: 2, Polygon: 2, MultiPolygon: 3,
+};
+
+/** The same geometry, with its positions rounded to what a GPS actually knows. */
+export function roundGeometry(geometry) {
+  const depth = COORD_DEPTH[geometry?.type];
+  if (depth === undefined || !Array.isArray(geometry.coordinates)) return geometry;
+  return { ...geometry, coordinates: roundCoordinates(geometry.coordinates, depth) };
+}
+
 function packFeature(feature, { keepTimes = false } = {}) {
   const props = feature.properties || {};
-  const geometry = thinLine(feature.geometry);
+  const simplified = thinLine(feature.geometry);
+  const geometry = roundGeometry(simplified);
   // Timestamps are one per point; a thinned line no longer has those points.
-  const thinned = geometry !== feature.geometry;
+  const thinned = simplified !== feature.geometry;
   const packed = {
     type: 'Feature',
     geometry,
@@ -191,16 +235,84 @@ const dayGap = (from, to) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.pa
 
 
 export class FolderStore {
-  constructor({ storage = safeStorage(), key = STORAGE_KEY } = {}) {
+  constructor({ storage = safeStorage(), key = STORAGE_KEY, vault = indexedVault() } = {}) {
     this.storage = storage;
     this.key = key;
+    this.vault = vault;
     this.folders = [];
     this.listeners = new Set();
+    this.errorListeners = new Set();
     this.lastError = null;
+    this.writing = null;
+    this.pending = false;
+    // Whatever localStorage holds, so the first paint has something even
+    // before the vault answers, and so an install from before the vault has
+    // its collection to migrate.
     this.load();
   }
 
   /* ---------------- persistence ---------------- */
+
+  /**
+   * Take up whatever the vault holds, and hand it what it does not have yet.
+   *
+   * Called once at startup, before anything renders. Three cases: the vault
+   * answers with a collection, which wins because it is where saves have been
+   * going; the vault is empty and localStorage had folders, which is the first
+   * run after the upgrade, so they move across and the old row is released;
+   * or there is no vault at all, and localStorage stays the store it was.
+   *
+   * @returns {Promise<boolean>} whether the vault supplied the collection
+   */
+  async hydrate() {
+    if (!this.vault) return false;
+    let stored = null;
+    try {
+      stored = await this.vault.get(this.key);
+    } catch {
+      // A browser that refuses IndexedDB (private mode in some builds) keeps
+      // the localStorage behaviour it had rather than losing the collection.
+      this.vault = null;
+      return false;
+    }
+
+    if (stored) {
+      this.adopt(stored);
+      this.emitQuietly();
+      return true;
+    }
+
+    // Only once the copy is safely in the vault: an interrupted migration must
+    // leave the collection somewhere, and two copies is the survivable failure.
+    // A vault that refused the write has already sent the collection back to
+    // localStorage, so releasing that row here would throw it away.
+    const moved = this.folders.length ? await this.flush() : true;
+    if (moved && this.vault) {
+      try { this.storage?.removeItem(this.key); } catch { /* nothing to release */ }
+    }
+    return false;
+  }
+
+  /** Notify renderers without stamping any folder as changed. */
+  emitQuietly() {
+    for (const listener of this.listeners) listener(this, null);
+  }
+
+  /** Called with a message when a save fails after the fact. */
+  onError(listener) {
+    this.errorListeners.add(listener);
+    return () => this.errorListeners.delete(listener);
+  }
+
+  reportError(message) {
+    this.lastError = message;
+    for (const listener of this.errorListeners) listener(message);
+  }
+
+  /** The value that gets stored: plain data, no class instances, no functions. */
+  serialize() {
+    return { version: 1, folders: this.folders };
+  }
 
   load() {
     let raw = null;
@@ -212,35 +324,90 @@ export class FolderStore {
     if (!raw) { this.folders = []; return; }
 
     try {
-      const parsed = JSON.parse(raw);
-      const folders = Array.isArray(parsed?.folders) ? parsed.folders : [];
-      this.folders = folders
-        .filter((folder) => folder && typeof folder === 'object')
-        .map((folder, index) => ({
-          id: folder.id || makeId('f'),
-          name: clampName(folder.name, `Folder ${index + 1}`),
-          color: folder.color || FOLDER_COLORS[index % FOLDER_COLORS.length],
-          visible: folder.visible !== false,
-          collapsed: folder.collapsed === true,
-          created: folder.created || null,
-          updatedAt: folder.updatedAt || 0,
-          deleted: folder.deleted === true,
-          trip: readTrip(folder.trip),
-          items: (Array.isArray(folder.items) ? folder.items : [])
-            .filter((item) => item?.feature?.geometry)
-            .map((item) => ({ id: item.id || makeId('i'), feature: item.feature })),
-        }));
+      this.adopt(JSON.parse(raw));
     } catch {
       // Corrupt payload: start clean rather than trapping the user in an error.
       this.folders = [];
     }
   }
 
+  /**
+   * Read a stored payload into folders, from wherever it came.
+   *
+   * Every field is defaulted here rather than trusted, because the payload may
+   * have been written by an older version of the app, edited by hand, or come
+   * back from a device that crashed mid-write.
+   */
+  adopt(parsed) {
+    const folders = Array.isArray(parsed?.folders) ? parsed.folders : [];
+    this.folders = folders
+      .filter((folder) => folder && typeof folder === 'object')
+      .map((folder, index) => ({
+        id: folder.id || makeId('f'),
+        name: clampName(folder.name, `Folder ${index + 1}`),
+        color: folder.color || FOLDER_COLORS[index % FOLDER_COLORS.length],
+        visible: folder.visible !== false,
+        collapsed: folder.collapsed === true,
+        created: folder.created || null,
+        updatedAt: folder.updatedAt || 0,
+        deleted: folder.deleted === true,
+        trip: readTrip(folder.trip),
+        items: (Array.isArray(folder.items) ? folder.items : [])
+          .filter((item) => item?.feature?.geometry)
+          .map((item) => ({ id: item.id || makeId('i'), feature: item.feature })),
+      }));
+  }
+
+  /**
+   * Write the collection out.
+   *
+   * With a vault the write is asynchronous and coalesced: a burst of changes -
+   * an import dropping forty pins in - becomes one write of the final state
+   * rather than forty of intermediate ones, and the caller is not made to wait
+   * on the disk to redraw a list. Without one it is the old synchronous
+   * localStorage write, which is why this still returns a boolean.
+   */
   save() {
     this.lastError = null;
+    if (this.vault) { this.queueWrite(); return true; }
+    return this.saveLocal();
+  }
+
+  queueWrite() {
+    if (this.writing) { this.pending = true; return; }
+    this.writing = this.flush()
+      .finally(() => {
+        this.writing = null;
+        if (this.pending) { this.pending = false; this.queueWrite(); }
+      });
+  }
+
+  /**
+   * One write, awaited. Used by hydrate's migration and by queueWrite.
+   *
+   * A vault that refuses the write is not retried into a loop: the collection
+   * falls back to localStorage for the rest of the session, which is smaller
+   * but is at least somewhere, and the failure is reported rather than
+   * swallowed.
+   */
+  async flush() {
+    if (!this.vault) return this.saveLocal();
+    try {
+      await this.vault.set(this.key, this.serialize());
+      return true;
+    } catch (error) {
+      this.vault = null;
+      if (this.saveLocal()) return true;
+      this.reportError(this.lastError
+        || `Could not save folders: ${error?.message || 'the browser refused to store them'}`);
+      return false;
+    }
+  }
+
+  saveLocal() {
     if (!this.storage) return false;
     try {
-      this.storage.setItem(this.key, JSON.stringify({ version: 1, folders: this.folders }));
+      this.storage.setItem(this.key, JSON.stringify(this.serialize()));
       return true;
     } catch (error) {
       // Almost always QuotaExceededError. Report it rather than silently losing
@@ -355,13 +522,23 @@ export class FolderStore {
     return folder;
   }
 
+  /**
+   * Change a folder's settings.
+   *
+   * Whether it is open in the list is view state, not the collection: it is
+   * about this screen on this device, and the same folder can reasonably be
+   * open here and shut on the phone. So a patch that touches only that saves
+   * without stamping the folder as modified, which keeps a disclosure triangle
+   * from moving the sync clock and pushing the whole folder over the network.
+   */
   update(id, patch) {
     const folder = this.get(id);
     if (!folder) return null;
     if (patch.color) folder.color = patch.color;
     if (typeof patch.visible === 'boolean') folder.visible = patch.visible;
     if (typeof patch.collapsed === 'boolean') folder.collapsed = patch.collapsed;
-    this.emit(id);
+    const shared = Boolean(patch.color) || typeof patch.visible === 'boolean';
+    this.emit(shared ? id : null);
     return folder;
   }
 
@@ -418,8 +595,24 @@ export class FolderStore {
    * re-importing. Pins whose word resolves to nothing, or to what they
    * already show, are left alone; pins with no word never had one to match.
    *
-   * @param {(symbol: string) => string|null} resolve  iconForSymbol, passed in so this module stays free of the icon set
+   * @param {(pin: object) => string|null} resolve  iconForPin, passed in so this module stays free of the icon set
    * @returns {number} how many pins changed
+   */
+  /**
+   * Give every pin in a folder the icon it would be given today.
+   *
+   * The resolver is handed the whole pin and the folder's name rather than
+   * just the imported symbol word, because for most collections the symbol
+   * says nothing: a GaiaGPS export stamps every pin the same, and what tells a
+   * covered bridge from a mine is what the person typed in the title, or which
+   * folder they filed it in.
+   *
+   * Only the icon moves. Colour is left exactly as it is - people colour-code
+   * pins by what they mean to them, and a re-match must not have an opinion
+   * about that.
+   *
+   * @param {string} folderId
+   * @param {(pin: {name: string, symbol: string, folderName: string}) => string|null} resolve
    */
   rematchIcons(folderId, resolve) {
     const folder = this.get(folderId);
@@ -427,8 +620,12 @@ export class FolderStore {
     let changed = 0;
     for (const item of folder.items) {
       const props = item.feature.properties;
-      if (props.kind !== 'waypoint' || !props.symbol) continue;
-      const icon = resolve(props.symbol);
+      if (props.kind !== 'waypoint') continue;
+      const icon = resolve({
+        name: props.name || '',
+        symbol: props.symbol || '',
+        folderName: folder.name,
+      });
       if (icon && icon !== props.icon) { props.icon = icon; changed += 1; }
     }
     if (changed) this.emit(folderId);
@@ -691,6 +888,56 @@ export class FolderStore {
       };
     }, { folders: 0, waypoints: 0, tracks: 0 });
   }
+}
+
+/**
+ * A one-store IndexedDB keyed on strings, or null where there is no IndexedDB.
+ *
+ * Deliberately tiny: get, set, remove. The folder collection is written whole
+ * on every change, so there is nothing here to index or query - what IndexedDB
+ * is being used for is its size, not its shape. Node has no indexedDB, so the
+ * tests get null here and exercise the localStorage path they always did.
+ */
+export function indexedVault({ name = VAULT_DB, store = VAULT_STORE } = {}) {
+  if (typeof indexedDB === 'undefined') return null;
+
+  let dbPromise = null;
+  const open = () => {
+    if (dbPromise) return dbPromise;
+    dbPromise = new Promise((resolve, reject) => {
+      const request = indexedDB.open(name, 1);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(store)) db.createObjectStore(store);
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error('Could not open the folder store.'));
+      // Firefox in private mode neither resolves nor errors; without this the
+      // app would wait on it for ever instead of falling back to localStorage.
+      request.onblocked = () => reject(new Error('The folder store is blocked by another tab.'));
+    }).catch((error) => { dbPromise = null; throw error; });
+    return dbPromise;
+  };
+
+  const transact = (mode, run) => open().then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction(store, mode);
+    let request;
+    try {
+      request = run(tx.objectStore(store));
+    } catch (error) {
+      reject(error);
+      return;
+    }
+    tx.oncomplete = () => resolve(request ? request.result : undefined);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error('The folder store transaction was aborted.'));
+  }));
+
+  return {
+    get: (key) => transact('readonly', (objects) => objects.get(key)),
+    set: (key, value) => transact('readwrite', (objects) => objects.put(value, key)),
+    remove: (key) => transact('readwrite', (objects) => objects.delete(key)),
+  };
 }
 
 /** localStorage access that tolerates private mode and disabled site data. */

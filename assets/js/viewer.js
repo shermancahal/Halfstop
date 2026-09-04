@@ -32,7 +32,7 @@ import {
   FolderStore, FOLDER_COLORS, readTrip, tripStanding, localDay,
 } from './lib/folders.js';
 import {
-  PIN_ICONS, DEFAULT_PIN_ICON, pinIconGroups, pinIconSVG, pinImageId, registerPinImages, rasterizePinIcon, pinColorFor, iconForSymbol, searchPinIcons,
+  PIN_ICONS, DEFAULT_PIN_ICON, pinIconGroups, pinIconSVG, pinImageId, registerPinImages, rasterizePinIcon, pinColorFor, iconForPin, searchPinIcons,
 } from './lib/pin-icons.js';
 import { toGPX } from './lib/gpx-write.js';
 import {
@@ -427,6 +427,16 @@ async function main() {
   // with the other three - but the stored choice still has to reach the page.
   applyStoredTheme();
   state.folders = new FolderStore();
+  /*
+   * Before anything reads the collection, and before sync is wired up.
+   *
+   * Folders live in IndexedDB now, which cannot be read synchronously, so the
+   * constructor brings up whatever localStorage still holds and this replaces
+   * it with the real thing. Awaited rather than left to settle later, because
+   * a sign-in that ran against a half-loaded collection would push an empty
+   * one over the top of a full one.
+   */
+  await state.folders.hydrate();
   state.offline = new OfflineStore();
   state.offline.addEventListener('change', () => {
     renderOfflineTab();
@@ -458,6 +468,9 @@ async function main() {
     refreshFolderData();
     if (state.folders.lastError) toast(state.folders.lastError, { tone: 'error', timeout: 10000 });
   });
+  // A vault write finishes after the change that caused it, so a failure has
+  // to announce itself rather than wait for the next render to notice.
+  state.folders.onError((message) => toast(message, { tone: 'error', timeout: 10000 }));
   // On a phone the panel covers the map, so the map is what you should land on.
   // Desktop has room for both, so it stays open there.
   /*
@@ -791,6 +804,7 @@ function cacheDom() {
   dom.newFolder = document.getElementById('new-folder');
   dom.newTrip = document.getElementById('new-trip');
   dom.importIntoFolder = document.getElementById('import-into-folder');
+  dom.rematchAll = document.getElementById('rematch-all');
   dom.dropTarget = document.getElementById('drop-target');
   dom.importAsk = document.getElementById('import-ask');
   /*
@@ -9310,10 +9324,33 @@ function wireFolders() {
    */
   dom.importIntoFolder?.addEventListener('click', () => dom.fileInput?.click());
 
-  // A mark apiece, so three buttons in a row are told apart before they are read.
+  /*
+   * Re-match every folder at once.
+   *
+   * The same action lives on each folder's own editor, but a collection built
+   * up over years is thirty folders, and thirty clicks to take up a symbol set
+   * that grew is not a feature anybody uses. Icons only: a pin's colour is the
+   * user's own code for what it means to them, and nothing here touches it.
+   */
+  dom.rematchAll?.addEventListener('click', () => {
+    const folders = state.folders.list();
+    if (!folders.length) { toast('No folders to re-match yet.', { tone: 'info' }); return; }
+    let changed = 0;
+    let touched = 0;
+    for (const folder of folders) {
+      const moved = state.folders.rematchIcons(folder.id, iconForPin);
+      if (moved) { changed += moved; touched += 1; }
+    }
+    toast(changed
+      ? `${changed} pin${changed === 1 ? '' : 's'} took a new symbol across ${touched} folder${touched === 1 ? '' : 's'}.`
+      : 'Every pin already shows the symbol its name matches.', { tone: changed ? 'ok' : 'info' });
+  });
+
+  // A mark apiece, so four buttons in a row are told apart before they are read.
   withIcon(dom.newFolder, icons.folder);
   withIcon(dom.newTrip, icons.route);
   withIcon(dom.importIntoFolder, icons.upload);
+  withIcon(dom.rematchAll, icons.refresh);
 }
 
 /**
@@ -11330,10 +11367,10 @@ function folderActionsRow(folder) {
        */
       el('button', {
         class: 'button button-ghost button-small', type: 'button',
-        title: 'Give every pin the symbol its imported name matches today',
+        title: 'Give every pin the symbol its name, its folder or its import matches today',
         html: `${icons.refresh}<span>Re-match</span>`,
         onclick: () => {
-          const changed = state.folders.rematchIcons(folder.id, iconForSymbol);
+          const changed = state.folders.rematchIcons(folder.id, iconForPin);
           toast(changed
             ? `${changed} pin${changed === 1 ? '' : 's'} took a new symbol.`
             : 'Every pin already shows the symbol its name matches.', { tone: changed ? 'ok' : 'info' });

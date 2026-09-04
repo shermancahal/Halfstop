@@ -296,6 +296,36 @@ const context = await browser.newContext({ viewport: { width: 1280, height: 900 
 const page = await context.newPage();
 
 /*
+ * Read the saved collection the way the app stores it.
+ *
+ * Folders moved from localStorage into IndexedDB when a few megabytes of
+ * string stopped being enough for a real collection. Checks below want to
+ * confirm what was actually written to disk rather than what is in memory, so
+ * they read the store itself - falling back to the old row, because a browser
+ * without IndexedDB still keeps folders there.
+ */
+await context.addInitScript(() => {
+  window.__readFolders = () => new Promise((resolve) => {
+    const fromLocal = () => {
+      try {
+        const raw = JSON.parse(window.localStorage.getItem('ab-maps-folders-v1') || '{}');
+        resolve(raw.folders || raw.items || []);
+      } catch { resolve([]); }
+    };
+    if (typeof indexedDB === 'undefined') { fromLocal(); return; }
+    const open = indexedDB.open('ab-maps-folders', 1);
+    open.onerror = fromLocal;
+    open.onsuccess = () => {
+      const db = open.result;
+      if (!db.objectStoreNames.contains('state')) { fromLocal(); return; }
+      const request = db.transaction('state', 'readonly').objectStore('state').get('ab-maps-folders-v1');
+      request.onerror = fromLocal;
+      request.onsuccess = () => (request.result ? resolve(request.result.folders || []) : fromLocal());
+    };
+  });
+});
+
+/*
  * Open the panel if it is shut, then show a tab.
  *
  * The panel now starts closed - it is a tool you reach for, and opening it
@@ -828,8 +858,8 @@ const actions = await page.evaluate(() => [...document.querySelectorAll('#tab-fo
     top: Math.round(node.getBoundingClientRect().top),
     clipped: [...node.querySelectorAll('span')].some((span) => span.scrollWidth > span.clientWidth + 1),
   })));
-check('the folder actions are New folder, New trip and Import',
-  actions.map((a) => a.label), ['New folder', 'New trip', 'Import']);
+check('the folder actions are New folder, New trip, Import and Re-match icons',
+  actions.map((a) => a.label), ['New folder', 'New trip', 'Import', 'Re-match icons']);
 check('each carrying a mark of its own', actions.every((a) => a.icon), true);
 check('and Import is there before anything has been imported',
   actions.find((a) => a.label === 'Import')?.hidden, false);
@@ -2578,9 +2608,8 @@ await page.locator('.popup-new-folder').fill('Field notes');
 await page.locator('.popup-save-confirm button').first().click();
 await page.waitForTimeout(500);
 
-const saved = await page.evaluate(() => {
-  const folders = JSON.parse(window.localStorage.getItem('ab-maps-folders-v1') || '{}');
-  const list = folders.folders || folders.items || [];
+const saved = await page.evaluate(async () => {
+  const list = await window.__readFolders();
   const folder = list.find((entry) => entry.name === 'Field notes');
   const item = folder?.items?.[0]?.feature?.properties;
   return { folder: folder?.name, name: item?.name, note: item?.description, icon: item?.icon };
@@ -2711,9 +2740,8 @@ await page.locator('.identify-card .popup-new-folder').fill('From the map');
 await page.locator('.identify-card .popup-save-confirm button').first().click();
 await page.waitForTimeout(500);
 
-const fromIdentify = await page.evaluate(() => {
-  const folders = JSON.parse(window.localStorage.getItem('ab-maps-folders-v1') || '{}');
-  const list = folders.folders || folders.items || [];
+const fromIdentify = await page.evaluate(async () => {
+  const list = await window.__readFolders();
   return list.find((entry) => entry.name === 'From the map')?.items?.[0]?.feature?.properties?.name;
 });
 /*

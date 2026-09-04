@@ -7,11 +7,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  FolderStore, fingerprint, packFeature, readTrip, tripStanding, localDay, thinLine, TRACK_POINT_CAP,
+  FolderStore, fingerprint, packFeature, readTrip, tripStanding, localDay, thinLine, roundGeometry,
+  TRACK_POINT_CAP,
 } from '../assets/js/lib/folders.js';
 import { toGPX } from '../assets/js/lib/gpx-write.js';
 import { parseGPX } from '../assets/js/lib/gpx.js';
 import { parseMapFile } from '../assets/js/lib/parse.js';
+import { iconForPin } from '../assets/js/lib/pin-icons.js';
 
 /** In-memory stand-in for localStorage, so tests never touch a real browser API. */
 function memoryStorage(initial = null) {
@@ -21,6 +23,28 @@ function memoryStorage(initial = null) {
     setItem: (key, value) => { map.set(key, value); },
     removeItem: (key) => { map.delete(key); },
     get size() { return map.size; },
+    dump: (key = 'ab-maps-folders-v1') => map.get(key),
+  };
+}
+
+/**
+ * In-memory stand-in for the IndexedDB vault: the same three promise-returning
+ * methods, plus a switch that makes writes fail the way a browser refusing
+ * storage does.
+ */
+function memoryVault({ seed = null, failWrites = false } = {}) {
+  const map = new Map(seed ? [['ab-maps-folders-v1', seed]] : []);
+  return {
+    writes: 0,
+    get: async (key) => map.get(key),
+    set: async function set(key, value) {
+      this.writes += 1;
+      if (failWrites) throw new Error('the browser refused to store them');
+      // Stored structurally, so a later mutation of the live object cannot
+      // change what was written - which is what IndexedDB does.
+      map.set(key, JSON.parse(JSON.stringify(value)));
+    },
+    remove: async (key) => { map.delete(key); },
     dump: (key = 'ab-maps-folders-v1') => map.get(key),
   };
 }
@@ -423,8 +447,10 @@ test('trips: the queue can be reordered, and nothing falls out of it', () => {
 /*
  * A day's GPS log is twenty thousand points and a folder is one localStorage
  * row, so a stored track is thinned to a budget - keeping its ends, keeping
- * the elevation on every point it keeps, and leaving a short track exactly as
- * it was. Timestamps cannot survive thinning, since they are one per point.
+ * the elevation on every point it keeps, and leaving a short track's points
+ * where they were. Timestamps cannot survive thinning, since they are one per
+ * point. Positions are rounded on the way in, so the ends match to the
+ * precision anybody stores rather than bit for bit.
  */
 test('folders: a long track is thinned to the budget and a short one is left alone', () => {
   const long = [];
@@ -440,8 +466,8 @@ test('folders: a long track is thinned to the budget and a short one is left alo
   const kept = packed.geometry.coordinates;
   assert.ok(kept.length <= TRACK_POINT_CAP, `${kept.length} points is over the cap`);
   assert.ok(kept.length > 100, 'thinned, not gutted');
-  assert.deepEqual(kept[0], long[0]);
-  assert.deepEqual(kept.at(-1), long.at(-1));
+  assert.deepEqual(kept[0], roundGeometry({ type: 'Point', coordinates: long[0] }).coordinates);
+  assert.deepEqual(kept.at(-1), roundGeometry({ type: 'Point', coordinates: long.at(-1) }).coordinates);
   assert.ok(kept.every((position) => position.length === 3), 'elevation rides along');
   assert.equal(packed.properties.coordTimes, undefined, 'timestamps do not survive thinning');
 
@@ -465,10 +491,159 @@ test('folders: re-matching gives pins the symbol their imported name resolves to
     { type: 'Feature', geometry: { type: 'Point', coordinates: [-83, 37] }, properties: { kind: 'waypoint', name: 'C', symbol: 'emoji-unicorn', icon: 'pin' } },
     { type: 'Feature', geometry: { type: 'Point', coordinates: [-84, 37] }, properties: { kind: 'waypoint', name: 'D' } },
   ]);
-  const resolve = (symbol) => (symbol === 'fire-lookout' ? 'tower' : null);
+  const resolve = (pin) => (pin.symbol === 'fire-lookout' ? 'tower' : null);
   assert.equal(store.rematchIcons(folder.id, resolve), 1, 'only the stale one changes');
   const icons = store.get(folder.id).items.map((item) => item.feature.properties.icon);
   assert.deepEqual(icons, ['tower', 'tower', 'pin', null], 'a pin with no word keeps its nothing');
   assert.equal(store.rematchIcons(folder.id, resolve), 0, 'a second pass finds nothing to do');
   assert.equal(store.rematchIcons('nope', resolve), 0);
+});
+
+/*
+ * The resolver gets the whole pin and the folder's name, because for most
+ * collections the imported symbol says nothing - a GaiaGPS export stamps
+ * every point the same, and what tells a covered bridge from a mine is the
+ * title somebody typed or the folder they filed it in.
+ */
+test('folders: re-matching reads the title and the folder, and never the colour', () => {
+  const store = new FolderStore({ storage: memoryStorage(), vault: null });
+  const folder = store.create('Abandoned Kentucky');
+  store.addFeatures(folder.id, [
+    { type: 'Feature', geometry: { type: 'Point', coordinates: [-81, 37] }, properties: { kind: 'waypoint', name: 'Bennett Mill CB', icon: 'pin', color: '#1d4ed8' } },
+    { type: 'Feature', geometry: { type: 'Point', coordinates: [-82, 37] }, properties: { kind: 'waypoint', name: 'Old iron bridge', icon: 'pin', color: '#b4441f' } },
+    { type: 'Feature', geometry: { type: 'Point', coordinates: [-83, 37] }, properties: { kind: 'waypoint', name: 'Miller house', icon: 'pin' } },
+  ]);
+  assert.equal(store.rematchIcons(folder.id, iconForPin), 3);
+  const items = store.get(folder.id).items.map((item) => item.feature.properties);
+  assert.deepEqual(items.map((props) => props.icon),
+    ['covered-bridge', 'bridge', 'abandoned-building']);
+  assert.deepEqual(items.map((props) => props.color),
+    ['#1d4ed8', '#b4441f', null], 'colour is nobody else\'s business');
+});
+
+/*
+ * Folders outgrew localStorage: a few megabytes of string is fifty saved
+ * tracks, and once it is full every later change is refused - including
+ * opening a folder, which is not even a change to the collection. They live
+ * in IndexedDB now, and the first run after the upgrade carries across what
+ * the old row held and then lets go of it.
+ */
+test('folders: the collection moves from localStorage into the vault on first run', async () => {
+  const storage = memoryStorage();
+  const first = new FolderStore({ storage, vault: null });
+  const folder = first.create('Kentucky');
+  first.addFeatures(folder.id, [waypoint('Tower')]);
+  assert.ok(storage.dump(), 'the old install wrote to localStorage');
+
+  const vault = memoryVault();
+  const second = new FolderStore({ storage, vault });
+  assert.equal(await second.hydrate(), false, 'the vault had nothing to give yet');
+  assert.equal(second.folders.length, 1, 'and nothing was lost getting there');
+  assert.equal(vault.dump().folders[0].name, 'Kentucky', 'the collection is in the vault');
+  assert.equal(storage.dump(), undefined, 'and the row it was competing for is released');
+});
+
+test('folders: once the vault holds the collection, it is what loads', async () => {
+  const vault = memoryVault();
+  const first = new FolderStore({ storage: memoryStorage(), vault });
+  first.addFeatures(first.create('Ohio').id, [waypoint('Ford')]);
+  await first.flush();
+
+  const storage = memoryStorage();
+  const second = new FolderStore({ storage, vault });
+  assert.equal(second.folders.length, 0, 'localStorage had nothing');
+  assert.equal(await second.hydrate(), true);
+  assert.equal(second.folders[0].name, 'Ohio');
+  assert.equal(second.folders[0].items.length, 1);
+});
+
+test('folders: a burst of changes becomes one write, not one write each', async () => {
+  const vault = memoryVault();
+  const store = new FolderStore({ storage: memoryStorage(), vault });
+  const folder = store.create('Imported');
+  for (let i = 0; i < 20; i += 1) store.addFeatures(folder.id, [waypoint(`Pin ${i}`, -84 - i)]);
+  await store.writing;
+  await store.writing;
+  // The first write goes out immediately; everything that arrives while it is
+  // in flight collapses into one more carrying the final state.
+  assert.equal(vault.writes, 2, `${vault.writes} writes for 21 changes`);
+  assert.equal(vault.dump().folders[0].items.length, 20, 'and the last state is the one stored');
+});
+
+test('folders: a migration into a vault that refuses it does not lose the folders', async () => {
+  const storage = memoryStorage();
+  const first = new FolderStore({ storage, vault: null });
+  first.addFeatures(first.create('Only copy').id, [waypoint('Tower')]);
+
+  const second = new FolderStore({ storage, vault: memoryVault({ failWrites: true }) });
+  assert.equal(await second.hydrate(), false);
+  assert.ok(storage.dump(), 'the row it was about to release still holds the collection');
+  assert.equal(second.folders[0].name, 'Only copy');
+
+  const third = new FolderStore({ storage, vault: null });
+  assert.equal(third.folders[0].items.length, 1, 'and it is still there on the next start');
+});
+
+test('folders: a vault that refuses the write falls back and says so', async () => {
+  const storage = memoryStorage();
+  const store = new FolderStore({ storage, vault: memoryVault({ failWrites: true }) });
+  const said = [];
+  store.onError((message) => said.push(message));
+  store.create('Nowhere');
+  await store.writing;
+  assert.equal(store.vault, null, 'the vault is not tried again this session');
+  assert.ok(storage.dump(), 'the collection landed in localStorage instead');
+  assert.equal(said.length, 0, 'and with somewhere to put it there is nothing to report');
+});
+
+test('folders: with nowhere left to write, the failure is announced', async () => {
+  const store = new FolderStore({ storage: null, vault: memoryVault({ failWrites: true }) });
+  const said = [];
+  store.onError((message) => said.push(message));
+  store.create('Nowhere');
+  await store.writing;
+  assert.equal(said.length, 1);
+  assert.match(said[0], /Could not save folders/);
+});
+
+/*
+ * Whether a folder is open in the list is about this screen, not the
+ * collection. Stamping it as modified would push the whole folder to every
+ * other device every time somebody looked inside one.
+ */
+test('folders: opening a folder does not stamp it as modified', () => {
+  const store = new FolderStore({ storage: memoryStorage(), vault: null });
+  const folder = store.create('Trip');
+  // A known-old stamp, so "did not move" and "moved" are both readable; two
+  // Date.now() calls in the same millisecond are equal.
+  const stamped = 1_700_000_000_000;
+  folder.updatedAt = stamped;
+  const seen = [];
+  store.onChange((_store, id) => seen.push(id));
+
+  store.update(folder.id, { collapsed: true });
+  assert.equal(store.get(folder.id).collapsed, true, 'the folder still shuts');
+  assert.equal(store.get(folder.id).updatedAt, stamped, 'but the clock did not move');
+  assert.deepEqual(seen, [null], 'and sync was not asked to push it');
+
+  store.update(folder.id, { visible: false });
+  assert.ok(store.get(folder.id).updatedAt > stamped, 'hiding it is a real change');
+  assert.deepEqual(seen, [null, folder.id]);
+});
+
+/*
+ * A GPS fix is good to a few metres and serialises as seventeen digits.
+ * Rounding to eleven centimetres halves what a track costs and changes
+ * nothing anybody can see.
+ */
+test('folders: stored positions are rounded to what a GPS actually knows', () => {
+  const packed = packFeature({
+    type: 'Feature',
+    geometry: { type: 'LineString', coordinates: [[-84.512345678901234, 38.123456789012345, 321.456789]] },
+    properties: { kind: 'track', name: 'Ridge' },
+  });
+  assert.deepEqual(packed.geometry.coordinates[0], [-84.512346, 38.123457, 321.5]);
+
+  const point = packFeature(waypoint('Gap', -84.987654321, 36.123456789));
+  assert.deepEqual(point.geometry.coordinates.slice(0, 2), [-84.987654, 36.123457]);
 });

@@ -947,6 +947,62 @@ const EMOJI_ICONS = new Map([
   ['\u{1F304}', 'scenic'],     // sunrise over mountains
 ]);
 
+/*
+ * What a pin is called, and what folder it is in, are evidence too.
+ *
+ * A GaiaGPS export gives every pin the same generic symbol, so the only thing
+ * that tells one from another is what the person typed. These rules read that,
+ * and they are deliberately a short explicit list rather than a general
+ * word-match: a title is free text, and guessing at it wrongly across a whole
+ * folder is worse than leaving the pins alone.
+ *
+ * Order matters. "Covered bridge" is a bridge, so it has to be asked first, or
+ * every covered bridge becomes a plain one.
+ */
+const TITLE_RULES = [
+  // "CB" on its own, or with a number after it - CB 12, CB-4 - is how covered
+  // bridges get written down in the field. Guarded by word boundaries so it
+  // does not fire on "CBS Tower" or a word that happens to contain the letters.
+  { icon: 'covered-bridge', test: /\bcovered[\s-]*bridge\b|\bcb\b(?!\s*radio)/i },
+  { icon: 'bridge', test: /\bbridges?\b/i },
+];
+
+/*
+ * And what the folder says, for the pins whose own names say nothing.
+ *
+ * Weaker than a title on purpose: somebody who filed a covered bridge in
+ * "Abandoned" meant it to be a covered bridge in the abandoned folder.
+ */
+const FOLDER_RULES = [
+  { icon: 'abandoned-building', test: /\babandoned\b/i },
+];
+
+const firstRule = (rules, text) => (text
+  ? (rules.find((rule) => rule.test.test(text))?.icon || null)
+  : null);
+
+/** The icon a pin's own name calls for, or null if it says nothing useful. */
+export function iconForTitle(title) {
+  return firstRule(TITLE_RULES, String(title || '').trim());
+}
+
+/** The icon a folder's name calls for, for pins that have no better claim. */
+export function iconForFolderName(name) {
+  return firstRule(FOLDER_RULES, String(name || '').trim());
+}
+
+/**
+ * Everything known about one pin, resolved to a single icon.
+ *
+ * The pin's own name first, then the symbol its source file carried, then the
+ * folder it was filed in. Returns null when nothing has an opinion, which the
+ * caller reads as "leave this pin as it is" rather than as "use the plain pin"
+ * - a symbol somebody chose by hand must survive a re-match.
+ */
+export function iconForPin({ name, symbol, folderName } = {}) {
+  return iconForTitle(name) || iconForSymbol(symbol) || iconForFolderName(folderName);
+}
+
 export function iconForSymbol(symbol) {
   const typed = String(symbol || '').trim().toLowerCase();
   if (!typed) return null;
