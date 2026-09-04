@@ -293,7 +293,8 @@ test('editItem changes the text you write, not the styling', () => {
   store.addFeatures(folder.id, [{
     type: 'Feature',
     geometry: { type: 'Point', coordinates: [-84, 35] },
-    properties: { name: 'Waypoint 214', kind: 'waypoint', color: '#123456', icon: 'water' },
+    // A palette colour, since an import snaps to the nearest one on the way in.
+    properties: { name: 'Waypoint 214', kind: 'waypoint', color: '#0f766e', icon: 'water' },
   }]);
 
   const [item] = store.get(folder.id).items;
@@ -306,7 +307,7 @@ test('editItem changes the text you write, not the styling', () => {
   assert.equal(props.name, 'Spring below the ford');
   assert.equal(props.description, 'Runs clear all summer.');
   // Styling is styleItems' job and must survive a text edit untouched.
-  assert.equal(props.color, '#123456');
+  assert.equal(props.color, '#0f766e');
   assert.equal(props.icon, 'water');
 });
 
@@ -478,58 +479,6 @@ test('folders: a long track is thinned to the budget and a short one is left alo
   assert.equal(packFeature(short, { keepTimes: true }).properties.coordTimes.length, 2);
 });
 
-/*
- * A pin keeps the symbol word it came in with, and its picture was chosen
- * from the table as it stood that day. Re-matching lets an old folder catch
- * up when the table grows - and leaves alone anything that already matches,
- * has no word, or has a word the table still does not know.
- */
-test('folders: re-matching gives pins the symbol their imported name resolves to now', () => {
-  const store = new FolderStore({ storage: memoryStorage() });
-  const folder = store.create('Towers');
-  store.addFeatures(folder.id, [
-    { type: 'Feature', geometry: { type: 'Point', coordinates: [-81, 37] }, properties: { kind: 'waypoint', name: 'A', symbol: 'fire-lookout', icon: 'pin' } },
-    { type: 'Feature', geometry: { type: 'Point', coordinates: [-82, 37] }, properties: { kind: 'waypoint', name: 'B', symbol: 'fire-lookout', icon: 'tower' } },
-    { type: 'Feature', geometry: { type: 'Point', coordinates: [-83, 37] }, properties: { kind: 'waypoint', name: 'C', symbol: 'emoji-unicorn', icon: 'pin' } },
-    { type: 'Feature', geometry: { type: 'Point', coordinates: [-84, 37] }, properties: { kind: 'waypoint', name: 'D' } },
-  ]);
-  const resolve = (pin) => (pin.symbol === 'fire-lookout' ? 'tower' : null);
-  assert.equal(store.rematchIcons(folder.id, resolve), 1, 'only the stale one changes');
-  const icons = store.get(folder.id).items.map((item) => item.feature.properties.icon);
-  assert.deepEqual(icons, ['tower', 'tower', 'pin', null], 'a pin with no word keeps its nothing');
-  assert.equal(store.rematchIcons(folder.id, resolve), 0, 'a second pass finds nothing to do');
-  assert.equal(store.rematchIcons('nope', resolve), 0);
-});
-
-/*
- * The resolver gets the whole pin and the folder's name, because for most
- * collections the imported symbol says nothing - a GaiaGPS export stamps
- * every point the same, and what tells a covered bridge from a mine is the
- * title somebody typed or the folder they filed it in.
- */
-test('folders: re-matching reads the title and the folder, and never the colour', () => {
-  const store = new FolderStore({ storage: memoryStorage(), vault: null });
-  const folder = store.create('Abandoned Kentucky');
-  store.addFeatures(folder.id, [
-    { type: 'Feature', geometry: { type: 'Point', coordinates: [-81, 37] }, properties: { kind: 'waypoint', name: 'Bennett Mill CB', icon: 'pin', color: '#1d4ed8' } },
-    { type: 'Feature', geometry: { type: 'Point', coordinates: [-82, 37] }, properties: { kind: 'waypoint', name: 'Old iron bridge', icon: 'pin', color: '#b4441f' } },
-    { type: 'Feature', geometry: { type: 'Point', coordinates: [-83, 37] }, properties: { kind: 'waypoint', name: 'Miller house', icon: 'pin' } },
-  ]);
-  assert.equal(store.rematchIcons(folder.id, iconForPin), 3);
-  const items = store.get(folder.id).items.map((item) => item.feature.properties);
-  assert.deepEqual(items.map((props) => props.icon),
-    ['covered-bridge', 'bridge', 'abandoned']);
-  assert.deepEqual(items.map((props) => props.color),
-    ['#1d4ed8', '#b4441f', null], 'colour is nobody else\'s business');
-});
-
-/*
- * Folders outgrew localStorage: a few megabytes of string is fifty saved
- * tracks, and once it is full every later change is refused - including
- * opening a folder, which is not even a change to the collection. They live
- * in IndexedDB now, and the first run after the upgrade carries across what
- * the old row held and then lets go of it.
- */
 test('folders: the collection moves from localStorage into the vault on first run', async () => {
   const storage = memoryStorage();
   const first = new FolderStore({ storage, vault: null });
@@ -648,30 +597,6 @@ test('folders: stored positions are rounded to what a GPS actually knows', () =>
 
   const point = packFeature(waypoint('Gap', -84.987654321, 36.123456789));
   assert.deepEqual(point.geometry.coordinates.slice(0, 2), [-84.987654, 36.123457]);
-});
-
-/*
- * A pin can point at a page. The field is newer than most collections, so the
- * address for a place is usually in the middle of a sentence somebody typed
- * years ago - and that note is left exactly as it was, because tidying up
- * what a person wrote would be the app taking a liberty.
- */
-test('folders: a pin carries a link, and can be given one out of its own notes', () => {
-  const store = new FolderStore({ storage: memoryStorage(), vault: null });
-  const folder = store.create('Reading');
-  store.addFeatures(folder.id, [
-    { ...waypoint('Tower'), properties: { kind: 'waypoint', name: 'Tower', description: 'Write-up at https://example.org/tower, worth a read.' } },
-    { ...waypoint('Ford', -85), properties: { kind: 'waypoint', name: 'Ford', description: 'No link here.' } },
-    { ...waypoint('Mill', -86), properties: { kind: 'waypoint', name: 'Mill', description: 'see www.example.org/mill', link: 'https://kept.example/already' } },
-  ]);
-
-  assert.equal(store.adoptLinks(folder.id, findLink), 1, 'only the one that had none and had an address');
-  const items = store.get(folder.id).items.map((item) => item.feature.properties);
-  assert.equal(items[0].link, 'https://example.org/tower');
-  assert.match(items[0].description, /https:\/\/example\.org\/tower, worth a read\./, 'the note is untouched');
-  assert.equal(items[1].link, null);
-  assert.equal(items[2].link, 'https://kept.example/already', 'a pin that had one keeps it');
-  assert.equal(store.adoptLinks(folder.id, findLink), 0, 'a second pass finds nothing to do');
 });
 
 test('folders: a link can be named, and clearing the address clears the name', () => {
@@ -842,4 +767,48 @@ test('folders: a nested batch does not announce itself separately', () => {
 test('colors: every swatch has a name, and no name is left over', () => {
   assert.deepEqual(Object.keys(COLOR_NAMES).sort(), [...FOLDER_COLORS].sort());
   assert.equal(new Set(Object.values(COLOR_NAMES)).size, FOLDER_COLORS.length, 'and no two share one');
+});
+
+/*
+ * What an import does on its own, now that the two sweep buttons are gone.
+ *
+ * They existed because the work had to be asked for; it is done at the moment
+ * a pin is filed instead, when everything needed to do it is in hand - the
+ * pin, the file it came from, and the folder it is going into.
+ */
+test('import: a colour lands on the nearest swatch', () => {
+  const store = new FolderStore({ storage: memoryStorage(), vault: null });
+  const folder = store.create('Imported');
+  store.addFeatures(folder.id, [
+    // GaiaGPS's own brown, which is in the palette exactly.
+    { ...waypoint('Exact'), properties: { kind: 'waypoint', name: 'Exact', color: '#784D3E' } },
+    // And something off it, which lands on the one a person would have picked.
+    { ...waypoint('Near', -85), properties: { kind: 'waypoint', name: 'Near', color: '#1d4ed8' } },
+    { ...waypoint('None', -86), properties: { kind: 'waypoint', name: 'None' } },
+  ]);
+  const colors = store.get(folder.id).items.map((item) => item.feature.properties.color);
+  assert.deepEqual(colors, ['#784d3e', '#2d3fc7', null]);
+});
+
+test('import: the folder has a say in the symbol, but only over silence', () => {
+  const store = new FolderStore({ storage: memoryStorage(), vault: null });
+  const folder = store.create('Abandoned Kentucky');
+  store.addFeatures(folder.id, [
+    { ...waypoint('Miller house'), properties: { kind: 'waypoint', name: 'Miller house' } },
+    // A symbol the file carried is better evidence than the folder's name.
+    { ...waypoint('Elk ford', -85), properties: { kind: 'waypoint', name: 'Elk ford', icon: 'ford' } },
+    // And so is the pin's own name.
+    { ...waypoint('Bennett Mill CB', -86), properties: { kind: 'waypoint', name: 'Bennett Mill CB', icon: 'covered-bridge' } },
+  ]);
+  assert.deepEqual(store.get(folder.id).items.map((item) => item.feature.properties.icon),
+    ['abandoned', 'ford', 'covered-bridge']);
+});
+
+test('import: a folder that says nothing leaves a pin with no symbol', () => {
+  const store = new FolderStore({ storage: memoryStorage(), vault: null });
+  const folder = store.create('Kentucky');
+  store.addFeatures(folder.id, [
+    { ...waypoint('Somewhere'), properties: { kind: 'waypoint', name: 'Somewhere' } },
+  ]);
+  assert.equal(store.get(folder.id).items[0].feature.properties.icon, null);
 });

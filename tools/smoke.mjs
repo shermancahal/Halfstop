@@ -882,8 +882,8 @@ const actions = await page.evaluate(() => [...document.querySelectorAll('#tab-fo
     top: Math.round(node.getBoundingClientRect().top),
     clipped: [...node.querySelectorAll('span')].some((span) => span.scrollWidth > span.clientWidth + 1),
   })));
-check('the folder actions are New folder, New trip, Import, Re-match and Find links',
-  actions.map((a) => a.label), ['New folder', 'New trip', 'Import', 'Re-match', 'Find links']);
+check('the folder actions are New folder, New trip and Import',
+  actions.map((a) => a.label), ['New folder', 'New trip', 'Import']);
 check('each carrying a mark of its own', actions.every((a) => a.icon), true);
 check('and Import is there before anything has been imported',
   actions.find((a) => a.label === 'Import')?.hidden, false);
@@ -891,9 +891,6 @@ check('and Import is there before anything has been imported',
 // on one line cut "New folder" short at the panel's width.
 check('New folder and New trip share a line', actions[0].top === actions[1].top, true);
 check('and Import has the next to itself', actions[2].top > actions[1].top, true);
-// And the two sweeps over everything already saved share the line below it.
-check('the two sweeps share the line under Import',
-  actions[3].top === actions[4].top && actions[3].top > actions[2].top, true);
 check('with every word intact', actions.filter((a) => a.clipped).map((a) => a.label), []);
 await shot(page.locator('#tab-folders .folder-actions'), 'folder-actions');
 

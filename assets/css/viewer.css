@@ -438,13 +438,6 @@ html, body { height: 100%; overflow: hidden; }
 #tab-folders > .panel-section > .folder-actions .button { flex: 1 1 calc(50% - 4px); }
 #tab-folders > .panel-section > .folder-actions #import-into-folder { flex: 1 0 100%; }
 
-/* The two sweeps that act on everything already saved, sharing the line below
-   the three that make something new. Same width apiece, so neither reads as
-   the one you are meant to press. Labels are short because at half the panel's
-   width "Re-match icons" is cut off; each says the whole thing on hover. */
-#tab-folders > .panel-section > .folder-actions #rematch-all,
-#tab-folders > .panel-section > .folder-actions #find-links { flex: 1 1 calc(50% - 4px); }
-
 /* A pin's link, under its note rather than beside its name: the note is what
    you read, and this is what you do next. */
 .popup-link-row { margin: 8px 0 0; }

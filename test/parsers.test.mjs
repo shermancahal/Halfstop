@@ -439,3 +439,57 @@ test('gpx: a waypoint link keeps the wording the file gave it', () => {
   assert.equal(props[2].link, 'https://example.org/gap');
   assert.equal(props[2].linkLabel, null, 'no wording is no wording, not a guess');
 });
+
+/*
+ * An address typed into a note becomes the pin's link and leaves the note.
+ *
+ * The note is for what the place is like; a bare address in the middle of one
+ * is neither read nor tapped comfortably. What is left behind is tidied, or
+ * there is nothing left and the note is empty.
+ */
+test('import: a web address in a note moves into the link field', async () => {
+  // Through parseMapFile, which is the import path: the promotion runs for
+  // every format rather than only for the one that happens to be tested.
+  const gpx = (desc) => `<?xml version="1.0"?><gpx version="1.1">
+    <wpt lat="37" lon="-84"><name>Tower</name><desc>${desc}</desc></wpt>
+  </gpx>`;
+  const one = async (desc) => (await parseMapFile(gpx(desc), 'notes.gpx')).geojson.features[0].properties;
+
+  let props = await one('Write-up at https://example.org/tower, worth a read.');
+  assert.equal(props.link, 'https://example.org/tower');
+  assert.equal(props.description, 'Write-up, worth a read.', 'the dangling preposition goes too');
+
+  props = await one('https://example.org/only');
+  assert.equal(props.link, 'https://example.org/only');
+  assert.equal(props.description, '', 'a note that was only an address is empty, not punctuation');
+
+  props = await one('Gate locked. See www.nps.gov/abc');
+  assert.equal(props.link, 'https://www.nps.gov/abc', 'a bare host is given a scheme to be followed');
+  assert.equal(props.description, 'Gate locked.');
+
+  // Only the first goes: a note listing sources is a note about sources.
+  props = await one('Two: https://a.example/1 and https://b.example/2');
+  assert.equal(props.link, 'https://a.example/1');
+  assert.match(props.description, /https:\/\/b\.example\/2/);
+
+  props = await one('Gate is unlocked.');
+  assert.equal(props.link, null);
+  assert.equal(props.description, 'Gate is unlocked.', 'a note with no address is untouched');
+});
+
+/*
+ * A <link> of its own beats one buried in the prose, and the prose keeps
+ * whatever it says - there was nothing to move.
+ */
+test('import: a link field of its own leaves the note alone', async () => {
+  const gpx = `<?xml version="1.0"?><gpx version="1.1">
+    <wpt lat="37" lon="-84"><name>Tower</name>
+      <desc>Also see https://example.org/other</desc>
+      <link href="https://example.org/official"><text>NPS page</text></link>
+    </wpt>
+  </gpx>`;
+  const props = (await parseMapFile(gpx, 'linked.gpx')).geojson.features[0].properties;
+  assert.equal(props.link, 'https://example.org/official');
+  assert.equal(props.linkLabel, 'NPS page');
+  assert.equal(props.description, 'Also see https://example.org/other');
+});

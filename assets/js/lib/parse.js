@@ -86,6 +86,55 @@ export function findLink(text) {
   return findLinks(text)[0] || null;
 }
 
+/**
+ * The same text with one address cut out of it, tidied up after.
+ *
+ * "Write-up at https://example.org/x, worth a read." with the address removed
+ * is "Write-up at, worth a read.", so the words left dangling round the hole
+ * are trimmed too: a preposition with nothing after it, the space doubled
+ * where the address was, an empty pair of brackets. What is left of a note
+ * that was nothing but an address is nothing, not a stray comma.
+ */
+export function withoutSpan(text, span) {
+  const value = String(text || '');
+  if (!span) return value;
+  const tidied = `${value.slice(0, span.at)}${value.slice(span.at + span.text.length)}`
+    .replace(/([([{<])\s*([)\]}>])/g, '')
+    .replace(/\b(?:at|on|see|via|from)\s*(?=[,.;:]|$)/gi, '')
+    .replace(/\s+([,.;:])/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^[,.;:)\]}>]+\s*/, '')
+    .trim();
+  // Punctuation on its own is not a note.
+  return /[\p{L}\p{N}]/u.test(tidied) ? tidied : '';
+}
+
+/**
+ * A web address typed into a note becomes the pin's link, and leaves the note.
+ *
+ * A note is for what the place is like; a bare address in the middle of one is
+ * neither read comfortably nor tapped comfortably, and every file format has
+ * somewhere better to put it. So it moves - and because it moves, the words
+ * left dangling round the hole are tidied after it.
+ *
+ * Only when the pin has no link already: a <link> the file carried is the one
+ * its writer meant, and a URL further down the prose is an aside.
+ *
+ * Only the first, too. A note listing three sources is a note about three
+ * sources, not a pin with three links; the rest stay where they are and stay
+ * clickable where they are shown.
+ */
+export function adoptNoteLink(props) {
+  if (!props || props.link) return props;
+  const note = props.description || props.notes || '';
+  const [span] = findLinkSpans(note);
+  if (!span) return props;
+  props.link = span.href;
+  props.description = withoutSpan(note, span);
+  return props;
+}
+
 export function measureFeature(feature) {
   const geometry = feature.geometry;
   const kind = feature.properties?.kind;
@@ -153,6 +202,7 @@ export function summarize(geojson) {
         || iconForSymbol(feature.properties.type);
       if (resolved) feature.properties.icon = resolved;
     }
+    adoptNoteLink(feature.properties);
     const measurements = measureFeature(feature);
     stats.featureCount++;
 
@@ -227,10 +277,7 @@ function adoptForeignProperties(props) {
     // one becomes the pin's link, which is what the photo importer follows.
     const photo = Array.isArray(props.photos) ? props.photos.find((entry) => entry?.fullsize_url || entry?.web_url) : null;
     const found = text(props.url, props.link_url, photo?.fullsize_url, photo?.web_url);
-    // Nothing in a field of its own: a URL somebody typed into the note is
-    // still the link for this place, and is the only one most files carry.
     if (found) props.link = found;
-    else props.link = findLink(props.description || props.notes) || props.link;
   }
   if (!Number.isFinite(props.time)) {
     const stamp = Date.parse(text(props.time_created, props.created, props.timestamp));

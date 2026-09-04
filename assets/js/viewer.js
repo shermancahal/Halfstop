@@ -20,7 +20,7 @@ import {
   engineFor, schemaFor, sourceNoteFor,
 } from './lib/engine.js';
 import { loadCatalog, findMap } from './lib/catalog.js';
-import { parseMapFile, linePositions, findLink, findLinkSpans } from './lib/parse.js';
+import { parseMapFile, linePositions, findLinkSpans } from './lib/parse.js';
 import {
   boundsAreValid, cumulativeDistances, formatDistance, formatDuration, formatElevation,
   formatTemperature, geojsonBounds, mergeBounds, padBounds,
@@ -32,7 +32,7 @@ import {
   FolderStore, FOLDER_COLORS, COLOR_NAMES, readColor, inPalette, readTrip, tripStanding, localDay,
 } from './lib/folders.js';
 import {
-  PIN_ICONS, DEFAULT_PIN_ICON, pinIconGroups, pinIconSVG, pinImageId, registerPinImages, rasterizePinIcon, pinColorFor, iconForPin, searchPinIcons, getPinIcon,
+  PIN_ICONS, DEFAULT_PIN_ICON, pinIconGroups, pinIconSVG, pinImageId, registerPinImages, rasterizePinIcon, pinColorFor, searchPinIcons, getPinIcon,
 } from './lib/pin-icons.js';
 import { toGPX } from './lib/gpx-write.js';
 import {
@@ -890,8 +890,6 @@ function cacheDom() {
   dom.newFolder = document.getElementById('new-folder');
   dom.newTrip = document.getElementById('new-trip');
   dom.importIntoFolder = document.getElementById('import-into-folder');
-  dom.rematchAll = document.getElementById('rematch-all');
-  dom.findLinks = document.getElementById('find-links');
   dom.dropTarget = document.getElementById('drop-target');
   dom.importAsk = document.getElementById('import-ask');
   /*
@@ -9430,53 +9428,10 @@ function wireFolders() {
    */
   dom.importIntoFolder?.addEventListener('click', () => dom.fileInput?.click());
 
-  /*
-   * Re-match every folder at once.
-   *
-   * The same action lives on each folder's own editor, but a collection built
-   * up over years is thirty folders, and thirty clicks to take up a symbol set
-   * that grew is not a feature anybody uses. Icons only: a pin's colour is the
-   * user's own code for what it means to them, and nothing here touches it.
-   */
-  dom.rematchAll?.addEventListener('click', () => {
-    const folders = state.folders.list();
-    if (!folders.length) { toast('No folders to re-match yet.', { tone: 'info' }); return; }
-    let changed = 0;
-    let touched = 0;
-    for (const folder of folders) {
-      const moved = state.folders.rematchIcons(folder.id, iconForPin);
-      if (moved) { changed += moved; touched += 1; }
-    }
-    toast(changed
-      ? `${changed} pin${changed === 1 ? '' : 's'} took a new symbol across ${touched} folder${touched === 1 ? '' : 's'}.`
-      : 'Every pin already shows the symbol its name matches.', { tone: changed ? 'ok' : 'info' });
-  });
-
-  /*
-   * Find the web addresses already sitting in people's notes.
-   *
-   * The link field is newer than most collections, so the page about a place
-   * is usually in the middle of a sentence somebody typed years ago. This
-   * promotes the first address in each note to the pin's own link, and leaves
-   * the note alone - the address stays where it reads, and is now also a
-   * button called "More info" until somebody names it something better.
-   */
-  dom.findLinks?.addEventListener('click', () => {
-    const folders = state.folders.list();
-    if (!folders.length) { toast('No folders to scan yet.', { tone: 'info' }); return; }
-    let found = 0;
-    for (const folder of folders) found += state.folders.adoptLinks(folder.id, findLink);
-    toast(found
-      ? `${found} pin${found === 1 ? '' : 's'} now carry a link from their notes.`
-      : 'No unlinked pin had a web address in its notes.', { tone: found ? 'ok' : 'info' });
-  });
-
-  // A mark apiece, so five buttons in a row are told apart before they are read.
+  // A mark apiece, so three buttons in a row are told apart before they are read.
   withIcon(dom.newFolder, icons.folder);
   withIcon(dom.newTrip, icons.route);
   withIcon(dom.importIntoFolder, icons.upload);
-  withIcon(dom.rematchAll, icons.refresh);
-  withIcon(dom.findLinks, icons.external);
 }
 
 /**
@@ -12018,22 +11973,6 @@ function folderActionsRow(folder) {
         title: `Export ${folder.name} as a GPX file`,
         html: `${icons.export}<span>Export</span>`,
         onclick: () => exportFolder(folder),
-      }),
-      /*
-       * A pin keeps the symbol word it was imported with, and its picture was
-       * chosen from the table as it stood on the day. When the set grows,
-       * this lets a folder from before catch up without re-importing.
-       */
-      el('button', {
-        class: 'button button-ghost button-small', type: 'button',
-        title: 'Give every pin the symbol its name, its folder or its import matches today',
-        html: `${icons.refresh}<span>Re-match</span>`,
-        onclick: () => {
-          const changed = state.folders.rematchIcons(folder.id, iconForPin);
-          toast(changed
-            ? `${changed} pin${changed === 1 ? '' : 's'} took a new symbol.`
-            : 'Every pin already shows the symbol its name matches.', { tone: changed ? 'ok' : 'info' });
-        },
       }),
       el('button', {
         class: 'button button-ghost button-small is-danger', type: 'button',

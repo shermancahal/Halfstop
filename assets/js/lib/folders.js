@@ -20,7 +20,7 @@
  * app as intended.
  */
 
-import { DEFAULT_PIN_ICON, pinColorFor } from './pin-icons.js';
+import { DEFAULT_PIN_ICON, pinColorFor, iconForPin } from './pin-icons.js';
 import { simplify } from './geo.js';
 
 const STORAGE_KEY = 'ab-maps-folders-v1';
@@ -220,7 +220,16 @@ function packFeature(feature, { keepTimes = false } = {}) {
       description: props.description || '',
       symbol: props.symbol || '',
       type: props.type || '',
-      color: props.color || null,
+      /*
+       * Snapped to the nearest swatch on the way in.
+       *
+       * An import arrives with whatever hex the other app used. Six of those
+       * are in the palette exactly, and the rest are near-misses that would
+       * show as "no swatch selected" in the editor and as a colour nobody can
+       * name in the table. Landing on the nearest one costs a shade nobody can
+       * see and makes the colour a thing the app can talk about.
+       */
+      color: nearestColor(props.color) || props.color || null,
       // Resolved from the source file's <sym>/IconStyle at import time, so a
       // GaiaGPS export arrives already styled rather than as identical dots.
       icon: props.icon || null,
@@ -700,6 +709,22 @@ export class FolderStore {
     for (const feature of features) {
       if (!feature?.geometry) { skipped++; continue; }
       const packed = packFeature(feature, { keepTimes });
+      /*
+       * The folder gets a say in the symbol, but only over silence.
+       *
+       * Which folder something was filed into is evidence about what it is -
+       * everything in "Abandoned Kentucky" is abandoned - and this is the only
+       * moment the app knows both the pin and its destination. It never
+       * overrides a symbol the file carried or the pin's own name earned;
+       * those were decided upstream and are better evidence.
+       */
+      if (!packed.properties.icon) {
+        packed.properties.icon = iconForPin({
+          name: packed.properties.name,
+          symbol: packed.properties.symbol,
+          folderName: folder.name,
+        }) || null;
+      }
       const print = fingerprint(packed);
       if (seen.has(print)) { skipped++; continue; }
       seen.add(print);
@@ -723,40 +748,6 @@ export class FolderStore {
    * @param {(pin: object) => string|null} resolve  iconForPin, passed in so this module stays free of the icon set
    * @returns {number} how many pins changed
    */
-  /**
-   * Give every pin in a folder the icon it would be given today.
-   *
-   * The resolver is handed the whole pin and the folder's name rather than
-   * just the imported symbol word, because for most collections the symbol
-   * says nothing: a GaiaGPS export stamps every pin the same, and what tells a
-   * covered bridge from a mine is what the person typed in the title, or which
-   * folder they filed it in.
-   *
-   * Only the icon moves. Colour is left exactly as it is - people colour-code
-   * pins by what they mean to them, and a re-match must not have an opinion
-   * about that.
-   *
-   * @param {string} folderId
-   * @param {(pin: {name: string, symbol: string, folderName: string}) => string|null} resolve
-   */
-  rematchIcons(folderId, resolve) {
-    const folder = this.get(folderId);
-    if (!folder) return 0;
-    let changed = 0;
-    for (const item of folder.items) {
-      const props = item.feature.properties;
-      if (props.kind !== 'waypoint') continue;
-      const icon = resolve({
-        name: props.name || '',
-        symbol: props.symbol || '',
-        folderName: folder.name,
-      });
-      if (icon && icon !== props.icon) { props.icon = icon; changed += 1; }
-    }
-    if (changed) this.emit(folderId);
-    return changed;
-  }
-
   /** @returns {boolean} whether there was an item there to remove */
   removeItem(folderId, itemId) {
     const folder = this.get(folderId);
@@ -920,35 +911,6 @@ export class FolderStore {
     props.linkLabel = named;
     this.emit(folderId);
     return true;
-  }
-
-  /**
-   * Give every pin in a folder that has no link the first web address in its
-   * own notes.
-   *
-   * Most collections predate there being a field for this, so the address for
-   * a place is sitting in the middle of a sentence somebody typed. The note is
-   * left exactly as it was - the address stays where it reads, and is now also
-   * a button - because editing what a person wrote to tidy the data would be
-   * the app taking a liberty.
-   *
-   * @param {string} folderId
-   * @param {(text: string) => string|null} find
-   */
-  adoptLinks(folderId, find) {
-    const folder = this.get(folderId);
-    if (!folder) return 0;
-    let changed = 0;
-    for (const item of folder.items) {
-      const props = item.feature.properties;
-      if (props.kind !== 'waypoint' || props.link) continue;
-      const found = find(`${props.description || ''}\n${props.name || ''}`);
-      if (!found) continue;
-      props.link = found;
-      changed += 1;
-    }
-    if (changed) this.emit(folderId);
-    return changed;
   }
 
   /**
