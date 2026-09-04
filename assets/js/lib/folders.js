@@ -47,6 +47,35 @@ export const FOLDER_COLORS = [
   '#06b6d4', '#7e22ce', '#a21caf', '#9f1239', '#ec4899', '#784d3e',
 ];
 
+/**
+ * What to call each of them.
+ *
+ * A table needs a word for a colour: a row of eighteen identical circles is
+ * not a menu anybody can use, and "#9f1239" is not a word. These are the
+ * ordinary names, not paint-chart names - somebody looking for the red one
+ * should find "Red".
+ */
+export const COLOR_NAMES = {
+  '#f42410': 'Red',
+  '#b4441f': 'Rust',
+  '#e8590c': 'Orange',
+  '#f59f00': 'Amber',
+  '#ffef00': 'Yellow',
+  '#94c11f': 'Lime',
+  '#4abd32': 'Green',
+  '#15803d': 'Forest',
+  '#0f766e': 'Teal',
+  '#0479ff': 'Sky',
+  '#0369a1': 'Deep blue',
+  '#2d3fc7': 'Blue',
+  '#06b6d4': 'Cyan',
+  '#7e22ce': 'Purple',
+  '#a21caf': 'Magenta',
+  '#9f1239': 'Deep rose',
+  '#ec4899': 'Pink',
+  '#784d3e': 'Brown',
+};
+
 /** How far apart two colours are, as a plain squared distance in RGB. */
 const colorGap = (a, b) => ((a >> 16) - (b >> 16)) ** 2
   + (((a >> 8) & 255) - ((b >> 8) & 255)) ** 2
@@ -483,14 +512,55 @@ export class FolderStore {
    * @param {string|null} folderId  the folder that changed, stamped as modified
    */
   emit(folderId = null) {
-    if (folderId) {
-      const folder = this.get(folderId);
+    for (const id of [].concat(folderId || [])) {
+      const folder = this.get(id);
       // Sync compares these, so a change that does not move the clock is a
       // change that will not travel.
       if (folder) folder.updatedAt = Date.now();
     }
+
+    // Inside a batch, remember what changed and say nothing until it ends.
+    if (this.held) {
+      this.held.any = true;
+      for (const id of [].concat(folderId || [])) this.held.folders.add(id);
+      return;
+    }
+
     this.save();
     for (const listener of this.listeners) listener(this, folderId);
+  }
+
+  /**
+   * Run a set of changes as one.
+   *
+   * Every edit method announces itself, which redraws the panel, writes the
+   * collection out and pushes the folder to sync. That is right for one edit
+   * and wrong for four hundred: re-colouring a folder from a table would
+   * redraw the map once per pin. Inside a batch the announcements are held,
+   * the folders that changed are remembered, and one announcement naming all
+   * of them goes out at the end.
+   *
+   * Nested batches are the inner one doing nothing, so a bulk action may call
+   * a method that batches on its own account.
+   *
+   * @param {() => T} run
+   * @returns {T} whatever run returned
+   * @template T
+   */
+  batch(run) {
+    if (this.held) return run();
+    this.held = { folders: new Set(), any: false };
+    try {
+      return run();
+    } finally {
+      const { folders, any } = this.held;
+      this.held = null;
+      // Nothing announced itself: no write, no redraw, nothing pushed. A
+      // change that named no folder - a deletion, say - still has to be
+      // written out, so "any" is tracked apart from which folders moved.
+      if (folders.size) this.emit([...folders]);
+      else if (any) this.emit();
+    }
   }
 
   /** Plain copy of every folder, for the sync merge. */
@@ -687,12 +757,15 @@ export class FolderStore {
     return changed;
   }
 
+  /** @returns {boolean} whether there was an item there to remove */
   removeItem(folderId, itemId) {
     const folder = this.get(folderId);
-    if (!folder) return;
+    if (!folder) return false;
     const before = folder.items.length;
     folder.items = folder.items.filter((item) => item.id !== itemId);
-    if (folder.items.length !== before) this.emit(folderId);
+    if (folder.items.length === before) return false;
+    this.emit(folderId);
+    return true;
   }
 
   /**
@@ -766,6 +839,49 @@ export class FolderStore {
 
     if (changed) this.emit(folderId);
     return changed;
+  }
+
+  /**
+   * Apply a style to items spread across folders, as one change.
+   *
+   * @param {Array<{folderId: string, itemId: string}>} entries
+   * @param {object} style  { color?: string|null, icon?: string|null }
+   * @returns {number} how many items changed
+   */
+  styleMany(entries, style) {
+    return this.batch(() => {
+      const byFolder = new Map();
+      for (const entry of entries) {
+        if (!byFolder.has(entry.folderId)) byFolder.set(entry.folderId, []);
+        byFolder.get(entry.folderId).push(entry.itemId);
+      }
+      let changed = 0;
+      for (const [folderId, itemIds] of byFolder) changed += this.styleItems(folderId, style, itemIds);
+      return changed;
+    });
+  }
+
+  /**
+   * Move items into one folder, as one change.
+   *
+   * @param {Array<{folderId: string, itemId: string}>} entries
+   * @param {string} toFolderId
+   * @returns {number} how many moved
+   */
+  moveItems(entries, toFolderId) {
+    return this.batch(() => entries.reduce(
+      (moved, entry) => moved + (this.moveItem(entry.itemId, entry.folderId, toFolderId) ? 1 : 0), 0));
+  }
+
+  /**
+   * Delete items spread across folders, as one change.
+   *
+   * @param {Array<{folderId: string, itemId: string}>} entries
+   * @returns {number} how many went
+   */
+  removeItems(entries) {
+    return this.batch(() => entries.reduce(
+      (gone, entry) => gone + (this.removeItem(entry.folderId, entry.itemId) ? 1 : 0), 0));
   }
 
   /** Clear per-item overrides so items fall back to the folder's own colour. */

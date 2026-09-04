@@ -2691,6 +2691,59 @@ await page.evaluate(() => {
 });
 await page.waitForTimeout(300);
 check('and it shuts again', await page.locator('.maplibregl-popup, .mapboxgl-popup').count(), 0);
+
+/*
+ * The table editor.
+ *
+ * The panel is a column beside a map: one pin at a time, read on a phone.
+ * Editing a hundred wants rows and columns, so this is a full-screen view over
+ * everything, with the bulk bar appearing only once something is ticked.
+ */
+await showTab('waypoints');
+await page.waitForTimeout(300);
+await page.locator('#open-table').click();
+await page.waitForTimeout(500);
+check('the table opens over the map', await page.locator('#table-editor').isVisible(), true);
+const columns = await page.locator('#table-editor thead th').evaluateAll(
+  (nodes) => nodes.map((node) => node.textContent.trim()).filter(Boolean));
+check('with a column for everything a pin wears',
+  columns, ['Pin', 'Name', 'Symbol', 'Color', 'Folder', 'Note', 'Link']);
+check('and a row for the saved pin', await page.locator('#table-editor tbody tr').count() >= 1, true);
+check('the bulk bar waits to be given something to act on',
+  (await page.locator('.table-bulk-count').textContent()).includes('Tick rows'), true);
+
+await page.locator('#table-editor tbody tr .table-tick input').first().check();
+await page.waitForTimeout(250);
+check('ticking a row brings it out', await page.locator('.table-bulk-count').textContent(), '1 selected');
+const bulkControls = await page.locator('.table-bulk select').evaluateAll(
+  (nodes) => nodes.map((node) => node.options[node.selectedIndex]?.textContent));
+check('offering symbol, colour and folder, each starting on a label rather than a value',
+  bulkControls, ['Set symbol…', 'Set color…', 'Move to…']);
+
+// The colour menu is words, because eighteen identical circles is not a menu.
+const colourWords = await page.locator('.table-bulk-color option').evaluateAll(
+  (nodes) => nodes.map((node) => node.textContent));
+check('and the colours are named', colourWords.includes('Yellow') && colourWords.includes('Brown'), true);
+
+await shot(page.locator('#table-editor'), 'table-editor');
+await page.locator('.table-bulk button', { hasText: 'Clear' }).click();
+await page.waitForTimeout(200);
+
+// Typing in the search must not lose the caret: every keystroke redraws the
+// table, and a redraw that drops focus makes the search unusable.
+await page.locator('.table-search').click();
+await page.keyboard.type('cave', { delay: 40 });
+await page.waitForTimeout(300);
+check('typing in the search keeps the caret', await page.evaluate(
+  () => document.activeElement?.classList.contains('table-search')), true);
+check('and filters as it goes', await page.locator('.table-search').inputValue(), 'cave');
+
+await page.keyboard.press('Escape');
+await page.waitForTimeout(300);
+check('Escape closes the table', await page.locator('#table-editor').isVisible(), false);
+await showTab('folders');
+await page.waitForTimeout(200);
+
 await showTab('layers');
 await page.waitForTimeout(200);
 

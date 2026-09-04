@@ -15,7 +15,7 @@ import { parseGPX } from '../assets/js/lib/gpx.js';
 import { parseMapFile } from '../assets/js/lib/parse.js';
 import { iconForPin } from '../assets/js/lib/pin-icons.js';
 import { findLink } from '../assets/js/lib/parse.js';
-import { FOLDER_COLORS, readColor, nearestColor, inPalette } from '../assets/js/lib/folders.js';
+import { FOLDER_COLORS, COLOR_NAMES, readColor, nearestColor, inPalette } from '../assets/js/lib/folders.js';
 
 /** In-memory stand-in for localStorage, so tests never touch a real browser API. */
 function memoryStorage(initial = null) {
@@ -749,4 +749,97 @@ test('colors: anything else lands on the nearest swatch', () => {
   assert.equal(nearestColor('#b45309'), '#b4441f', 'the old amber');
   assert.equal(nearestColor('#000000'), nearestColor('#010101'));
   assert.equal(nearestColor('not a colour'), null);
+});
+
+/*
+ * A bulk edit is one change, not one per row.
+ *
+ * Every edit method announces itself, which redraws the panel, writes the
+ * collection out and pushes the folder to sync. Right for one pin; for four
+ * hundred it redraws the map four hundred times.
+ */
+test('folders: a batch announces itself once, naming every folder it touched', () => {
+  const store = new FolderStore({ storage: memoryStorage(), vault: null });
+  const a = store.create('A');
+  const b = store.create('B');
+  store.addFeatures(a.id, [waypoint('One'), waypoint('Two', -85)]);
+  store.addFeatures(b.id, [waypoint('Three', -86)]);
+
+  const seen = [];
+  store.onChange((_store, changed) => seen.push(changed));
+
+  const ids = (folder) => store.get(folder.id).items.map((item) => item.id);
+  const entries = [
+    ...ids(a).map((itemId) => ({ folderId: a.id, itemId })),
+    ...ids(b).map((itemId) => ({ folderId: b.id, itemId })),
+  ];
+  assert.equal(store.styleMany(entries, { color: '#ffef00' }), 3);
+  assert.equal(seen.length, 1, 'one announcement for three pins in two folders');
+  assert.deepEqual([...seen[0]].sort(), [a.id, b.id].sort(), 'and it names both folders');
+
+  for (const folder of [a, b]) {
+    for (const item of store.get(folder.id).items) {
+      assert.equal(item.feature.properties.color, '#ffef00');
+    }
+  }
+});
+
+test('folders: a batch that changes nothing says nothing', () => {
+  const store = new FolderStore({ storage: memoryStorage(), vault: null });
+  const folder = store.create('A');
+  store.addFeatures(folder.id, [waypoint('One')]);
+  const seen = [];
+  store.onChange(() => seen.push(1));
+  assert.equal(store.styleMany([], { color: '#ffef00' }), 0);
+  assert.equal(seen.length, 0);
+});
+
+test('folders: moving and deleting in bulk are each one change', () => {
+  const store = new FolderStore({ storage: memoryStorage(), vault: null });
+  const from = store.create('From');
+  const to = store.create('To');
+  store.addFeatures(from.id, [waypoint('One'), waypoint('Two', -85), waypoint('Three', -86)]);
+  const entries = store.get(from.id).items.map((item) => ({ folderId: from.id, itemId: item.id }));
+
+  const seen = [];
+  store.onChange((_store, changed) => seen.push(changed));
+
+  assert.equal(store.moveItems(entries.slice(0, 2), to.id), 2);
+  assert.equal(seen.length, 1, 'one announcement for the move');
+  assert.deepEqual([...seen[0]].sort(), [from.id, to.id].sort(), 'both ends of a move travel');
+  assert.equal(store.get(to.id).items.length, 2);
+  assert.equal(store.get(from.id).items.length, 1);
+
+  const left = store.get(to.id).items.map((item) => ({ folderId: to.id, itemId: item.id }));
+  assert.equal(store.removeItems(left), 2);
+  assert.equal(seen.length, 2, 'and one for the delete');
+  assert.equal(store.get(to.id).items.length, 0);
+});
+
+/*
+ * A batch inside a batch is the outer one's business. A bulk action is free to
+ * call a method that batches on its own account without splitting the change
+ * in two.
+ */
+test('folders: a nested batch does not announce itself separately', () => {
+  const store = new FolderStore({ storage: memoryStorage(), vault: null });
+  const folder = store.create('A');
+  store.addFeatures(folder.id, [waypoint('One'), waypoint('Two', -85)]);
+  const entries = store.get(folder.id).items.map((item) => ({ folderId: folder.id, itemId: item.id }));
+
+  const seen = [];
+  store.onChange(() => seen.push(1));
+  store.batch(() => {
+    store.styleMany(entries, { icon: 'tower' });
+    store.styleMany(entries, { color: '#f42410' });
+  });
+  assert.equal(seen.length, 1);
+  const props = store.get(folder.id).items[0].feature.properties;
+  assert.equal(props.icon, 'tower');
+  assert.equal(props.color, '#f42410');
+});
+
+test('colors: every swatch has a name, and no name is left over', () => {
+  assert.deepEqual(Object.keys(COLOR_NAMES).sort(), [...FOLDER_COLORS].sort());
+  assert.equal(new Set(Object.values(COLOR_NAMES)).size, FOLDER_COLORS.length, 'and no two share one');
 });

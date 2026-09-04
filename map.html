@@ -271,6 +271,13 @@
             </div>
             <label class="visually-hidden" for="waypoint-folder">Filter by folder</label>
             <select id="waypoint-folder" class="drop-target" style="margin-bottom:11px"></select>
+            <!--
+              The panel is a column beside a map: one pin at a time, read on a
+              phone. Editing a hundred of them wants rows and columns and the
+              width of the screen, which is what the table is for.
+            -->
+            <button class="button button-secondary button-small" id="open-table" type="button"
+              style="width:100%;margin-bottom:11px">Edit as a table</button>
             <div id="waypoint-list"></div>
           </div>
         </div>
@@ -287,6 +294,13 @@
     <div class="map-surface">
       <div id="map"></div>
       <div class="import-ask" id="import-ask" hidden></div>
+      <!--
+        The table editor. Over everything, because it is the whole job while it
+        is open: built in JS, but the shell is here so it has a place in the
+        document order and a label before anything renders.
+      -->
+      <div class="table-editor" id="table-editor" role="dialog" aria-modal="true"
+        aria-label="Edit waypoints as a table" hidden></div>
       <button class="icon-button panel-toggle" id="panel-toggle" type="button" aria-label="Toggle the controls panel">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
       </button>

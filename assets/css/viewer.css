@@ -2670,3 +2670,83 @@ html, body { height: 100%; overflow: hidden; }
 .region-stale-status {
   font-size: .72rem; color: var(--ink-3); font-variant-numeric: tabular-nums;
 }
+
+
+/* ==========================================================================
+   The table editor
+   --------------------------------------------------------------------------
+   Over everything, because editing a hundred waypoints is the whole job while
+   it is happening - not something done in a column beside a map. The panel is
+   for one pin at a time; this is for the set.
+   ========================================================================== */
+
+.table-editor {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; flex-direction: column;
+  background: var(--surface); color: var(--ink);
+  /* Under the notch and above the home bar on a phone. */
+  padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
+    max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  gap: 9px;
+}
+.table-editor[hidden] { display: none; }
+/* The map keeps running behind it; stopping the page scrolling stops the
+   table's own scroller handing its overflow to the document on iOS. */
+body.has-table { overflow: hidden; }
+
+.table-head { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; }
+.table-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.table-title h2 { margin: 0; font-size: 1.02rem; font-weight: 650; }
+.table-tools { display: flex; gap: 7px; align-items: center; flex: 1 1 320px; justify-content: flex-end; }
+.table-search { flex: 1 1 180px; min-width: 120px; }
+.table-editor input,
+.table-editor select {
+  font: inherit; font-size: .84rem; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm, 6px); padding: 5px 7px; min-width: 0;
+}
+.table-editor input:focus-visible,
+.table-editor select:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+
+/* Always present, so ticking a row does not shift the table under the cursor. */
+.table-bulk {
+  display: flex; flex-wrap: wrap; gap: 7px; align-items: center;
+  padding: 7px 9px; border-radius: var(--radius-md, 8px);
+  background: var(--paper-2, rgba(0, 0, 0, .04)); border: 1px solid var(--line);
+}
+.table-bulk.is-idle { color: var(--ink-3); font-size: .84rem; }
+.table-bulk-count { font-size: .84rem; font-weight: 600; }
+
+.table-scroll { flex: 1 1 auto; overflow: auto; -webkit-overflow-scrolling: touch; }
+.table-grid { width: 100%; border-collapse: collapse; font-size: .84rem; }
+.table-grid th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--surface); text-align: left; font-weight: 650;
+  padding: 6px 7px; border-bottom: 1px solid var(--line-strong); white-space: nowrap;
+}
+.table-grid td { padding: 4px 7px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.table-grid tr.is-picked td { background: var(--paper-2, rgba(0, 0, 0, .05)); }
+.table-tick { width: 30px; }
+.table-tick input { width: 17px; height: 17px; padding: 0; }
+.table-mark { width: 34px; }
+/* The pin as the map draws it, at the size a row can hold. */
+.table-pin {
+  display: flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: #fff; border: 2.4px solid var(--pin);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .25);
+}
+.table-pin svg { display: block; }
+.table-name { width: 100%; min-width: 130px; }
+.table-note { width: 100%; min-width: 150px; }
+.table-link { width: 100%; min-width: 140px; }
+.table-symbol, .table-color, .table-folder { max-width: 150px; }
+
+.table-foot { display: flex; gap: 10px; align-items: center; justify-content: center; }
+
+/* A phone cannot show eight columns at once, so the table keeps its width and
+   scrolls sideways rather than folding into something unreadable. */
+@media (max-width: 720px) {
+  .table-grid { min-width: 760px; }
+  .table-title h2 { font-size: .95rem; }
+}

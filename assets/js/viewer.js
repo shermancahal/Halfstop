@@ -29,7 +29,7 @@ import { el, escapeHTML, createToaster, downloadText, saveBlob, applyStoredTheme
 import { fogOutlook, nightHours, fogName, fogNote, fogBand } from './lib/fog.js';
 import { icons } from './lib/icons.js';
 import {
-  FolderStore, FOLDER_COLORS, readColor, inPalette, readTrip, tripStanding, localDay,
+  FolderStore, FOLDER_COLORS, COLOR_NAMES, readColor, inPalette, readTrip, tripStanding, localDay,
 } from './lib/folders.js';
 import {
   PIN_ICONS, DEFAULT_PIN_ICON, pinIconGroups, pinIconSVG, pinImageId, registerPinImages, rasterizePinIcon, pinColorFor, iconForPin, searchPinIcons,
@@ -224,6 +224,15 @@ const state = {
   /** folderId -> how many of its items are currently revealed in the tree. */
   folderReveal: new Map(),
   waypointFolderFilter: '',
+  /*
+   * The table editor: its own search, its own page, and what is ticked.
+   *
+   * Kept apart from the panel's list rather than shared with it, because they
+   * are two views of the same collection used for different jobs - a filter
+   * you set to bulk-edit a hundred pins should not silently change what the
+   * panel shows when you close the table.
+   */
+  table: { open: false, query: '', folder: '', page: 0, picked: new Set() },
   /** Saved offline regions, defined here and downloaded by the mobile app. */
   offline: null,
   /** Region id whose outline is emphasised on the map, or ''. */
@@ -515,10 +524,12 @@ async function main() {
     renderLayersTab();
   });
 
-  state.folders.onChange((_store, folderId) => {
-    // Push the folder that changed straight away; a full sync still runs on
-    // sign-in and catches anything a failed push missed.
-    if (folderId && state.account?.user) {
+  state.folders.onChange((_store, changed) => {
+    // Push the folders that changed straight away; a full sync still runs on
+    // sign-in and catches anything a failed push missed. A bulk edit names
+    // several at once, which is why this takes a list as readily as an id.
+    if (!changed || !state.account?.user) return;
+    for (const folderId of [].concat(changed)) {
       const folder = state.folders.get(folderId);
       if (folder) state.account.pushFolder(folder);
     }
@@ -526,6 +537,7 @@ async function main() {
   state.folders.onChange(() => {
     renderFoldersTab();
     renderWaypointsTab();
+    renderTableEditor();
     renderDropTarget();
     refreshFolderData();
     if (state.folders.lastError) toast(state.folders.lastError, { tone: 'error', timeout: 10000 });
@@ -848,6 +860,8 @@ function cacheDom() {
   dom.overlayList = document.getElementById('overlay-list');
   dom.catalogList = document.getElementById('catalog-list');
   dom.waypointList = document.getElementById('waypoint-list');
+  dom.openTable = document.getElementById('open-table');
+  dom.tableEditor = document.getElementById('table-editor');
   dom.waypointSearch = document.getElementById('waypoint-search');
   dom.waypointFolder = document.getElementById('waypoint-folder');
   dom.waypointCount = document.getElementById('waypoint-count');
@@ -924,8 +938,19 @@ function wirePanel() {
   document.getElementById('panel-close')?.addEventListener('click', () => setPanelOpen(false));
 
   // Escape closes the panel on phones, where it is a full-screen overlay.
+  // The table sits over everything, so it gets first refusal on the key.
   window.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && !dom.panel.hidden && isNarrow()) setPanelOpen(false);
+    if (event.key !== 'Escape') return;
+    if (state.table.open) { closeTableEditor(); return; }
+    if (!dom.panel.hidden && isNarrow()) setPanelOpen(false);
+  });
+
+  dom.openTable?.addEventListener('click', () => {
+    if (!state.folders.totals().waypoints) {
+      toast('No saved waypoints to edit yet.', { tone: 'info' });
+      return;
+    }
+    openTableEditor();
   });
   wireSettingsMenu();
   /*
@@ -10877,6 +10902,342 @@ function renderWaypointsTab() {
 }
 
 /** How many waypoint cards render at once. */
+
+/* ==========================================================================
+   The table editor
+   ========================================================================== */
+
+const TABLE_PAGE_SIZE = 50;
+
+/** Every saved waypoint matching a search and a folder, newest naming first. */
+function waypointRows({ query = '', folder = '' } = {}) {
+  const needle = query.trim().toLowerCase();
+  const rows = [];
+  for (const held of state.folders.list()) {
+    if (folder && held.id !== folder) continue;
+    for (const item of held.items) {
+      const props = item.feature.properties;
+      if (props.kind !== 'waypoint') continue;
+      if (needle && !`${props.name} ${props.description || ''}`.toLowerCase().includes(needle)) continue;
+      rows.push({ folder: held, item });
+    }
+  }
+  return rows.sort((a, b) => a.item.feature.properties.name.localeCompare(
+    b.item.feature.properties.name, undefined, { numeric: true }));
+}
+
+const rowKey = (row) => `${row.folder.id}:${row.item.id}`;
+const pickedEntries = () => [...state.table.picked].map((key) => {
+  const [folderId, itemId] = key.split(':');
+  return { folderId, itemId };
+});
+
+function openTableEditor() {
+  state.table.open = true;
+  state.table.picked.clear();
+  dom.tableEditor.hidden = false;
+  document.body.classList.add('has-table');
+  renderTableEditor();
+  dom.tableEditor.querySelector('.table-search')?.focus();
+}
+
+function closeTableEditor() {
+  state.table.open = false;
+  state.table.picked.clear();
+  dom.tableEditor.hidden = true;
+  document.body.classList.remove('has-table');
+  dom.openTable?.focus();
+}
+
+/**
+ * A select of every symbol, grouped, with an optional leading choice.
+ *
+ * The same control in a row and in the bulk bar, because they do the same
+ * thing to one pin and to ninety.
+ */
+function symbolSelect(value, { lead = '', className = 'table-symbol' } = {}) {
+  return el('select', { class: className, 'aria-label': 'Symbol' }, [
+    lead ? el('option', { value: '', text: lead }) : null,
+    ...[...pinIconGroups()].map(([group, choices]) => el('optgroup', { label: group },
+      choices.map((choice) => el('option', {
+        value: choice.id, text: choice.name, selected: choice.id === value,
+      })))),
+  ].filter(Boolean));
+}
+
+/** A select of the palette by name, plus "no colour". */
+function colorSelect(value, { lead = '', className = 'table-color' } = {}) {
+  const held = value && !inPalette(value) ? [value] : [];
+  return el('select', { class: className, 'aria-label': 'Color' }, [
+    lead ? el('option', { value: '__none__', text: lead }) : null,
+    el('option', { value: '', text: 'No color', selected: !lead && !value }),
+    ...held.map((hex) => el('option', { value: hex, text: `Its own (${hex})`, selected: true })),
+    ...FOLDER_COLORS.map((hex) => el('option', {
+      value: hex,
+      text: COLOR_NAMES[hex] || hex,
+      selected: Boolean(value) && readColor(hex) === readColor(value),
+    })),
+  ].filter(Boolean));
+}
+
+/** A select of every folder, plus an optional leading choice. */
+function folderSelect(value, { lead = '', className = 'table-folder' } = {}) {
+  return el('select', { class: className, 'aria-label': 'Folder' }, [
+    lead ? el('option', { value: '', text: lead }) : null,
+    ...state.folders.list().map((held) => el('option', {
+      value: held.id, text: held.name, selected: held.id === value,
+    })),
+  ].filter(Boolean));
+}
+
+function renderTableEditor() {
+  if (!dom.tableEditor || !state.table.open) return;
+
+  const rows = waypointRows(state.table);
+  const pages = Math.max(1, Math.ceil(rows.length / TABLE_PAGE_SIZE));
+  const page = Math.min(Math.max(0, state.table.page), pages - 1);
+  state.table.page = page;
+  const shown = rows.slice(page * TABLE_PAGE_SIZE, (page + 1) * TABLE_PAGE_SIZE);
+
+  /*
+   * Ticks are dropped when the pin behind them goes.
+   *
+   * Otherwise deleting forty pins leaves forty keys in the set, the bulk bar
+   * goes on claiming they are selected, and the next action addresses items
+   * that are not there.
+   */
+  const live = new Set(rows.map(rowKey));
+  for (const key of state.table.picked) if (!live.has(key)) state.table.picked.delete(key);
+
+  const picked = state.table.picked;
+  const allShown = shown.length > 0 && shown.every((row) => picked.has(rowKey(row)));
+
+  const search = el('input', {
+    type: 'search', class: 'table-search', value: state.table.query,
+    placeholder: 'Search name or note…', 'aria-label': 'Search waypoints',
+    oninput: (event) => {
+      state.table.query = event.target.value;
+      state.table.page = 0;
+      renderTableEditor();
+    },
+  });
+
+  const head = el('div', { class: 'table-head' }, [
+    el('div', { class: 'table-title' }, [
+      el('h2', { text: 'Edit waypoints' }),
+      el('span', { class: 'count', text: `${rows.length} of ${state.folders.totals().waypoints}` }),
+    ]),
+    el('div', { class: 'table-tools' }, [
+      search,
+      folderSelect(state.table.folder, { lead: 'Every folder', className: 'table-filter' }),
+      el('button', {
+        class: 'button button-secondary button-small', type: 'button', text: 'Done',
+        onclick: closeTableEditor,
+      }),
+    ]),
+  ]);
+  head.querySelector('.table-filter').addEventListener('change', (event) => {
+    state.table.folder = event.target.value;
+    state.table.page = 0;
+    renderTableEditor();
+  });
+
+  /*
+   * The bulk bar, only once something is ticked.
+   *
+   * Every control here is "set this on all of them", so each is a select that
+   * starts on a label rather than on a value: a menu already showing "Red"
+   * would be claiming ninety pins are red.
+   */
+  const bulk = el('div', { class: `table-bulk${picked.size ? '' : ' is-idle'}` });
+  if (picked.size) {
+    const entries = () => pickedEntries();
+    const symbol = symbolSelect('', { lead: `Set symbol…`, className: 'table-bulk-symbol' });
+    symbol.addEventListener('change', () => {
+      if (!symbol.value) return;
+      const n = state.folders.styleMany(entries(), { icon: symbol.value });
+      symbol.value = '';
+      toast(`${n} pin${n === 1 ? '' : 's'} took that symbol.`, { tone: n ? 'ok' : 'info' });
+    });
+
+    const colour = colorSelect('', { lead: 'Set color…', className: 'table-bulk-color' });
+    colour.addEventListener('change', () => {
+      if (colour.value === '__none__') return;
+      const n = state.folders.styleMany(entries(), { color: colour.value || null });
+      colour.value = '__none__';
+      toast(`${n} pin${n === 1 ? '' : 's'} took that color.`, { tone: n ? 'ok' : 'info' });
+    });
+
+    const move = folderSelect('', { lead: 'Move to…', className: 'table-bulk-folder' });
+    move.addEventListener('change', () => {
+      if (!move.value) return;
+      const target = state.folders.get(move.value);
+      const n = state.folders.moveItems(entries(), move.value);
+      move.value = '';
+      state.table.picked.clear();
+      toast(`${n} pin${n === 1 ? '' : 's'} moved to ${target?.name || 'the folder'}.`, { tone: n ? 'ok' : 'info' });
+    });
+
+    bulk.append(
+      el('span', { class: 'table-bulk-count', text: `${picked.size} selected` }),
+      symbol, colour, move,
+      el('button', {
+        class: 'button button-ghost button-small is-danger', type: 'button', text: 'Delete',
+        onclick: () => {
+          const count = picked.size;
+          if (!window.confirm(`Delete ${count} waypoint${count === 1 ? '' : 's'}? This cannot be undone.`)) return;
+          const gone = state.folders.removeItems(entries());
+          state.table.picked.clear();
+          toast(`${gone} waypoint${gone === 1 ? '' : 's'} deleted.`, { tone: 'ok' });
+        },
+      }),
+      el('button', {
+        class: 'button button-ghost button-small', type: 'button', text: 'Clear',
+        onclick: () => { state.table.picked.clear(); renderTableEditor(); },
+      }),
+    );
+  } else {
+    bulk.append(el('span', { class: 'table-bulk-count', text: 'Tick rows to edit them together' }));
+  }
+
+  const body = el('tbody');
+  for (const row of shown) {
+    const props = row.item.feature.properties;
+    const key = rowKey(row);
+
+    const tick = el('input', {
+      type: 'checkbox', checked: picked.has(key),
+      'aria-label': `Select ${props.name}`,
+      onchange: (event) => {
+        if (event.target.checked) picked.add(key); else picked.delete(key);
+        renderTableEditor();
+      },
+    });
+
+    const symbol = symbolSelect(props.icon || DEFAULT_PIN_ICON);
+    symbol.addEventListener('change', () => {
+      state.folders.styleItems(row.folder.id, { icon: symbol.value }, [row.item.id]);
+    });
+
+    const colour = colorSelect(props.color || '');
+    colour.addEventListener('change', () => {
+      state.folders.styleItems(row.folder.id, { color: colour.value || null }, [row.item.id]);
+    });
+
+    const where = folderSelect(row.folder.id);
+    where.addEventListener('change', () => {
+      state.folders.moveItem(row.item.id, row.folder.id, where.value);
+    });
+
+    body.append(el('tr', { class: picked.has(key) ? 'is-picked' : '', dataset: { key } }, [
+      el('td', { class: 'table-tick' }, [tick]),
+      // The pin as it is actually drawn: white disc, coloured ring, symbol
+      // inside. A word in the colour column says which colour; this says what
+      // the thing looks like on the map, which is the question being answered.
+      el('td', { class: 'table-mark' }, [el('span', {
+        class: 'table-pin', style: `--pin:${pinColorFor(props)}`,
+        html: pinIconSVG(props.icon || DEFAULT_PIN_ICON, { size: 15, stroke: 1.9 }),
+      })]),
+      el('td', {}, [el('input', {
+        type: 'text', class: 'table-name', value: props.name || '',
+        'aria-label': 'Name', dataset: { field: 'name' },
+        onchange: (event) => state.folders.renameItem(row.folder.id, row.item.id, event.target.value),
+      })]),
+      el('td', {}, [symbol]),
+      el('td', {}, [colour]),
+      el('td', {}, [where]),
+      el('td', {}, [el('input', {
+        type: 'text', class: 'table-note', value: props.description || '',
+        placeholder: 'Note', 'aria-label': 'Note', dataset: { field: 'note' },
+        onchange: (event) => state.folders.describeItem(row.folder.id, row.item.id, event.target.value),
+      })]),
+      el('td', {}, [el('input', {
+        type: 'url', class: 'table-link', value: props.link || '',
+        placeholder: 'https://…', 'aria-label': 'Link', dataset: { field: 'link' },
+        inputmode: 'url', autocapitalize: 'off', spellcheck: 'false',
+        onchange: (event) => state.folders.linkItem(row.folder.id, row.item.id, {
+          url: event.target.value, label: props.linkLabel || '',
+        }),
+      })]),
+    ]));
+  }
+
+  const all = el('input', {
+    type: 'checkbox', checked: allShown, 'aria-label': 'Select every row on this page',
+    onchange: (event) => {
+      for (const row of shown) {
+        if (event.target.checked) picked.add(rowKey(row)); else picked.delete(rowKey(row));
+      }
+      renderTableEditor();
+    },
+  });
+
+  const table = el('table', { class: 'table-grid' }, [
+    el('thead', {}, [el('tr', {}, [
+      el('th', { class: 'table-tick' }, [all]),
+      el('th', { class: 'table-mark' }, [el('span', { class: 'visually-hidden', text: 'Pin' })]),
+      el('th', { text: 'Name' }),
+      el('th', { text: 'Symbol' }),
+      el('th', { text: 'Color' }),
+      el('th', { text: 'Folder' }),
+      el('th', { text: 'Note' }),
+      el('th', { text: 'Link' }),
+    ])]),
+    body,
+  ]);
+
+  const scroller = el('div', { class: 'table-scroll' }, [
+    rows.length ? table : el('p', { class: 'hint', text: 'Nothing matches that search.' }),
+  ]);
+
+  const foot = el('div', { class: 'table-foot' }, [
+    el('button', {
+      class: 'button button-ghost button-small', type: 'button', text: 'Previous',
+      disabled: page === 0,
+      onclick: () => { state.table.page -= 1; renderTableEditor(); },
+    }),
+    el('span', { class: 'count', text: `Page ${page + 1} of ${pages}` }),
+    el('button', {
+      class: 'button button-ghost button-small', type: 'button', text: 'Next',
+      disabled: page >= pages - 1,
+      onclick: () => { state.table.page += 1; renderTableEditor(); },
+    }),
+  ]);
+
+  /*
+   * What was focused before the redraw is focused after it, caret and all.
+   *
+   * Every edit and every keystroke in the search redraws the whole table, and
+   * a redraw that drops the caret makes the search unusable - one letter, then
+   * focus gone. The control is found again by where it is rather than by node,
+   * since the node it was has been replaced.
+   */
+  const active = document.activeElement;
+  const restore = (() => {
+    if (!active || !dom.tableEditor.contains(active)) return null;
+    const key = active.closest('tr')?.dataset.key;
+    const where = key && active.dataset.field
+      ? `tr[data-key="${key}"] [data-field="${active.dataset.field}"]`
+      : (active.classList.contains('table-search') ? '.table-search' : null);
+    if (!where) return null;
+    // Only text inputs have a caret to keep; asking a select for one throws.
+    const caret = active.type === 'text' || active.type === 'search' || active.type === 'url';
+    return { where, start: caret ? active.selectionStart : null, end: caret ? active.selectionEnd : null };
+  })();
+
+  dom.tableEditor.replaceChildren(head, bulk, scroller, foot);
+
+  if (restore) {
+    const back = dom.tableEditor.querySelector(restore.where);
+    if (back) {
+      back.focus();
+      if (restore.start !== null) {
+        try { back.setSelectionRange(restore.start, restore.end); } catch { /* not a text field */ }
+      }
+    }
+  }
+}
+
 const WAYPOINT_PAGE_SIZE = 30;
 /** How much of a field note fits on a card before it stops being a glance. */
 const NOTE_PREVIEW = 200;
