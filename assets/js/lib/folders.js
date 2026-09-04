@@ -28,10 +28,62 @@ const VAULT_DB = 'ab-maps-folders';
 const VAULT_STORE = 'state';
 const NAME_LIMIT = 80;
 
+/**
+ * The colours a folder or a pin can wear.
+ *
+ * Eighteen, bold, and spread around the wheel, because the whole point of
+ * colouring a pin is to tell it apart from the one beside it at a glance on a
+ * busy map. Muted variations of one hue would be a palette that looks
+ * considered and works badly.
+ *
+ * Six of them are GaiaGPS's own, to the exact hex: its red, yellow, green,
+ * sky, blue and brown. That is not deference to another app - it is so that a
+ * pin imported from Gaia lands on a swatch rather than beside one, and opening
+ * it shows the colour it has rather than nothing selected.
+ */
 export const FOLDER_COLORS = [
-  '#b4441f', '#1d4ed8', '#15803d', '#a21caf', '#0f766e',
-  '#b45309', '#4338ca', '#be123c', '#3f6212', '#0369a1',
+  '#f42410', '#b4441f', '#e8590c', '#f59f00', '#ffef00', '#94c11f',
+  '#4abd32', '#15803d', '#0f766e', '#0479ff', '#0369a1', '#2d3fc7',
+  '#06b6d4', '#7e22ce', '#a21caf', '#9f1239', '#ec4899', '#784d3e',
 ];
+
+/** How far apart two colours are, as a plain squared distance in RGB. */
+const colorGap = (a, b) => ((a >> 16) - (b >> 16)) ** 2
+  + (((a >> 8) & 255) - ((b >> 8) & 255)) ** 2
+  + ((a & 255) - (b & 255)) ** 2;
+
+/** "#abc" and "#aabbcc" alike, as a number, or null if it is neither. */
+export function readColor(value) {
+  const hex = String(value ?? '').trim().replace(/^#/, '');
+  const full = hex.length === 3 ? hex.replace(/./g, (c) => c + c) : hex;
+  return /^[0-9a-f]{6}$/i.test(full) ? parseInt(full, 16) : null;
+}
+
+/**
+ * The palette colour closest to the one given, or null for a colour this
+ * cannot read.
+ *
+ * Squared RGB distance, which is not how eyes work - but the palette is
+ * eighteen colours far apart from each other, and for "which of these
+ * eighteen is that Gaia brown" it lands on the answer a person would pick.
+ * Somewhere it would matter, this would need to be Lab.
+ */
+export function nearestColor(value, palette = FOLDER_COLORS) {
+  const target = readColor(value);
+  if (target === null) return null;
+  let best = null;
+  for (const entry of palette) {
+    const gap = colorGap(target, readColor(entry));
+    if (!best || gap < best.gap) best = { entry, gap };
+  }
+  return best ? best.entry : null;
+}
+
+/** Whether a colour is one of the palette's, however it was spelled. */
+export function inPalette(value, palette = FOLDER_COLORS) {
+  const target = readColor(value);
+  return target !== null && palette.some((entry) => readColor(entry) === target);
+}
 
 /** Monotonic id generator; the counter keeps ids unique within a millisecond. */
 let idCounter = 0;

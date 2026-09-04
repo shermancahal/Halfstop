@@ -29,7 +29,7 @@ import { el, escapeHTML, createToaster, downloadText, saveBlob, applyStoredTheme
 import { fogOutlook, nightHours, fogName, fogNote, fogBand } from './lib/fog.js';
 import { icons } from './lib/icons.js';
 import {
-  FolderStore, FOLDER_COLORS, readTrip, tripStanding, localDay,
+  FolderStore, FOLDER_COLORS, readColor, inPalette, readTrip, tripStanding, localDay,
 } from './lib/folders.js';
 import {
   PIN_ICONS, DEFAULT_PIN_ICON, pinIconGroups, pinIconSVG, pinImageId, registerPinImages, rasterizePinIcon, pinColorFor, iconForPin, searchPinIcons,
@@ -7818,9 +7818,12 @@ function openPopupEditor(host, props, popup) {
   let icon = live.icon || DEFAULT_PIN_ICON;
   let colour = live.color || folder.color;
 
-  const swatches = el('div', { class: 'popup-edit-colours' }, FOLDER_COLORS.map((value) => {
+  // As above: the pin's own colour first when the palette does not hold it,
+  // and matched as a colour rather than as a string, so Gaia's capitals count.
+  const popupColors = inPalette(colour) ? [...FOLDER_COLORS] : [colour, ...FOLDER_COLORS];
+  const swatches = el('div', { class: 'popup-edit-colours' }, popupColors.map((value) => {
     const button = el('button', {
-      class: `popup-swatch${value === colour ? ' is-on' : ''}`,
+      class: `popup-swatch${readColor(value) === readColor(colour) ? ' is-on' : ''}`,
       type: 'button', style: `background:${value}`,
       'aria-label': `Color ${value}`,
       onclick: () => {
@@ -11305,9 +11308,19 @@ function openStyleEditor(folder, itemIds, anchor) {
   /* colour */
   editor.append(el('div', { class: 'style-label', text: 'Color' }));
   const colorRow = el('div', { class: 'swatch-row' });
+  /*
+   * Compared as colours, not as strings.
+   *
+   * GaiaGPS writes its hex in capitals and the palette is written in lower
+   * case, so "#784D3E" and "#784d3e" are the same brown and used not to look
+   * it: an imported pin opened with nothing selected, as though it had no
+   * colour at all.
+   */
   const paintSwatches = () => {
+    const chosen = readColor(chosenColor);
     colorRow.querySelectorAll('.swatch').forEach((node) => {
-      node.classList.toggle('is-chosen', node.dataset.color === (chosenColor || ''));
+      const value = node.dataset.color;
+      node.classList.toggle('is-chosen', value ? readColor(value) === chosen : chosen === null);
     });
   };
   colorRow.append(el('button', {
@@ -11317,7 +11330,17 @@ function openStyleEditor(folder, itemIds, anchor) {
     style: `--swatch:${folder.color}`,
     onclick: () => { chosenColor = null; colorTouched = true; paintSwatches(); },
   }));
-  for (const color of FOLDER_COLORS) {
+  /*
+   * A colour from outside the palette keeps a swatch of its own, first.
+   *
+   * Some pin somewhere wears a hex no palette of eighteen contains - an older
+   * folder colour, an exporter nobody has seen. Showing the palette alone
+   * would say that pin has no colour, and the first tap anywhere would throw
+   * away what it does have. So it is shown as itself, already selected.
+   */
+  const swatchColors = [...FOLDER_COLORS];
+  if (chosenColor && !inPalette(chosenColor)) swatchColors.unshift(chosenColor);
+  for (const color of swatchColors) {
     colorRow.append(el('button', {
       class: 'swatch', type: 'button', dataset: { color },
       title: color, 'aria-label': `Color ${color}`, style: `--swatch:${color}`,

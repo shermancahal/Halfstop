@@ -15,6 +15,7 @@ import { parseGPX } from '../assets/js/lib/gpx.js';
 import { parseMapFile } from '../assets/js/lib/parse.js';
 import { iconForPin } from '../assets/js/lib/pin-icons.js';
 import { findLink } from '../assets/js/lib/parse.js';
+import { FOLDER_COLORS, readColor, nearestColor, inPalette } from '../assets/js/lib/folders.js';
 
 /** In-memory stand-in for localStorage, so tests never touch a real browser API. */
 function memoryStorage(initial = null) {
@@ -690,4 +691,62 @@ test('folders: a link can be named, and clearing the address clears the name', (
   props = store.get(folder.id).items[0].feature.properties;
   assert.equal(props.link, null);
   assert.equal(props.linkLabel, '', 'wording for a link that is gone is wording for nothing');
+});
+
+/*
+ * The palette exists so a pin can be told from the one beside it on a busy
+ * map, which means bold and far apart rather than tastefully related. Six of
+ * the eighteen are GaiaGPS's own to the exact hex, so an import lands on a
+ * swatch rather than beside one.
+ */
+test('colors: eighteen bold ones, including the six GaiaGPS writes', () => {
+  assert.equal(FOLDER_COLORS.length, 18);
+  assert.equal(new Set(FOLDER_COLORS).size, 18, 'and no colour is listed twice');
+  for (const hex of FOLDER_COLORS) assert.match(hex, /^#[0-9a-f]{6}$/, `${hex} is not a plain hex`);
+
+  // Counted out of the user's own exports: brown, blue, green, yellow, red, sky.
+  for (const gaia of ['#784d3e', '#2d3fc7', '#4abd32', '#ffef00', '#f42410', '#0479ff']) {
+    assert.ok(inPalette(gaia), `${gaia} has no swatch`);
+  }
+
+  // Far apart: two swatches a person cannot tell apart are one swatch and a
+  // trap. 40 is about where two circles stop reading as the same colour.
+  const gap = (a, b) => Math.hypot((a >> 16) - (b >> 16),
+    ((a >> 8) & 255) - ((b >> 8) & 255), (a & 255) - (b & 255));
+  for (let i = 0; i < FOLDER_COLORS.length; i += 1) {
+    for (let j = i + 1; j < FOLDER_COLORS.length; j += 1) {
+      const apart = gap(readColor(FOLDER_COLORS[i]), readColor(FOLDER_COLORS[j]));
+      assert.ok(apart > 40, `${FOLDER_COLORS[i]} and ${FOLDER_COLORS[j]} are ${Math.round(apart)} apart`);
+    }
+  }
+});
+
+/*
+ * Gaia writes its hex in capitals and the palette is written in lower case.
+ * Compared as strings those are different colours, which is why an imported
+ * pin used to open with nothing selected.
+ */
+test('colors: a colour is read as a colour, not as a string', () => {
+  assert.equal(readColor('#784D3E'), readColor('#784d3e'));
+  assert.equal(readColor('#FFF'), readColor('#ffffff'), 'three digits is six');
+  assert.equal(readColor('784d3e'), readColor('#784d3e'), 'the hash is optional');
+  assert.equal(readColor('rebeccapurple'), null);
+  assert.equal(readColor(''), null);
+  assert.equal(readColor(null), null);
+
+  assert.ok(inPalette('#784D3E'), 'capitals are the same brown');
+  assert.ok(!inPalette('#123456'));
+});
+
+/*
+ * Colours from before this palette, and from exporters nobody has seen, still
+ * have to land somewhere sensible when something has to choose for them.
+ */
+test('colors: anything else lands on the nearest swatch', () => {
+  assert.equal(nearestColor('#784D3E'), '#784d3e', 'an exact match is its own nearest');
+  assert.equal(nearestColor('#1d4ed8'), '#2d3fc7', 'the old blue');
+  assert.equal(nearestColor('#3f6212'), '#15803d', 'the old olive');
+  assert.equal(nearestColor('#b45309'), '#b4441f', 'the old amber');
+  assert.equal(nearestColor('#000000'), nearestColor('#010101'));
+  assert.equal(nearestColor('not a colour'), null);
 });

@@ -834,6 +834,30 @@ await page.waitForTimeout(200);
 check('and clearing it brings the groups back',
   await page.locator('.style-editor .icon-group-label').count(), grouped);
 await shot(page.locator('.style-editor'), 'icon-picker');
+
+/*
+ * The colours. Eighteen bold ones plus "no colour", and six of them are
+ * GaiaGPS's own to the exact hex so an imported pin lands on a swatch. They
+ * are compared as colours rather than as strings, because Gaia writes its hex
+ * in capitals and a pin used to open with nothing selected because of it.
+ */
+const swatches = await page.evaluate(() => {
+  const row = document.querySelector('.style-editor .swatch-row');
+  const nodes = [...(row?.querySelectorAll('.swatch') || [])];
+  return {
+    total: nodes.length,
+    inherit: nodes.filter((node) => node.classList.contains('is-inherit')).length,
+    colors: nodes.map((node) => node.dataset.color).filter(Boolean),
+  };
+});
+check('the colour row offers eighteen and a way to clear it', swatches.total, 19);
+check('one of which is "no colour"', swatches.inherit, 1);
+check('GaiaGPS\'s own six are all there, so an import lands on a swatch',
+  ['#f42410', '#ffef00', '#4abd32', '#0479ff', '#2d3fc7', '#784d3e']
+    .every((hex) => swatches.colors.includes(hex)), true);
+check('and no colour is offered twice', new Set(swatches.colors).size, swatches.colors.length);
+await shot(page.locator('.style-editor .swatch-row'), 'colour-row');
+
 await page.keyboard.press('Escape');
 await shot(page.locator('#folder-list .folder').first(), 'folder-row');
 check('folder layers present', afterImport.folderLayers, 5);
