@@ -898,6 +898,40 @@ const folderRows = () => page.locator('#folder-list .folder').evaluateAll(
   (nodes) => nodes.map((node) => node.dataset.folder));
 await page.locator(`.folder[data-folder="${child}"] .folder-menu-button`).click();
 await page.waitForTimeout(400);
+/*
+ * The chevron has to be tappable, not just visible.
+ *
+ * It is drawn at 20px, which is three and a half millimetres on a phone -
+ * well under what a thumb needs - while the folder's name beside it is ten
+ * times the width. That is why the name folded a folder every time and the
+ * chevron did not. The mark stays small; the target is grown with a
+ * pseudo-element, so this measures the target and not the glyph.
+ */
+const chevronTarget = await page.locator(`.folder[data-folder="${parent}"] .folder-disclosure`)
+  .evaluate((node) => {
+    const box = node.getBoundingClientRect();
+    const after = getComputedStyle(node, '::after');
+    const px = (value) => parseFloat(value) || 0;
+    return {
+      drawn: Math.round(box.width),
+      width: Math.round(box.width - px(after.left) - px(after.right)),
+      height: Math.round(box.height - px(after.top) - px(after.bottom)),
+    };
+  });
+check('the disclosure is still drawn small', chevronTarget.drawn <= 24, true);
+check('but is a thumb-sized target', chevronTarget.width >= 32 && chevronTarget.height >= 40, true);
+
+// And it must not have grown over the name, or it would steal taps meant for it.
+const noOverlap = await page.evaluate((id) => {
+  const head = document.querySelector(`.folder[data-folder="${id}"] .folder-head`);
+  const chevron = head.querySelector('.folder-disclosure');
+  const name = head.querySelector('.folder-name');
+  const after = getComputedStyle(chevron, '::after');
+  const right = chevron.getBoundingClientRect().right - (parseFloat(after.right) || 0);
+  return right <= name.getBoundingClientRect().left;
+}, parent);
+check('and stops short of the name beside it', noOverlap, true);
+
 check('an editor can be open on the folder inside', await page.locator('.style-editor').count(), 1);
 await page.locator(`.folder[data-folder="${parent}"] .folder-disclosure`).click();
 await page.waitForTimeout(500);

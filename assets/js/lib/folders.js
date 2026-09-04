@@ -595,6 +595,10 @@ export class FolderStore {
       id: folder.id || makeId('f'),
       name: clampName(folder.name, `Folder ${index + 1}`),
       color: folder.color || FOLDER_COLORS[index % FOLDER_COLORS.length],
+      // Every field a folder has must be named here. This rebuilds each one
+      // from scratch, so anything left out is not defaulted - it is deleted,
+      // on every sync, without a word.
+      parentId: folder.parentId || null,
       visible: folder.visible !== false,
       collapsed: folder.collapsed === true,
       created: folder.created || null,

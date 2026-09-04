@@ -984,3 +984,32 @@ test('folders: a folder counts what is in the folders inside it', () => {
   assert.equal(store.branchCounts(deep.id).total, 2);
   assert.equal(store.branchCounts('nope').total, 0);
 });
+
+/*
+ * replaceAll rebuilds every folder field by field, which is how a sync applies
+ * a merge. Anything not named there is not defaulted, it is deleted - on every
+ * sync, silently. Nesting was lost that way: the move saved to disk, and the
+ * next sync put it back at the top.
+ *
+ * So this compares the whole shape rather than one field, and will fail the
+ * next time a field is added and forgotten here.
+ */
+test('folders: a sync round trip keeps every field a folder has', () => {
+  const store = new FolderStore({ storage: memoryStorage(), vault: null });
+  const top = store.create('Transport', { trip: { from: '2026-05-01', to: '2026-05-03' } });
+  const child = store.create('Railroads', { parentId: top.id });
+  store.addFeatures(child.id, [waypoint('Trestle')]);
+  store.update(child.id, { visible: false, collapsed: true });
+
+  const before = store.snapshot();
+  store.replaceAll(before);
+  const after = store.list();
+
+  assert.deepEqual(after.map((folder) => Object.keys(folder).sort()),
+    before.map((folder) => Object.keys(folder).sort()), 'no field disappears');
+  for (const [index, folder] of after.entries()) {
+    assert.deepEqual(folder, before[index], `${folder.name} came back different`);
+  }
+  assert.equal(store.get(child.id).parentId, top.id, 'and it is still filed inside');
+  assert.equal(store.pathOf(child.id), 'Transport \u203a Railroads');
+});

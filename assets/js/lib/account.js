@@ -10,7 +10,7 @@
  */
 
 import { SUPABASE_URL, SUPABASE_KEY } from '../config.js';
-import { mergeFolders, rowToFolder, folderToRow } from './sync.js';
+import { mergeFolders, rowToFolder, folderToRow, missingColumn } from './sync.js';
 
 const SUPABASE_VERSION = '2.45.4';
 const CDN = `https://cdn.jsdelivr.net/npm/@supabase/supabase-js@${SUPABASE_VERSION}/+esm`;
@@ -354,10 +354,7 @@ export class Account extends EventTarget {
       this.folders.replaceAll(result.merged);
 
       if (result.toPush.length) {
-        const rows = result.toPush.map((folder) => folderToRow(folder, this.user.id));
-        const { error: upsertError } = await client
-          .from(TABLE)
-          .upsert(rows, { onConflict: 'user_id,client_id' });
+        const { error: upsertError } = await this.upsertFolders(client, result.toPush);
         if (upsertError) throw new Error(upsertError.message);
       }
 
@@ -374,15 +371,53 @@ export class Account extends EventTarget {
     }
   }
 
-  /** Push one folder immediately, e.g. right after an edit. */
+  /**
+   * Write folders up, surviving a database that predates a column.
+   *
+   * Adding parent_id to the row broke every push for anybody who had not run
+   * schema.sql again: Postgres rejects the whole row over one unknown column,
+   * so a rename, a new pin and a colour change all stopped travelling - not
+   * just the nesting. When that is what came back, the rows go out again
+   * without the column and the session remembers, so the next push is one
+   * request rather than two.
+   */
+  async upsertFolders(client, folders) {
+    const send = (withParent) => client
+      .from(TABLE)
+      .upsert(folders.map((folder) => folderToRow(folder, this.user.id, { withParent })),
+        { onConflict: 'user_id,client_id' });
+
+    if (this.noParentColumn) return send(false);
+
+    const first = await send(true);
+    if (!first.error || !missingColumn(first.error.message, 'parent_id')) return first;
+
+    // Said once. It is worth knowing that nesting is not travelling, and not
+    // worth saying again on every edit for the rest of the session.
+    this.noParentColumn = true;
+    console.warn('[account] folders.parent_id is missing; run supabase/schema.sql again for nesting to sync.');
+    return send(false);
+  }
+
+  /**
+   * Push one folder immediately, e.g. right after an edit.
+   *
+   * supabase-js resolves with an error rather than throwing, so the try/catch
+   * that used to be here caught nothing at all: a rejected row looked exactly
+   * like a successful one, and an edit that never reached the server was never
+   * reported. The status line says so now.
+   */
   async pushFolder(folder) {
     if (!this.user) return;
     try {
       const client = await this.getClient();
-      await client.from(TABLE).upsert([folderToRow(folder, this.user.id)], { onConflict: 'user_id,client_id' });
+      const { error } = await this.upsertFolders(client, [folder]);
+      // A network error is left quiet - the next full sync carries it, and
+      // interrupting an edit to say the wifi dropped helps nobody. Anything
+      // the server actively refused is a different thing and has to be said.
+      if (error) this.setStatus('signed-in', `Not saved to your account: ${error.message}`);
     } catch {
-      // Silent: the next full sync will carry it. Interrupting an edit with a
-      // network error helps nobody.
+      // Offline, or the client could not be built. The next sync carries it.
     }
   }
 }

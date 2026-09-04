@@ -10652,24 +10652,23 @@ function renderFolder(folder) {
   const trip = tripBar(folder);
 
   const body = el('div', { class: 'folder-body' });
-  if (!folder.items.length) {
-    /*
-     * "Empty" is only true of a folder holding nothing at all.
-     *
-     * A folder used as a drawer for other folders holds no pins of its own and
-     * is not empty, and telling somebody who has just filed two folders into it
-     * that it is empty reads as the filing not having worked.
-     */
-    const inside = state.folders.childrenOf(folder.id).length;
+  /*
+   * A folder used as a drawer for other folders says nothing at all.
+   *
+   * "Empty" would be false - there are folders in it, listed directly below -
+   * and a line explaining that it holds no pins of its own is a sentence about
+   * the absence of something nobody was looking for. The folders under it are
+   * the answer to what is in it.
+   */
+  const holdsFolders = !folder.items.length && state.folders.childrenOf(folder.id).length > 0;
+  if (!folder.items.length && !holdsFolders) {
     body.append(el('p', {
       class: 'folder-empty',
-      text: inside
-        ? `No pins of its own — ${inside} folder${inside === 1 ? '' : 's'} filed inside.`
-        : folder.trip
-          ? 'Nothing planned yet — drop pins for the places you mean to stop.'
-          : 'Empty — drag items here, or import from a loaded map.',
+      text: folder.trip
+        ? 'Nothing planned yet — drop pins for the places you mean to stop.'
+        : 'Empty — drag items here, or import from a loaded map.',
     }));
-  } else {
+  } else if (folder.items.length) {
     /*
      * Reveal a folder's contents in chunks rather than all at once.
      *
@@ -10713,7 +10712,8 @@ function renderFolder(folder) {
 
   node.append(head);
   if (trip) node.append(trip);
-  node.append(body);
+  // Nothing to draw a rule under: a drawer of folders has no body of its own.
+  if (!holdsFolders) node.append(body);
   return node;
 }
 

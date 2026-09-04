@@ -37,8 +37,25 @@ export function rowToFolder(row) {
   };
 }
 
+/**
+ * Whether a rejection is the server saying it has never heard of a column.
+ *
+ * A schema that has not been migrated yet rejects the whole row, which meant
+ * every push failed for anybody who had not run schema.sql again - not only
+ * the nesting, everything. Recognising it lets the push go out again without
+ * the column rather than losing the edit.
+ */
+export function missingColumn(message, column) {
+  return new RegExp(`column .*${column}.* does not exist|'${column}' column`, 'i')
+    .test(String(message || ''));
+}
+
 /** A folder, mapped to the row shape Supabase expects. */
-export function folderToRow(folder, userId) {
+export function folderToRow(folder, userId, { withParent = true } = {}) {
+  if (!withParent) {
+    const { parent_id: _dropped, ...rest } = folderToRow(folder, userId);
+    return rest;
+  }
   return {
     user_id: userId,
     client_id: folder.id,

@@ -9,7 +9,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { mergeFolders, rowToFolder, folderToRow, describeSync } from '../assets/js/lib/sync.js';
+import { mergeFolders, rowToFolder, folderToRow, describeSync, missingColumn } from '../assets/js/lib/sync.js';
 import { FolderStore } from '../assets/js/lib/folders.js';
 
 const folder = (id, updatedAt, extra = {}) => ({
@@ -220,4 +220,33 @@ test('sync: which folder a folder is filed under makes the round trip', () => {
   // And a row written before the column existed reads as one at the top,
   // rather than as undefined leaking into the tree.
   assert.equal(rowToFolder({ client_id: 'f_old', name: 'Old', items: [] }).parentId, null);
+});
+
+/*
+ * Adding a column to the row broke every push for anybody whose database
+ * predated it: Postgres rejects the whole row over one unknown column, so a
+ * rename, a new pin and a colour change all stopped travelling - not just the
+ * nesting it was added for. The client has to be able to send the row without
+ * it, and to recognise being told so.
+ */
+test('sync: a row can be sent without the column a database may not have', () => {
+  const folder = { id: 'f_child', name: 'Railroads', parentId: 'f_parent', items: [], updatedAt: 1 };
+  const full = folderToRow(folder, 'user-1');
+  const older = folderToRow(folder, 'user-1', { withParent: false });
+
+  assert.equal(full.parent_id, 'f_parent');
+  assert.equal('parent_id' in older, false, 'the column is absent, not null');
+  assert.deepEqual(Object.keys(older), Object.keys(full).filter((key) => key !== 'parent_id'),
+    'and nothing else changes with it');
+});
+
+test('sync: the two ways a server says it has never heard of the column', () => {
+  assert.equal(missingColumn('column folders.parent_id does not exist', 'parent_id'), true);
+  assert.equal(missingColumn("Could not find the 'parent_id' column of 'folders' in the schema cache", 'parent_id'), true);
+
+  // Anything else is a real failure and must not be quietly retried away.
+  assert.equal(missingColumn('permission denied for table folders', 'parent_id'), false);
+  assert.equal(missingColumn('Failed to fetch', 'parent_id'), false);
+  assert.equal(missingColumn('', 'parent_id'), false);
+  assert.equal(missingColumn(null, 'parent_id'), false);
 });

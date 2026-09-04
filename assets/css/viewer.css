@@ -533,6 +533,16 @@ html, body { height: 100%; overflow: hidden; }
 .folder-disclosure {
   width: 20px; height: 20px; flex: none; padding: 0; border: 0; background: none;
   color: var(--ink-3); cursor: pointer; display: flex; align-items: center; justify-content: center;
+  position: relative;
+}
+/* The tappable area, which is not the drawn one.
+   A 20px glyph is about three and a half millimetres on a phone, well under
+   the nine a thumb needs, while the folder's name beside it is ten times the
+   width - which is why the name folded a folder every time and the chevron
+   did not. The mark stays 13px; the target grows into the row's own padding
+   and stops short of the name, where there is nothing else to hit. */
+.folder-disclosure::after {
+  content: ''; position: absolute; top: -12px; bottom: -12px; left: -10px; right: -5px;
 }
 .folder-disclosure svg { width: 13px; height: 13px; transition: transform .12s ease; }
 .folder.is-collapsed .folder-disclosure svg { transform: rotate(-90deg); }
