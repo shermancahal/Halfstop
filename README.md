@@ -1,7 +1,7 @@
-# Fieldstop
+# Halfstop
 
-A back-roads atlas and trip planner that works with no signal, built as a
-subsidiary site of [American Byways](https://americanbyways.com).
+A back-roads atlas and trip planner that works with no signal, published by
+Halfstop, LLC.
 
 Three pages:
 
@@ -283,7 +283,7 @@ needs — and nothing else — into `dist/`, along with:
   compression, short cache lifetimes, and a commented-out HTTPS redirect.
 - **`UPLOAD-INSTRUCTIONS.txt`** — the same guidance in plain text, so it
   travels with the files.
-- **`american-byways-maps.zip`** — the same tree as an archive, for hosts whose
+- **`halfstop-maps.zip`** — the same tree as an archive, for hosts whose
   file manager can upload and extract one.
 
 The test suite, `tools/`, `package.json` and the git metadata are deliberately
@@ -321,7 +321,7 @@ branch, run number, build time and host. Fetch it before concluding anything
 about which version is live — the site shows its version nowhere else, and a
 deploy that quietly changed nothing looks exactly like one that worked.
 
-For a custom subdomain such as `maps.americanbyways.com`, add a `CNAME` file at
+For a custom subdomain such as `maps.example.com`, add a `CNAME` file at
 the repository root containing the hostname, and point a DNS CNAME record at
 `<user>.github.io`.
 
@@ -471,7 +471,7 @@ terms. A test checks that too, in the opposite direction.
 
 ## Licence and attribution
 
-Site code is © American Byways. Published track data is © its contributors.
+Site code is © Halfstop, LLC. Published track data is © its contributors.
 Basemap and overlay tiles belong to their respective providers (USGS, Esri, the
 OpenStreetMap contributors, Mapbox) and are subject to those providers' terms and
 attribution requirements, which the viewer displays in the map's attribution

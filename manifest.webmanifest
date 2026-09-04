@@ -1,6 +1,6 @@
 {
-  "name": "Fieldstop",
-  "short_name": "Fieldstop",
+  "name": "Halfstop",
+  "short_name": "Halfstop",
   "description": "Topo, satellite and street maps with public land, drone ceilings, weather and trip planning — downloadable for use with no signal.",
   "id": "./",
   "start_url": "./",

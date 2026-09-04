@@ -81,7 +81,7 @@ Organization enrolment needs a D-U-N-S number and takes considerably longer.
    **Sign in with Apple** in its capabilities.
 2. **Identifiers → + → Services IDs** — this is the separate one, and it is
    what the *web* sign-in uses. Give it an identifier such as
-   `com.americanbyways.gps.web`.
+   `com.halfstop.app.web`.
 3. Open that Services ID → tick **Sign in with Apple** → **Configure**:
    - **Primary App ID:** the one from step 1.
    - **Domains and Subdomains** and **Return URLs:** the Supabase callback,

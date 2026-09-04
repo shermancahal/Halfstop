@@ -17,7 +17,16 @@ const PAGE = 'faq';
 
 initTheme(document.getElementById('theme-toggle'));
 for (const node of document.querySelectorAll('#brand-name')) node.textContent = SITE.name;
-for (const node of document.querySelectorAll('#brand-parent')) node.textContent = SITE.parent.name;
-for (const node of document.querySelectorAll('#parent-name-footer')) node.textContent = SITE.parent.name;
+// The parent line and the "A project of ..." note go when there is no parent
+// to name; the markup's fallback would otherwise keep showing the old one.
+const parentName = SITE.parent?.name || '';
+for (const node of document.querySelectorAll('#brand-parent')) {
+  node.textContent = parentName;
+  node.hidden = !parentName;
+}
+for (const node of document.querySelectorAll('#parent-name-footer')) {
+  if (parentName) node.textContent = parentName;
+  else node.closest('p')?.remove();
+}
 
 enablePageEditing(PAGE).catch((error) => console.warn('[faq]', error?.message || error));

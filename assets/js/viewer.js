@@ -842,8 +842,18 @@ function applyBranding() {
     const node = document.getElementById(id);
     if (node) node.textContent = SITE.name;
   }
+  /*
+   * The parent line goes away entirely when there is no parent to name.
+   *
+   * Writing only when there is a name would leave the markup's fallback on
+   * screen - which is how a rename ships with the old name still showing under
+   * the new one.
+   */
   const parent = document.getElementById('brand-parent');
-  if (parent && SITE.parent?.name) parent.textContent = SITE.parent.name;
+  if (parent) {
+    parent.textContent = SITE.parent?.name || '';
+    parent.hidden = !SITE.parent?.name;
+  }
 }
 
 function cacheDom() {
@@ -12438,12 +12448,12 @@ async function downloadVisible(asGeoJSON = false) {
    * because anything already built on it should keep working.
    */
   if (asGeoJSON) {
-    await downloadText('american-byways-maps.geojson', JSON.stringify(geojson, null, 2), 'application/geo+json');
+    await downloadText('halfstop-maps.geojson', JSON.stringify(geojson, null, 2), 'application/geo+json');
     toast(`Exported ${count} as GeoJSON.`, { tone: 'ok' });
     return;
   }
-  const how = await downloadText('american-byways-maps.gpx',
-    toGPX(geojson, { name: 'American Byways' }), 'application/gpx+xml');
+  const how = await downloadText('halfstop-maps.gpx',
+    toGPX(geojson, { name: SITE.name }), 'application/gpx+xml');
   if (how !== 'cancelled') toast(`Exported ${count} as GPX.`, { tone: 'ok' });
 }
 

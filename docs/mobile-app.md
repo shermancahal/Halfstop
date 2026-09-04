@@ -166,10 +166,10 @@ to look at once it is running.
 ### Before touching the Mac
 
 1. **Decide the bundle identifier now.** `capacitor.config.json` says
-   `com.americanbyways.gps`. It is the app's permanent name to Apple: once a
+   `com.halfstop.app`. It is the app's permanent name to Apple: once a
    build with it reaches App Store Connect, changing it means a different app
    with no update path from the old one. It is free to change today and only
-   today. If the product is Fieldstop, `com.americanbyways.fieldstop` is the
+   today. The product is Halfstop, so `com.halfstop.app` is the
    obvious answer; if you keep `gps`, keep it on purpose.
 
 2. **Fill in `assets/js/token.js` completely.** `npm run dist:app` reads that
@@ -261,15 +261,15 @@ takes a day or two to approve. Everything below assumes it is done and Xcode
 is signed in with that account under Settings → Accounts.
 
 1. **Decide the bundle identifier - now, for good.** `capacitor.config.json`
-   says `com.americanbyways.gps`. The first upload to App Store Connect binds
+   says `com.halfstop.app`. The first upload to App Store Connect binds
    that string to the app record permanently; changing it later means a
-   second, unrelated app with no update path. If the product is Fieldstop,
-   `com.americanbyways.fieldstop` is the honest choice. Change it in
+   second, unrelated app with no update path. The product is Halfstop,
+   so `com.halfstop.app` is the honest choice. Change it in
    `capacitor.config.json`, run `npm run app:ios` again so the native project
    picks it up, and check it in Xcode under the App target → General.
 
 2. **The app record.** appstoreconnect.apple.com → My Apps → **+** → New App.
-   Platform iOS, name **Fieldstop** (has to be unique on the store), primary
+   Platform iOS, name **Halfstop** (has to be unique on the store), primary
    language, the bundle ID from step 1, and an SKU (any string, e.g.
    `fieldstop-ios`). Nothing here goes public until you submit for review.
 
@@ -296,7 +296,7 @@ is signed in with that account under Settings → Accounts.
      a day; later builds usually do not). Up to 10,000 testers.
 
    Testers install the **TestFlight** app from the App Store, open the
-   invitation or link there, and get Fieldstop. Builds expire after 90 days.
+   invitation or link there, and get Halfstop. Builds expire after 90 days.
 
 6. **Every build after the first.** Bump the **Build** number in Xcode
    (App target → General → Identity; App Store Connect refuses a duplicate),

@@ -1,5 +1,5 @@
 /**
- * The Fieldstop pin set: symbols for the places a back-roads atlas is about.
+ * The Halfstop pin set: symbols for the places a back-roads atlas is about.
  *
  * Icons are stored as SVG path data on a 24x24 grid and rasterised at runtime
  * into map images, drawn in ink on a white disc whose ring carries the pin's

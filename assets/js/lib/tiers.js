@@ -64,7 +64,7 @@ export const TIERS = {
     name: 'Free',
     // Everything, and the note says whether that is the plan or the moment.
     grants: Object.keys(FEATURES),
-    note: 'Everything is free while Fieldstop is being built. '
+    note: 'Everything is free while Halfstop is being built. '
       + 'If that ever changes, it will change here first and it will say so.',
   },
 };

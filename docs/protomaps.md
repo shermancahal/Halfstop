@@ -215,7 +215,7 @@ site's own address and duly got asked about.
 ### The custom domain, and what it actually needs
 
 `r2.dev` is rate-limited and Cloudflare says outright it is not for
-production. The upgrade is a custom domain — `tiles.americanbyways.com`, say —
+production. The upgrade is a custom domain — `tiles.example.com`, say —
 and the thing worth knowing before you go looking for it is that **you do not
 get it from your web host.** It is not a product anybody sells you. It is a
 subdomain of a domain you already own, and the only requirement is where its
@@ -472,7 +472,7 @@ Backblaze B2 both work and both bill for it.
    re-uploading the whole site on every deploy stops being reasonable.
 3. **Settings → Public access** — either enable the `r2.dev` development URL,
    which is fine for evaluating and is rate-limited and discouraged for
-   production, or connect a custom domain such as `tiles.americanbyways.com`.
+   production, or connect a custom domain such as `tiles.example.com`.
    **Come back and do the custom domain before this is anything but a test:**
    `r2.dev` is rate-limited, and a rate-limited basemap fails as a map with
    holes in it rather than as an error.

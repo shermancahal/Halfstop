@@ -178,7 +178,7 @@ test('export: the manifest carries the estimate alongside each definition', () =
   const regions = [createRegion({ name: 'Cherokee', bounds: SMOKIES, basemapName: 'USGS Topo' })];
   const manifest = buildManifest(regions, { styleURL: 'mapbox://styles/mapbox/outdoors-v12' });
 
-  assert.equal(manifest.format, 'american-byways-offline');
+  assert.equal(manifest.format, 'halfstop-offline');
   assert.equal(manifest.version, 1);
   assert.equal(manifest.maxZoom, MAX_ZOOM);
   assert.equal(manifest.regions.length, 1);

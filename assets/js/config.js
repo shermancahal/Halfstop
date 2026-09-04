@@ -8,15 +8,27 @@
  */
 
 export const SITE = {
-  name: 'Fieldstop',
-  shortName: 'Fieldstop',
+  name: 'Halfstop',
+  shortName: 'Halfstop',
   tagline: 'Field maps, tracks and waypoints from the road.',
   description:
     'A public library of GPS tracks, routes and waypoints exported from GaiaGPS — '
     + 'viewable in the browser and downloadable as GPX, KML or GeoJSON.',
-  parent: { name: 'American Byways', url: 'https://americanbyways.com' },
+  /*
+   * The organisation this is published under, or null when there is none to
+   * name.
+   *
+   * It used to say "A project of American Byways", which was worth saying when
+   * the two had different names. Halfstop, LLC is the company behind Halfstop,
+   * and a header reading "Halfstop / Halfstop, LLC" tells a reader nothing they
+   * did not have. The company belongs in the footer with the copyright, which
+   * is where a legal entity is actually looked for.
+   *
+   * Set it to { name, url } to bring the line back.
+   */
+  parent: null,
   // Shown in the footer and in file attributions.
-  copyrightHolder: 'American Byways',
+  copyrightHolder: 'Halfstop, LLC',
   contactEmail: '',
   /*
    * Who may edit page content in place.

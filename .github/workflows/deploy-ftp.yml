@@ -156,7 +156,7 @@ jobs:
           exclude: |
             **/.git*
             **/.git*/**
-            **/american-byways-maps.zip
+            **/halfstop-maps.zip
             ${{ steps.token.outputs.skip }}
 
       # A first attempt that died mid-transfer leaves no state file, so this
@@ -179,7 +179,7 @@ jobs:
           exclude: |
             **/.git*
             **/.git*/**
-            **/american-byways-maps.zip
+            **/halfstop-maps.zip
             ${{ steps.token.outputs.skip }}
 
       - name: Report the upload result

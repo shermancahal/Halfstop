@@ -381,9 +381,9 @@ export function regionDefinition(region, { styleURL = '', pixelRatio = 2 } = {})
  * Versioned, because the app that reads this does not exist yet and will want
  * to know what it is looking at.
  */
-export function buildManifest(regions, { styleURL = '', pixelRatio = 2, kind = 'raster', app = 'Fieldstop' } = {}) {
+export function buildManifest(regions, { styleURL = '', pixelRatio = 2, kind = 'raster', app = 'Halfstop' } = {}) {
   return {
-    format: 'american-byways-offline',
+    format: 'halfstop-offline',
     version: 1,
     app,
     exported: new Date().toISOString(),

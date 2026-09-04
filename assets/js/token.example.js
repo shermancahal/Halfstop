@@ -9,8 +9,8 @@
  *
  * Restrict the token to your domains in the Mapbox dashboard (Account →
  * Tokens → URL restrictions), for example:
- *     https://shermanc8.sg-host.com/*
- *     https://americanbyways.com/*
+ *     https://shermancahal.github.io/Map/*
+ *     https://your-domain.example/*
  *
  * Leave it empty and the site runs on the open USGS / Esri / OpenStreetMap
  * basemaps with no account at all.

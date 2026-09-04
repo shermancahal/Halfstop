@@ -123,7 +123,7 @@ export function toGPX(geojson, meta = {}) {
 
   const stamp = Number.isFinite(meta.time) ? new Date(meta.time) : new Date();
   let header = '<?xml version="1.0" encoding="UTF-8"?>\n';
-  header += '<gpx version="1.1" creator="American Byways Maps"\n';
+  header += '<gpx version="1.1" creator="Halfstop"\n';
   header += '     xmlns="http://www.topografix.com/GPX/1/1"\n';
   header += '     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n';
   header += '     xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">\n';

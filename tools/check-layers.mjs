@@ -344,7 +344,7 @@ async function probe(entry) {
   try {
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'american-byways-maps layer check (github.com/shermancahal/Map)',
+        'User-Agent': 'halfstop layer check (github.com/shermancahal/Map)',
         // Sent so the answer says whether a browser could have made this
         // request. A tile that fetches perfectly from a script and is refused
         // by the page is the second way a layer shows nothing, and status

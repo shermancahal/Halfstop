@@ -67,7 +67,7 @@ const server = createServer(async (request, response) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Fieldstop — serving ${ROOT}`);
+  console.log(`Halfstop — serving ${ROOT}`);
   console.log(`  http://localhost:${PORT}/          landing page`);
   console.log(`  http://localhost:${PORT}/map.html  viewer`);
 });

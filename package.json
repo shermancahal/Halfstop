@@ -1,9 +1,9 @@
 {
-  "name": "fieldstop",
+  "name": "halfstop",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A back-roads atlas and trip planner that works with no signal, published as a subsidiary site of American Byways.",
+  "description": "A back-roads atlas and trip planner that works with no signal, published by Halfstop, LLC.",
   "engines": {
     "node": ">=18"
   },

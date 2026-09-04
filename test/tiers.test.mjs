@@ -80,7 +80,7 @@ test('tiers: the plan summary says both what you have and whether it is real yet
   assert.equal(summary.name, 'Free');
   assert.equal(summary.live, false);
   assert.equal(summary.includes.length, Object.keys(FEATURES).length);
-  assert.match(summary.note, /free while Fieldstop is being built/);
+  assert.match(summary.note, /free while Halfstop is being built/);
 });
 
 /*
