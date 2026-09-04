@@ -10154,9 +10154,40 @@ function tripBar(folder) {
  * afternoon rather than anything they can predict. Numeric-aware, so "Day 2"
  * comes before "Day 10", and case-blind.
  */
+const byName = (a, b) => String(a.name).localeCompare(String(b.name), undefined, { numeric: true, sensitivity: 'base' });
+
+/**
+ * Every folder in reading order, each carrying how deep it sits.
+ *
+ * Depth-first: a folder, then what is filed under it, then the next folder.
+ * Alphabetical within each level, which is the order asked for and the one
+ * nesting does not argue with - the tree says where a folder belongs, the
+ * alphabet says where to look for it among its siblings.
+ */
 function sortedFolders() {
-  return state.folders.list().slice()
-    .sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { numeric: true, sensitivity: 'base' }));
+  const out = [];
+  const walk = (parentId, depth) => {
+    for (const folder of state.folders.childrenOf(parentId).sort(byName)) {
+      out.push(Object.assign(folder, { depth }));
+      walk(folder.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  /*
+   * Anything the walk could not reach still has to be listed.
+   *
+   * A folder whose parent was deleted on another device arrives pointing at
+   * nothing, and a collection that is invisible because of a bad id is worse
+   * than one that is untidy. They are shown at the top, where they can be
+   * refiled.
+   */
+  if (out.length !== state.folders.list().length) {
+    const seen = new Set(out.map((folder) => folder.id));
+    for (const folder of state.folders.list().filter((f) => !seen.has(f.id)).sort(byName)) {
+      out.push(Object.assign(folder, { depth: 0 }));
+    }
+  }
+  return out;
 }
 
 function renderFoldersTab() {
@@ -10477,9 +10508,11 @@ function renderFolder(folder) {
   const counts = state.folders.counts(folder);
   const chosen = selectedIn(folder.id);
 
+  const depth = folder.depth || 0;
   const node = el('section', {
-    class: `folder${folder.collapsed ? ' is-collapsed' : ''}`,
-    dataset: { folder: folder.id },
+    class: `folder${folder.collapsed ? ' is-collapsed' : ''}${depth ? ' is-nested' : ''}`,
+    dataset: { folder: folder.id, depth: String(depth) },
+    style: depth ? `--depth:${depth}` : '',
   });
 
   /*
@@ -10513,10 +10546,19 @@ function renderFolder(folder) {
      * means - so the same control did two different jobs one level apart. An
      * eye only ever means one thing.
      */
+    /*
+     * Its own switch, and a note when something above it has the last word.
+     *
+     * A folder can be set to show and still draw nothing because a parent is
+     * hidden. The eye goes on reporting the folder's own setting - that is
+     * what pressing it changes - and the title says why nothing is on the map.
+     */
     el('button', {
-      class: `icon-button folder-eye${folder.visible ? '' : ' is-hidden'}`,
+      class: `icon-button folder-eye${folder.visible ? '' : ' is-hidden'}${state.folders.showing(folder) ? '' : ' is-dimmed'}`,
       type: 'button',
-      title: folder.visible ? `Hide ${folder.name} on the map` : `Show ${folder.name} on the map`,
+      title: folder.visible
+        ? (state.folders.showing(folder) ? `Hide ${folder.name} on the map` : `${folder.name} is set to show, but a folder above it is hidden`)
+        : `Show ${folder.name} on the map`,
       'aria-label': folder.visible ? `Hide ${folder.name} on the map` : `Show ${folder.name} on the map`,
       'aria-pressed': String(folder.visible),
       html: folder.visible ? icons.eye : icons.eyeOff,
@@ -11023,10 +11065,12 @@ function colorSelect(value, { lead = '', className = 'table-color' } = {}) {
 
 /** A select of every folder, plus an optional leading choice. */
 function folderSelect(value, { lead = '', className = 'table-folder' } = {}) {
+  // Named by its path, because "Schools" on its own does not say which
+  // "Schools" once folders can be filed inside one another.
   return el('select', { class: className, 'aria-label': 'Folder' }, [
     lead ? el('option', { value: '', text: lead }) : null,
-    ...state.folders.list().map((held) => el('option', {
-      value: held.id, text: held.name, selected: held.id === value,
+    ...sortedFolders().map((held) => el('option', {
+      value: held.id, text: state.folders.pathOf(held.id), selected: held.id === value,
     })),
   ].filter(Boolean));
 }
@@ -11936,13 +11980,41 @@ function openStyleEditor(folder, itemIds, anchor) {
  * where it could show one line and clipped most names; here it has the width.
  */
 function folderNameRow(folder) {
-  return el('div', { class: 'picker-row editor-folder-name' }, [
-    el('span', { class: 'style-label', text: 'Name' }),
-    el('input', {
-      class: 'folder-rename', type: 'text', value: folder.name, 'aria-label': 'Folder name', maxlength: 80,
-      onchange: (event) => state.folders.rename(folder.id, event.target.value),
-      onkeydown: (event) => { if (event.key === 'Enter') event.target.blur(); },
-    }),
+  /*
+   * Where the folder sits, as a menu of the places it could go.
+   *
+   * Only the folders it may legally go under are offered: not itself, not
+   * anything filed under it - which would cut the branch loose - and nothing
+   * that would push it past the depth limit. Refusing at the menu rather than
+   * at the click means there is never a choice that does nothing.
+   */
+  const nest = el('select', { class: 'folder-parent', 'aria-label': 'File this folder under' }, [
+    el('option', { value: '', text: 'Top level', selected: !folder.parentId }),
+    ...sortedFolders()
+      .filter((entry) => state.folders.canNestUnder(folder.id, entry.id))
+      .map((entry) => el('option', {
+        value: entry.id,
+        text: state.folders.pathOf(entry.id),
+        selected: entry.id === folder.parentId,
+      })),
+  ]);
+  nest.addEventListener('change', () => {
+    if (!state.folders.setParent(folder.id, nest.value || null)) renderFoldersTab();
+  });
+
+  return el('div', { class: 'editor-folder-name' }, [
+    el('div', { class: 'picker-row' }, [
+      el('span', { class: 'style-label', text: 'Name' }),
+      el('input', {
+        class: 'folder-rename', type: 'text', value: folder.name, 'aria-label': 'Folder name', maxlength: 80,
+        onchange: (event) => state.folders.rename(folder.id, event.target.value),
+        onkeydown: (event) => { if (event.key === 'Enter') event.target.blur(); },
+      }),
+    ]),
+    el('div', { class: 'picker-row' }, [
+      el('span', { class: 'style-label', text: 'Inside' }),
+      nest,
+    ]),
   ]);
 }
 
@@ -11980,9 +12052,15 @@ function folderActionsRow(folder) {
         html: `${icons.trash}<span>Delete</span>`,
         onclick: () => {
           const total = state.folders.counts(folder).total;
+          const inside = state.folders.childrenOf(folder.id).length;
+          // Its own pins go; folders filed under it do not, they move up. Said
+          // here because a parent looks like it holds everything beneath it.
+          const kept = inside
+            ? ` The ${inside} folder${inside === 1 ? '' : 's'} inside will move up, not be deleted.`
+            : '';
           const message = total
-            ? `Delete “${folder.name}” and its ${total} item${total === 1 ? '' : 's'}? This cannot be undone.`
-            : `Delete “${folder.name}”?`;
+            ? `Delete “${folder.name}” and its ${total} item${total === 1 ? '' : 's'}? This cannot be undone.${kept}`
+            : `Delete “${folder.name}”?${kept}`;
           if (!window.confirm(message)) return;
 
           const tombstone = state.folders.remove(folder.id);

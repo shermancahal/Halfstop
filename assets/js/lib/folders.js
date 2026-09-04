@@ -24,6 +24,17 @@ import { DEFAULT_PIN_ICON, pinColorFor, iconForPin } from './pin-icons.js';
 import { simplify } from './geo.js';
 
 const STORAGE_KEY = 'ab-maps-folders-v1';
+
+/**
+ * How deep folders may nest.
+ *
+ * Three, because the panel is a column about three hundred pixels wide and
+ * each level costs an indent. "Abandoned > Buildings > Schools" is a real way
+ * to file things; a fourth level is a folder whose name has nowhere left to
+ * be read. The limit is enforced on the move, not on the render, so nothing
+ * ever gets filed somewhere it cannot be seen.
+ */
+export const MAX_FOLDER_DEPTH = 3;
 const VAULT_DB = 'ab-maps-folders';
 const VAULT_STORE = 'state';
 const NAME_LIMIT = 80;
@@ -439,6 +450,7 @@ export class FolderStore {
         id: folder.id || makeId('f'),
         name: clampName(folder.name, `Folder ${index + 1}`),
         color: folder.color || FOLDER_COLORS[index % FOLDER_COLORS.length],
+        parentId: folder.parentId || null,
         visible: folder.visible !== false,
         collapsed: folder.collapsed === true,
         created: folder.created || null,
@@ -607,11 +619,14 @@ export class FolderStore {
     return this.folders.find((folder) => folder.id === id) || null;
   }
 
-  create(name = 'New folder', { color = null, visible = true, trip = null } = {}) {
+  create(name = 'New folder', { color = null, visible = true, trip = null, parentId = null } = {}) {
     const folder = {
       id: makeId('f'),
       name: clampName(name, `Folder ${this.folders.length + 1}`),
       color: color || FOLDER_COLORS[this.folders.length % FOLDER_COLORS.length],
+      // Only if the parent exists and has room beneath it; a folder filed
+      // under something that is not there is a folder nobody can see.
+      parentId: this.canNestUnder(null, parentId) ? parentId : null,
       visible,
       collapsed: false,
       created: Date.now(),
@@ -686,9 +701,22 @@ export class FolderStore {
   remove(id) {
     const folder = this.get(id);
     if (!folder) return null;
+
+    /*
+     * Its children move up rather than going with it.
+     *
+     * Deleting a drawer should not delete what somebody filed inside it, and
+     * a folder holding four hundred pins is not something to lose to a
+     * mis-tap on a parent. They take the deleted folder's own place in the
+     * tree, which is where they were before it existed.
+     */
+    const orphans = this.childrenOf(id);
+    for (const child of orphans) child.parentId = folder.parentId || null;
+
     this.folders = this.folders.filter((entry) => entry.id !== id);
     const tombstone = { ...folder, items: [], deleted: true, updatedAt: Date.now() };
-    this.emit();
+    // The children changed too, so they have to travel.
+    this.emit(orphans.map((child) => child.id));
     return tombstone;
   }
 
@@ -1015,13 +1043,112 @@ export class FolderStore {
     return true;
   }
 
+  /* ---------------- nesting ---------------- */
+
+  /** The folders filed directly under one, or at the top when id is null. */
+  childrenOf(id = null) {
+    return this.folders.filter((folder) => (folder.parentId || null) === (id || null));
+  }
+
+  /** A folder and everything filed under it, at any depth. */
+  descendantsOf(id) {
+    const out = [];
+    const walk = (parentId) => {
+      for (const child of this.childrenOf(parentId)) { out.push(child); walk(child.id); }
+    };
+    walk(id);
+    return out;
+  }
+
+  /** Its parents, outermost first. */
+  ancestorsOf(id) {
+    const out = [];
+    let folder = this.get(id);
+    // Bounded rather than trusting the data: a cycle in a payload that was
+    // edited by hand, or written by a version with a bug, must not hang the
+    // app on the first render.
+    for (let step = 0; folder?.parentId && step < 32; step += 1) {
+      folder = this.get(folder.parentId);
+      if (!folder || out.includes(folder)) break;
+      out.unshift(folder);
+    }
+    return out;
+  }
+
+  /** How far down a folder sits; 0 at the top. */
+  depthOf(id) {
+    return this.ancestorsOf(id).length;
+  }
+
+  /** "Abandoned \u203a Schools", for a menu that has to say where a folder is. */
+  pathOf(id) {
+    const folder = this.get(id);
+    if (!folder) return '';
+    return [...this.ancestorsOf(id), folder].map((entry) => entry.name).join(' \u203a ');
+  }
+
+  /**
+   * Whether a folder may be filed under another.
+   *
+   * Three things make it a no: a folder cannot be its own parent, it cannot go
+   * under one of its own descendants - which would cut the whole branch loose
+   * from the tree and lose it - and it cannot go somewhere that would push it
+   * or anything under it past the depth limit.
+   *
+   * `id` may be null to ask "could a new folder go here", which is what
+   * create() does before it has an id to check.
+   */
+  canNestUnder(id, parentId) {
+    if (!parentId) return true;
+    const parent = this.get(parentId);
+    if (!parent) return false;
+    if (id && (id === parentId || this.descendantsOf(id).some((entry) => entry.id === parentId))) return false;
+
+    const below = id
+      ? Math.max(0, ...this.descendantsOf(id).map((entry) => this.depthOf(entry.id) - this.depthOf(id)))
+      : 0;
+    return this.depthOf(parentId) + 1 + below < MAX_FOLDER_DEPTH;
+  }
+
+  /**
+   * File a folder under another, or at the top when parentId is null.
+   *
+   * @returns {boolean} whether it moved
+   */
+  setParent(id, parentId = null) {
+    const folder = this.get(id);
+    if (!folder) return false;
+    const target = parentId || null;
+    if ((folder.parentId || null) === target) return false;
+    if (!this.canNestUnder(id, target)) return false;
+
+    const was = folder.parentId;
+    folder.parentId = target;
+    // Both ends move: the folder itself, and whichever folders gained or lost
+    // a child, so a device syncing this sees the same tree rather than half.
+    this.emit([id, was, target].filter(Boolean));
+    return true;
+  }
+
+  /**
+   * Whether a folder actually draws: its own switch and every one above it.
+   *
+   * Hiding a parent hides what is under it, which is the only reading of a
+   * closed drawer anybody has. Stored visibility is left alone, so showing the
+   * parent again brings back exactly what was showing before.
+   */
+  showing(folder) {
+    if (!folder || folder.visible === false) return false;
+    return this.ancestorsOf(folder.id).every((entry) => entry.visible !== false);
+  }
+
   /* ---------------- reads ---------------- */
 
   /** All items across every folder, each tagged with its folder for rendering. */
   toGeoJSON({ visibleOnly = true } = {}) {
     const features = [];
     for (const folder of this.folders) {
-      if (visibleOnly && !folder.visible) continue;
+      if (visibleOnly && !this.showing(folder)) continue;
       for (const item of folder.items) {
         features.push({
           ...item.feature,

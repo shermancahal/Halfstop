@@ -198,3 +198,26 @@ test('row: a track round-trips through the row format intact', () => {
   assert.deepEqual(back.items, folder.items);
   assert.equal(back.name, 'Drive');
 });
+
+/*
+ * Nesting travels. Without the column a folder filed inside another would
+ * come back from the server at the top, and a sign-in would flatten a tree
+ * somebody spent an evening building.
+ */
+test('sync: which folder a folder is filed under makes the round trip', () => {
+  const row = folderToRow({
+    id: 'f_child', name: 'Churches', color: '#b4441f', parentId: 'f_parent',
+    visible: true, collapsed: false, items: [], updatedAt: 1_700_000_000_000,
+  }, 'user-1');
+  assert.equal(row.parent_id, 'f_parent');
+  assert.equal(rowToFolder({ ...row, client_id: row.client_id }).parentId, 'f_parent');
+
+  // A folder at the top says so as null, both ways.
+  const top = folderToRow({ id: 'f_top', name: 'Abandoned', items: [], updatedAt: 1 }, 'user-1');
+  assert.equal(top.parent_id, null);
+  assert.equal(rowToFolder({ ...top, client_id: top.client_id }).parentId, null);
+
+  // And a row written before the column existed reads as one at the top,
+  // rather than as undefined leaking into the tree.
+  assert.equal(rowToFolder({ client_id: 'f_old', name: 'Old', items: [] }).parentId, null);
+});

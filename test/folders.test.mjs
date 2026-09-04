@@ -812,3 +812,139 @@ test('import: a folder that says nothing leaves a pin with no symbol', () => {
   ]);
   assert.equal(store.get(folder.id).items[0].feature.properties.icon, null);
 });
+
+/* ------------------------------------------------------------- nesting */
+
+const tree = () => {
+  const store = new FolderStore({ storage: memoryStorage(), vault: null });
+  const top = store.create('Abandoned');
+  const mid = store.create('Churches', { parentId: top.id });
+  const deep = store.create('Stone', { parentId: mid.id });
+  const other = store.create('Covered bridges');
+  return { store, top, mid, deep, other };
+};
+
+test('folders: a folder can be filed inside another, and knows where it sits', () => {
+  const { store, top, mid, deep, other } = tree();
+  assert.equal(store.depthOf(top.id), 0);
+  assert.equal(store.depthOf(mid.id), 1);
+  assert.equal(store.depthOf(deep.id), 2);
+  assert.equal(store.pathOf(deep.id), 'Abandoned \u203a Churches \u203a Stone');
+  assert.deepEqual(store.childrenOf(top.id).map((f) => f.name), ['Churches']);
+  assert.deepEqual(store.descendantsOf(top.id).map((f) => f.name), ['Churches', 'Stone']);
+  assert.deepEqual(store.childrenOf(null).map((f) => f.name), ['Abandoned', 'Covered bridges']);
+  assert.deepEqual(store.ancestorsOf(deep.id).map((f) => f.name), ['Abandoned', 'Churches']);
+  assert.equal(store.depthOf(other.id), 0);
+});
+
+/*
+ * The two ways a tree stops being a tree: a loop, which cuts a branch loose
+ * from the root and loses it, and a branch deeper than the panel can show.
+ */
+test('folders: a folder cannot be filed inside itself or its own branch', () => {
+  const { store, top, mid, deep } = tree();
+  assert.equal(store.canNestUnder(top.id, top.id), false, 'not itself');
+  assert.equal(store.canNestUnder(top.id, mid.id), false, 'not its own child');
+  assert.equal(store.canNestUnder(top.id, deep.id), false, 'nor further down its own branch');
+  assert.equal(store.setParent(top.id, mid.id), false);
+  assert.equal(store.get(top.id).parentId, null, 'and it did not move');
+});
+
+test('folders: nesting stops at the depth the panel can show', () => {
+  const { store, top, mid, deep, other } = tree();
+  // Three levels means depths 0, 1 and 2. Stone is at the bottom of that, so
+  // nothing may go under it.
+  assert.equal(store.canNestUnder(other.id, deep.id), false);
+
+  // A leaf has room anywhere there is a level left.
+  const leaf = store.create('Fire towers');
+  assert.equal(store.canNestUnder(leaf.id, mid.id), true);
+  assert.equal(store.setParent(leaf.id, mid.id), true);
+  assert.equal(store.depthOf(leaf.id), 2);
+
+  // A branch is measured by its deepest folder, not by its own depth: moving
+  // Churches carries Stone with it, so it may sit at the top or one below,
+  // and nowhere that would put Stone at three.
+  assert.equal(store.canNestUnder(mid.id, other.id), true, 'one below the top still fits');
+  const under = store.create('Kentucky', { parentId: other.id });
+  assert.equal(store.canNestUnder(mid.id, under.id), false, 'two below does not');
+  assert.equal(store.setParent(mid.id, under.id), false);
+  assert.equal(store.get(mid.id).parentId, top.id, 'and it did not move');
+});
+
+test('folders: moving a folder tells both ends, so a sync carries the whole tree', () => {
+  const { store, top, mid, other } = tree();
+  const seen = [];
+  store.onChange((_store, changed) => seen.push([].concat(changed || [])));
+  const leaf = store.create('Mills');
+  seen.length = 0;
+
+  assert.equal(store.setParent(leaf.id, top.id), true);
+  assert.deepEqual(seen[0].sort(), [leaf.id, top.id].sort(), 'the folder and its new parent');
+
+  seen.length = 0;
+  assert.equal(store.setParent(leaf.id, other.id), true);
+  assert.deepEqual(seen[0].sort(), [leaf.id, top.id, other.id].sort(), 'and the one it left');
+  assert.equal(store.setParent(leaf.id, other.id), false, 'moving it where it already is changes nothing');
+  assert.equal(mid.parentId, top.id, 'nothing else moved');
+});
+
+/*
+ * Hiding a drawer hides what is in it. The stored setting is left alone, so
+ * opening the drawer again brings back exactly what was showing before.
+ */
+test('folders: hiding a folder hides everything filed under it', () => {
+  const { store, top, mid, deep, other } = tree();
+  store.addFeatures(deep.id, [waypoint('Under three')]);
+  store.addFeatures(other.id, [waypoint('Elsewhere', -85)]);
+
+  assert.equal(store.showing(store.get(deep.id)), true);
+  assert.equal(store.toGeoJSON().features.length, 2);
+
+  store.update(top.id, { visible: false });
+  assert.equal(store.showing(store.get(deep.id)), false, 'three levels down still goes dark');
+  assert.equal(store.get(deep.id).visible, true, 'but its own switch is untouched');
+  assert.equal(store.toGeoJSON().features.length, 1, 'and the map drops the branch');
+  assert.equal(store.showing(store.get(other.id)), true, 'a different branch is unaffected');
+
+  store.update(top.id, { visible: false });
+  store.update(mid.id, { visible: false });
+  store.update(top.id, { visible: true });
+  assert.equal(store.showing(store.get(deep.id)), false, 'the middle folder is still shut');
+});
+
+/*
+ * Deleting a drawer must not delete what somebody filed inside it. A folder
+ * holding four hundred pins is not something to lose to a mis-tap on a parent.
+ */
+test('folders: deleting a folder moves its children up, it does not take them', () => {
+  const { store, top, mid, deep } = tree();
+  store.addFeatures(deep.id, [waypoint('Kept')]);
+
+  store.remove(mid.id);
+  assert.equal(store.get(mid.id), null);
+  assert.equal(store.get(deep.id).parentId, top.id, 'Stone takes the place its parent had');
+  assert.equal(store.get(deep.id).items.length, 1, 'and keeps its pins');
+
+  store.remove(top.id);
+  assert.equal(store.get(deep.id).parentId, null, 'and moves to the top when that goes too');
+});
+
+test('folders: nesting survives being written out and read back', async () => {
+  const vault = memoryVault();
+  const first = new FolderStore({ storage: memoryStorage(), vault });
+  const top = first.create('Abandoned');
+  first.create('Churches', { parentId: top.id });
+  await first.flush();
+
+  const second = new FolderStore({ storage: memoryStorage(), vault });
+  await second.hydrate();
+  assert.equal(second.pathOf(second.childrenOf(second.list()[0].id)[0].id),
+    'Abandoned \u203a Churches');
+});
+
+test('folders: a folder created under one that is not there lands at the top', () => {
+  const store = new FolderStore({ storage: memoryStorage(), vault: null });
+  const folder = store.create('Orphan', { parentId: 'f_gone' });
+  assert.equal(folder.parentId, null);
+});

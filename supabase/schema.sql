@@ -1,4 +1,4 @@
--- American Byways GPS — Supabase schema
+-- Halfstop — Supabase schema
 --
 -- Run this once in the Supabase dashboard: SQL Editor -> New query -> Run.
 -- Safe to run again; every statement is guarded.
@@ -14,6 +14,13 @@ create table if not exists public.folders (
 
   name        text not null,
   color       text,
+
+  -- The client_id of the folder this one is filed under, or null at the top.
+  -- Not a foreign key: sync pushes folders one at a time and in no particular
+  -- order, so a child can arrive before its parent does, and a constraint here
+  -- would reject it rather than let the tree settle a moment later.
+  parent_id   text,
+
   visible     boolean not null default true,
   collapsed   boolean not null default false,
 
@@ -33,6 +40,10 @@ create table if not exists public.folders (
 );
 
 create index if not exists folders_user_idx on public.folders (user_id, updated_at desc);
+
+-- Added after the table shipped, so an existing install gets the column by
+-- running this file again rather than by dropping anything.
+alter table public.folders add column if not exists parent_id text;
 
 -- Row-level security. Without this every signed-in user could read every other
 -- user's folders, since the publishable key is by design public.

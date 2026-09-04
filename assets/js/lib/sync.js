@@ -25,6 +25,9 @@ export function rowToFolder(row) {
     id: row.client_id,
     name: row.name,
     color: row.color,
+    // Older rows have no such column; a folder that has never been nested
+    // reads as one at the top, which is what it is.
+    parentId: row.parent_id || null,
     visible: row.visible !== false,
     collapsed: row.collapsed === true,
     created: row.created_at ? Date.parse(row.created_at) : null,
@@ -41,6 +44,7 @@ export function folderToRow(folder, userId) {
     client_id: folder.id,
     name: folder.name,
     color: folder.color,
+    parent_id: folder.parentId || null,
     visible: folder.visible !== false,
     collapsed: folder.collapsed === true,
     deleted: folder.deleted === true,

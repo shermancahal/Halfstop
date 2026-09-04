@@ -806,6 +806,65 @@ check('and edit as a mark rather than a word', folderHead.editIsMark, true);
 check('and nothing written under the pins', folderHead.prose, 0);
 
 /*
+ * Folders can be filed inside folders. The panel shows the tree - a folder,
+ * then what is under it - and hiding a parent takes its branch off the map
+ * without touching what each folder is set to on its own.
+ */
+const folderIds = () => page.locator('#folder-list .folder').evaluateAll(
+  (nodes) => nodes.map((node) => node.dataset.folder));
+const beforeNew = await folderIds();
+await page.locator('#new-folder').click();
+await page.waitForTimeout(400);
+const child = (await folderIds()).find((id) => !beforeNew.includes(id));
+const parent = beforeNew[0];
+
+await page.locator(`.folder[data-folder="${child}"] .folder-menu-button`).click();
+await page.waitForTimeout(300);
+const nestOptions = await page.locator(`.folder[data-folder="${child}"] .folder-parent option`)
+  .evaluateAll((nodes) => nodes.map((node) => node.value));
+check('a new folder is offered every folder it could go inside',
+  nestOptions[0] === '' && nestOptions.includes(parent), true);
+check('and never itself', nestOptions.includes(child), false);
+
+await page.selectOption(`.folder[data-folder="${child}"] .folder-parent`, parent);
+await page.waitForTimeout(500);
+const row = page.locator(`.folder[data-folder="${child}"]`);
+check('filing it inside another draws it one level in', await row.getAttribute('data-depth'), '1');
+check('and marks it as nested, so the indent is not an accident',
+  (await row.getAttribute('class')).includes('is-nested'), true);
+check('the tree reads parent first, then what is under it',
+  (await folderIds()).indexOf(parent) + 1, (await folderIds()).indexOf(child));
+
+// Hiding the parent: the child's own switch is untouched, but it stops drawing.
+await page.locator(`.folder[data-folder="${parent}"] .folder-eye`).click();
+await page.waitForTimeout(400);
+const childEye = page.locator(`.folder[data-folder="${child}"] .folder-eye`);
+check('hiding a parent leaves the child set to show', await childEye.getAttribute('aria-pressed'), 'true');
+check('but says the switch is not the one deciding',
+  (await childEye.getAttribute('class')).includes('is-dimmed'), true);
+check('and the title explains why nothing is on the map',
+  /above it is hidden/.test(await childEye.getAttribute('title')), true);
+await page.locator(`.folder[data-folder="${parent}"] .folder-eye`).click();
+await page.waitForTimeout(300);
+check('showing it again clears that', (await childEye.getAttribute('class')).includes('is-dimmed'), false);
+
+// A parent may not be filed inside its own child, or the branch comes loose.
+await page.locator(`.folder[data-folder="${parent}"] .folder-menu-button`).click();
+await page.waitForTimeout(300);
+check('a folder is never offered a place inside its own branch',
+  (await page.locator(`.folder[data-folder="${parent}"] .folder-parent option`)
+    .evaluateAll((nodes) => nodes.map((node) => node.value))).includes(child), false);
+await shot(page.locator('#folder-list'), 'folder-tree');
+
+// Put it back, so the checks below count the folders they expect. The suite
+// already answers every dialog, so this one needs no handler of its own.
+await page.locator(`.folder[data-folder="${child}"] .folder-menu-button`).click();
+await page.waitForTimeout(300);
+await page.locator(`.folder[data-folder="${child}"] .editor-folder-actions button`, { hasText: 'Delete' }).click();
+await page.waitForTimeout(400);
+check('and it can be deleted again', (await folderIds()).includes(child), false);
+
+/*
  * The symbol picker searches, because there are a hundred and seventy of them
  * now and a grid that size cannot be scanned. What is checked is the word a
  * person would actually type: "building" has to bring back the house and the
