@@ -518,7 +518,7 @@ test('folders: re-matching reads the title and the folder, and never the colour'
   assert.equal(store.rematchIcons(folder.id, iconForPin), 3);
   const items = store.get(folder.id).items.map((item) => item.feature.properties);
   assert.deepEqual(items.map((props) => props.icon),
-    ['covered-bridge', 'bridge', 'abandoned-building']);
+    ['covered-bridge', 'bridge', 'abandoned']);
   assert.deepEqual(items.map((props) => props.color),
     ['#1d4ed8', '#b4441f', null], 'colour is nobody else\'s business');
 });

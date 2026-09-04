@@ -48,7 +48,7 @@ import { NPS_ICONS } from './nps-icons.js';
  * kinds lists them under headings that mean the same thing.
  */
 /**
- * Park signs that said the same thing as a drawn icon, and what they became.
+ * Icons that were retired, and what they became.
  *
  * The library has a campground, a campsite and an RV campground; the drawn set
  * has a tent and a camper that mean exactly those things and look like this
@@ -59,7 +59,9 @@ import { NPS_ICONS } from './nps-icons.js';
  * last month may still name one: `getPinIcon` follows it so the pin keeps its
  * meaning, and the editor selects the drawn icon it now wears.
  */
-const RETIRED_SIGNS = {
+const RETIRED_ICONS = {
+  // Two abandoned pins became one; see the note on the icon itself.
+  'abandoned-building': 'abandoned',
   'nps-campground': 'tent',
   'nps-campsite': 'tent',
   'nps-rv-campground': 'camper',
@@ -147,7 +149,7 @@ const RETIRED_SIGNS = {
   'nps-point-of-interest': 'star',
 };
 
-const PARK_SIGNS = NPS_ICONS.filter((icon) => !RETIRED_SIGNS[`nps-${icon.symbol}`]).map((icon) => ({
+const PARK_SIGNS = NPS_ICONS.filter((icon) => !RETIRED_ICONS[`nps-${icon.symbol}`]).map((icon) => ({
   id: `nps-${icon.symbol}`,
   name: icon.name,
   // Filed under the same headings as the drawn set rather than in one flat
@@ -625,18 +627,21 @@ export const PIN_ICONS = [
     sym: ['House', 'Home', 'Residence', 'Farmhouse'],
   },
   {
-    id: 'abandoned', name: 'Abandoned business', group: 'Places',
-    d: ['M3 21V9', 'M21 21V9', 'M2 9l2-4h16l2 4', 'M2 21h20', 'M9 21v-7h6v7', 'M9 14l6 7', 'M15 14l-6 7'],
-    tags: ['building', 'store', 'shop', 'business', 'derelict', 'vacant', 'closed'],
-    sym: ['Abandoned', 'Abandoned Business', 'Derelict', 'Vacant', 'Out of Business'],
-  },
-  {
-    id: 'abandoned-building', name: 'Abandoned building', group: 'Places',
-    // A building crossed out, where 'abandoned' is a storefront with its
-    // awning: one is a shut shop, the other is a boarded-up house or works.
+    id: 'abandoned', name: 'Abandoned', group: 'Places',
+    /*
+     * One crossed-out building, for all of it.
+     *
+     * There were two: a storefront with an awning for "abandoned business"
+     * and this one for "abandoned building". Nobody standing in front of a
+     * shut place decides which of those it is - a boarded-up store is both -
+     * and two pictures for one meaning is a worse picker, not a richer one.
+     * The building is the general shape, so it is the one that stayed.
+     */
     d: ['M4 21V9l8-5 8 5v12', 'M2 21h20', 'M7.5 12.5l9 6', 'M16.5 12.5l-9 6'],
-    tags: ['building', 'derelict', 'boarded', 'condemned', 'empty', 'ruin', 'house', 'decay'],
-    sym: ['Abandoned Building', 'Derelict Building', 'Boarded Up', 'Condemned'],
+    tags: ['building', 'store', 'shop', 'business', 'derelict', 'boarded', 'condemned',
+      'vacant', 'closed', 'empty', 'ruin', 'house', 'decay'],
+    sym: ['Abandoned', 'Abandoned Building', 'Abandoned Business', 'Derelict', 'Derelict Building',
+      'Boarded Up', 'Condemned', 'Vacant', 'Out of Business'],
   },
   {
     id: 'hospital', name: 'Hospital', group: 'Places',
@@ -788,7 +793,7 @@ export const DEFAULT_PIN_ICON = 'pin';
 const BY_ID = new Map(PIN_ICONS.map((icon) => [icon.id, icon]));
 
 export function getPinIcon(id) {
-  return BY_ID.get(id) || BY_ID.get(RETIRED_SIGNS[id]) || BY_ID.get(DEFAULT_PIN_ICON);
+  return BY_ID.get(id) || BY_ID.get(RETIRED_ICONS[id]) || BY_ID.get(DEFAULT_PIN_ICON);
 }
 
 /**
@@ -799,7 +804,7 @@ export function getPinIcon(id) {
  * so the retired id is not carried forward for ever.
  */
 export function resolvePinIconId(id) {
-  return RETIRED_SIGNS[id] || id;
+  return RETIRED_ICONS[id] || id;
 }
 
 /**
@@ -974,7 +979,7 @@ const TITLE_RULES = [
  * "Abandoned" meant it to be a covered bridge in the abandoned folder.
  */
 const FOLDER_RULES = [
-  { icon: 'abandoned-building', test: /\babandoned\b/i },
+  { icon: 'abandoned', test: /\babandoned\b/i },
 ];
 
 const firstRule = (rules, text) => (text

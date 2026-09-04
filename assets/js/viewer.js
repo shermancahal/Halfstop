@@ -32,7 +32,7 @@ import {
   FolderStore, FOLDER_COLORS, COLOR_NAMES, readColor, inPalette, readTrip, tripStanding, localDay,
 } from './lib/folders.js';
 import {
-  PIN_ICONS, DEFAULT_PIN_ICON, pinIconGroups, pinIconSVG, pinImageId, registerPinImages, rasterizePinIcon, pinColorFor, iconForPin, searchPinIcons,
+  PIN_ICONS, DEFAULT_PIN_ICON, pinIconGroups, pinIconSVG, pinImageId, registerPinImages, rasterizePinIcon, pinColorFor, iconForPin, searchPinIcons, getPinIcon,
 } from './lib/pin-icons.js';
 import { toGPX } from './lib/gpx-write.js';
 import {
@@ -232,7 +232,7 @@ const state = {
    * you set to bulk-edit a hundred pins should not silently change what the
    * panel shows when you close the table.
    */
-  table: { open: false, query: '', folder: '', page: 0, picked: new Set() },
+  table: { open: false, query: '', folder: '', symbol: '', color: '', sort: 'name', dir: 1, page: 0, picked: new Set() },
   /** Saved offline regions, defined here and downloaded by the mobile app. */
   offline: null,
   /** Region id whose outline is emphasised on the map, or ''. */
@@ -10909,8 +10909,27 @@ function renderWaypointsTab() {
 
 const TABLE_PAGE_SIZE = 50;
 
-/** Every saved waypoint matching a search and a folder, newest naming first. */
-function waypointRows({ query = '', folder = '' } = {}) {
+/** The word a pin's symbol goes by, so a search and a sort can use it. */
+const symbolName = (props) => getPinIcon(props.icon || DEFAULT_PIN_ICON).name;
+
+/**
+ * The word a pin's colour goes by.
+ *
+ * "No color" for a pin that has none, which is the answer to "show me the
+ * plain ones" - and a hex for anything off the palette, so a colour with no
+ * name is still searchable by what it is.
+ */
+const colorName = (props) => (props.color
+  ? (COLOR_NAMES[props.color.toLowerCase()] || props.color)
+  : 'No color');
+
+/** Where a colour sits in the palette; -1 for none, so the plain ones group. */
+const colorOrder = (props) => (props.color
+  ? FOLDER_COLORS.findIndex((hex) => readColor(hex) === readColor(props.color))
+  : -1);
+
+/** Every saved waypoint matching the table's search and its filters, sorted. */
+function waypointRows({ query = '', folder = '', symbol = '', color = '', sort = 'name', dir = 1 } = {}) {
   const needle = query.trim().toLowerCase();
   const rows = [];
   for (const held of state.folders.list()) {
@@ -10918,12 +10937,69 @@ function waypointRows({ query = '', folder = '' } = {}) {
     for (const item of held.items) {
       const props = item.feature.properties;
       if (props.kind !== 'waypoint') continue;
-      if (needle && !`${props.name} ${props.description || ''}`.toLowerCase().includes(needle)) continue;
+      if (symbol && (props.icon || DEFAULT_PIN_ICON) !== symbol) continue;
+      // '__none__' is "no colour at all", which is a real thing to look for
+      // and cannot be spelled as a hex.
+      if (color === '__none__' && props.color) continue;
+      if (color && color !== '__none__' && readColor(props.color) !== readColor(color)) continue;
+      /*
+       * The search reads what the pin wears, not just what it is called.
+       *
+       * So "yellow" finds the yellow ones and "plain" finds the ones still on
+       * the plain pin with no colour. The folder's name is deliberately not in
+       * here: there is a menu for that, and folding it in made "bridge" match
+       * every pin in a folder called "Covered bridges".
+       */
+      if (needle) {
+        const hay = `${props.name} ${props.description || ''} ${symbolName(props)} ${colorName(props)}`;
+        if (!hay.toLowerCase().includes(needle)) continue;
+      }
       rows.push({ folder: held, item });
     }
   }
-  return rows.sort((a, b) => a.item.feature.properties.name.localeCompare(
-    b.item.feature.properties.name, undefined, { numeric: true }));
+
+  const text = (row, pick) => String(pick(row.item.feature.properties, row.folder) || '');
+  const by = {
+    name: (row) => text(row, (props) => props.name),
+    symbol: (row) => text(row, symbolName),
+    folder: (row) => row.folder.name,
+  }[sort];
+
+  return rows.sort((a, b) => {
+    // Colour sorts around the wheel rather than by the alphabet: red beside
+    // orange is what somebody scanning for "the warm ones" expects, and
+    // "Amber, Blue, Brown" is not an order anybody means.
+    const gap = sort === 'color'
+      ? colorOrder(a.item.feature.properties) - colorOrder(b.item.feature.properties)
+      : by(a).localeCompare(by(b), undefined, { numeric: true, sensitivity: 'base' });
+    // Name is the tiebreak everywhere, so the order is stable and readable.
+    return (gap || a.item.feature.properties.name.localeCompare(
+      b.item.feature.properties.name, undefined, { numeric: true })) * dir;
+  });
+}
+
+/**
+ * What is actually in use, counted, for the filter menus.
+ *
+ * Built from the collection rather than from the whole symbol set: a menu of
+ * a hundred and twenty symbols, of which four are used, is a worse way to
+ * find the four. The counts say how much work each choice is.
+ */
+function tableFacets(folder = '') {
+  const symbols = new Map();
+  const colors = new Map();
+  for (const held of state.folders.list()) {
+    if (folder && held.id !== folder) continue;
+    for (const item of held.items) {
+      const props = item.feature.properties;
+      if (props.kind !== 'waypoint') continue;
+      const icon = props.icon || DEFAULT_PIN_ICON;
+      symbols.set(icon, (symbols.get(icon) || 0) + 1);
+      const key = props.color ? props.color.toLowerCase() : '__none__';
+      colors.set(key, (colors.get(key) || 0) + 1);
+    }
+  }
+  return { symbols, colors };
 }
 
 const rowKey = (row) => `${row.folder.id}:${row.item.id}`;
@@ -11014,7 +11090,9 @@ function renderTableEditor() {
 
   const search = el('input', {
     type: 'search', class: 'table-search', value: state.table.query,
-    placeholder: 'Search name or note…', 'aria-label': 'Search waypoints',
+    // It matches the symbol and the colour too, and the placeholder says so
+    // rather than leaving somebody to discover that "yellow" works.
+    placeholder: 'Search name, note, symbol or color…', 'aria-label': 'Search waypoints',
     oninput: (event) => {
       state.table.query = event.target.value;
       state.table.page = 0;
@@ -11022,25 +11100,80 @@ function renderTableEditor() {
     },
   });
 
+  /*
+   * The filters, built from what the collection actually holds.
+   *
+   * "Plain pin (12)" and "No color (43)" appear because twelve and forty-three
+   * of them exist, and answer the question this was asked for: find the ones
+   * that were never given a symbol or a colour.
+   */
+  const facets = tableFacets(state.table.folder);
+  const byCount = (a, b) => b[1] - a[1];
+
+  const symbolFilter = el('select', { class: 'table-filter-symbol', 'aria-label': 'Filter by symbol' }, [
+    el('option', { value: '', text: `Every symbol (${facets.symbols.size})` }),
+    ...[...facets.symbols].sort(byCount).map(([id, count]) => el('option', {
+      value: id, text: `${getPinIcon(id).name} (${count})`, selected: id === state.table.symbol,
+    })),
+  ]);
+  symbolFilter.addEventListener('change', (event) => {
+    state.table.symbol = event.target.value;
+    state.table.page = 0;
+    renderTableEditor();
+  });
+
+  const colorFilter = el('select', { class: 'table-filter-color', 'aria-label': 'Filter by color' }, [
+    el('option', { value: '', text: `Every color (${facets.colors.size})` }),
+    ...[...facets.colors].sort(byCount).map(([key, count]) => el('option', {
+      value: key,
+      text: `${key === '__none__' ? 'No color' : (COLOR_NAMES[key] || key)} (${count})`,
+      selected: key === '__none__'
+        ? state.table.color === '__none__'
+        : Boolean(state.table.color) && state.table.color !== '__none__'
+          && readColor(key) === readColor(state.table.color),
+    })),
+  ]);
+  colorFilter.addEventListener('change', (event) => {
+    state.table.color = event.target.value;
+    state.table.page = 0;
+    renderTableEditor();
+  });
+
+  const folderFilter = folderSelect(state.table.folder, { lead: 'Every folder', className: 'table-filter' });
+  folderFilter.addEventListener('change', (event) => {
+    state.table.folder = event.target.value;
+    // The symbol and colour menus are built from one folder's contents, so a
+    // choice made against another folder's list may name nothing here.
+    state.table.symbol = '';
+    state.table.color = '';
+    state.table.page = 0;
+    renderTableEditor();
+  });
+
+  const filtered = state.table.query || state.table.folder || state.table.symbol || state.table.color;
   const head = el('div', { class: 'table-head' }, [
     el('div', { class: 'table-title' }, [
       el('h2', { text: 'Edit waypoints' }),
       el('span', { class: 'count', text: `${rows.length} of ${state.folders.totals().waypoints}` }),
-    ]),
+      filtered ? el('button', {
+        class: 'button button-ghost button-small', type: 'button', text: 'Clear filters',
+        onclick: () => {
+          Object.assign(state.table, { query: '', folder: '', symbol: '', color: '', page: 0 });
+          renderTableEditor();
+        },
+      }) : null,
+    ].filter(Boolean)),
     el('div', { class: 'table-tools' }, [
       search,
-      folderSelect(state.table.folder, { lead: 'Every folder', className: 'table-filter' }),
+      folderFilter,
+      symbolFilter,
+      colorFilter,
       el('button', {
         class: 'button button-secondary button-small', type: 'button', text: 'Done',
         onclick: closeTableEditor,
       }),
     ]),
   ]);
-  head.querySelector('.table-filter').addEventListener('change', (event) => {
-    state.table.folder = event.target.value;
-    state.table.page = 0;
-    renderTableEditor();
-  });
 
   /*
    * The bulk bar, only once something is ticked.
@@ -11172,14 +11305,37 @@ function renderTableEditor() {
     },
   });
 
+  /*
+   * A sortable heading, which is a button rather than a clickable cell so it
+   * can be reached and pressed from a keyboard.
+   */
+  const sortable = (key, label) => {
+    const on = state.table.sort === key;
+    return el('th', { 'aria-sort': on ? (state.table.dir > 0 ? 'ascending' : 'descending') : 'none' }, [
+      el('button', {
+        class: `table-sort${on ? ' is-on' : ''}`, type: 'button',
+        title: `Sort by ${label.toLowerCase()}`,
+        html: `${label}<span aria-hidden="true">${on ? (state.table.dir > 0 ? ' \u2191' : ' \u2193') : ''}</span>`,
+        onclick: () => {
+          // The same heading again reverses it; a different one starts over
+          // ascending, because that is what somebody means by "sort by folder".
+          if (state.table.sort === key) state.table.dir = -state.table.dir;
+          else { state.table.sort = key; state.table.dir = 1; }
+          state.table.page = 0;
+          renderTableEditor();
+        },
+      }),
+    ]);
+  };
+
   const table = el('table', { class: 'table-grid' }, [
     el('thead', {}, [el('tr', {}, [
       el('th', { class: 'table-tick' }, [all]),
       el('th', { class: 'table-mark' }, [el('span', { class: 'visually-hidden', text: 'Pin' })]),
-      el('th', { text: 'Name' }),
-      el('th', { text: 'Symbol' }),
-      el('th', { text: 'Color' }),
-      el('th', { text: 'Folder' }),
+      sortable('name', 'Name'),
+      sortable('symbol', 'Symbol'),
+      sortable('color', 'Color'),
+      sortable('folder', 'Folder'),
       el('th', { text: 'Note' }),
       el('th', { text: 'Link' }),
     ])]),

@@ -2742,6 +2742,18 @@ body.has-table { overflow: hidden; }
 .table-link { width: 100%; min-width: 140px; }
 .table-symbol, .table-color, .table-folder { max-width: 150px; }
 
+/* A heading you can press, that still looks like a heading. */
+.table-sort {
+  font: inherit; font-weight: 650; color: inherit;
+  background: none; border: 0; padding: 0; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 2px; white-space: nowrap;
+}
+.table-sort:hover { text-decoration: underline; text-underline-offset: 3px; }
+.table-sort.is-on { color: var(--accent, #b4441f); }
+.table-sort:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 3px; }
+
+.table-filter-symbol, .table-filter-color, .table-filter { max-width: 200px; }
+
 .table-foot { display: flex; gap: 10px; align-items: center; justify-content: center; }
 
 /* A phone cannot show eight columns at once, so the table keeps its width and

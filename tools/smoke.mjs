@@ -2707,7 +2707,9 @@ check('the table opens over the map', await page.locator('#table-editor').isVisi
 const columns = await page.locator('#table-editor thead th').evaluateAll(
   (nodes) => nodes.map((node) => node.textContent.trim()).filter(Boolean));
 check('with a column for everything a pin wears',
-  columns, ['Pin', 'Name', 'Symbol', 'Color', 'Folder', 'Note', 'Link']);
+  // Name carries the sort arrow, since the table opens sorted by it.
+  columns.map((label) => label.replace(/\s*[\u2191\u2193]$/, '')),
+  ['Pin', 'Name', 'Symbol', 'Color', 'Folder', 'Note', 'Link']);
 check('and a row for the saved pin', await page.locator('#table-editor tbody tr').count() >= 1, true);
 check('the bulk bar waits to be given something to act on',
   (await page.locator('.table-bulk-count').textContent()).includes('Tick rows'), true);
@@ -2728,6 +2730,66 @@ check('and the colours are named', colourWords.includes('Yellow') && colourWords
 await shot(page.locator('#table-editor'), 'table-editor');
 await page.locator('.table-bulk button', { hasText: 'Clear' }).click();
 await page.waitForTimeout(200);
+
+/*
+ * Finding the pins that need the work.
+ *
+ * The menus are built from what the collection actually holds, with counts:
+ * a menu of a hundred and twenty symbols, of which four are used, is a worse
+ * way to find the four. "No color" is in there because "show me the plain
+ * ones" is the question this was asked for.
+ */
+const facetMenus = await page.evaluate(() => ({
+  symbols: [...document.querySelectorAll('.table-filter-symbol option')].map((o) => o.textContent),
+  colors: [...document.querySelectorAll('.table-filter-color option')].map((o) => o.textContent),
+}));
+check('the symbol menu lists only what is in use, counted',
+  facetMenus.symbols.length > 1 && facetMenus.symbols.every((t) => /\(\d+\)$/.test(t)), true);
+check('and the colour menu offers the ones with none',
+  facetMenus.colors.some((t) => t.startsWith('No color (')), true);
+
+const rowCount = () => page.locator('#table-editor tbody tr').count();
+const everything = await rowCount();
+await page.selectOption('.table-filter-color', '__none__');
+await page.waitForTimeout(300);
+const plain = await rowCount();
+check('filtering to the uncoloured ones narrows the table', plain > 0 && plain <= everything, true);
+await page.selectOption('.table-filter-color', '');
+await page.waitForTimeout(250);
+
+// The search reads what a pin wears, so a colour word finds pins by colour.
+await page.locator('.table-search').click();
+await page.keyboard.type('no color', { delay: 25 });
+await page.waitForTimeout(350);
+check('and searching a colour word does the same', await rowCount(), plain);
+await page.fill('.table-search', '');
+await page.waitForTimeout(250);
+
+/*
+ * Sorting. The table opens sorted by name, so the first press of that heading
+ * reverses it rather than doing nothing - which is what somebody pressing an
+ * already-sorted column means.
+ */
+const names = () => page.locator('#table-editor tbody tr .table-name')
+  .evaluateAll((nodes) => nodes.map((node) => node.value));
+const ascending = await names();
+check('the table opens sorted by name',
+  await page.locator('.table-grid th[aria-sort="ascending"] .table-sort').textContent(), 'Name \u2191');
+
+await page.locator('.table-sort', { hasText: 'Name' }).click();
+await page.waitForTimeout(300);
+check('pressing that heading reverses it',
+  await page.locator('.table-grid th[aria-sort="descending"] .table-sort').textContent(), 'Name \u2193');
+const descending = await names();
+check('and the rows turn round with it', descending[0] !== ascending[0], true);
+
+await page.locator('.table-sort', { hasText: 'Color' }).click();
+await page.waitForTimeout(300);
+check('a different heading starts over ascending',
+  await page.locator('.table-grid th[aria-sort="ascending"] .table-sort').textContent(), 'Color \u2191');
+check('and only one heading claims the sort',
+  await page.locator('.table-grid th[aria-sort="ascending"], .table-grid th[aria-sort="descending"]').count(), 1);
+await shot(page.locator('#table-editor'), 'table-sorted');
 
 // Typing in the search must not lose the caret: every keystroke redraws the
 // table, and a redraw that drops focus makes the search unusable.

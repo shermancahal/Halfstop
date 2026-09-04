@@ -122,7 +122,7 @@ test('pins: searching finds symbols by the word a person would type', () => {
   const ids = (query) => searchPinIcons(query).map((icon) => icon.id);
 
   const buildings = ids('building');
-  for (const wanted of ['house', 'church', 'school', 'hospital', 'industry', 'abandoned-building']) {
+  for (const wanted of ['house', 'church', 'school', 'hospital', 'industry', 'abandoned']) {
     assert.ok(buildings.includes(wanted), `"building" should find ${wanted}`);
   }
   assert.ok(ids('abandoned').includes('ruins'), 'a ghost town is abandoned');
@@ -144,13 +144,19 @@ test('pins: a search term matches a word it starts, not any substring', () => {
   assert.ok(searchPinIcons('trail').map((icon) => icon.id).includes('trailhead'));
 });
 
-test('pins: the abandoned building is its own symbol, not the shut shop', () => {
-  const building = PIN_ICONS.find((icon) => icon.id === 'abandoned-building');
-  const shop = PIN_ICONS.find((icon) => icon.id === 'abandoned');
-  assert.ok(building && shop);
-  assert.notDeepEqual(building.d, shop.d, 'two ideas, two drawings');
-  assert.equal(iconForSymbol('Abandoned Building'), 'abandoned-building');
+/*
+ * There were two: a storefront for "abandoned business" and a crossed-out
+ * building. Nobody standing in front of a shut place decides which it is, so
+ * there is one - and the pins that already named the other still find it.
+ */
+test('pins: the abandoned business and the abandoned building are one pin', () => {
+  assert.equal(PIN_ICONS.filter((icon) => /^abandoned/.test(icon.id)).length, 1);
+  assert.equal(iconForSymbol('Abandoned Building'), 'abandoned');
+  assert.equal(iconForSymbol('Abandoned Business'), 'abandoned');
   assert.equal(iconForSymbol('abandoned'), 'abandoned');
+  // A pin saved when there were two keeps its meaning.
+  assert.equal(getPinIcon('abandoned-building').id, 'abandoned');
+  assert.ok(searchPinIcons('building').map((icon) => icon.id).includes('abandoned'));
 });
 
 /*
