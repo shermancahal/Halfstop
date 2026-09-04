@@ -1188,6 +1188,32 @@ export class FolderStore {
     return { waypoints, tracks, total: folder.items.length };
   }
 
+  /**
+   * What is in a folder and everything filed under it.
+   *
+   * A drawer's count is what is in the drawer. A parent holding nothing of its
+   * own and a child holding a hundred and thirty is not empty, and saying "0"
+   * beside it - especially while it is folded shut over them - is a lie the
+   * reader has no way to check.
+   */
+  branchCounts(id) {
+    const folder = this.get(id);
+    if (!folder) return { waypoints: 0, tracks: 0, total: 0 };
+    return [folder, ...this.descendantsOf(id)].reduce((sum, entry) => {
+      const counts = this.counts(entry);
+      return {
+        waypoints: sum.waypoints + counts.waypoints,
+        tracks: sum.tracks + counts.tracks,
+        total: sum.total + counts.total,
+      };
+    }, { waypoints: 0, tracks: 0, total: 0 });
+  }
+
+  /** Whether a folder is hidden inside a folded one, at any depth. */
+  foldedAway(id) {
+    return this.ancestorsOf(id).some((entry) => entry.collapsed === true);
+  }
+
   totals() {
     return this.folders.reduce((sum, folder) => {
       const counts = this.counts(folder);

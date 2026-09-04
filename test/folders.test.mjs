@@ -948,3 +948,39 @@ test('folders: a folder created under one that is not there lands at the top', (
   const folder = store.create('Orphan', { parentId: 'f_gone' });
   assert.equal(folder.parentId, null);
 });
+
+/*
+ * Nesting is a flat list with an indent, not a folder inside a folder's own
+ * body, so "folded" has to be asked about the whole line of parents. Without
+ * that, shutting a folder hid its own empty body and left everything filed
+ * under it exactly where it was.
+ */
+test('folders: a folder inside a folded one counts as folded away', () => {
+  const { store, top, mid, deep, other } = tree();
+  assert.equal(store.foldedAway(mid.id), false);
+
+  store.update(top.id, { collapsed: true });
+  assert.equal(store.foldedAway(mid.id), true, 'the child goes away with it');
+  assert.equal(store.foldedAway(deep.id), true, 'and so does the one under that');
+  assert.equal(store.foldedAway(top.id), false, 'the folded folder is still itself shown');
+  assert.equal(store.foldedAway(other.id), false, 'another branch is unaffected');
+
+  assert.equal(store.get(mid.id).collapsed, false, 'nobody else was folded to do it');
+});
+
+/*
+ * A folder holding no pins of its own and a child holding a hundred and thirty
+ * is not empty, and "0" beside it - while it is folded shut over them - is a
+ * number the reader has no way to check.
+ */
+test('folders: a folder counts what is in the folders inside it', () => {
+  const { store, top, mid, deep } = tree();
+  store.addFeatures(deep.id, [waypoint('Deep one'), waypoint('Deep two', -85)]);
+  store.addFeatures(mid.id, [waypoint('Middle', -86)]);
+
+  assert.equal(store.counts(store.get(top.id)).total, 0, 'it holds no pins of its own');
+  assert.equal(store.branchCounts(top.id).total, 3, 'but three are filed under it');
+  assert.equal(store.branchCounts(mid.id).total, 3, 'itself and what is below');
+  assert.equal(store.branchCounts(deep.id).total, 2);
+  assert.equal(store.branchCounts('nope').total, 0);
+});

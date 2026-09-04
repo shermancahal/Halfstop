@@ -888,6 +888,31 @@ await page.waitForTimeout(300);
 check('a folder is never offered a place inside its own branch',
   (await page.locator(`.folder[data-folder="${parent}"] .folder-parent option`)
     .evaluateAll((nodes) => nodes.map((node) => node.value))).includes(child), false);
+/*
+ * Folding a parent takes the branch with it. This is the whole of what makes
+ * filing a folder inside another mean anything: without it, shutting the
+ * parent hid its own body and left everything under it on screen, so both
+ * folding and filing read as doing nothing.
+ */
+const folderRows = () => page.locator('#folder-list .folder').evaluateAll(
+  (nodes) => nodes.map((node) => node.dataset.folder));
+await page.locator(`.folder[data-folder="${child}"] .folder-menu-button`).click();
+await page.waitForTimeout(400);
+check('an editor can be open on the folder inside', await page.locator('.style-editor').count(), 1);
+await page.locator(`.folder[data-folder="${parent}"] .folder-disclosure`).click();
+await page.waitForTimeout(500);
+check('folding the parent takes the folder inside off the list', (await folderRows()).includes(child), false);
+check('and the editor that was open on it', await page.locator('.style-editor').count(), 0);
+check('while the parent itself stays', (await folderRows()).includes(parent), true);
+await page.locator(`.folder[data-folder="${parent}"] .folder-disclosure`).click();
+await page.waitForTimeout(400);
+check('unfolding brings it back', (await folderRows()).includes(child), true);
+
+// A parent counts what is filed under it, or a folder shut over a hundred
+// pins would sit there claiming to hold none.
+const parentCount = await page.locator(`.folder[data-folder="${parent}"] .folder-count`).textContent();
+check('and its count includes what is inside it', Number(parentCount) > 0, true);
+
 await shot(page.locator('#folder-list'), 'folder-tree');
 
 // Put it back, so the checks below count the folders they expect. The suite

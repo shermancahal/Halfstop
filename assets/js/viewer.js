@@ -10214,7 +10214,17 @@ function renderFoldersTab() {
     return;
   }
 
+  /*
+   * A folder inside a folded one is not drawn at all.
+   *
+   * Nesting is a flat list with an indent, not a folder inside a folder's own
+   * body - it has to be, or a branch of three would nest three scroll
+   * containers. So folding a parent has to be done here: without it, shutting
+   * "Historic" hid its own empty body and left the hundred and thirty pins
+   * under it exactly where they were, which is folding that does nothing.
+   */
   for (const folder of folders) {
+    if (state.folders.foldedAway(folder.id)) continue;
     dom.folderList.append(renderFolder(folder));
   }
 
@@ -10527,12 +10537,18 @@ function restoreOpenEditor() {
  */
 function toggleFolder(folder) {
   const folding = !folder.collapsed;
-  if (folding && state.openEditor?.folderId === folder.id) state.openEditor = null;
+  // Anywhere in the branch, not just on this folder: folding "Historic" takes
+  // away the row the editor for "Fire Lookout Towers" was hanging off.
+  const open = state.openEditor?.folderId;
+  const inBranch = open === folder.id
+    || state.folders.descendantsOf(folder.id).some((entry) => entry.id === open);
+  if (folding && inBranch) state.openEditor = null;
   state.folders.update(folder.id, { collapsed: folding });
 }
 
 function renderFolder(folder) {
   const counts = state.folders.counts(folder);
+  const branch = state.folders.branchCounts(folder.id);
   const chosen = selectedIn(folder.id);
 
   /*
@@ -10573,7 +10589,20 @@ function renderFolder(folder) {
       title: folder.collapsed ? `Expand ${folder.name}` : `Collapse ${folder.name}`,
       onclick: () => toggleFolder(folder),
     }),
-    counts.total ? el('span', { class: 'folder-count', text: String(counts.total) }) : null,
+    /*
+     * What is in the drawer, including the drawers inside it.
+     *
+     * A folder holding nothing of its own and a child holding a hundred and
+     * thirty is not empty, and "0" beside it - while it is folded shut over
+     * them - is a number the reader has no way to check.
+     */
+    branch.total ? el('span', {
+      class: 'folder-count',
+      text: String(branch.total),
+      title: branch.total === counts.total
+        ? `${branch.total} in ${folder.name}`
+        : `${branch.total} in ${folder.name} and the folders inside it`,
+    }) : null,
     /*
      * An eye, not a checkbox. A checkbox beside a name in a list of names reads
      * as "selected", which is what the checkbox on each pin below it actually
@@ -10624,11 +10653,21 @@ function renderFolder(folder) {
 
   const body = el('div', { class: 'folder-body' });
   if (!folder.items.length) {
+    /*
+     * "Empty" is only true of a folder holding nothing at all.
+     *
+     * A folder used as a drawer for other folders holds no pins of its own and
+     * is not empty, and telling somebody who has just filed two folders into it
+     * that it is empty reads as the filing not having worked.
+     */
+    const inside = state.folders.childrenOf(folder.id).length;
     body.append(el('p', {
       class: 'folder-empty',
-      text: folder.trip
-        ? 'Nothing planned yet — drop pins for the places you mean to stop.'
-        : 'Empty — drag items here, or import from a loaded map.',
+      text: inside
+        ? `No pins of its own — ${inside} folder${inside === 1 ? '' : 's'} filed inside.`
+        : folder.trip
+          ? 'Nothing planned yet — drop pins for the places you mean to stop.'
+          : 'Empty — drag items here, or import from a loaded map.',
     }));
   } else {
     /*
