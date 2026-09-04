@@ -60,7 +60,13 @@ function writeWaypoint(feature, position) {
   out += tag('desc', props.description, '    ');
   out += tag('sym', props.symbol, '    ');
   out += tag('type', props.type, '    ');
-  if (props.link) out += `    <link href="${xml(props.link)}"/>\n`;
+  // <link> carries its wording in a child element, not an attribute, so a
+  // reader on the other side sees "NPS page" rather than a bare URL.
+  if (props.link) {
+    out += props.linkLabel
+      ? `    <link href="${xml(props.link)}"><text>${xml(props.linkLabel)}</text></link>\n`
+      : `    <link href="${xml(props.link)}"/>\n`;
+  }
   out += '  </wpt>\n';
   return out;
 }

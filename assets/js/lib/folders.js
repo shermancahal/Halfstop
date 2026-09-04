@@ -144,6 +144,9 @@ function packFeature(feature, { keepTimes = false } = {}) {
       // GaiaGPS export arrives already styled rather than as identical dots.
       icon: props.icon || null,
       link: props.link || null,
+      // What to call the link. Blank means the app's own wording, so a pin
+      // that never had a label follows the app if the app's wording changes.
+      linkLabel: props.linkLabel || '',
       // Photo ids only — the images themselves live in IndexedDB (lib/photos.js),
       // because a single phone photo would exhaust the localStorage budget.
       photos: Array.isArray(props.photos) ? props.photos.slice(0, 24) : [],
@@ -728,6 +731,56 @@ export class FolderStore {
     item.feature.properties.description = text;
     this.emit(folderId);
     return true;
+  }
+
+  /**
+   * Set or clear the web address a pin points at, and what to call it.
+   *
+   * A blank address clears the label too: a name for a link that no longer
+   * exists is a name for nothing, and would come back if an address were set
+   * later, wearing wording meant for a different page.
+   */
+  linkItem(folderId, itemId, { url, label } = {}) {
+    const folder = this.get(folderId);
+    const item = folder?.items.find((entry) => entry.id === itemId);
+    if (!item) return false;
+    const props = item.feature.properties;
+    const href = String(url ?? '').trim().slice(0, 2000);
+    const named = href ? String(label ?? '').trim().slice(0, NAME_LIMIT) : '';
+    if (props.link === (href || null) && (props.linkLabel || '') === named) return false;
+    props.link = href || null;
+    props.linkLabel = named;
+    this.emit(folderId);
+    return true;
+  }
+
+  /**
+   * Give every pin in a folder that has no link the first web address in its
+   * own notes.
+   *
+   * Most collections predate there being a field for this, so the address for
+   * a place is sitting in the middle of a sentence somebody typed. The note is
+   * left exactly as it was - the address stays where it reads, and is now also
+   * a button - because editing what a person wrote to tidy the data would be
+   * the app taking a liberty.
+   *
+   * @param {string} folderId
+   * @param {(text: string) => string|null} find
+   */
+  adoptLinks(folderId, find) {
+    const folder = this.get(folderId);
+    if (!folder) return 0;
+    let changed = 0;
+    for (const item of folder.items) {
+      const props = item.feature.properties;
+      if (props.kind !== 'waypoint' || props.link) continue;
+      const found = find(`${props.description || ''}\n${props.name || ''}`);
+      if (!found) continue;
+      props.link = found;
+      changed += 1;
+    }
+    if (changed) this.emit(folderId);
+    return changed;
   }
 
   /**

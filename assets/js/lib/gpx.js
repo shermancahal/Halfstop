@@ -69,6 +69,20 @@ function linkOf(node) {
   return url || null;
 }
 
+/*
+ * What the file calls its link.
+ *
+ * GPX puts the wording in <link><text>, and the older <urlname> beside <url>.
+ * Kept because it is the writer's own name for where the link goes - "NPS
+ * page", "trip report" - and a reader is better served by that than by a
+ * generic label the app invented.
+ */
+function linkTextOf(node) {
+  const link = childNamed(node, 'link');
+  const text = (link && childText(link, 'text')) || childText(node, 'urlname');
+  return text || null;
+}
+
 function describe(node) {
   // GPX splits prose across desc/cmt; prefer desc but fall back so nothing is lost.
   return childText(node, 'desc') || childText(node, 'cmt') || '';
@@ -116,6 +130,7 @@ export function parseGPX(source) {
         type: childText(trk, 'type') || '',
         color: colorFromExtensions(trk),
         link: linkOf(trk),
+        linkLabel: linkTextOf(trk),
         coordTimes: multi ? times : times[0],
       },
     );
@@ -135,6 +150,7 @@ export function parseGPX(source) {
       type: childText(rte, 'type') || '',
       color: colorFromExtensions(rte),
       link: linkOf(rte),
+      linkLabel: linkTextOf(rte),
       coordTimes: null,
     });
   }
@@ -150,6 +166,7 @@ export function parseGPX(source) {
       type: childText(wpt, 'type') || '',
       color: colorFromExtensions(wpt),
       link: linkOf(wpt),
+      linkLabel: linkTextOf(wpt),
       time: point.time,
     });
   }

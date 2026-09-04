@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { parseXML, childText, findDescendants, decodeEntities } from '../assets/js/lib/xml.js';
 import { parseGPX } from '../assets/js/lib/gpx.js';
 import { parseKML } from '../assets/js/lib/kml.js';
-import { parseMapFile, summarize } from '../assets/js/lib/parse.js';
+import { parseMapFile, summarize, findLinks, findLink, findLinkSpans } from '../assets/js/lib/parse.js';
 import { iconForSymbol } from '../assets/js/lib/pin-icons.js';
 import { extractKMLFromKMZ } from '../assets/js/lib/kmz.js';
 import {
@@ -379,4 +379,63 @@ test('symbols: the longest matching alias wins, not the first in the table', () 
   assert.equal(iconForSymbol('campfire'), 'campfire');
   assert.equal(iconForSymbol('Flag, Blue'), iconForSymbol('flag'));
   assert.equal(iconForSymbol(''), null);
+});
+
+/*
+ * Addresses inside prose somebody typed in the field. The grammar is narrow
+ * on purpose: a false positive turns a note into a broken link, and the
+ * punctuation that ends a sentence is not part of the address.
+ */
+test('links: a web address is found inside a note, without the punctuation around it', () => {
+  assert.deepEqual(findLinks('Write-up at https://example.org/tower, worth a read.'),
+    ['https://example.org/tower']);
+  assert.deepEqual(findLinks('see https://example.org/x.'), ['https://example.org/x']);
+  assert.deepEqual(findLinks('(https://a.example/c) and http://d.example/e'),
+    ['https://a.example/c', 'http://d.example/e']);
+  // A bare host is an address people write; it is given a scheme so it opens.
+  assert.deepEqual(findLinks('go to www.nps.gov/abc, then left'), ['https://www.nps.gov/abc']);
+
+  assert.deepEqual(findLinks('Gate is locked. Park at the pull-off.'), []);
+  assert.deepEqual(findLinks('https://'), [], 'a scheme on its own is not an address');
+  assert.deepEqual(findLinks('www.'), []);
+  assert.equal(findLink(''), null);
+  assert.equal(findLink(null), null);
+});
+
+/*
+ * A note is shown as it was typed, with the addresses in it made tappable in
+ * place - so the span has to say both what was written and where it starts.
+ * A scheme the writer did not type is not one the reader should be shown.
+ */
+test('links: a span says what was written, where, and what to follow', () => {
+  assert.deepEqual(findLinkSpans('go to www.nps.gov/abc, then left'),
+    [{ text: 'www.nps.gov/abc', href: 'https://www.nps.gov/abc', at: 6 }]);
+  assert.deepEqual(findLinkSpans('see https://www.nps.gov/x here'),
+    [{ text: 'https://www.nps.gov/x', href: 'https://www.nps.gov/x', at: 4 }]);
+});
+
+/*
+ * GPX puts the wording for a link in <link><text>, and the older files put it
+ * in <urlname>. It is the writer's own name for where the link goes, which
+ * serves a reader better than a label the app invented.
+ */
+test('gpx: a waypoint link keeps the wording the file gave it', () => {
+  const gpx = `<?xml version="1.0"?><gpx version="1.1">
+    <wpt lat="37" lon="-84"><name>Tower</name>
+      <link href="https://example.org/tower"><text>Fire tower history</text></link>
+    </wpt>
+    <wpt lat="38" lon="-85"><name>Ford</name>
+      <url>https://example.org/ford</url><urlname>Crossing notes</urlname>
+    </wpt>
+    <wpt lat="39" lon="-86"><name>Gap</name>
+      <link href="https://example.org/gap"/>
+    </wpt>
+  </gpx>`;
+  const props = parseGPX(gpx).geojson.features.map((feature) => feature.properties);
+  assert.equal(props[0].link, 'https://example.org/tower');
+  assert.equal(props[0].linkLabel, 'Fire tower history');
+  assert.equal(props[1].link, 'https://example.org/ford');
+  assert.equal(props[1].linkLabel, 'Crossing notes');
+  assert.equal(props[2].link, 'https://example.org/gap');
+  assert.equal(props[2].linkLabel, null, 'no wording is no wording, not a guess');
 });

@@ -37,6 +37,55 @@ function timesOf(properties) {
 }
 
 /** Per-feature measurements, written back onto feature.properties. */
+/*
+ * A web address inside free text.
+ *
+ * Not a general URL grammar - a deliberately narrow one, because this runs
+ * over prose somebody typed in the field and a false positive turns a note
+ * into a broken link. It wants a scheme, or a bare host that begins www.,
+ * and it stops before the punctuation that ends a sentence rather than
+ * swallowing it: "see https://example.org/x." is a link to /x, not to /x.
+ *
+ * Closing brackets go the same way, so a URL written in parentheses does not
+ * take the bracket with it. A URL that genuinely ends in one is rare enough,
+ * and wrong in the harmless direction: the link still opens the site.
+ */
+const URL_PATTERN = /\b(?:https?:\/\/|www\.)[^\s<>"']+/gi;
+const TRAILING_JUNK = /[.,;:!?)\]}>'"]+$/;
+
+/**
+ * Every web address in a piece of text, as written and as followed.
+ *
+ * Both, because they differ: "www.nps.gov" is written without a scheme and
+ * cannot be followed without one. A renderer needs the written form to find
+ * its place in the sentence and to show what the writer typed; a link needs
+ * the other. `at` is where the written form starts.
+ */
+export function findLinkSpans(text) {
+  const found = [];
+  for (const match of String(text || '').matchAll(URL_PATTERN)) {
+    const written = match[0].replace(TRAILING_JUNK, '');
+    // "https://" and "www." on their own are not addresses.
+    if (!/[^:/.]/.test(written.replace(/^https?:\/\//, '').replace(/^www\./, ''))) continue;
+    found.push({
+      text: written,
+      href: written.toLowerCase().startsWith('www.') ? `https://${written}` : written,
+      at: match.index,
+    });
+  }
+  return found;
+}
+
+/** Every web address in a piece of text, in the order they appear. */
+export function findLinks(text) {
+  return findLinkSpans(text).map((span) => span.href);
+}
+
+/** The first web address in a piece of text, or null. */
+export function findLink(text) {
+  return findLinks(text)[0] || null;
+}
+
 export function measureFeature(feature) {
   const geometry = feature.geometry;
   const kind = feature.properties?.kind;
@@ -178,7 +227,10 @@ function adoptForeignProperties(props) {
     // one becomes the pin's link, which is what the photo importer follows.
     const photo = Array.isArray(props.photos) ? props.photos.find((entry) => entry?.fullsize_url || entry?.web_url) : null;
     const found = text(props.url, props.link_url, photo?.fullsize_url, photo?.web_url);
+    // Nothing in a field of its own: a URL somebody typed into the note is
+    // still the link for this place, and is the only one most files carry.
     if (found) props.link = found;
+    else props.link = findLink(props.description || props.notes) || props.link;
   }
   if (!Number.isFinite(props.time)) {
     const stamp = Date.parse(text(props.time_created, props.created, props.timestamp));

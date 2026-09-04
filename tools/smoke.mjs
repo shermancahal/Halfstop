@@ -858,8 +858,8 @@ const actions = await page.evaluate(() => [...document.querySelectorAll('#tab-fo
     top: Math.round(node.getBoundingClientRect().top),
     clipped: [...node.querySelectorAll('span')].some((span) => span.scrollWidth > span.clientWidth + 1),
   })));
-check('the folder actions are New folder, New trip, Import and Re-match icons',
-  actions.map((a) => a.label), ['New folder', 'New trip', 'Import', 'Re-match icons']);
+check('the folder actions are New folder, New trip, Import, Re-match and Find links',
+  actions.map((a) => a.label), ['New folder', 'New trip', 'Import', 'Re-match', 'Find links']);
 check('each carrying a mark of its own', actions.every((a) => a.icon), true);
 check('and Import is there before anything has been imported',
   actions.find((a) => a.label === 'Import')?.hidden, false);
@@ -867,6 +867,9 @@ check('and Import is there before anything has been imported',
 // on one line cut "New folder" short at the panel's width.
 check('New folder and New trip share a line', actions[0].top === actions[1].top, true);
 check('and Import has the next to itself', actions[2].top > actions[1].top, true);
+// And the two sweeps over everything already saved share the line below it.
+check('the two sweeps share the line under Import',
+  actions[3].top === actions[4].top && actions[3].top > actions[2].top, true);
 check('with every word intact', actions.filter((a) => a.clipped).map((a) => a.label), []);
 await shot(page.locator('#tab-folders .folder-actions'), 'folder-actions');
 
@@ -2594,7 +2597,7 @@ check('and both fields are labelled',
     || (await page.locator('.popup-save-panel').innerText()).toUpperCase().includes('SAVE INTO'), true);
 
 await page.locator('.drop-pin-name').fill('Cave spring');
-await page.locator('.drop-pin-note').fill('Water here in August. Gate is unlocked.');
+await page.locator('.drop-pin-note').fill('Water here in August. Write-up at https://example.org/spring, worth a read.');
 
 const folderSelect = page.locator('.popup-folder');
 await folderSelect.selectOption(await folderSelect.locator('option').first().getAttribute('value'));
@@ -2616,9 +2619,56 @@ const saved = await page.evaluate(async () => {
 });
 check('the folder is created with the name that was typed', saved.folder, 'Field notes');
 check('the pin keeps the name it was given', saved.name, 'Cave spring');
-check('the field notes reach the saved pin', saved.note, 'Water here in August. Gate is unlocked.');
+check('the field notes reach the saved pin', saved.note,
+  'Water here in August. Write-up at https://example.org/spring, worth a read.');
 check('and the symbol that was chosen is the one that was saved',
   typeof saved.icon === 'string' && saved.icon.length > 0 && symbol !== null, true);
+
+/*
+ * Opening a saved pin.
+ *
+ * Two things that were both wrong here. The engine focuses the first focusable
+ * thing in a popup when it opens; on iOS a focused <select> opens its picker,
+ * so tapping a saved pin threw a full-screen wheel of folder names over the
+ * map. And a web address typed into a note was text, when the reason somebody
+ * writes one down is to follow it.
+ */
+await showTab('waypoints');
+await page.waitForTimeout(300);
+await page.locator('.waypoint-card', { hasText: 'Cave spring' }).first().click();
+await page.waitForTimeout(900);
+
+const opened = await page.evaluate(() => {
+  const popup = document.querySelector('.maplibregl-popup-content, .mapboxgl-popup-content');
+  const anchor = popup?.querySelector('.popup-desc a');
+  return {
+    focused: document.activeElement?.tagName || '',
+    inPopup: Boolean(popup && document.activeElement && popup.contains(document.activeElement)),
+    href: anchor?.getAttribute('href') || '',
+    text: anchor?.textContent || '',
+    target: anchor?.getAttribute('target') || '',
+    rel: anchor?.getAttribute('rel') || '',
+    selects: popup ? popup.querySelectorAll('select').length : -1,
+  };
+});
+check('a saved pin has a folder picker on its popup', opened.selects > 0, true);
+check('but opening the popup does not put focus into it', opened.inPopup, false);
+check('so no native picker is thrown over the map', opened.focused === 'SELECT', false);
+check('the address in the note is a link', opened.href, 'https://example.org/spring');
+check('showing the address itself, not a label over it', opened.text, 'https://example.org/spring');
+check('and it opens away from the map, safely',
+  `${opened.target} ${opened.rel}`, '_blank noopener noreferrer');
+// Shut it again, or the checks below count this card as well as their own.
+// The close control is the app's own, on the popup's action bar.
+await page.evaluate(() => {
+  const popup = document.querySelector('.maplibregl-popup, .mapboxgl-popup');
+  const close = popup?.querySelector('.maplibregl-popup-close-button, .mapboxgl-popup-close-button');
+  if (close) close.click(); else popup?.remove();
+});
+await page.waitForTimeout(300);
+check('and it shuts again', await page.locator('.maplibregl-popup, .mapboxgl-popup').count(), 0);
+await showTab('layers');
+await page.waitForTimeout(200);
 
 // A second card, to check the close button rather than the save button.
 await page.locator('.map-tool').nth(1).click();

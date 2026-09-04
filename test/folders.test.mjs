@@ -14,6 +14,7 @@ import { toGPX } from '../assets/js/lib/gpx-write.js';
 import { parseGPX } from '../assets/js/lib/gpx.js';
 import { parseMapFile } from '../assets/js/lib/parse.js';
 import { iconForPin } from '../assets/js/lib/pin-icons.js';
+import { findLink } from '../assets/js/lib/parse.js';
 
 /** In-memory stand-in for localStorage, so tests never touch a real browser API. */
 function memoryStorage(initial = null) {
@@ -646,4 +647,47 @@ test('folders: stored positions are rounded to what a GPS actually knows', () =>
 
   const point = packFeature(waypoint('Gap', -84.987654321, 36.123456789));
   assert.deepEqual(point.geometry.coordinates.slice(0, 2), [-84.987654, 36.123457]);
+});
+
+/*
+ * A pin can point at a page. The field is newer than most collections, so the
+ * address for a place is usually in the middle of a sentence somebody typed
+ * years ago - and that note is left exactly as it was, because tidying up
+ * what a person wrote would be the app taking a liberty.
+ */
+test('folders: a pin carries a link, and can be given one out of its own notes', () => {
+  const store = new FolderStore({ storage: memoryStorage(), vault: null });
+  const folder = store.create('Reading');
+  store.addFeatures(folder.id, [
+    { ...waypoint('Tower'), properties: { kind: 'waypoint', name: 'Tower', description: 'Write-up at https://example.org/tower, worth a read.' } },
+    { ...waypoint('Ford', -85), properties: { kind: 'waypoint', name: 'Ford', description: 'No link here.' } },
+    { ...waypoint('Mill', -86), properties: { kind: 'waypoint', name: 'Mill', description: 'see www.example.org/mill', link: 'https://kept.example/already' } },
+  ]);
+
+  assert.equal(store.adoptLinks(folder.id, findLink), 1, 'only the one that had none and had an address');
+  const items = store.get(folder.id).items.map((item) => item.feature.properties);
+  assert.equal(items[0].link, 'https://example.org/tower');
+  assert.match(items[0].description, /https:\/\/example\.org\/tower, worth a read\./, 'the note is untouched');
+  assert.equal(items[1].link, null);
+  assert.equal(items[2].link, 'https://kept.example/already', 'a pin that had one keeps it');
+  assert.equal(store.adoptLinks(folder.id, findLink), 0, 'a second pass finds nothing to do');
+});
+
+test('folders: a link can be named, and clearing the address clears the name', () => {
+  const store = new FolderStore({ storage: memoryStorage(), vault: null });
+  const folder = store.create('Reading');
+  store.addFeatures(folder.id, [waypoint('Tower')]);
+  const itemId = store.get(folder.id).items[0].id;
+
+  assert.equal(store.linkItem(folder.id, itemId, { url: 'https://nps.gov/x', label: 'NPS page' }), true);
+  let props = store.get(folder.id).items[0].feature.properties;
+  assert.equal(props.link, 'https://nps.gov/x');
+  assert.equal(props.linkLabel, 'NPS page');
+
+  assert.equal(store.linkItem(folder.id, itemId, { url: 'https://nps.gov/x', label: 'NPS page' }), false, 'no change is no write');
+
+  store.linkItem(folder.id, itemId, { url: '', label: 'NPS page' });
+  props = store.get(folder.id).items[0].feature.properties;
+  assert.equal(props.link, null);
+  assert.equal(props.linkLabel, '', 'wording for a link that is gone is wording for nothing');
 });

@@ -20,7 +20,7 @@ import {
   engineFor, schemaFor, sourceNoteFor,
 } from './lib/engine.js';
 import { loadCatalog, findMap } from './lib/catalog.js';
-import { parseMapFile, linePositions } from './lib/parse.js';
+import { parseMapFile, linePositions, findLink, findLinkSpans } from './lib/parse.js';
 import {
   boundsAreValid, cumulativeDistances, formatDistance, formatDuration, formatElevation,
   formatTemperature, geojsonBounds, mergeBounds, padBounds,
@@ -392,6 +392,68 @@ const layerIdsFor = (key) => [
  * One definition, used by both the folder layers and an open file's, so the
  * two cannot drift apart.
  */
+/*
+ * Popups never take focus for themselves.
+ *
+ * The engine focuses the first focusable thing inside a popup when it opens,
+ * for a keyboard reader's sake. On iOS a focused <select> opens its picker, so
+ * tapping a saved pin threw up a full-screen wheel of folder names - the
+ * "Move to..." list - over the map, with the popup behind it and nothing
+ * touched. That is the whole bug: not the select, the focus.
+ *
+ * Nothing is lost by refusing it. A popup opens because somebody clicked or
+ * tapped the map, and the focus was already where they put it.
+ */
+const POPUP_FOCUS = { focusAfterOpen: false };
+
+/** What a link with no wording of its own is called. */
+const DEFAULT_LINK_LABEL = 'More info';
+
+/**
+ * A note, with any web address in it turned into something you can tap.
+ *
+ * Built out of text nodes and anchors rather than by writing HTML, so a note
+ * containing "<" or a stray tag is shown as what was typed. That is the whole
+ * reason this is not a string of markup: the text is the user's, and some of
+ * it came out of a file somebody else wrote.
+ */
+function linkedText(text, className) {
+  const node = el('p', { class: className });
+  const value = String(text || '');
+  let at = 0;
+  for (const span of findLinkSpans(value)) {
+    if (span.at < at) continue;
+    if (span.at > at) node.append(value.slice(at, span.at));
+    // Shown as it was written. A bare "www.nps.gov" gets a scheme to be
+    // followed, and does not get one to be read.
+    node.append(el('a', {
+      href: span.href, target: '_blank', rel: 'noopener noreferrer', text: span.text,
+    }));
+    at = span.at + span.text.length;
+  }
+  node.append(value.slice(at));
+  return node;
+}
+
+/**
+ * The link a pin carries, as a button, or null.
+ *
+ * A pin may name its link - GPX carries the wording in <link><text>, and the
+ * editor lets anyone write their own - and falls back to the app's word when
+ * it does not.
+ */
+function pinLinkButton(props, { className = 'button button-ghost button-small' } = {}) {
+  if (!props?.link) return null;
+  return el('a', {
+    class: className,
+    href: props.link,
+    target: '_blank',
+    rel: 'noopener noreferrer',
+    text: props.linkLabel || DEFAULT_LINK_LABEL,
+    title: props.link,
+  });
+}
+
 const PIN_DISC_RADIUS = ['interpolate', ['linear'], ['zoom'], 8, 6.5, 10, 8.5, 14, 14, 17, 17];
 const PIN_HALO_RADIUS = ['interpolate', ['linear'], ['zoom'], 8, 8.5, 10, 10.5, 14, 16, 17, 19];
 const PIN_RING_WIDTH = ['interpolate', ['linear'], ['zoom'], 8, 2, 10, 2.4, 14, 3, 17, 3.4];
@@ -805,6 +867,7 @@ function cacheDom() {
   dom.newTrip = document.getElementById('new-trip');
   dom.importIntoFolder = document.getElementById('import-into-folder');
   dom.rematchAll = document.getElementById('rematch-all');
+  dom.findLinks = document.getElementById('find-links');
   dom.dropTarget = document.getElementById('drop-target');
   dom.importAsk = document.getElementById('import-ask');
   /*
@@ -6745,7 +6808,7 @@ function showDropPin(position) {
   // Our own close control rather than the engine's corner glyph: 26px,
   // unlabelled, and sitting on top of the title of any pin whose name filled
   // the line.
-  const popup = new state.gl.Popup({ closeButton: false, maxWidth: '320px', offset: 12 })
+  const popup = new state.gl.Popup({ ...POPUP_FOCUS, closeButton: false, maxWidth: '320px', offset: 12 })
     .setLngLat(position);
   state.dropPopup = popup;
 
@@ -7082,7 +7145,7 @@ function showIdentifyResults(position, groups, { pending = false } = {}) {
   state.dropPopup?.remove();
 
   const content = el('div', { class: 'identify-card' });
-  const popup = new state.gl.Popup({ closeButton: false, maxWidth: '340px', offset: 12 })
+  const popup = new state.gl.Popup({ ...POPUP_FOCUS, closeButton: false, maxWidth: '340px', offset: 12 })
     .setLngLat(position);
   state.dropPopup = popup;
 
@@ -7680,8 +7743,13 @@ function showFeaturePopup(feature, lngLat, { edit = false, identity = null } = {
   ]));
 
   if (description) {
-    content.append(el('p', { class: 'popup-desc', text: description }));
+    content.append(linkedText(description, 'popup-desc'));
   }
+
+  // Where this place is written up. On the popup because that is where a
+  // reader is when they want to know more, rather than two taps further in.
+  const popupLink = pinLinkButton(props, { className: 'popup-link' });
+  if (popupLink) content.append(el('div', { class: 'popup-link-row' }, [popupLink]));
 
   // The latest field note, trimmed. A popup is a glance, and "gate locked" is
   // exactly the kind of thing you want at a glance rather than two taps away.
@@ -7706,7 +7774,7 @@ function showFeaturePopup(feature, lngLat, { edit = false, identity = null } = {
     ])));
   }
 
-  const popup = new state.gl.Popup({ closeButton: true, maxWidth: '300px', offset: 12 })
+  const popup = new state.gl.Popup({ ...POPUP_FOCUS, closeButton: true, maxWidth: '300px', offset: 12 })
     .setLngLat(feature.geometry?.type === 'Point' ? feature.geometry.coordinates : lngLat);
 
   content.append(props.itemId
@@ -8584,7 +8652,7 @@ function renderPinDetails(folder, item) {
         el('div', { class: 'account-meta', text: folder.name }),
       ]),
     ]),
-    props.description ? el('p', { class: 'pin-description', text: props.description }) : null,
+    props.description ? linkedText(props.description, 'pin-description') : null,
     el('div', { class: 'picker-row', style: 'margin-top:11px' }, [
       labelledButton(icons.target, 'Zoom to', {
         title: 'Centre the map on this waypoint',
@@ -9346,11 +9414,31 @@ function wireFolders() {
       : 'Every pin already shows the symbol its name matches.', { tone: changed ? 'ok' : 'info' });
   });
 
-  // A mark apiece, so four buttons in a row are told apart before they are read.
+  /*
+   * Find the web addresses already sitting in people's notes.
+   *
+   * The link field is newer than most collections, so the page about a place
+   * is usually in the middle of a sentence somebody typed years ago. This
+   * promotes the first address in each note to the pin's own link, and leaves
+   * the note alone - the address stays where it reads, and is now also a
+   * button called "More info" until somebody names it something better.
+   */
+  dom.findLinks?.addEventListener('click', () => {
+    const folders = state.folders.list();
+    if (!folders.length) { toast('No folders to scan yet.', { tone: 'info' }); return; }
+    let found = 0;
+    for (const folder of folders) found += state.folders.adoptLinks(folder.id, findLink);
+    toast(found
+      ? `${found} pin${found === 1 ? '' : 's'} now carry a link from their notes.`
+      : 'No unlinked pin had a web address in its notes.', { tone: found ? 'ok' : 'info' });
+  });
+
+  // A mark apiece, so five buttons in a row are told apart before they are read.
   withIcon(dom.newFolder, icons.folder);
   withIcon(dom.newTrip, icons.route);
   withIcon(dom.importIntoFolder, icons.upload);
   withIcon(dom.rematchAll, icons.refresh);
+  withIcon(dom.findLinks, icons.external);
 }
 
 /**
@@ -10668,14 +10756,10 @@ function photoSection(folder, item) {
     }),
   ]);
 
-  // A link the source file carried, e.g. a GaiaGPS photo page.
-  const link = item.feature.properties.link;
-  if (link) {
-    actions.append(el('a', {
-      class: 'button button-ghost button-small', href: link, target: '_blank', rel: 'noopener noreferrer',
-      text: 'Open source link',
-    }));
-  }
+  // Whatever this pin points at - a GaiaGPS photo page, an NPS page, a trip
+  // report somebody typed into the note. Called what the pin calls it.
+  const linkButton = pinLinkButton(item.feature.properties);
+  if (linkButton) actions.append(linkButton);
 
   section.append(strip, picker, actions);
   paint();
@@ -11189,6 +11273,31 @@ function openStyleEditor(folder, itemIds, anchor) {
       text: target.feature.properties.description || '',
       onchange: (event) => state.folders.describeItem(folder.id, target.id, event.target.value),
     }));
+
+    /*
+     * Where this place is written up.
+     *
+     * Two fields, because a bare URL on a card is a poor thing to read and an
+     * awful thing to tap: the address, and what to call it. The wording is
+     * left blank by default rather than pre-filled, so a pin that never had
+     * one follows the app's word - which is what most pins want, and what a
+     * batch adopted out of old notes gets.
+     */
+    const linkUrl = el('input', {
+      type: 'url', class: 'style-name', value: target.feature.properties.link || '',
+      'aria-label': 'Link', placeholder: 'https://… a page about this place',
+      inputmode: 'url', autocapitalize: 'off', spellcheck: 'false',
+    });
+    const linkLabel = el('input', {
+      type: 'text', class: 'style-name', value: target.feature.properties.linkLabel || '',
+      'aria-label': 'Link wording', placeholder: `Link wording (${DEFAULT_LINK_LABEL})`,
+    });
+    const saveLink = () => state.folders.linkItem(folder.id, target.id, {
+      url: linkUrl.value, label: linkLabel.value,
+    });
+    linkUrl.addEventListener('change', saveLink);
+    linkLabel.addEventListener('change', saveLink);
+    editor.append(linkUrl, linkLabel);
   }
 
   if (single) editor.append(photoSection(folder, target));
