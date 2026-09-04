@@ -806,6 +806,40 @@ check('and edit as a mark rather than a word', folderHead.editIsMark, true);
 check('and nothing written under the pins', folderHead.prose, 0);
 
 /*
+ * Folding a folder folds everything open on it.
+ *
+ * The style editor is a sibling of the folder's body rather than part of it,
+ * so hiding the body left it standing - and on a phone that editor is the
+ * whole screen. The pins went away below the fold, nothing visible changed,
+ * and the folder read as refusing to close.
+ */
+const firstFolder = (await page.locator('#folder-list .folder').first().getAttribute('data-folder'));
+const folderBox = () => page.locator(`.folder[data-folder="${firstFolder}"]`)
+  .evaluate((node) => Math.round(node.getBoundingClientRect().height));
+await page.locator(`.folder[data-folder="${firstFolder}"] .folder-menu-button`).click();
+await page.waitForTimeout(400);
+check('the folder editor opens', await page.locator('.style-editor').count(), 1);
+const openHeight = await folderBox();
+
+await page.locator(`.folder[data-folder="${firstFolder}"] .folder-disclosure`).click();
+await page.waitForTimeout(400);
+check('folding it closes the editor too', await page.locator('.style-editor').count(), 0);
+const foldedHeight = await folderBox();
+check('so the folder really is one row high', foldedHeight < 90, true);
+check('and not still carrying the editor', foldedHeight < openHeight / 2, true);
+
+// But a folded folder can still be opened to rename it: folding is the
+// transition, not a rule about folded folders.
+await page.locator(`.folder[data-folder="${firstFolder}"] .folder-menu-button`).click();
+await page.waitForTimeout(400);
+check('a folded folder can still be renamed without unfolding',
+  await page.locator(`.folder[data-folder="${firstFolder}"] .folder-rename`).isVisible(), true);
+await page.locator(`.folder[data-folder="${firstFolder}"] .folder-disclosure`).click();
+await page.waitForTimeout(300);
+check('and unfolds again', await page.locator(`.folder[data-folder="${firstFolder}"]`)
+  .evaluate((node) => node.classList.contains('is-collapsed')), false);
+
+/*
  * Folders can be filed inside folders. The panel shows the tree - a folder,
  * then what is under it - and hiding a parent takes its branch off the map
  * without touching what each folder is set to on its own.

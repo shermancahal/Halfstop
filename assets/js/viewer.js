@@ -10166,13 +10166,13 @@ const byName = (a, b) => String(a.name).localeCompare(String(b.name), undefined,
  */
 function sortedFolders() {
   const out = [];
-  const walk = (parentId, depth) => {
+  const walk = (parentId) => {
     for (const folder of state.folders.childrenOf(parentId).sort(byName)) {
-      out.push(Object.assign(folder, { depth }));
-      walk(folder.id, depth + 1);
+      out.push(folder);
+      walk(folder.id);
     }
   };
-  walk(null, 0);
+  walk(null);
   /*
    * Anything the walk could not reach still has to be listed.
    *
@@ -10183,9 +10183,7 @@ function sortedFolders() {
    */
   if (out.length !== state.folders.list().length) {
     const seen = new Set(out.map((folder) => folder.id));
-    for (const folder of state.folders.list().filter((f) => !seen.has(f.id)).sort(byName)) {
-      out.push(Object.assign(folder, { depth: 0 }));
-    }
+    for (const folder of state.folders.list().filter((f) => !seen.has(f.id)).sort(byName)) out.push(folder);
   }
   return out;
 }
@@ -10501,14 +10499,50 @@ function restoreOpenEditor() {
     : dom.folderList.querySelector(`[data-folder="${folder.id}"] .folder-head`);
   if (!anchor) { state.openEditor = null; return; }
 
+  /*
+   * An editor anchored to a pin cannot be restored into a folded folder.
+   *
+   * The row it hangs off is still in the document, just hidden with the rest
+   * of the body, so the editor would be built into something nobody can see -
+   * and state.openEditor would stay set for ever, with no editor on screen and
+   * no way to shut the one that is not there.
+   */
+  if (folder.collapsed && anchor.closest('.folder-body')) { state.openEditor = null; return; }
+
   openStyleEditor(folder, open.itemIds, anchor);
+}
+
+/**
+ * Fold a folder away, and take whatever is open on it with it.
+ *
+ * The editor is a sibling of the folder's body rather than part of it - it has
+ * to be, since it can also be opened on a folder that is already folded - so
+ * hiding the body left it standing. On a phone that editor is the whole
+ * screen: the pins went away below the fold, nothing visible changed, and the
+ * folder read as refusing to close.
+ *
+ * Folding is the transition, not the state, which is why this is here and not
+ * a rule about collapsed folders: opening the editor on a folded folder to
+ * rename it is a perfectly good thing to do.
+ */
+function toggleFolder(folder) {
+  const folding = !folder.collapsed;
+  if (folding && state.openEditor?.folderId === folder.id) state.openEditor = null;
+  state.folders.update(folder.id, { collapsed: folding });
 }
 
 function renderFolder(folder) {
   const counts = state.folders.counts(folder);
   const chosen = selectedIn(folder.id);
 
-  const depth = folder.depth || 0;
+  /*
+   * Asked for rather than carried on the folder.
+   *
+   * The walk that orders these used to stamp a depth onto each one, which put
+   * a detail of this render into the object that gets written to disk and
+   * pushed to sync. Three ancestors is a cheap thing to count.
+   */
+  const depth = state.folders.depthOf(folder.id);
   const node = el('section', {
     class: `folder${folder.collapsed ? ' is-collapsed' : ''}${depth ? ' is-nested' : ''}`,
     dataset: { folder: folder.id, depth: String(depth) },
@@ -10532,12 +10566,12 @@ function renderFolder(folder) {
       'aria-label': folder.collapsed ? `Expand ${folder.name}` : `Collapse ${folder.name}`,
       'aria-expanded': String(!folder.collapsed),
       html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
-      onclick: () => state.folders.update(folder.id, { collapsed: !folder.collapsed }),
+      onclick: () => toggleFolder(folder),
     }),
     el('button', {
       class: 'folder-name', type: 'button', text: folder.name,
       title: folder.collapsed ? `Expand ${folder.name}` : `Collapse ${folder.name}`,
-      onclick: () => state.folders.update(folder.id, { collapsed: !folder.collapsed }),
+      onclick: () => toggleFolder(folder),
     }),
     counts.total ? el('span', { class: 'folder-count', text: String(counts.total) }) : null,
     /*
