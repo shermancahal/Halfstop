@@ -344,7 +344,7 @@ async function probe(entry) {
   try {
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'halfstop layer check (github.com/shermancahal/Map)',
+        'User-Agent': 'halfstop layer check (github.com/shermancahal/Halfstop)',
         // Sent so the answer says whether a browser could have made this
         // request. A tile that fetches perfectly from a script and is refused
         // by the page is the second way a layer shows nothing, and status
@@ -354,7 +354,7 @@ async function probe(entry) {
         // URL-restricted token against — not Origin. Without it every
         // token-gated probe fails from CI with a 403 that says nothing about
         // whether the endpoint works, which is worse than not probing at all.
-        Referer: `${ORIGIN}/Map/`,
+        Referer: `${ORIGIN}/Halfstop/`,
         /*
          * A candidate may ask for part of a file.
          *

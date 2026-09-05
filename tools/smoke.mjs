@@ -66,8 +66,17 @@ for (let z = 6; z <= 12; z += 1) {
 }
 const SAMPLE_ARCHIVE = buildArchive(SAMPLE_TILES, { leaves: true });
 
+/*
+ * The subpath GitHub Pages serves this repository from, which is the
+ * repository's own name. Written once: the prefix and the number of characters
+ * to strip off it used to be two separate literals, so renaming the repository
+ * would have left every asset served from the wrong place with nothing saying
+ * so.
+ */
+const SUBPATH = '/Halfstop/';
+
 /**
- * Build dist and serve it under /Map/, the subpath GitHub Pages uses, so the
+ * Build dist and serve it under the subpath GitHub Pages uses, so the
  * relative asset paths resolve the same way they do in production.
  */
 async function serveFreshBuild() {
@@ -106,7 +115,7 @@ async function serveFreshBuild() {
 
   const server = createServer(async (request, response) => {
     let name = decodeURIComponent(new URL(request.url, 'http://x').pathname);
-    name = name.startsWith('/Map/') ? name.slice(5) : name.replace(/^\//, '');
+    name = name.startsWith(SUBPATH) ? name.slice(SUBPATH.length) : name.replace(/^\//, '');
     if (name === '' || name.endsWith('/')) name += 'index.html';
     const file = path.join(dist, name);
     if (!file.startsWith(dist)) return response.writeHead(403).end();
@@ -152,7 +161,7 @@ async function serveFreshBuild() {
   });
 
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  return { server, url: `http://127.0.0.1:${server.address().port}/Map/` };
+  return { server, url: `http://127.0.0.1:${server.address().port}${SUBPATH}` };
 }
 
 const external = process.env.SMOKE_URL;

@@ -49,7 +49,7 @@ function fakeClient({ session = null, signOutError = null } = {}) {
 }
 
 const withHash = (hash) => {
-  globalThis.window = { location: { href: `https://shermancahal.github.io/Map/?m=x${hash}`, hash } };
+  globalThis.window = { location: { href: `https://shermancahal.github.io/Halfstop/?m=x${hash}`, hash } };
 };
 
 test('account: every emailed link is told where to come back to', async () => {
@@ -60,7 +60,7 @@ test('account: every emailed link is told where to come back to', async () => {
   await account.signUp('a@example.com', 'secret');
   await account.signInWithLink('a@example.com');
 
-  const back = 'https://shermancahal.github.io/Map/?m=x';
+  const back = 'https://shermancahal.github.io/Halfstop/?m=x';
   for (const [name, options] of client.calls) {
     assert.equal(options?.options?.emailRedirectTo, back,
       `${name} did not say where the link should return to`);
@@ -75,7 +75,7 @@ test('account: the return address drops the fragment it arrived in', async () =>
   withHash('#access_token=stale');
 
   await account.signUp('a@example.com', 'secret');
-  assert.equal(client.calls[0][1].options.emailRedirectTo, 'https://shermancahal.github.io/Map/?m=x');
+  assert.equal(client.calls[0][1].options.emailRedirectTo, 'https://shermancahal.github.io/Halfstop/?m=x');
 });
 
 test('account: a link that came back refused says why', async () => {
@@ -152,8 +152,8 @@ test('account: a provider sign-in says where to come back to', async () => {
   await account.signInWithProvider('google');
 
   assert.deepEqual(client.calls.map(([name, options]) => [name, options.provider, options.options.redirectTo]), [
-    ['signInWithOAuth', 'apple', 'https://shermancahal.github.io/Map/?m=x'],
-    ['signInWithOAuth', 'google', 'https://shermancahal.github.io/Map/?m=x'],
+    ['signInWithOAuth', 'apple', 'https://shermancahal.github.io/Halfstop/?m=x'],
+    ['signInWithOAuth', 'google', 'https://shermancahal.github.io/Halfstop/?m=x'],
   ]);
 });
 
@@ -259,7 +259,7 @@ test('account: editing the profile sends only what changed', async () => {
   const [name, attributes, options] = client.calls.at(-1);
   assert.equal(name, 'updateUser');
   assert.deepEqual(attributes, { data: { display_name: 'S. Cahal' } }, 'the address was not resent');
-  assert.equal(options.emailRedirectTo, 'https://shermancahal.github.io/Map/?m=x',
+  assert.equal(options.emailRedirectTo, 'https://shermancahal.github.io/Halfstop/?m=x',
     'the confirmation link is told where to come back to, like every other emailed link');
   assert.equal(account.message, 'Saved.');
 });

@@ -1,7 +1,7 @@
 /**
  * Open the published site in a real browser and report why the map is empty.
  *
- *   node tools/check-site.mjs https://shermancahal.github.io/Map/ byways
+ *   node tools/check-site.mjs https://shermancahal.github.io/Halfstop/ byways
  *
  * Everything else in this repo checks one layer of the stack in isolation:
  * the unit tests check the reader, `check:archive` checks the host, the smoke
@@ -31,7 +31,7 @@ const url = process.argv[2];
 const basemap = process.argv[3] || 'byways';
 if (!url) {
   console.error('Usage: node tools/check-site.mjs <site url> [basemap id] [zoom/lat/lon]');
-  console.error('  e.g. node tools/check-site.mjs https://shermancahal.github.io/Map/ byways');
+  console.error('  e.g. node tools/check-site.mjs https://shermancahal.github.io/Halfstop/ byways');
   process.exit(2);
 }
 

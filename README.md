@@ -307,7 +307,7 @@ Two things that catch people out:
 
 ## Deploying with GitHub Pages
 
-This is the live host: <https://shermancahal.github.io/Map/>
+This is the live host: <https://shermancahal.github.io/Halfstop/>
 
 `.github/workflows/deploy-pages.yml` runs the test suite, verifies
 `data/catalog.json` matches `data/maps/`, builds `dist/`, and publishes it on

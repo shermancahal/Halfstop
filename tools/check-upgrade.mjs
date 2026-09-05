@@ -57,10 +57,19 @@ function check(what, actual, expected) {
   console.log(`  ${ok ? 'ok  ' : 'FAIL'}  ${what}${ok ? '' : `  (got ${JSON.stringify(actual)}, expected ${JSON.stringify(expected)})`}`);
 }
 
+/*
+ * The subpath GitHub Pages serves this repository from, which is the
+ * repository's own name. Written once: the prefix and the number of characters
+ * to strip off it used to be two separate literals, so renaming the repository
+ * would have left every asset served from the wrong place with nothing saying
+ * so.
+ */
+const SUBPATH = '/Halfstop/';
+
 build();
 const server = createServer(async (request, response) => {
   let name = decodeURIComponent(new URL(request.url, 'http://x').pathname);
-  name = name.startsWith('/Map/') ? name.slice(5) : name.replace(/^\//, '');
+  name = name.startsWith(SUBPATH) ? name.slice(SUBPATH.length) : name.replace(/^\//, '');
   if (name === '' || name.endsWith('/')) name += 'index.html';
   const file = path.join(DIST, name);
   if (!file.startsWith(DIST)) return response.writeHead(403).end();
@@ -77,7 +86,7 @@ const server = createServer(async (request, response) => {
   }
 });
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-const SITE = `http://127.0.0.1:${server.address().port}/Map/`;
+const SITE = `http://127.0.0.1:${server.address().port}${SUBPATH}`;
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 const context = await browser.newContext();

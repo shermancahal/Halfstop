@@ -20,7 +20,7 @@ on:
       url:
         description: 'The site to open — defaults to the published one.'
         required: false
-        default: 'https://shermancahal.github.io/Map/'
+        default: 'https://shermancahal.github.io/Halfstop/'
         type: string
       basemap:
         description: 'Which basemap to select. byways is the Protomaps/Mapbox one.'

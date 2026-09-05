@@ -823,7 +823,7 @@
     "id": "pages:range",
     "expect": "data",
     "range": "bytes=0-120",
-    "url": "https://shermancahal.github.io/Map/assets/js/config.js",
+    "url": "https://shermancahal.github.io/Halfstop/assets/js/config.js",
     "find": "(Site configuration)",
     "note": "Whether GitHub Pages honours a Range request and sends CORS. If it does, a small .pmtiles extract can ship inside the Pages deploy and Protomaps can be tested with no bucket, no credentials and no bill - which is currently the only thing standing between the finished port and looking at it. The report prints the status and the CORS column, and a 206 with an allow-origin is the whole answer. Asked of a file already deployed rather than of a new one, so it costs nothing to ask."
   },
@@ -831,7 +831,7 @@
     "id": "pages:range-tail",
     "expect": "data",
     "range": "bytes=2000-2120",
-    "url": "https://shermancahal.github.io/Map/assets/js/config.js",
+    "url": "https://shermancahal.github.io/Halfstop/assets/js/config.js",
     "find": "([\\s\\S]{8})",
     "note": "The same question asked for a slice from the middle of the file rather than the start. A host can answer 206 for bytes=0-N by truncating the response it was going to send anyway and still have no real range support - which would look like success on the first probe and fail on every tile after the first. The bytes returned here must not be the head of the file."
   },
@@ -852,7 +852,7 @@
   {
     "id": "pages:archive-config",
     "expect": "data",
-    "url": "https://shermancahal.github.io/Map/assets/js/token.js",
+    "url": "https://shermancahal.github.io/Halfstop/assets/js/token.js",
     "find": "ABMAP_PROTOMAPS_ARCHIVE = '([^']*)'",
     "note": "What the deployed site is configured to read. The archive can be present and the config still empty, in which case Byways Topo goes on drawing from Mapbox and the extract is a file nobody asks for.\n\nWhether that URL is readable is asked by the 'Check a map archive' workflow, run with no url: it reads PROTOMAPS_ARCHIVE and probes Range, CORS and compression against whatever the variable currently says. Two candidates here used to ask the same thing with the bucket URL frozen into this file, which is one copy of a fact that moves - and it moved the first time somebody changed the public base. One source of truth, and it is the variable."
   },
