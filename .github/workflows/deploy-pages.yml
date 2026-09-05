@@ -276,6 +276,24 @@ jobs:
       - name: Stage the upload package
         run: npm run build && node tools/build-dist.mjs
 
+      # The custom domain, claimed by the artifact rather than only by a
+      # setting in the repository.
+      #
+      # A workflow-published site is served from what this upload contains, and
+      # the Pages settings field is the only other place the hostname is
+      # written. Carrying it here binds the host on every deploy, so the domain
+      # cannot come unset without anybody noticing - and a deploy from a fork,
+      # which cannot pass GitHub's verification for a domain it does not own,
+      # simply keeps serving from github.io.
+      #
+      # Written after build-dist, deliberately: it writes the service worker's
+      # precache list from what is in dist at that moment, and there is no
+      # reason for a phone to cache this file.
+      - name: Claim the custom domain
+        run: |
+          echo 'app.halfstop.app' > dist/CNAME
+          cat dist/CNAME
+
       - name: Put the archive in the site
         if: ${{ steps.archive.outputs.url != '' }}
         # After the build, deliberately. build-dist writes the service
