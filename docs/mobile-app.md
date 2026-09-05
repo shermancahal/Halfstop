@@ -260,18 +260,19 @@ There is no way to put an iOS app on somebody else's phone without the
 takes a day or two to approve. Everything below assumes it is done and Xcode
 is signed in with that account under Settings → Accounts.
 
-1. **Decide the bundle identifier - now, for good.** `capacitor.config.json`
-   says `com.halfstop.app`. The first upload to App Store Connect binds
-   that string to the app record permanently; changing it later means a
-   second, unrelated app with no update path. The product is Halfstop,
-   so `com.halfstop.app` is the honest choice. Change it in
-   `capacitor.config.json`, run `npm run app:ios` again so the native project
-   picks it up, and check it in Xcode under the App target → General.
+1. **Confirm the bundle identifier - now, for good.** `capacitor.config.json`
+   says `com.halfstop.app`, which matches the product and is the one to keep.
+   The first upload to App Store Connect binds that string to the app record
+   permanently; changing it afterwards means a second, unrelated app with no
+   update path from the first. It is free to change today and only today, so
+   read it once in Xcode under the App target → General and be sure. If you do
+   change it, change it in `capacitor.config.json` and run `npm run app:ios`
+   again so the native project picks it up.
 
 2. **The app record.** appstoreconnect.apple.com → My Apps → **+** → New App.
    Platform iOS, name **Halfstop** (has to be unique on the store), primary
    language, the bundle ID from step 1, and an SKU (any string, e.g.
-   `fieldstop-ios`). Nothing here goes public until you submit for review.
+   `halfstop-ios`). Nothing here goes public until you submit for review.
 
 3. **Three things Xcode will refuse to upload without.**
    - An app icon set. `npm run build:icons` writes them; §4 says where they go.
