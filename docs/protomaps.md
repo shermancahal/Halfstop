@@ -485,6 +485,7 @@ Bucket → **Settings → CORS policy**:
 [
   {
     "AllowedOrigins": [
+      "https://app.halfstop.app",
       "https://shermancahal.github.io",
       "capacitor://localhost",
       "https://localhost",
@@ -502,6 +503,16 @@ The two `localhost` origins are for the iOS and Android shell. A Capacitor
 webview loads from `capacitor://localhost` or `https://localhost`, not from the
 site's domain — the same reason the app needs its own unrestricted Mapbox
 token. The last one is `npm start`.
+
+**This list is per origin, and a new domain is a new origin.** Moving the site
+from `shermancahal.github.io` to `app.halfstop.app` broke the default basemap
+until the new name was added here, and the failure gives nothing away: the
+archive is reachable, the ranges are honoured, and the browser drops the
+response before the page ever sees it. The old origin is worth leaving in
+place while a move settles — it costs nothing and keeps the previous URL
+working. `MaxAgeSeconds` is why a fix looks like it did not take: the browser
+holds the last preflight for an hour, so test the change in a private
+window.
 
 ### 6. Check it before wiring anything up
 
