@@ -852,15 +852,15 @@ await page.waitForTimeout(400);
 const child = (await folderIds()).find((id) => !beforeNew.includes(id));
 const parent = beforeNew[0];
 
-await page.locator(`.folder[data-folder="${child}"] .folder-menu-button`).click();
+await page.locator(`.folder[data-folder="${child}"] > .folder-head .folder-menu-button`).click();
 await page.waitForTimeout(300);
-const nestOptions = await page.locator(`.folder[data-folder="${child}"] .folder-parent option`)
+const nestOptions = await page.locator(`.folder[data-folder="${child}"] > .style-editor .folder-parent option`)
   .evaluateAll((nodes) => nodes.map((node) => node.value));
 check('a new folder is offered every folder it could go inside',
   nestOptions[0] === '' && nestOptions.includes(parent), true);
 check('and never itself', nestOptions.includes(child), false);
 
-await page.selectOption(`.folder[data-folder="${child}"] .folder-parent`, parent);
+await page.selectOption(`.folder[data-folder="${child}"] > .style-editor .folder-parent`, parent);
 await page.waitForTimeout(500);
 const row = page.locator(`.folder[data-folder="${child}"]`);
 check('filing it inside another draws it one level in', await row.getAttribute('data-depth'), '1');
@@ -869,24 +869,57 @@ check('and marks it as nested, so the indent is not an accident',
 check('the tree reads parent first, then what is under it',
   (await folderIds()).indexOf(parent) + 1, (await folderIds()).indexOf(child));
 
+/*
+ * And it is drawn inside the parent, at the top of it.
+ *
+ * A folder is a heading for what is filed under it. Listed as a sibling after
+ * the parent's own pins, a sub-folder of a drawer holding a hundred and thirty
+ * of them sat a hundred and thirty rows down, off the bottom of the screen,
+ * which made the filing look like it had not taken.
+ */
+const nesting = await page.evaluate(([parentId, childId]) => {
+  const parentNode = document.querySelector(`.folder[data-folder="${parentId}"]`);
+  const childNode = document.querySelector(`.folder[data-folder="${childId}"]`);
+  const body = parentNode.querySelector(':scope > .folder-body');
+  const firstPin = body.querySelector(':scope > .folder-item');
+  return {
+    inside: parentNode.contains(childNode),
+    inBody: body.contains(childNode),
+    top: [...body.children][0] === childNode,
+    abovePins: !firstPin
+      || childNode.getBoundingClientRect().top < firstPin.getBoundingClientRect().top,
+    roots: document.querySelectorAll('#folder-list > .folder').length,
+    all: document.querySelectorAll('#folder-list .folder').length,
+    stepIn: Math.round(childNode.getBoundingClientRect().left
+      - parentNode.getBoundingClientRect().left),
+  };
+}, [parent, child]);
+check('a folder inside another is drawn inside it', nesting.inside && nesting.inBody, true);
+check('at the top of its body, above the parent\u2019s own pins',
+  nesting.top && nesting.abovePins, true);
+check('so the list itself holds only the tops of the tree',
+  nesting.roots < nesting.all, true);
+check('and each level steps in once, not once per level it is deep',
+  nesting.stepIn > 4 && nesting.stepIn < 30, true);
+
 // Hiding the parent: the child's own switch is untouched, but it stops drawing.
-await page.locator(`.folder[data-folder="${parent}"] .folder-eye`).click();
+await page.locator(`.folder[data-folder="${parent}"] > .folder-head .folder-eye`).click();
 await page.waitForTimeout(400);
-const childEye = page.locator(`.folder[data-folder="${child}"] .folder-eye`);
+const childEye = page.locator(`.folder[data-folder="${child}"] > .folder-head .folder-eye`);
 check('hiding a parent leaves the child set to show', await childEye.getAttribute('aria-pressed'), 'true');
 check('but says the switch is not the one deciding',
   (await childEye.getAttribute('class')).includes('is-dimmed'), true);
 check('and the title explains why nothing is on the map',
   /above it is hidden/.test(await childEye.getAttribute('title')), true);
-await page.locator(`.folder[data-folder="${parent}"] .folder-eye`).click();
+await page.locator(`.folder[data-folder="${parent}"] > .folder-head .folder-eye`).click();
 await page.waitForTimeout(300);
 check('showing it again clears that', (await childEye.getAttribute('class')).includes('is-dimmed'), false);
 
 // A parent may not be filed inside its own child, or the branch comes loose.
-await page.locator(`.folder[data-folder="${parent}"] .folder-menu-button`).click();
+await page.locator(`.folder[data-folder="${parent}"] > .folder-head .folder-menu-button`).click();
 await page.waitForTimeout(300);
 check('a folder is never offered a place inside its own branch',
-  (await page.locator(`.folder[data-folder="${parent}"] .folder-parent option`)
+  (await page.locator(`.folder[data-folder="${parent}"] > .style-editor .folder-parent option`)
     .evaluateAll((nodes) => nodes.map((node) => node.value))).includes(child), false);
 /*
  * Folding a parent takes the branch with it. This is the whole of what makes
@@ -896,7 +929,7 @@ check('a folder is never offered a place inside its own branch',
  */
 const folderRows = () => page.locator('#folder-list .folder').evaluateAll(
   (nodes) => nodes.map((node) => node.dataset.folder));
-await page.locator(`.folder[data-folder="${child}"] .folder-menu-button`).click();
+await page.locator(`.folder[data-folder="${child}"] > .folder-head .folder-menu-button`).click();
 await page.waitForTimeout(400);
 /*
  * The chevron has to be tappable, not just visible.
@@ -907,7 +940,7 @@ await page.waitForTimeout(400);
  * chevron did not. The mark stays small; the target is grown with a
  * pseudo-element, so this measures the target and not the glyph.
  */
-const chevronTarget = await page.locator(`.folder[data-folder="${parent}"] .folder-disclosure`)
+const chevronTarget = await page.locator(`.folder[data-folder="${parent}"] > .folder-head .folder-disclosure`)
   .evaluate((node) => {
     const box = node.getBoundingClientRect();
     const after = getComputedStyle(node, '::after');
@@ -933,25 +966,31 @@ const noOverlap = await page.evaluate((id) => {
 check('and stops short of the name beside it', noOverlap, true);
 
 check('an editor can be open on the folder inside', await page.locator('.style-editor').count(), 1);
-await page.locator(`.folder[data-folder="${parent}"] .folder-disclosure`).click();
+await page.locator(`.folder[data-folder="${parent}"] > .folder-head .folder-disclosure`).click();
 await page.waitForTimeout(500);
-check('folding the parent takes the folder inside off the list', (await folderRows()).includes(child), false);
+/*
+ * The child is still in the document - it lives in the body being hidden -
+ * so this asks whether it can be seen, not whether it was removed.
+ */
+const childShown = () => page.locator(`.folder[data-folder="${child}"]`)
+  .evaluate((node) => node.getBoundingClientRect().height > 0);
+check('folding the parent takes the folder inside off the list', await childShown(), false);
 check('and the editor that was open on it', await page.locator('.style-editor').count(), 0);
 check('while the parent itself stays', (await folderRows()).includes(parent), true);
-await page.locator(`.folder[data-folder="${parent}"] .folder-disclosure`).click();
+await page.locator(`.folder[data-folder="${parent}"] > .folder-head .folder-disclosure`).click();
 await page.waitForTimeout(400);
-check('unfolding brings it back', (await folderRows()).includes(child), true);
+check('unfolding brings it back', await childShown(), true);
 
 // A parent counts what is filed under it, or a folder shut over a hundred
 // pins would sit there claiming to hold none.
-const parentCount = await page.locator(`.folder[data-folder="${parent}"] .folder-count`).textContent();
+const parentCount = await page.locator(`.folder[data-folder="${parent}"] > .folder-head .folder-count`).textContent();
 check('and its count includes what is inside it', Number(parentCount) > 0, true);
 
 await shot(page.locator('#folder-list'), 'folder-tree');
 
 // Put it back, so the checks below count the folders they expect. The suite
 // already answers every dialog, so this one needs no handler of its own.
-await page.locator(`.folder[data-folder="${child}"] .folder-menu-button`).click();
+await page.locator(`.folder[data-folder="${child}"] > .folder-head .folder-menu-button`).click();
 await page.waitForTimeout(300);
 await page.locator(`.folder[data-folder="${child}"] .editor-folder-actions button`, { hasText: 'Delete' }).click();
 await page.waitForTimeout(400);

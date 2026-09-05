@@ -10215,17 +10215,21 @@ function renderFoldersTab() {
   }
 
   /*
-   * A folder inside a folded one is not drawn at all.
+   * Only the top of the tree is appended here. Each folder draws the folders
+   * filed under it at the top of its own body, so a branch arrives as one
+   * block and folding a parent takes its children with it for free.
    *
-   * Nesting is a flat list with an indent, not a folder inside a folder's own
-   * body - it has to be, or a branch of three would nest three scroll
-   * containers. So folding a parent has to be done here: without it, shutting
-   * "Historic" hid its own empty body and left the hundred and thirty pins
-   * under it exactly where they were, which is folding that does nothing.
+   * `folders` is the flat walk, used above for the counts and below to find
+   * anything the walk could not reach - a folder whose parent was deleted on
+   * another device points at nothing and would otherwise never be drawn.
    */
+  const drawn = new Set();
+  for (const folder of state.folders.childrenOf(null).sort(byName)) {
+    dom.folderList.append(renderFolder(folder, drawn));
+  }
   for (const folder of folders) {
-    if (state.folders.foldedAway(folder.id)) continue;
-    dom.folderList.append(renderFolder(folder));
+    if (drawn.has(folder.id)) continue;
+    dom.folderList.append(renderFolder(folder, drawn));
   }
 
   restoreOpenEditor();
@@ -10516,8 +10520,13 @@ function restoreOpenEditor() {
    * of the body, so the editor would be built into something nobody can see -
    * and state.openEditor would stay set for ever, with no editor on screen and
    * no way to shut the one that is not there.
+   *
+   * `foldedAway` as well as the folder's own switch: a folder inside a folded
+   * one is drawn in that folder's hidden body while saying, truthfully, that
+   * it is not folded itself.
    */
-  if (folder.collapsed && anchor.closest('.folder-body')) { state.openEditor = null; return; }
+  const hidden = folder.collapsed || state.folders.foldedAway(folder.id);
+  if (hidden && anchor.closest('.folder-body')) { state.openEditor = null; return; }
 
   openStyleEditor(folder, open.itemIds, anchor);
 }
@@ -10546,7 +10555,17 @@ function toggleFolder(folder) {
   state.folders.update(folder.id, { collapsed: folding });
 }
 
-function renderFolder(folder) {
+/**
+ * One folder, with the folders filed under it drawn inside it.
+ *
+ * `drawn` is carried through the recursion rather than kept here: it marks
+ * what has been built so the caller can spot a folder the walk never reached,
+ * and it is what stops a parentId cycle written by a buggy sync from
+ * recursing until the stack gives out.
+ */
+function renderFolder(folder, drawn = new Set()) {
+  if (drawn.has(folder.id)) return null;
+  drawn.add(folder.id);
   const counts = state.folders.counts(folder);
   const branch = state.folders.branchCounts(folder.id);
   const chosen = selectedIn(folder.id);
@@ -10653,14 +10672,28 @@ function renderFolder(folder) {
 
   const body = el('div', { class: 'folder-body' });
   /*
+   * The folders inside this one go at the top of its body, above its own pins.
+   *
+   * Above, because a folder is a heading for what is filed under it: a drawer
+   * of a hundred and thirty pins holding one sub-folder used to list that
+   * sub-folder after all hundred and thirty, which put it off the bottom of
+   * the screen and made the nesting look like it had not taken.
+   */
+  const children = state.folders.childrenOf(folder.id).sort(byName);
+  for (const child of children) {
+    const nested = renderFolder(child, drawn);
+    if (nested) body.append(nested);
+  }
+
+  /*
    * A folder used as a drawer for other folders says nothing at all.
    *
-   * "Empty" would be false - there are folders in it, listed directly below -
+   * "Empty" would be false - there are folders in it, listed right there -
    * and a line explaining that it holds no pins of its own is a sentence about
-   * the absence of something nobody was looking for. The folders under it are
+   * the absence of something nobody was looking for. The folders in it are
    * the answer to what is in it.
    */
-  const holdsFolders = !folder.items.length && state.folders.childrenOf(folder.id).length > 0;
+  const holdsFolders = !folder.items.length && children.length > 0;
   if (!folder.items.length && !holdsFolders) {
     body.append(el('p', {
       class: 'folder-empty',
@@ -10694,14 +10727,26 @@ function renderFolder(folder) {
     }
   }
 
-  // Folders are drop targets so items can be dragged between them.
+  /*
+   * Folders are drop targets so items can be dragged between them.
+   *
+   * Propagation stops at the first folder under the pointer, now that a
+   * folder can sit inside another one's body: without it, dragging over a
+   * nested folder lit up every folder above it as well, and released the pin
+   * into whichever of them handled the drop.
+   */
   node.addEventListener('dragover', (event) => {
+    event.stopPropagation();
     if (!state.dragItem || state.dragItem.folderId === folder.id) return;
     event.preventDefault();
     node.classList.add('is-drop-target');
   });
-  node.addEventListener('dragleave', () => node.classList.remove('is-drop-target'));
+  node.addEventListener('dragleave', (event) => {
+    event.stopPropagation();
+    node.classList.remove('is-drop-target');
+  });
   node.addEventListener('drop', (event) => {
+    event.stopPropagation();
     node.classList.remove('is-drop-target');
     if (!state.dragItem || state.dragItem.folderId === folder.id) return;
     event.preventDefault();
@@ -10712,8 +10757,10 @@ function renderFolder(folder) {
 
   node.append(head);
   if (trip) node.append(trip);
-  // Nothing to draw a rule under: a drawer of folders has no body of its own.
-  if (!holdsFolders) node.append(body);
+  // A drawer of folders needs no rule of its own above them, but it does need
+  // the body: that is where they are.
+  if (holdsFolders) body.classList.add('is-drawer');
+  node.append(body);
   return node;
 }
 

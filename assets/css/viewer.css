@@ -511,18 +511,18 @@ html, body { height: 100%; overflow: hidden; }
 }
 .folder.is-drop-target { border-color: var(--clay); box-shadow: 0 0 0 2px var(--clay-soft); }
 
-/* A folder filed inside another, stepped in and tied to it by a rule down the
-   left. Indent alone reads as an accident at one level; the line says the
-   nesting is deliberate and where the branch ends. */
+/* A folder filed inside another sits inside its parent's body, above the
+   parent's own pins, stepped in and tied to it by a rule down the left. The
+   containment carries the depth, so the step is one fixed amount rather than
+   a multiple of it: a branch of three would otherwise be indented six times
+   and the innermost folder would have no width left for its name. */
 .folder.is-nested {
-  margin-left: calc(var(--depth, 1) * 14px);
+  margin: 7px 7px 7px 12px;
   border-left-width: 3px;
   border-left-color: var(--line-strong);
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-  /* Pulled up against its parent so a branch reads as one block. */
-  margin-top: -4px;
 }
+/* A folder holding only other folders has no pins to rule off from its head. */
+.folder-body.is-drawer { border-top: 0; }
 /* Something that is set to show but cannot, because a folder above it is shut.
    The eye still reports its own switch; this says the switch is not the one
    deciding. */
