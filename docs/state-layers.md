@@ -210,7 +210,7 @@ about.
 
 ## Every shipped layer, with its shape and what is wrong with it
 
-All 48 are live at https://shermancahal.github.io/Halfstop/ and all ship switched
+All 48 are live at https://app.halfstop.app/ and all ship switched
 off. "Verified" means the records' fields have been read, not that a human has
 looked at the layer on a map. Nobody has done that yet.
 

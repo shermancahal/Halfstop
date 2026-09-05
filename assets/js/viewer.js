@@ -102,10 +102,11 @@ const COORD_FORMATS_KEY = 'ab-maps-coord-formats-v1';
 /**
  * The directory the page's own assets are served from.
  *
- * The site runs at the origin root locally and under /Halfstop/ on GitHub Pages,
- * and a shield fetched from an absolute /assets path works in the first case and
- * 404s in the second. Derived from the document rather than configured, so it
- * cannot disagree with where the page actually is.
+ * The site has run at an origin root and under a repository-named subpath on
+ * GitHub Pages, and a shield fetched from an absolute /assets path works in
+ * the first case and 404s in the second. Derived from the document rather than
+ * configured, so it cannot disagree with where the page actually is - which is
+ * why moving to a custom domain, and off the subpath, needed nothing here.
  */
 function assetBase() {
   const path = globalThis.location?.pathname || '/';

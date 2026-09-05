@@ -55,7 +55,7 @@ const Y = 201;
 const EMPTY_BYTES = 1000;
 
 /** The published site, so the CORS answer is the one the real page would get. */
-const ORIGIN = 'https://shermancahal.github.io';
+const ORIGIN = 'https://app.halfstop.app';
 
 const SPAN = 20037508.342789244;
 
@@ -354,7 +354,7 @@ async function probe(entry) {
         // URL-restricted token against — not Origin. Without it every
         // token-gated probe fails from CI with a 403 that says nothing about
         // whether the endpoint works, which is worse than not probing at all.
-        Referer: `${ORIGIN}/Halfstop/`,
+        Referer: `${ORIGIN}/`,
         /*
          * A candidate may ask for part of a file.
          *

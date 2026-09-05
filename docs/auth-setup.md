@@ -8,8 +8,8 @@ This is the list.
 
 **Authentication → URL Configuration**
 
-- **Site URL:** `https://shermancahal.github.io/Halfstop/`
-- **Redirect URLs:** add `https://shermancahal.github.io/Halfstop/**`
+- **Site URL:** `https://app.halfstop.app/`
+- **Redirect URLs:** add `https://app.halfstop.app/**`
 
 Why it matters more than it looks. Every auth call in `account.js` now passes
 an explicit `emailRedirectTo` or `redirectTo`. Supabase compares that against
@@ -24,21 +24,21 @@ Until the deployment URL is in that list, the code change has no effect.
 
 1. Go to <https://supabase.com/dashboard> and pick the project.
 2. **Authentication** in the left sidebar → **URL Configuration**.
-3. **Site URL** — a single field. Set it to `https://shermancahal.github.io/Halfstop/`.
+3. **Site URL** — a single field. Set it to `https://app.halfstop.app/`.
    This is the fallback every unmatched redirect lands on, which is why the
    wrong value here was so hard to spot: it was being used as a *default*, not
    rejected as an *error*.
 4. **Redirect URLs** — a list, with an **Add URL** button. Add:
 
    ```
-   https://shermancahal.github.io/Halfstop/**
+   https://app.halfstop.app/**
    ```
 
 5. Save.
 
 Two notes on the pattern. `*` matches within one path segment and `**` matches
-across segments, so the double star is what covers `/Halfstop/map.html` and
-`/Halfstop/faq.html` both. And a redirect carrying a query string still matches —
+across segments, so the double star is what covers `/map.html` and
+`/faq.html` both. And a redirect carrying a query string still matches —
 the comparison is against the path, not the whole URL.
 
 Nothing needs redeploying. The next sign-in attempt uses the new list.
@@ -113,7 +113,7 @@ one, and a common reason for a first submission to be rejected.
 ## 3. The app is a separate problem
 
 Inside the Capacitor shell the web view's origin is not this site, so a
-redirect back to `https://shermancahal.github.io/Halfstop/` leaves the app rather
+redirect back to `https://app.halfstop.app/` leaves the app rather
 than returning to it. Making sign-in work there needs a deep link — a custom
 scheme or a universal link registered with iOS, added to the allow list above,
 and handled on the way back in.

@@ -67,11 +67,17 @@ for (let z = 6; z <= 12; z += 1) {
 const SAMPLE_ARCHIVE = buildArchive(SAMPLE_TILES, { leaves: true });
 
 /*
- * The subpath GitHub Pages serves this repository from, which is the
- * repository's own name. Written once: the prefix and the number of characters
- * to strip off it used to be two separate literals, so renaming the repository
- * would have left every asset served from the wrong place with nothing saying
- * so.
+ * A subpath to serve the build under, on purpose.
+ *
+ * The site itself is at the root of app.halfstop.app now, and serving these
+ * checks from a root would test the easy case: every relative asset path
+ * resolves whether or not assetBase() does its job. A subpath is what breaks -
+ * an absolute /assets path 404s under one - so this keeps the harder case
+ * covered, and the exact name is arbitrary.
+ *
+ * Written once. The prefix and the number of characters to strip off it used
+ * to be two separate literals, which meant changing one and not the other
+ * served every asset from the wrong place with nothing saying so.
  */
 const SUBPATH = '/Halfstop/';
 

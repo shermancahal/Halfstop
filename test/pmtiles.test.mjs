@@ -605,7 +605,7 @@ test('offline: the store can say which archive its tiles came from', async () =>
    * is what makes it reportable.
    */
   const store = memoryTileStore();
-  const old = 'https://shermancahal.github.io/Halfstop/tiles/byways.pmtiles';
+  const old = 'https://app.halfstop.app/tiles/byways.pmtiles';
   const now = 'https://pub-abc.r2.dev/byways.pmtiles';
 
   /*

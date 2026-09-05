@@ -1,6 +1,6 @@
 name: Publish to GitHub Pages
 
-# The one thing that publishes https://shermancahal.github.io/Halfstop/
+# The one thing that publishes https://app.halfstop.app/
 #
 # "The one thing" is load-bearing. There used to be a second workflow that also
 # deployed to Pages, uploading the repository root instead of ./dist. Both ran
