@@ -1,7 +1,16 @@
 # Halfstop
 
-A back-roads atlas and trip planner that works with no signal, published by
-Halfstop, LLC.
+A planning map for photographers — the light, the location, and the road in —
+that works with no signal, published by Halfstop, LLC.
+
+Drop a pin and it works out golden and blue hour, moonrise and illumination, the
+galactic core's window, tonight's aurora chance, the next lunar eclipse and the
+odds of fog, then draws each of them as a bearing across the ground. Under that
+sit public land, forest roads, dark-sky, airspace and weather layers, folders of
+saved waypoints, and regions you can download before you leave signal.
+
+Site copy — taglines, page metadata and the claims that have to stay honest —
+lives in [`docs/copy.md`](docs/copy.md).
 
 Three pages:
 

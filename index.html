@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Halfstop — maps for the back roads</title>
-<meta name="description" content="A back-roads atlas that works with no signal: federal and state land, forest roads, topographic and aerial mapping you can download before you leave.">
+<title>Halfstop — plan the light, scout the location</title>
+<meta name="description" content="A planning map for photographers: golden hour, moonrise, the Milky Way's core, aurora chance and lunar eclipses at any pin, over federal, state and topographic mapping that works with no signal.">
 <meta property="og:title" content="Halfstop">
-<meta property="og:description" content="Field maps, tracks and waypoints from the road — viewable in the browser, downloadable as GPX, KML or GeoJSON.">
+<meta property="og:description" content="Drop a pin and Halfstop tells you when the light arrives and which way to face — then shows you the land, the roads and the weather around it.">
 <meta property="og:type" content="website">
 <meta name="theme-color" content="#b4441f" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#15120f" media="(prefers-color-scheme: dark)">
@@ -50,16 +50,19 @@
     <div class="wrap">
       <div class="hero-inner">
         <div data-editable-body>
-          <h1>Maps for the roads the atlas forgot.</h1>
+          <h1>Plan the light before you drive to it.</h1>
           <p class="lede">
-            A back-roads atlas that works with no signal. Federal and state land, forest
-            roads, drone ceilings and the weather over them — drawn over topographic and
-            aerial mapping you can download before you leave the tarmac.
+            A map for photographers. Drop a pin anywhere and Halfstop works out
+            when the light arrives and which way to face — golden hour, blue hour,
+            moonrise, the Milky Way's core, tonight's aurora chance, the next
+            lunar eclipse, and whether the valley will fill with fog by dawn.
+            Underneath it: federal, state and topographic mapping you can
+            download before you leave signal.
           </p>
         </div>
         <div class="hero-actions">
           <a class="button button-primary" href="map.html">Open the map</a>
-          <a class="button button-secondary" href="#about">How it works</a>
+          <a class="button button-secondary" href="#about">What it does</a>
         </div>
       </div>
     </div>
@@ -110,19 +113,31 @@
 
   <section class="section" id="about" data-editable="about">
     <div class="wrap" data-editable-body>
-      <div class="section-head"><h2>How it works</h2></div>
+      <div class="section-head"><h2>What it does</h2></div>
       <div class="prose-grid">
         <div>
-          <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z"/><path d="M14 2v6h6"/></svg>Open files, not a walled garden</h3>
-          <p>Every map is published in the format it was recorded in — GPX, KML or KMZ — alongside a GeoJSON conversion. Download it, open it in GaiaGPS, Garmin BaseCamp, CalTopo or QGIS. Nothing here is locked to this site.</p>
+          <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7.5h3L8.6 5h6.8l1.6 2.5h3a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="3.4"/></svg>The light, at the pin, on the night</h3>
+          <p>The whole day drawn as a bar: night, twilight, golden hour, daylight and back. Beside it the moon, with how much of it is lit and when it clears the horizon; the galactic core, with how high it gets and which nights it is up in true darkness; tonight's aurora chance from NOAA; the next lunar eclipse with its contact times; and the odds of fog, worked out from the forecast's own ingredients.</p>
         </div>
         <div>
-          <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>Real basemaps and overlays</h3>
-          <p>USGS topo quads, aerial imagery, OpenTopoMap and street maps, with hillshade, hydrography and label overlays you can stack and fade independently — the layer control works the way it does in a proper GPS app.</p>
+          <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m15.6 8.4-2.1 5.1-5.1 2.1 2.1-5.1Z"/></svg>Which way to face</h3>
+          <p>Sun, moon and Milky Way drawn as lines from the pin, across the actual ground. Pull the time slider and they swing, so you can see whether the core clears the ridge and where the sun will break at 06:20 — before you commit to a two-hour drive and a dark walk in.</p>
         </div>
         <div>
-          <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Drop your own files in</h3>
-          <p>The map opens a GPX, KML, KMZ or GeoJSON file straight from your computer and shows distance, ascent and an elevation profile. Those files are parsed in your browser and never uploaded anywhere.</p>
+          <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>Federal and state mapping, stacked</h3>
+          <p>Public land and who manages it, Forest Service roads with surface and season, BLM routes, USGS topo and imagery, light pollution and Bortle sky brightness, FAA drone ceilings and flight restrictions, radar, cloud cover and the direction a warned storm is moving — plus state agency layers for thirty states. Stack any number of them and fade each one independently.</p>
+        </div>
+        <div>
+          <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>The spots you keep</h3>
+          <p>Save a location with a colour and an icon, pin photographs to it so next year you remember what the light was doing, and sort everything into folders you name. Import a GPX, KML, KMZ or GeoJSON straight off your computer — read in the browser, never uploaded — and export any folder back out as GPX. Sign in and your folders follow you to the next device.</p>
+        </div>
+        <div>
+          <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 6.4 6 10a6 6 0 0 1-12 0c0-3.6 6-10 6-10Z"/></svg>A map drawn to be read, not admired</h3>
+          <p>Byways Topo is our own style rather than somebody else's pixels: an atlas palette borrowed from Rand McNally and National Geographic, terrain you can actually read relief off, unpaved roads drawn louder than the paved ones, and route shields and park symbols rendered here so they cannot go missing. USGS, Esri and OpenStreetMap basemaps sit alongside it, one press away.</p>
+        </div>
+        <div>
+          <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="m7.5 10 4.5 4.5 4.5-4.5"/><path d="M4 20h16"/></svg>It works where the signal does not</h3>
+          <p>Mark the ground you care about, see honestly what it will cost in tiles and megabytes, and take it with you; or save the view as a picture, which costs nothing and is often the whole answer on a phone in a canyon. Every sun, moon and Milky Way figure is arithmetic done on the device, so the panel that decides your evening does not need a bar of signal.</p>
         </div>
       </div>
     </div>
@@ -161,27 +176,35 @@
       <ul class="roadmap">
         <li>
           <span class="phase shipped">Shipped</span>
-          <span><b>A map-first site</b><span class="detail">The map is the homepage. Switchable topo, imagery and street basemaps with stackable overlays, distance and elevation stats, and a shareable URL for any view.</span></span>
+          <span><b>Sun, moon, Milky Way, aurora, eclipse and fog</b><span class="detail">One panel, computed on the device for the pin you selected: light phases as a bar, moon illumination and rise, the galactic core's window, NOAA aurora chance, lunar eclipse contact times, and fog likelihood with the reason attached.</span></span>
         </li>
         <li>
           <span class="phase shipped">Shipped</span>
-          <span><b>Folders for your waypoints</b><span class="detail">Import waypoints out of any map into folders you name, move them between folders, colour them, hide them, and export a folder back out as GPX. Kept in your browser — never uploaded.</span></span>
+          <span><b>The lines on the map</b><span class="detail">Sun, moon and galactic core drawn as bearings from the pin, moved by a time slider, so a plan is checked against the ridge in front of you rather than against a table of numbers.</span></span>
         </li>
         <li>
           <span class="phase shipped">Shipped</span>
-          <span><b>Client-side GPX / KML / KMZ parsing</b><span class="detail">Files are read and measured in the browser, so the viewer opens your own recordings without an upload step or a server round trip.</span></span>
+          <span><b>Federal and state layers</b><span class="detail">Public land, Forest Service and BLM roads, USGS topo and imagery, drone ceilings and restrictions, light pollution, weather and storm motion — and state agency layers for thirty states, each one checked against the live service before it was wired in.</span></span>
+        </li>
+        <li>
+          <span class="phase shipped">Shipped</span>
+          <span><b>Waypoints, folders and photos</b><span class="detail">Save and style a spot, attach photographs to it, organise everything into folders, import and export GPX, KML, KMZ and GeoJSON, and keep folders in step across devices once you sign in.</span></span>
+        </li>
+        <li>
+          <span class="phase shipped">Shipped</span>
+          <span><b>Offline regions and trip planning</b><span class="detail">Download the ground you will be standing on, and plan the drive around it — how long a queue of stops really takes once eating, fuel and sleep are counted, and what is worth a detour within a few miles of the way.</span></span>
         </li>
         <li>
           <span class="phase">Next</span>
-          <span><b>Mapbox layers</b><span class="detail">Drop a Mapbox token into the config and the viewer switches to Mapbox GL with vector styles, 3D terrain and any custom layers built in Mapbox Studio. The engine abstraction for this is already in place.</span></span>
+          <span><b>An app in the two stores</b><span class="detail">The site already installs to a home screen and opens with no network. Next is the native shell around the same code, which is also what unlocks proper offline storage for the basemaps that reserve it for native toolkits.</span></span>
         </li>
         <li>
           <span class="phase">Next</span>
-          <span><b>Offline-capable field app</b><span class="detail">A lightweight installable version with cached tiles and saved maps for use where there is no signal — the part of GaiaGPS that matters most on the road.</span></span>
+          <span><b>More states, more agencies</b><span class="detail">Thirty states have layers wired in. The rest have been surveyed and the good sources are known; each one is a matter of probing the service and confirming its fields say something useful.</span></span>
         </li>
         <li>
           <span class="phase">Later</span>
-          <span><b>Route drawing and editing</b><span class="detail">Sketch a route in the browser, snap it to roads and trails, and export it back out as GPX for the device you actually navigate with.</span></span>
+          <span><b>Solar eclipses and drawn routes</b><span class="detail">Paths of totality alongside the lunar eclipses already here, and sketching a route in the browser to export as GPX for whatever you actually navigate with.</span></span>
         </li>
       </ul>
     </div>
@@ -193,8 +216,8 @@
   <div class="wrap">
     <div class="footer-main">
       <p><b id="footer-name">Halfstop</b><br>
-      <span id="footer-tagline">Field maps, tracks and waypoints from the road.</span></p>
-      <p style="font-size:.82rem">Basemap and overlay tiles are served by USGS, Esri and the OpenStreetMap community under their own terms. Track data is published by <span id="footer-holder">Halfstop, LLC</span>.</p>
+      <span id="footer-tagline">Plan the light. Scout the location. Keep the spot.</span></p>
+      <p style="font-size:.82rem">Sun, moon and Milky Way figures are computed on your device. Aurora, weather and land layers come from NOAA, USGS, Esri, the Forest Service, the BLM, the FAA, state agencies and the OpenStreetMap community, under their own terms. Published by <span id="footer-holder">Halfstop, LLC</span>.</p>
     </div>
     <div>
       <h4>Site</h4>

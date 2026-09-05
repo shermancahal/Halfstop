@@ -1,7 +1,7 @@
 {
   "name": "Halfstop",
   "short_name": "Halfstop",
-  "description": "Topo, satellite and street maps with public land, drone ceilings, weather and trip planning — downloadable for use with no signal.",
+  "description": "Golden hour, moonrise, the Milky Way, aurora and eclipse times at any pin, over topo, satellite and public-land mapping you can take offline.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
@@ -9,7 +9,7 @@
   "orientation": "any",
   "background_color": "#faf7f2",
   "theme_color": "#b4441f",
-  "categories": ["navigation", "travel", "utilities"],
+  "categories": ["photo", "navigation", "travel", "utilities"],
   "icons": [
     { "src": "assets/img/mark.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
     { "src": "assets/img/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
