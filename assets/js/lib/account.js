@@ -348,8 +348,33 @@ export class Account extends EventTarget {
       const { data, error } = await client.from(TABLE).select('*').eq('user_id', this.user.id);
       if (error) throw new Error(error.message);
 
-      const remote = (data || []).map(rowToFolder);
-      const result = mergeFolders(this.folders.snapshot(), remote);
+      /*
+       * A database that predates parent_id returns rows without the key at
+       * all, which is not the same thing as a folder that sits at the top -
+       * and reading it as such let an un-migrated server flatten the tree on
+       * every sync, silently, for whichever side happened to be newer.
+       *
+       * When the server cannot hold the answer its silence is not an
+       * instruction. Each remote row is given back whatever this device
+       * already believes about where that folder goes, so nesting neither
+       * travels nor is destroyed until the column exists.
+       *
+       * This is also what re-arms the push after the migration: the read says
+       * whether the column is there, so the first sync after running
+       * schema.sql picks it up without anybody reloading anything.
+       */
+      const rows = data || [];
+      const knowsParents = !rows.length || rows.some((row) => 'parent_id' in row);
+      this.noParentColumn = rows.length > 0 && !knowsParents;
+
+      const local = this.folders.snapshot();
+      const filedAt = new Map(local.map((folder) => [folder.id, folder.parentId || null]));
+      const remote = rows.map((row) => {
+        const folder = rowToFolder(row);
+        if (!knowsParents) folder.parentId = filedAt.get(folder.id) || null;
+        return folder;
+      });
+      const result = mergeFolders(local, remote);
 
       this.folders.replaceAll(result.merged);
 

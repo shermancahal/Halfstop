@@ -305,3 +305,80 @@ test('account: a name is read from wherever the sign-in put it', () => {
   assert.equal(displayName({ user_metadata: { display_name: '   ' }, email: 'a@b.c' }), '');
   assert.equal(displayName(null), '');
 });
+
+/*
+ * A server that has never heard of parent_id.
+ *
+ * Postgres does not return a key for a column that does not exist, and
+ * reading that absence as "this folder sits at the top" let an un-migrated
+ * database flatten the tree on every sync - quietly, and only on whichever
+ * device happened to be older.
+ */
+function dataClient(rows, { onUpsert = () => ({ error: null }) } = {}) {
+  const sent = [];
+  return {
+    sent,
+    from() {
+      return {
+        select() { return { async eq() { return { data: rows, error: null }; } }; },
+        async upsert(payload) { sent.push(payload); return onUpsert(payload); },
+      };
+    },
+    auth: {
+      async getSession() { return { data: { session: null } }; },
+      onAuthStateChange() { return { data: { subscription: { unsubscribe() {} } } }; },
+    },
+  };
+}
+
+const storeOf = (list) => {
+  let held = list;
+  return {
+    list: () => held,
+    snapshot: () => held.map((folder) => ({ ...folder })),
+    replaceAll(next) { held = next; },
+    toGeoJSON: () => ({ features: [] }),
+  };
+};
+
+const row = (id, extra = {}) => ({
+  client_id: id, name: id, color: '#b4441f', visible: true, collapsed: false,
+  deleted: false, items: [], updated_at: new Date(5000).toISOString(), ...extra,
+});
+
+test('account: a server with no parent_id column does not unfile anything', async () => {
+  // The row is newer than the local copy, so without the guard the pull wins
+  // and the nesting is gone.
+  const rows = [{ ...row('rail'), updated_at: new Date(9000).toISOString() }];
+  const store = storeOf([{ id: 'rail', name: 'rail', parentId: 'transport', updatedAt: 5000, items: [], deleted: false }]);
+  const client = dataClient(rows);
+  const account = new Account(store, { client: async () => client, configured: () => true });
+  account.user = { id: 'u1' };
+
+  await account.sync();
+  assert.equal(store.list()[0].parentId, 'transport', 'the tree this device knows is left alone');
+  assert.equal(account.noParentColumn, true, 'and the push knows not to send a column that is not there');
+});
+
+test('account: the column appearing is noticed on the next sync, with no reload', async () => {
+  const store = storeOf([{ id: 'rail', name: 'rail', parentId: 'transport', updatedAt: 5000, items: [], deleted: false }]);
+  const account = new Account(store, {
+    // A migrated table returns the key, holding null, for a folder at the top.
+    client: async () => dataClient([row('rail', { parent_id: null })]),
+    configured: () => true,
+  });
+  account.user = { id: 'u1' };
+  account.noParentColumn = true;
+
+  await account.sync();
+  assert.equal(account.noParentColumn, false, 'a row carrying the key says the migration has been run');
+});
+
+test('account: an empty table is not evidence the column is missing', async () => {
+  const store = storeOf([]);
+  const account = new Account(store, { client: async () => dataClient([]), configured: () => true });
+  account.user = { id: 'u1' };
+
+  await account.sync();
+  assert.equal(account.noParentColumn, false);
+});

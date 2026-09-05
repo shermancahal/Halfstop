@@ -123,6 +123,33 @@ export function mergeFolders(local, remote) {
       if (!mine.deleted) merged.push(mine);
       toPush.push(mine);
       if (theirsAt > 0) conflicts.push({ id: mine.id, name: mine.name, kept: 'this device' });
+    } else if ((mine.parentId || null) !== (theirs.parentId || null)
+      && (!mine.parentId || !theirs.parentId)) {
+      /*
+       * Identical timestamps that disagree about where a folder is filed.
+       *
+       * That cannot happen from two people editing: the same instant means
+       * the same state. It happens when the server could not hold the answer.
+       * A database that predates parent_id took the push, dropped the column,
+       * and handed back a row that is byte-for-byte the one that went up
+       * except for the nesting - so both sides then sat on the same timestamp
+       * for ever, each quietly sure it was up to date, and running the
+       * migration afterwards changed nothing because nothing had a reason to
+       * be sent again.
+       *
+       * So whichever side still knows where the folder goes is the one that
+       * is right, in either direction: the laptop that did the filing pushes
+       * it, and the phone that was handed the flattened copy takes it back.
+       * Only when one side is null - two different parents at one instant is
+       * not this, and falls through to keeping local.
+       */
+      if (mine.parentId) {
+        if (!mine.deleted) merged.push(mine);
+        toPush.push(mine);
+      } else {
+        if (!theirs.deleted) merged.push(theirs);
+        pulled++;
+      }
     } else {
       // Identical timestamps: same state, or a clock that did not move. Either
       // way there is nothing to choose between them, so keep local and be quiet.

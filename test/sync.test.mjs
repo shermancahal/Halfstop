@@ -250,3 +250,45 @@ test('sync: the two ways a server says it has never heard of the column', () => 
   assert.equal(missingColumn('', 'parent_id'), false);
   assert.equal(missingColumn(null, 'parent_id'), false);
 });
+
+/*
+ * The deadlock a database without parent_id left behind.
+ *
+ * The push went up whole, the server dropped the column it had never heard
+ * of, and the row that came back was identical to the one that went except
+ * for the nesting. Both sides then held the same updatedAt for ever - each
+ * quietly certain it was up to date - so running the migration afterwards
+ * fixed nothing, because nothing had a reason to be sent again.
+ */
+test('merge: at one instant, the side that knows where a folder is filed wins', () => {
+  const nested = folder('a', 5, { parentId: 'transport' });
+  const flat = folder('a', 5, { parentId: null });
+
+  const laptop = mergeFolders([nested], [flat]);
+  assert.equal(laptop.merged[0].parentId, 'transport', 'the filing is kept');
+  assert.deepEqual(laptop.toPush.map((f) => f.id), ['a'], 'and sent, though the clocks agree');
+
+  const phone = mergeFolders([flat], [nested]);
+  assert.equal(phone.merged[0].parentId, 'transport', 'the flattened copy takes it back');
+  assert.equal(phone.pulled, 1);
+  assert.deepEqual(phone.toPush, [], 'and has nothing to say back');
+});
+
+test('merge: two different parents at one instant is not that, and stays quiet', () => {
+  const result = mergeFolders(
+    [folder('a', 5, { parentId: 'transport' })],
+    [folder('a', 5, { parentId: 'historic' })],
+  );
+  assert.equal(result.merged[0].parentId, 'transport', 'local is kept, as for any tie');
+  assert.deepEqual(result.toPush, []);
+  assert.equal(result.pulled, 0);
+});
+
+test('merge: a tie over anything but the parent is still quiet', () => {
+  const result = mergeFolders(
+    [folder('a', 5, { parentId: 'transport' })],
+    [folder('a', 5, { parentId: 'transport' })],
+  );
+  assert.deepEqual(result.toPush, []);
+  assert.equal(result.pulled, 0);
+});
