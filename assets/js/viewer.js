@@ -4986,8 +4986,14 @@ function renderOfflineTab() {
     el('p', {
       class: 'hint',
       style: 'margin:-4px 0 10px',
+      /*
+       * The depth is read rather than written out. It differs by basemap -
+       * Byways Topo goes as deep as the archive was cut, the raster maps stop
+       * at the z14 judgement - and a hardcoded number here promised one of
+       * them something the other could not do.
+       */
       text: 'Mark the ground you are heading for, then download it. The tiles stay on this device '
-        + `and the map draws with no signal, down to z${OFFLINE_MAX_ZOOM}. Byways Topo, the USGS maps `
+        + `and the map draws with no signal, down to z${deepestUsefulZoom()}. Byways Topo, the USGS maps `
         + 'and the agency layers can be stored; Mapbox\u2019s own maps cannot.',
     }),
     el('div', { class: 'folder-actions offline-actions' }, [
@@ -5111,20 +5117,28 @@ async function describeStorage(node) {
 /**
  * How deep a region can usefully be taken, for the basemap it was saved from.
  *
- * Two ceilings, and the lower one wins. `OFFLINE_MAX_ZOOM` is a judgement about
- * what is worth carrying — each level past it quadruples the tiles to add
- * detail nobody reads on a phone in weather. The archive's own depth is a fact:
- * past it there are no tiles at all.
+ * For the archive this is the archive's own depth, and not a level less.
  *
- * Offering the deeper number was not harmless. Every tile past the archive's
- * depth comes back absent, and absent is reported as "outside the map's
- * coverage" — which reads as a badly drawn region and sends somebody off to
- * redraw it, when the fix is a smaller number in a dropdown they were offered.
+ * It used to be the lower of that and `OFFLINE_MAX_ZOOM` — a judgement that
+ * each level past z14 quadruples the tiles to add detail nobody reads on a
+ * phone in weather. That judgement is right about raster tiles and wrong here,
+ * because this number has to agree with a second one it was never compared to:
+ * the style declares the archive source's maxzoom as the archive's full depth,
+ * and MapLibre stops stretching the deepest tile it has the moment it believes
+ * a deeper one exists. So an archive cut to z15 with a region stored to z14
+ * drew perfectly down to z14 and then went blank — reachable only with no
+ * signal, which is exactly where nobody can work out why.
+ *
+ * Past the archive's real depth there are no tiles at all and MapLibre knows
+ * it, which is why overzoom takes over there and the map keeps drawing.
+ *
+ * Raster basemaps keep the z14 ceiling. They are declared at their own depths,
+ * they overzoom the same way, and nothing about them was ever out of step.
  */
 function deepestUsefulZoom(region) {
   const basemap = basemapById(region?.basemapId || state.basemapId);
   const fromArchive = basemap?.custom === 'byways' && PROTOMAPS_ARCHIVE;
-  return fromArchive ? Math.min(OFFLINE_MAX_ZOOM, PROTOMAPS_MAXZOOM) : OFFLINE_MAX_ZOOM;
+  return fromArchive ? PROTOMAPS_MAXZOOM : OFFLINE_MAX_ZOOM;
 }
 
 function regionRow(region, kind) {

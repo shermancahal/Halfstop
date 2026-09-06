@@ -30,6 +30,19 @@ import { tileKey } from './pmtiles-store.js';
 export const MAX_ZOOM = 14;
 
 /**
+ * The hard limit, as opposed to the judgement above.
+ *
+ * MAX_ZOOM is an opinion about raster tiles and what is worth carrying. This
+ * is the bound that stops a bad number - a corrupt saved region, a hand-edited
+ * export - asking for a download nobody could finish, and it has to sit above
+ * MAX_ZOOM because the map archive is allowed past it: what a region stores
+ * from the archive must reach the depth the style says the archive has, or the
+ * map goes blank exactly where it was downloaded to be used. Which basemap
+ * gets which ceiling is decided in the viewer, where the basemap is known.
+ */
+export const HARD_MAX_ZOOM = 16;
+
+/**
  * Mapbox's default offline ceiling per user, across all their regions.
  *
  * 6,000 tiles is what a Mapbox account allows before downloads start failing,
@@ -147,12 +160,12 @@ export function tileRange(bounds, zoom) {
 }
 
 /** Tiles needed for a box across an inclusive zoom range. */
-export function countTiles(bounds, minZoom = 0, maxZoom = MAX_ZOOM) {
+export function countTiles(bounds, minZoom = 0, maxZoom = HARD_MAX_ZOOM) {
   const box = normalizeBounds(bounds);
   if (!box) return 0;
 
   const low = Math.max(0, Math.round(minZoom));
-  const high = Math.min(MAX_ZOOM, Math.round(maxZoom));
+  const high = Math.min(HARD_MAX_ZOOM, Math.round(maxZoom));
   if (high < low) return 0;
 
   let total = 0;
@@ -239,8 +252,8 @@ export function createRegion({ name, bounds, minZoom = 8, maxZoom = 12, basemapI
   const box = normalizeBounds(bounds);
   if (!box) return null;
 
-  const low = Math.max(0, Math.min(MAX_ZOOM, Math.round(minZoom)));
-  const high = Math.max(low, Math.min(MAX_ZOOM, Math.round(maxZoom)));
+  const low = Math.max(0, Math.min(HARD_MAX_ZOOM, Math.round(minZoom)));
+  const high = Math.max(low, Math.min(HARD_MAX_ZOOM, Math.round(maxZoom)));
 
   return {
     id: makeId(),
@@ -283,7 +296,7 @@ export function tieredPlan(bounds, waypoints = [], {
   const box = normalizeBounds(bounds);
   if (!box) return null;
 
-  const level = (zoom) => Math.max(0, Math.min(MAX_ZOOM, Math.round(zoom)));
+  const level = (zoom) => Math.max(0, Math.min(HARD_MAX_ZOOM, Math.round(zoom)));
   const tiers = [
     { zoom: level(broad), boxes: [box], covers: 'the whole region' },
     { zoom: level(mid), boxes: [box], covers: 'the whole region' },
@@ -488,8 +501,8 @@ export class OfflineStore extends EventTarget {
 
     if (changes.name !== undefined) region.name = clampName(changes.name, region.name);
     if (changes.bounds !== undefined) region.bounds = normalizeBounds(changes.bounds) || region.bounds;
-    if (changes.minZoom !== undefined) region.minZoom = Math.max(0, Math.min(MAX_ZOOM, Math.round(changes.minZoom)));
-    if (changes.maxZoom !== undefined) region.maxZoom = Math.max(0, Math.min(MAX_ZOOM, Math.round(changes.maxZoom)));
+    if (changes.minZoom !== undefined) region.minZoom = Math.max(0, Math.min(HARD_MAX_ZOOM, Math.round(changes.minZoom)));
+    if (changes.maxZoom !== undefined) region.maxZoom = Math.max(0, Math.min(HARD_MAX_ZOOM, Math.round(changes.maxZoom)));
     if (region.maxZoom < region.minZoom) region.maxZoom = region.minZoom;
 
     region.updatedAt = Date.now();

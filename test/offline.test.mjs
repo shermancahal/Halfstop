@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 
 import { BASEMAPS } from '../assets/js/config.js';
 import {
+  HARD_MAX_ZOOM,
   MAX_ZOOM, TILE_BUDGET, OfflineStore,
   normalizeBounds, crossesAntimeridian, tileRange, countTiles,
   estimateBytes, formatBytes, areaKm2,
@@ -100,9 +101,23 @@ test('tiles: a box crossing the antimeridian counts both halves', () => {
   assert.ok(crossing < wholeWorld / 100, `a one-degree box should not cost the planet (${crossing})`);
 });
 
-test('tiles: the zoom cap is enforced however it is asked for', () => {
-  assert.equal(MAX_ZOOM, 14);
-  assert.equal(countTiles(SMOKIES, 8, 22), countTiles(SMOKIES, 8, MAX_ZOOM), 'z22 must clamp to the cap');
+/*
+ * Two ceilings, and they are not the same number.
+ *
+ * MAX_ZOOM is a judgement about raster tiles: each level past it quadruples
+ * what you carry to add detail nobody reads on a phone. HARD_MAX_ZOOM is the
+ * bound a bad number cannot get past. The archive is allowed between them,
+ * because what a region stores has to reach the depth the style says the
+ * archive has - stopping a level short drew the map perfectly and then went
+ * blank, with no signal, which is the one place nobody can debug it.
+ */
+test('tiles: the two ceilings are distinct, and the hard one is what clamps', () => {
+  assert.equal(MAX_ZOOM, 14, 'the raster judgement');
+  assert.ok(HARD_MAX_ZOOM > MAX_ZOOM, 'the archive needs room above the judgement');
+  assert.equal(countTiles(SMOKIES, 8, 22), countTiles(SMOKIES, 8, HARD_MAX_ZOOM), 'z22 must clamp to the hard cap');
+  assert.equal(countTiles(SMOKIES, 8, 15), countTiles(SMOKIES, 8, 15), 'and z15 must not be clamped away');
+  assert.ok(countTiles(SMOKIES, 8, 15) > countTiles(SMOKIES, 8, MAX_ZOOM),
+    'a region taken past the raster judgement really does hold more');
   assert.equal(countTiles(SMOKIES, 14, 8), 0, 'a backwards range is empty, not negative');
 });
 
@@ -138,7 +153,11 @@ test('area: a degree box is about the right number of square kilometres', () => 
 
 test('region: zooms clamp to the cap and cannot invert', () => {
   const region = createRegion({ name: 'Cherokee', bounds: SMOKIES, minZoom: 9, maxZoom: 20 });
-  assert.equal(region.maxZoom, MAX_ZOOM);
+  assert.equal(region.maxZoom, HARD_MAX_ZOOM);
+
+  // Between the two ceilings is where the archive lives, and it must survive.
+  const deep = createRegion({ bounds: SMOKIES, minZoom: 8, maxZoom: 15 });
+  assert.equal(deep.maxZoom, 15, 'z15 is the archive depth, not something to round away');
 
   const backwards = createRegion({ bounds: SMOKIES, minZoom: 12, maxZoom: 6 });
   assert.ok(backwards.maxZoom >= backwards.minZoom, 'max must never fall below min');
@@ -233,7 +252,10 @@ test('store: updates clamp the same way creation does', () => {
   const region = store.add({ name: 'Cherokee', bounds: SMOKIES, minZoom: 8, maxZoom: 12 });
 
   store.update(region.id, { maxZoom: 19 });
-  assert.equal(store.get(region.id).maxZoom, MAX_ZOOM);
+  assert.equal(store.get(region.id).maxZoom, HARD_MAX_ZOOM);
+
+  store.update(region.id, { maxZoom: 15 });
+  assert.equal(store.get(region.id).maxZoom, 15, 'the archive depth passes through');
 
   store.update(region.id, { minZoom: 14, maxZoom: 10 });
   assert.ok(store.get(region.id).maxZoom >= store.get(region.id).minZoom);
