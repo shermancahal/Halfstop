@@ -281,12 +281,57 @@ pre code { background: none; padding: 0; }
 /* ---------- landing page ---------- */
 
 .hero { padding: 72px 0 40px; position: relative; overflow: hidden; }
+/*
+ * The ground behind the words, in two layers.
+ *
+ * ::before is a picture of the map itself, centred and cropped; ::after is the
+ * wash over it. They are separate because the wash has to change with the
+ * theme and the picture must not: one image, read as pale ground under dark
+ * ink in the light theme and as dark ground under light ink in the dark one.
+ *
+ * The image is set on a modifier class rather than on .hero, so a hero with no
+ * picture keeps the CSS-drawn texture that was here before and nothing 404s
+ * while one is being chosen.
+ */
 .hero::after {
   /* Faint contour-line texture, drawn in CSS so there is no image to load. */
   content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
   background:
     radial-gradient(ellipse 60% 80% at 78% 8%, color-mix(in srgb, var(--pine) 11%, transparent), transparent 70%),
     radial-gradient(ellipse 70% 60% at 12% 0%, color-mix(in srgb, var(--clay) 9%, transparent), transparent 72%);
+}
+
+.hero.has-ground::before {
+  content: ""; position: absolute; inset: 0; z-index: -2; pointer-events: none;
+  background: var(--hero-ground) center / cover no-repeat;
+}
+/*
+ * Light theme: wash the map out towards the paper so body text keeps its
+ * contrast. Heavier at the left, where the words are, and thinning to the
+ * right so the map is still legible as a map.
+ */
+.hero.has-ground::after {
+  background:
+    linear-gradient(100deg,
+      color-mix(in srgb, var(--paper) 92%, transparent) 0%,
+      color-mix(in srgb, var(--paper) 82%, transparent) 46%,
+      color-mix(in srgb, var(--paper) 55%, transparent) 100%),
+    radial-gradient(ellipse 60% 80% at 78% 8%, color-mix(in srgb, var(--pine) 11%, transparent), transparent 70%);
+}
+/* Dark theme: the same idea, darkening rather than lightening. */
+@media (prefers-color-scheme: dark) {
+  .hero.has-ground::before { filter: brightness(.62) saturate(.85); }
+  .hero.has-ground::after {
+    background:
+      linear-gradient(100deg,
+        color-mix(in srgb, var(--paper) 90%, transparent) 0%,
+        color-mix(in srgb, var(--paper) 78%, transparent) 46%,
+        color-mix(in srgb, var(--paper) 48%, transparent) 100%);
+  }
+}
+/* A picture of ground is decoration; it must never cost legibility. */
+@media (prefers-reduced-motion: no-preference) {
+  .hero.has-ground::before { transition: opacity .3s ease; }
 }
 .hero-inner { max-width: 640px; }
 .eyebrow {
