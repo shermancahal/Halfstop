@@ -1,5 +1,5 @@
 /**
- * The landing page: branding, the theme toggle, and its own editable prose.
+ * The landing page: branding, the theme toggle and the catalogue.
  *
  * It used to be the map library, and the code for that is all still here and
  * still correct - the catalogue markup is commented out of index.html rather
@@ -16,7 +16,6 @@ import { loadCatalog, facet, filterMaps } from './lib/catalog.js';
 import { el, escapeHTML, initTheme, formatDate } from './lib/ui.js';
 import { formatDistance, formatElevation } from './lib/geo.js';
 import { registerServiceWorker } from './lib/pwa.js';
-import { enablePageEditing } from './lib/page-edit.js';
 
 const dom = {};
 let catalog = { maps: [] };
@@ -246,13 +245,3 @@ main();
 // too — and an already-installed app opened on this page keeps its cache warm.
 registerServiceWorker();
 
-/*
- * The home page's own prose, editable in place by whoever is allowed to.
- *
- * Same editor the help page uses, and the same rules: the markup in
- * index.html is what a reader with no account, no network and no JavaScript
- * gets, a saved version replaces it a moment after load, and the pencil is
- * offered only to a signed-in editor. Last, and not awaited, because the
- * catalogue is the page and this must not delay it.
- */
-enablePageEditing('home').catch((error) => console.warn('[home]', error?.message || error));

@@ -76,7 +76,7 @@ import { kpNow, auroraChance, describeKp } from './lib/aurora.js';
 import { lunarEclipses, describeEclipse, shadowGeometry } from './lib/eclipse.js';
 import { describeSync } from './lib/sync.js';
 import { registerServiceWorker, applyServiceWorkerUpdate } from './lib/pwa.js';
-import { mayEdit } from './lib/editable.js';
+import { mayEdit } from './lib/editors.js';
 import {
   OfflineStore, MAX_ZOOM as OFFLINE_MAX_ZOOM, TILE_BUDGET,
   mayCacheTiles, tileURLsFor, downloadTiles, clearTiles, tileKeysFor, downloadArchiveTiles,

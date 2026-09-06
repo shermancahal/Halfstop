@@ -9,8 +9,8 @@ Three pages:
    and street basemaps, stackable overlays, public land and airspace, weather,
    distance and elevation statistics, and a shareable URL for any view. It will
    open a GPX, KML, KMZ or GeoJSON file straight from your own computer.
-2. **The landing page** (`index.html`) and **help** (`faq.html`) — prose, and
-   editable in place by a signed-in editor.
+2. **The landing page** (`index.html`) and **help** (`faq.html`) — prose, in
+   the HTML. It changes by a commit, like everything else here.
 3. **Folders** — your own organisation of saved waypoints and tracks, built
    inside the map. Import waypoints out of any file into a folder, move them
    between folders, and export a folder back out as GPX.
