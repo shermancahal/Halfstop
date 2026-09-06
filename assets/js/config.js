@@ -10,10 +10,10 @@
 export const SITE = {
   name: 'Halfstop',
   shortName: 'Halfstop',
-  tagline: 'Field maps, tracks and waypoints from the road.',
+  tagline: 'A field atlas for photographers.',
   description:
-    'A public library of GPS tracks, routes and waypoints exported from GaiaGPS — '
-    + 'viewable in the browser and downloadable as GPX, KML or GeoJSON.',
+    'A field atlas for photographers. Scout locations, pin waypoints, and time '
+    + 'sunrise, moonset, eclipses and aurora on maps that work with no signal.',
   /*
    * The organisation this is published under, or null when there is none to
    * name.

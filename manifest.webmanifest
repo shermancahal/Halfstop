@@ -1,7 +1,7 @@
 {
   "name": "Halfstop",
   "short_name": "Halfstop",
-  "description": "Topo, satellite and street maps with public land, drone ceilings, weather and trip planning — downloadable for use with no signal.",
+  "description": "A field atlas for photographers. Scout locations, pin waypoints, and time sunrise, moonset, eclipses and aurora on maps that work with no signal.",
   "id": "./",
   "start_url": "./",
   "scope": "./",

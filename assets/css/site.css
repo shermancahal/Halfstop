@@ -497,3 +497,44 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 .account-or {
   margin: 12px 0 8px; text-align: center; font-size: .78rem; color: var(--ink-3);
 }
+
+/* ---------------------------------------------------------------- scout */
+
+/*
+ * The claim under the hero, and the picture of the thing making it.
+ *
+ * One column at a phone's width and two from a tablet up, with the words
+ * first in the source either way: the sentence is the argument and the
+ * screenshot is the evidence, and on a narrow screen the argument should not
+ * be below the fold under a picture.
+ */
+.section-scout .wrap { display: grid; gap: 30px; align-items: center; }
+/*
+ * Two columns only when there is something to put in the second one. Without
+ * the :has, a missing screenshot leaves half the section empty and the
+ * headline wrapped into a column half the width it wants; where :has is not
+ * supported the section stays one column, which is the same thing the phone
+ * gets and is never wrong.
+ */
+@media (min-width: 900px) {
+  .section-scout:has(.scout-shot) .wrap {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 48px;
+  }
+}
+.scout-lede h2 { margin: 0 0 14px; max-width: 20ch; }
+.scout-lede p { margin: 0; color: var(--ink-2); font-size: 1.02rem; max-width: 54ch; }
+
+.scout-shot { margin: 0; }
+.scout-shot img {
+  display: block; width: 100%; height: auto;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  /* A screenshot of a map is busy; the shadow is what separates it from the
+     page rather than a heavier border competing with the map's own lines. */
+  box-shadow: 0 18px 40px -22px rgba(0, 0, 0, .45);
+}
+
+/* ------------------------------------------------------------------ cta */
+
+.section-cta { text-align: center; }
+.section-cta h2 { margin: 0 0 10px; }
+.section-cta p { margin: 0 auto 22px; color: var(--ink-2); max-width: 52ch; }
