@@ -301,9 +301,18 @@ pre code { background: none; padding: 0; }
     radial-gradient(ellipse 70% 60% at 12% 0%, color-mix(in srgb, var(--clay) 9%, transparent), transparent 72%);
 }
 
+/*
+ * The path lives here, not in a custom property set on the element.
+ *
+ * A relative url() inside a custom property is resolved against the stylesheet
+ * the var() is substituted into, not the document the property was written in
+ * - so "assets/img/hero-topo.jpg" set in index.html was fetched from
+ * assets/css/assets/img/ and 404d. Written here it is relative to this file,
+ * which is the one place the answer cannot be ambiguous.
+ */
 .hero.has-ground::before {
   content: ""; position: absolute; inset: 0; z-index: -2; pointer-events: none;
-  background: var(--hero-ground) center / cover no-repeat;
+  background: url(../img/hero-topo.jpg) center / cover no-repeat;
 }
 /*
  * Light theme: wash the map out towards the paper so body text keeps its

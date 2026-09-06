@@ -46,12 +46,11 @@
 
 <main>
 
-  <!-- To put a picture of ground behind this: add class "has-ground" and set
-       the hero-ground custom property to its url. Both together or neither -
-       one turns the picture layer on, the other says which picture, and a
-       class on its own asks the browser for nothing. Until then the hero keeps
-       the texture drawn in CSS, which costs no request at all. -->
-  <section class="hero" data-editable="hero">
+  <!-- has-ground puts a picture of ground behind the words; which picture, and
+       the wash over it, are in site.css, where a relative path resolves the way
+       it reads. The wash changes with the theme so one file works under dark
+       ink and light ink alike. -->
+  <section class="hero has-ground" data-editable="hero">
     <div class="wrap">
       <div class="hero-inner">
         <div data-editable-body>
@@ -122,9 +121,15 @@
           you lose signal.
         </p>
       </div>
-      <!-- A picture of the app goes here, as a figure with class "scout-shot".
-           Left out until the file exists: markup ahead of the image is a 404 on
-           every load for a decoration nobody can see yet. -->
+      <figure class="scout-shot">
+        <!-- Sized, so the row below it does not jump when the picture lands,
+             and lazy because it sits under the fold on every screen this has
+             two columns on. -->
+        <img src="assets/img/app-screenshot.jpg" width="1440" height="1091"
+             loading="lazy" decoding="async"
+             alt="Halfstop showing topographic mapping around Elkins, West Virginia, with saved
+                  waypoints and the layer list open.">
+      </figure>
     </div>
   </section>
 

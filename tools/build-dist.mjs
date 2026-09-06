@@ -411,6 +411,12 @@ async function main() {
     html.push({ name, text: await readFile(source, 'utf8') });
   }
 
+  /*
+   * Pictures that sell the site rather than run it. Fetched when the homepage
+   * is looked at, never as part of the offline shell.
+   */
+  const NEVER_PRECACHE = /^assets\/img\/(hero-topo|app-screenshot)\./;
+
   const assets = [];
   for (const dir of INCLUDE_DIRS) {
     const source = path.join(ROOT, dir);
@@ -530,19 +536,26 @@ async function main() {
    * The service worker, with its two placeholders filled in.
    *
    * The precache list is the cache-busted URL of every asset plus the pages
-   * themselves, which is the whole site: 376 KB is small enough that picking a
-   * subset would only mean guessing wrong about which page someone opens first
-   * while offline. Built from `versions`, so an asset's precached URL is always
-   * the same URL the pages ask for — a mismatch would precache a file nobody
-   * ever requests and quietly leave the real one uncached.
+   * themselves, which is very nearly the whole site: at a few hundred KB,
+   * picking a subset would only mean guessing wrong about which page someone
+   * opens first while offline. Built from `versions`, so an asset's precached
+   * URL is always the same URL the pages ask for — a mismatch would precache a
+   * file nobody ever requests and quietly leave the real one uncached.
+   *
+   * The exception is the homepage's own pictures, which are the only files
+   * here big enough to change that arithmetic - half a megabyte of decoration
+   * against a shell of a few hundred KB. They are still served, still cached
+   * once seen, and simply not downloaded up front by somebody who opened the
+   * map. Nothing offline needs a photograph of the map to work.
    */
   const precache = [
     './',
     ...html.map((page) => `./${page.name}`),
     ...ROOT_FILES.filter((name) => name !== 'sw.js').map((name) => `./${name}`),
-    ...assets.map((asset) => (stampedHrefs.has(asset.name)
-      ? `./${asset.name}?v=${versions.get(asset.name)}`
-      : `./${asset.name}`)),
+    ...assets.filter((asset) => !NEVER_PRECACHE.test(asset.name)).map((asset) => (
+      stampedHrefs.has(asset.name)
+        ? `./${asset.name}?v=${versions.get(asset.name)}`
+        : `./${asset.name}`)),
   ];
 
   for (const name of ROOT_FILES) {
