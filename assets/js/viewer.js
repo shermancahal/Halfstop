@@ -8320,7 +8320,8 @@ function renderMapsTab() {
   if (!state.catalog.maps.length) {
     dom.catalogList.append(el('p', {
       class: 'hint',
-      text: 'No published maps yet. Drop a GPX, KML or KMZ file below to view it.',
+      text: 'No published maps here yet. Your own files are the usual way in — '
+        + 'open a GPX, KML, KMZ or GeoJSON below.',
     }));
   } else {
     for (const record of state.catalog.maps) {
@@ -8350,7 +8351,11 @@ function renderMapsTab() {
   const entries = [...state.documents.values()];
   dom.loadedCount.textContent = entries.length ? `${entries.length} loaded` : '';
   if (!entries.length) {
-    dom.loadedList.append(el('p', { class: 'hint', text: 'Nothing loaded yet.' }));
+    dom.loadedList.append(el('p', {
+      class: 'hint',
+      text: 'Nothing open. A file you open is read here in the browser and never uploaded; '
+        + 'file its waypoints into a folder to keep them.',
+    }));
     return;
   }
 
@@ -8430,7 +8435,12 @@ function renderDetailsTab() {
   const entry = state.documents.get(state.activeKey);
   if (!entry) {
     dom.details.append(el('div', { class: 'panel-section' }, [
-      el('p', { class: 'hint', text: 'Click a waypoint on the map, or pick one from Waypoints, to see everything known about it.' }),
+      el('p', {
+        class: 'hint',
+        html: 'Click anywhere on the map, or pick a waypoint from <b>Waypoints</b>, and this '
+          + 'becomes the panel for that spot: coordinates and elevation, and what the light, '
+          + 'the moon and the sky will be doing there.',
+      }),
     ]));
     return;
   }
@@ -10879,7 +10889,11 @@ function photoSection(folder, item) {
     }
 
     if (!photos.length) {
-      strip.append(el('p', { class: 'hint', style: 'margin:0', text: 'No photos on this pin yet.' }));
+      strip.append(el('p', {
+        class: 'hint', style: 'margin:0',
+        text: 'No photos on this pin yet. One frame from last time is the fastest way to '
+          + 'remember what the light was doing here.',
+      }));
     }
   };
 
@@ -11829,7 +11843,11 @@ function renderAccount() {
   const offered = (SITE.authProviders || []).filter((id) => PROVIDER_LABELS[id]);
 
   dom.account.append(
-    el('p', { class: 'hint', style: 'margin-bottom:10px', text: 'Sign in to keep your folders across devices.' }),
+    el('p', {
+      class: 'hint', style: 'margin-bottom:10px',
+      text: 'Sign in to keep your folders and pins on every device you use. '
+        + 'Photographs stay on the device they were added to.',
+    }),
   );
   if (offered.length) {
     dom.account.append(

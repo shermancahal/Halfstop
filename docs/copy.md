@@ -19,6 +19,7 @@ of getting to the spot and knowing what is around it.
 | Help sections | `faq.html`, slugs `photography`, `offline`, `basemaps`, `layers`, `drones`, `directions`, `account` | **Yes** |
 | `<title>`, `<meta name="description">`, Open Graph | `index.html`, `map.html`, `faq.html` heads | No |
 | App name and store-style description | `manifest.webmanifest` | No |
+| The map's own interface — empty states, buttons, toasts | `assets/js/viewer.js` | No — ships with the code, see **In the app** |
 
 **Editable in place** means the pencil: sign in as an address in `SITE.editors`,
 press it, and the section becomes a text field. The `<h2>` stays put — the page's
@@ -175,6 +176,34 @@ arriving from a search result needs, and it is where the honest limits live:
 
 ---
 
+## In the app
+
+The map's own strings live in `assets/js/viewer.js` and are not editable in
+place — they ship with the code. They follow one rule that the marketing copy
+does not have to: **an empty state has to say what to do next**, because a
+panel with nothing in it is the moment somebody decides the app is broken.
+
+| Where | Says |
+| --- | --- |
+| Details, nothing selected | Click anywhere, or pick a waypoint, and this becomes the panel for that spot — coordinates, elevation, and what the light, the moon and the sky will do there |
+| Files, no catalogue | Your own files are the usual way in; open a GPX, KML, KMZ or GeoJSON below |
+| Files, nothing open | Read here in the browser, never uploaded; file its waypoints into a folder to keep them |
+| Folders, none yet | Press Import, or click a point on the map and save it into one |
+| Waypoints, none yet | Open a file under Folders, or click a point on the map and save it |
+| Waypoints, no search match | Nothing matches that search |
+| Photos on a pin, none | One frame from last time is the fastest way to remember what the light was doing here |
+| Offline, nothing saved | Use the download button to mark ground, or the camera to keep a picture of the view |
+| Sign-in panel | Keeps folders and pins on every device; photographs stay on the device they were added to |
+| Plan, in settings | One word: `Free`. The sentence explaining it belongs in the help page, not in a menu somebody opened to switch to Celsius |
+
+Two of those are load-bearing beyond their length. The Details empty state is
+the doorway to the Photography panel and used to promise a coordinate readout.
+The sign-in line now says what sync does **not** carry: folder rows travel,
+photograph files do not, because uploading megabytes per pin without being
+asked is not a default anybody would choose.
+
+---
+
 ## Elsewhere
 
 **App store, short**
@@ -211,4 +240,5 @@ changing the claim means changing the code first.
 | RV-safe routing | An RV advisory, and what it cannot see |
 | Download any basemap | Download the open layers and our own archive; Mapbox reserves offline for native |
 | Your data is backed up | Folders live in this browser until you sign in |
+| Everything syncs | Folders and pins sync; photographs stay on the device they were added to |
 | Works offline | The app opens with no network; the map needs the regions you saved |
