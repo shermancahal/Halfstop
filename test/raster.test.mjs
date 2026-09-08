@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 import { decodePNG, encodePNG, resizeRGBA, cropRGBA } from '../tools/raster.mjs';
-import { ICONS, TIGHT, renderIcon, readMaster } from '../tools/build-app-icons.mjs';
+import { ICONS, TIGHT, SAFE, renderIcon, readMaster } from '../tools/build-app-icons.mjs';
 
 const solid = (size, [r, g, b, a = 255]) => {
   const rgba = new Uint8ClampedArray(size * size * 4);
@@ -127,6 +127,12 @@ test('the medallion stays inside the safe zone a launcher crops to', async () =>
 });
 
 test('the tight crop keeps the whole medallion, not part of it', () => {
-  // Two thirds of the frame around a medallion that measures 59% of it.
-  assert.ok(TIGHT > 0.6 && TIGHT < 0.8, `TIGHT is ${TIGHT}`);
+  // The medallion measures 86% of the master, so a tight crop has very little
+  // room: below this it starts cutting the bezel rather than the margin.
+  assert.ok(TIGHT >= 0.8 && TIGHT < 1, `TIGHT is ${TIGHT}`);
+});
+
+test('the maskable icon shrinks the artwork rather than trusting it to fit', () => {
+  // 86% of the master, times this, has to land inside Android's 80%.
+  assert.ok(0.86 * SAFE < 0.8, `86% x ${SAFE} is ${(0.86 * SAFE).toFixed(3)}`);
 });

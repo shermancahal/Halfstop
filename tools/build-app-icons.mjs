@@ -44,7 +44,19 @@ const OUT_DIR = path.join(ROOT, 'assets', 'img');
  * The medallion measures 456px across a 768px frame in the artwork, which is
  * 59%. Two thirds keeps it whole with a little air, and no more.
  */
-export const TIGHT = 0.66;
+export const TIGHT = 0.80;
+
+/*
+ * How much of a maskable icon the artwork is allowed to fill.
+ *
+ * Android crops adaptive icons to whatever shape the launcher uses, usually a
+ * circle, and guarantees only the middle 80% by width. The medallion measures
+ * 86% of the master - it very nearly fills the panel it was drawn on - so on a
+ * circular launcher its bezel would be cut into an arc. Shrinking it onto the
+ * same navy ground puts it at about 72%, inside the guarantee with room to
+ * spare, and the ground is the artwork's own so the join is invisible.
+ */
+export const SAFE = 0.84;
 
 /**
  * What gets written. Sizes are not arbitrary:
@@ -63,16 +75,58 @@ export const ICONS = [
   { file: 'apple-touch-icon.png', size: 180, shape: 'bleed' },
   { file: 'icon-192.png', size: 192, shape: 'bleed' },
   { file: 'icon-512.png', size: 512, shape: 'bleed' },
-  { file: 'icon-maskable-512.png', size: 512, shape: 'bleed' },
+  { file: 'icon-maskable-512.png', size: 512, shape: 'safe' },
   { file: 'icon-1024.png', size: 1024, shape: 'bleed' },
 ];
+
+/**
+ * The colour the artwork's own ground is, at the corner.
+ *
+ * Averaged over a patch rather than read from one pixel: the ground is a
+ * gradient and a single sample lands on whichever end of it the corner
+ * happens to be, which shows as a seam where the padding meets the artwork.
+ */
+function groundColour({ width, rgba }, patch = 24) {
+  let r = 0; let g = 0; let b = 0; let n = 0;
+  for (let y = 0; y < patch; y += 1) {
+    for (let x = 0; x < patch; x += 1) {
+      const i = (y * width + x) * 4;
+      r += rgba[i]; g += rgba[i + 1]; b += rgba[i + 2];
+      n += 1;
+    }
+  }
+  return [r / n, g / n, b / n];
+}
 
 /** One icon's pixels, from the master. */
 export function renderIcon(master, icon) {
   if (icon.shape === 'bleed') return resizeRGBA(master, icon.size);
-  const side = Math.round(master.width * TIGHT);
-  const inset = Math.round((master.width - side) / 2);
-  return resizeRGBA(cropRGBA(master, { x: inset, y: inset, size: side }), icon.size);
+
+  if (icon.shape === 'tight') {
+    const side = Math.round(master.width * TIGHT);
+    const inset = Math.round((master.width - side) / 2);
+    return resizeRGBA(cropRGBA(master, { x: inset, y: inset, size: side }), icon.size);
+  }
+
+  // safe: the whole artwork, shrunk onto its own ground so a circular crop
+  // cannot reach it.
+  const inner = Math.round(icon.size * SAFE);
+  const art = resizeRGBA(master, inner);
+  const [r, g, b] = groundColour(master);
+  const rgba = new Uint8ClampedArray(icon.size * icon.size * 4);
+  for (let i = 0; i < rgba.length; i += 4) {
+    rgba[i] = r; rgba[i + 1] = g; rgba[i + 2] = b; rgba[i + 3] = 255;
+  }
+  const offset = Math.round((icon.size - inner) / 2);
+  for (let y = 0; y < inner; y += 1) {
+    for (let x = 0; x < inner; x += 1) {
+      const from = (y * inner + x) * 4;
+      const to = ((y + offset) * icon.size + (x + offset)) * 4;
+      rgba[to] = art.rgba[from]; rgba[to + 1] = art.rgba[from + 1];
+      rgba[to + 2] = art.rgba[from + 2]; rgba[to + 3] = 255;
+    }
+  }
+  return { width: icon.size, height: icon.size, rgba };
 }
 
 export async function readMaster(file = SOURCE) {
