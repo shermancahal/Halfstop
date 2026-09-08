@@ -23,6 +23,25 @@
   --warn:           #9a6414;
   --surface:        #ffffff;
   --surface-2:      #faf7f2;
+  /*
+   * The chrome: the bar at the top and the block at the bottom.
+   *
+   * Read off the mark's own ground, and the same in both themes on purpose.
+   * The page beneath it changes with the theme; the frame around it does not,
+   * the way a masthead does not change colour when the paper does. It is also
+   * the one part of the site that sits directly beside the icon, in a browser
+   * tab and on a home screen, and a header that nearly matched would read as a
+   * mistake where one that plainly differs reads as a choice.
+   *
+   * Its own ink, because --ink follows the theme and would go dark against it.
+   */
+  --chrome:         #1f2846;
+  --chrome-2:       #171e36;
+  --chrome-ink:     #f2ece3;
+  --chrome-ink-2:   #a9b1c7;
+  --chrome-line:    #313c60;
+  --chrome-hover:   #2b3557;
+
   --shadow-sm:      0 1px 2px rgba(28, 24, 21, .06), 0 1px 3px rgba(28, 24, 21, .05);
   --shadow-md:      0 2px 6px rgba(28, 24, 21, .07), 0 8px 24px rgba(28, 24, 21, .08);
   --shadow-lg:      0 4px 12px rgba(28, 24, 21, .10), 0 20px 48px rgba(28, 24, 21, .14);
@@ -185,10 +204,17 @@ pre code { background: none; padding: 0; }
   padding-top: var(--safe-top);
   padding-left: var(--safe-left); padding-right: var(--safe-right);
   display: flex; align-items: center;
-  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  background: color-mix(in srgb, var(--chrome) 92%, transparent);
   backdrop-filter: saturate(150%) blur(10px);
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--chrome-line);
+  color: var(--chrome-ink);
 }
+/*
+ * Everything in the bar inherits the bar's ink rather than the page's.
+ *
+ * These are the same components used on the page below, and they read their
+ * colours from --ink and --line. Left alone they stayed dark, on a dark bar.
+ */
 /* Shrinkable, so a header that runs out of room crowds rather than overflows.
    The grid column above refuses to widen for it now, so the alternative to
    shrinking is clipping its own controls. */
@@ -240,6 +266,32 @@ pre code { background: none; padding: 0; }
 .icon-button:hover { background: var(--paper-3); color: var(--ink); border-color: var(--line); }
 .icon-button svg { width: 17px; height: 17px; }
 
+/*
+ * Everything in the bar takes the bar's ink, not the page's.
+ *
+ * These are the same components the page below uses and they read --ink and
+ * --paper-3, which follow the theme. On a bar that does not, the nav went
+ * brown on navy and the current page was marked with a cream pill - a bright
+ * block in the one place the eye lands first.
+ *
+ * Written after .nav and .icon-button rather than before, because it is the
+ * same specificity and the later one wins.
+ */
+.site-header .brand,
+.site-header .brand-name { color: var(--chrome-ink); }
+.site-header .brand-parent { color: var(--chrome-ink-2); }
+.site-header .nav a,
+.site-header .icon-button { color: var(--chrome-ink-2); border-color: transparent; }
+.site-header .nav a:hover,
+.site-header .icon-button:hover {
+  color: var(--chrome-ink); background: var(--chrome-hover); border-color: transparent;
+}
+/* The current page, marked by lifting it out of the bar rather than by
+   dropping a pale card onto it. */
+.site-header .nav a.is-active {
+  color: var(--chrome-ink); background: var(--chrome-hover);
+}
+
 /* ---------- buttons ---------- */
 
 .button {
@@ -268,15 +320,16 @@ pre code { background: none; padding: 0; }
 
 .site-footer {
   margin-top: 72px; padding: 40px 0 56px;
-  border-top: 1px solid var(--line); background: var(--paper-2);
-  font-size: .875rem; color: var(--ink-3);
+  border-top: 1px solid var(--chrome-line); background: var(--chrome);
+  font-size: .875rem; color: var(--chrome-ink-2);
 }
+.site-footer b { color: var(--chrome-ink); }
 .site-footer .wrap { display: flex; flex-wrap: wrap; gap: 20px 40px; align-items: flex-start; }
 .site-footer .footer-main { flex: 1 1 280px; }
-.site-footer h4 { font-family: var(--font-sans); font-size: .78rem; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-2); margin-bottom: .6em; }
+.site-footer h4 { font-family: var(--font-sans); font-size: .78rem; text-transform: uppercase; letter-spacing: .07em; color: var(--chrome-ink); margin-bottom: .6em; }
 .site-footer ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.site-footer a { color: var(--ink-2); text-decoration: none; }
-.site-footer a:hover { color: var(--clay); text-decoration: underline; }
+.site-footer a { color: var(--chrome-ink-2); text-decoration: none; }
+.site-footer a:hover { color: var(--chrome-ink); text-decoration: underline; }
 
 /* ---------- landing page ---------- */
 
