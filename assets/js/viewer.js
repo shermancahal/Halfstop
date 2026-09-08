@@ -77,6 +77,7 @@ import { lunarEclipses, describeEclipse, shadowGeometry } from './lib/eclipse.js
 import { describeSync } from './lib/sync.js';
 import { registerServiceWorker, applyServiceWorkerUpdate } from './lib/pwa.js';
 import { mayEdit } from './lib/editors.js';
+import { shareableURL, readSharedPin, pinLinkParts } from './lib/share.js';
 import {
   OfflineStore, MAX_ZOOM as OFFLINE_MAX_ZOOM, TILE_BUDGET,
   mayCacheTiles, tileURLsFor, downloadTiles, clearTiles, tileKeysFor, downloadArchiveTiles,
@@ -805,6 +806,21 @@ async function main() {
   } else {
     setStatus(false);
   }
+
+  /*
+   * A pin somebody sent, opened on arrival.
+   *
+   * After the catalogue, deliberately: fitAll() moves the camera to whatever
+   * files were on the link, and doing this first would show the pin and then
+   * pan away from it. The hash has already put the map over the point, so this
+   * only has to mark it and say what it is.
+   */
+  if (initial.pin) {
+    const { lon, lat, name } = initial.pin;
+    showPointDetails([lon, lat]);
+    if (name) toast(name, { tone: 'info', timeout: 8000 });
+  }
+
   renderDetailsTab();
 }
 
@@ -916,6 +932,12 @@ function readURL() {
     basemap: params.get('b'),
     overlays: params.has('o') ? (params.get('o') || '').split(',').filter(Boolean) : null,
     units: params.get('u') === 'metric' ? 'metric' : params.get('u') === 'imperial' ? 'imperial' : null,
+    /*
+     * A pin somebody sent. Read here rather than trusted: this is the one
+     * value on this list that arrives from another person's device, and a
+     * coordinate off the globe would move the map somewhere it cannot draw.
+     */
+    pin: readSharedPin(params),
   };
 }
 
@@ -8654,6 +8676,11 @@ function renderPointDetails(position) {
           openTab('folders');
         },
       }),
+      labelledButton(icons.share, 'Share', {
+        tone: 'ghost',
+        title: 'Send somebody a link that opens the map here',
+        onclick: () => sharePin({ name: 'Dropped pin' }, position),
+      }),
       labelledButton(icons.close, 'Clear', {
         tone: 'ghost',
         title: 'Forget this dropped pin',
@@ -8717,6 +8744,19 @@ function renderPinDetails(folder, item) {
           const row = dom.folderList.querySelector(`[data-item="${item.id}"]`);
           if (row) openStyleEditor(folder, [item.id], row);
         },
+      }),
+      /*
+       * The link carries the place, not the pin.
+       *
+       * Whoever opens it gets the map over this coordinate with the name on
+       * screen; they do not get a copy in their folders, because a link that
+       * silently wrote to somebody's saved pins would be a surprise. Saving it
+       * is their decision, and the Save button is already there when they make
+       * it.
+       */
+      labelledButton(icons.share, 'Share', {
+        title: 'Send somebody a link that opens the map on this waypoint',
+        onclick: () => sharePin(props, item.feature.geometry.coordinates),
       }),
     ]),
   ]));
@@ -10952,13 +10992,54 @@ function focusFolderItem(item, folderId = null, { edit = false } = {}) {
   }
 }
 
+/**
+ * A folder, handed to somebody else as a file.
+ *
+ * A link cannot carry a folder. One here holds 1,320 waypoints, and there is
+ * no server to put them on - so the honest unit for a folder is the GPX it
+ * already exports, offered to the share sheet rather than dropped in Downloads.
+ *
+ * Falls back to the download when a device has no share sheet, or has one that
+ * refuses files, which is most desktops. Same file either way; only where it
+ * lands differs.
+ */
+async function shareFolder(folder) {
+  const geojson = state.folders.folderGeoJSON(folder.id);
+  if (!geojson.features.length) {
+    toast('That folder is empty, so there is nothing to share.', { tone: 'error' });
+    return;
+  }
+  const filename = gpxNameFor(folder.name);
+  const gpx = toGPX(geojson, { name: folder.name });
+
+  if (navigator.canShare && navigator.share) {
+    const file = new File([gpx], filename, { type: 'application/gpx+xml' });
+    if (navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: folder.name });
+        return;
+      } catch (error) {
+        // Cancelled is a decision, not a failure, and needs no second attempt.
+        if (error?.name === 'AbortError') return;
+      }
+    }
+  }
+  downloadText(filename, gpx, 'application/gpx+xml');
+  toast(`Saved ${geojson.features.length} item${geojson.features.length === 1 ? '' : 's'} as ${filename}.`, { tone: 'ok' });
+}
+
+/** A folder's name as a filename, which two callers need to agree on. */
+function gpxNameFor(name) {
+  return `${String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'folder'}.gpx`;
+}
+
 function exportFolder(folder) {
   const geojson = state.folders.folderGeoJSON(folder.id);
   if (!geojson.features.length) {
     toast('That folder is empty, so there is nothing to export.', { tone: 'error' });
     return;
   }
-  const filename = `${folder.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'folder'}.gpx`;
+  const filename = gpxNameFor(folder.name);
   downloadText(filename, toGPX(geojson, { name: folder.name }), 'application/gpx+xml');
   toast(`Exported ${geojson.features.length} item${geojson.features.length === 1 ? '' : 's'} as ${filename}.`, { tone: 'ok' });
 }
@@ -12182,6 +12263,12 @@ function folderActionsRow(folder) {
         onclick: () => exportFolder(folder),
       }),
       el('button', {
+        class: 'button button-ghost button-small', type: 'button',
+        title: `Send ${folder.name} to somebody as a GPX file`,
+        html: `${icons.share}<span>Share</span>`,
+        onclick: () => shareFolder(folder),
+      }),
+      el('button', {
         class: 'button button-ghost button-small is-danger', type: 'button',
         title: `Delete ${folder.name}`,
         html: `${icons.trash}<span>Delete</span>`,
@@ -12542,13 +12629,28 @@ function renderProfile(profile) {
 
 async function shareView() {
   writeURL();
-  const url = location.href;
-  try {
-    await navigator.clipboard.writeText(url);
-    toast('Link copied — it restores these maps, this basemap and this view.', { tone: 'ok' });
-  } catch {
-    toast('Copy this URL to share the current view:', { tone: 'info' });
-  }
+  await offerLink(here(), {
+    title: SITE.name,
+    text: 'A view in Halfstop',
+    ok: 'Link copied \u2014 it restores these maps, this basemap and this view.',
+  });
+}
+
+/**
+ * One pin, as a link that opens the map on it.
+ *
+ * The coordinate travels in the query and the view in the hash, so the map
+ * opens at a sensible zoom over the point rather than at whatever the sender
+ * happened to be looking at. The name travels too: a pin with no name on
+ * somebody else's screen is a dot.
+ */
+async function sharePin(props, [lon, lat]) {
+  const name = String(props?.name || '').trim();
+  await offerLink(here(pinLinkParts({ lon, lat, name })), {
+    title: name || SITE.name,
+    text: name ? `${name} \u2014 on Halfstop` : 'A place on Halfstop',
+    ok: 'Link copied \u2014 it opens the map on this pin.',
+  });
 }
 
 /**

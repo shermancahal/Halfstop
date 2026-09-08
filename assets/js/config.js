@@ -29,6 +29,17 @@ export const SITE = {
   parent: null,
   // Shown in the footer and in file attributions.
   copyrightHolder: 'Halfstop, LLC',
+  /*
+   * Where this is published, for links that leave the device.
+   *
+   * The app runs at capacitor://localhost, so a link built from the running
+   * origin is meaningless to whoever it is sent to - it opens nothing on their
+   * phone and there is no error to notice, just a dead tap. Everything shared
+   * out of the app is built against this instead. On the web the running
+   * origin is used, so a link copied from a preview build still points at the
+   * preview.
+   */
+  url: 'https://app.halfstop.app/',
   contactEmail: '',
   /*
    * Who may edit page content in place.
