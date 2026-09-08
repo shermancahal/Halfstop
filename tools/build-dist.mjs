@@ -27,7 +27,7 @@ const DIST = path.join(ROOT, 'dist');
 const ZIP_NAME = 'halfstop-maps.zip';
 
 /** Everything the deployed site needs, and nothing else. */
-const INCLUDE_FILES = ['index.html', 'map.html', 'faq.html'];
+const INCLUDE_FILES = ['index.html', 'map.html', 'faq.html', 'terms.html', 'privacy.html'];
 
 /**
  * Root files copied through verbatim, without cache-busting.
@@ -320,6 +320,8 @@ Everything in this folder, keeping the folder structure exactly as it is:
   index.html        the homepage and the catalogue of published maps
   map.html          the map viewer
   faq.html          help, and the FAQ
+  terms.html        terms of service
+  privacy.html      privacy policy
   .htaccess         Apache settings (see notes inside; safe to delete)
   assets/           styles, scripts, icon
   data/             the published map files and catalog.json

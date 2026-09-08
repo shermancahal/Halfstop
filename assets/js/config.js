@@ -40,7 +40,7 @@ export const SITE = {
    * preview.
    */
   url: 'https://app.halfstop.app/',
-  contactEmail: '',
+  contactEmail: 'support@halfstop.app',
   /*
    * Who may edit page content in place.
    *

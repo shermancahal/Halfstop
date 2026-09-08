@@ -2782,3 +2782,7 @@ body.has-table { overflow: hidden; }
   .table-grid { min-width: 760px; }
   .table-title h2 { font-size: .95rem; }
 }
+
+/* The one control in the account panel that destroys something, set apart from
+   the two that do not. */
+.account-danger { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }

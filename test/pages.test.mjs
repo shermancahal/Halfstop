@@ -14,7 +14,30 @@ import { SITE } from '../assets/js/config.js';
  * gone wrong or came within one commit of going wrong.
  */
 
-const PAGES = ['index.html', 'faq.html', 'map.html'];
+/*
+ * Every page the build ships, and this list has to stay level with the one in
+ * tools/build-dist.mjs. Two pages were written, linked from the footer, and
+ * shipped by neither - the build copies a named list and so does this, so a new
+ * page is invisible to both until it is named twice.
+ */
+const PAGES = ['index.html', 'faq.html', 'map.html', 'terms.html', 'privacy.html'];
+
+/*
+ * The two lists, checked against each other rather than by hand.
+ *
+ * terms.html and privacy.html were written, linked from the footer, and shipped
+ * by nothing: the build copies a named list of pages and so does this file, so
+ * a new page is invisible to both until somebody remembers to name it twice.
+ * Nothing failed. The footer just linked to a 404 on the live site.
+ */
+test('pages: the build ships exactly the pages this file checks', async () => {
+  const source = await readFile(new URL('../tools/build-dist.mjs', import.meta.url), 'utf8');
+  const declared = /const INCLUDE_FILES = \[([^\]]*)\]/.exec(source)?.[1];
+  assert.ok(declared, 'INCLUDE_FILES is not where this test expects it');
+  const shipped = [...declared.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  assert.deepEqual([...shipped].sort(), [...PAGES].sort(),
+    'tools/build-dist.mjs and this list have drifted apart');
+});
 
 const read = (file) => readFile(new URL(`../${file}`, import.meta.url), 'utf8');
 

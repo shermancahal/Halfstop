@@ -2195,11 +2195,31 @@ if (!external) {
   // First, so that when the card is wrong the complaint under it is in the log.
   check('a clean sign-in has nothing to complain about', card.hints, []);
   check('who, then the edit, then the sync line, then the buttons',
-    card.rows, ['account-who', 'button', 'account-meta', 'account-actions']);
+    card.rows, ['account-who', 'button', 'account-meta', 'account-actions', 'account-actions']);
   check('the name is the one typed into the profile', card.name, 'Sherman Cahal');
   check('with the address on its own line under it', card.email, 'sherman@example.com');
   check('and the sync line counts folders', /folders? synced/.test(card.sync || ''), true);
-  check('two buttons, each with a mark', card.buttons, [['Sync now', true], ['Sign out', true]]);
+  check('three buttons, each with a mark',
+    card.buttons, [['Sync now', true], ['Sign out', true], ['Delete account', true]]);
+  /*
+   * Delete is on its own row, below a rule.
+   *
+   * Apple requires an app offering sign-in to offer this, so it has to be here
+   * - and it is the only control on this card that destroys something and
+   * cannot be undone. Beside Sign out, one row of three, it is a mis-tap. The
+   * separation is the safety, so it is the thing tested rather than its
+   * presence.
+   */
+  const danger = await signed.evaluate(() => {
+    const row = document.querySelector('#account-panel .account-danger');
+    const buttons = [...(row?.querySelectorAll('button') || [])].map((b) => b.textContent.trim());
+    const others = [...document.querySelectorAll('#account-panel .account-actions:not(.account-danger) button')]
+      .map((b) => b.textContent.trim());
+    return { buttons, others, ruled: row ? getComputedStyle(row).borderTopWidth : 'no row' };
+  });
+  check('delete sits apart from the buttons that undo', danger.buttons, ['Delete account']);
+  check('and nothing harmless shares its row', danger.others, ['Sync now', 'Sign out']);
+  check('with a rule between them', danger.ruled !== '0px', true);
   await shot(signed.locator('#settings-panel'), 'settings-signed-in');
 
   await signed.locator('#account-panel .account-edit').click();

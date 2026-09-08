@@ -291,6 +291,47 @@ export class Account extends EventTarget {
   }
 
   /**
+   * Delete the account, and everything on the server with it.
+   *
+   * Apple requires an app that offers sign-in to offer this from inside the
+   * app, and the privacy policy promises it. Both are satisfied by the rows
+   * going: what identifies a person here is their email on the auth record and
+   * the pins filed under their user id.
+   *
+   * The rows first, then the sign-out, in that order and never the reverse.
+   * Row-level security checks the signed-in user, so signing out first would
+   * leave a request with no authority to delete anything - it would succeed at
+   * deleting nothing and report success.
+   *
+   * The auth record itself cannot be removed from the browser: deleting a user
+   * needs the service_role key, which must never be in a page. So this empties
+   * the account and says plainly that the sign-in record is removed on request,
+   * rather than claiming something it did not do.
+   *
+   * What is on the device is deliberately left alone. Somebody deleting an
+   * account is asking us to forget them, not asking their phone to throw away
+   * the folders they spent a season building - and if they did want that, the
+   * app cannot tell the two apart, so it does the reversible one.
+   */
+  async deleteAccount() {
+    if (!this.user) return { ok: false, reason: 'Not signed in.' };
+    const client = await this.getClient();
+    if (!client) return { ok: false, reason: 'Accounts are not configured here.' };
+
+    const { error } = await client.from(TABLE).delete().eq('user_id', this.user.id);
+    if (error) {
+      this.setStatus('signed-in', `Could not delete your data: ${error.message}`);
+      return { ok: false, reason: error.message };
+    }
+
+    await this.signOut();
+    this.setStatus('signed-out',
+      'Your folders were deleted from the server. Your sign-in record is removed on request '
+      + '— write to support@halfstop.app. What is on this device is untouched.');
+    return { ok: true };
+  }
+
+  /**
    * Change the name or the address.
    *
    * Only what actually changed is sent. Supabase treats a new address as a

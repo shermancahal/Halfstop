@@ -629,3 +629,37 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
   font-size: .86rem; color: var(--ink-2); text-decoration: none;
 }
 .faq-index a:hover { border-color: var(--line-strong); color: var(--ink); }
+
+/* ----------------------------------------------------------------- costs */
+
+.costs-lede { max-width: 68ch; color: var(--ink-2); font-size: 1.02rem; margin: 0 0 28px; }
+.costs-grid { display: grid; gap: 18px; margin-bottom: 34px; }
+@media (min-width: 760px) { .costs-grid { grid-template-columns: 1fr 1fr; } }
+.costs-card {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); padding: 22px 24px;
+}
+.costs-card h3 { margin: 0 0 12px; font-family: var(--font-sans); font-size: 1rem; }
+.costs-card ul { margin: 0; padding-left: 1.1em; display: grid; gap: 7px; }
+.costs-card li { color: var(--ink-2); font-size: .93rem; }
+/* The free card is the one to read first, so it is the one with the accent. */
+.costs-grid .costs-card:first-child { border-color: var(--clay); box-shadow: 0 0 0 1px var(--clay-soft); }
+.costs-why { margin: 0 0 10px; }
+.section-costs p { max-width: 68ch; color: var(--ink-2); }
+.costs-promise {
+  border-left: 3px solid var(--clay); padding: 2px 0 2px 16px; margin-top: 26px;
+}
+
+/* ----------------------------------------------------------------- legal */
+
+.legal-wrap { max-width: 74ch; padding-bottom: 20px; }
+.legal-date { color: var(--ink-3); font-size: .86rem; margin: 0 0 30px; }
+.legal-section { margin-bottom: 34px; }
+.legal-section h2 {
+  font-size: 1.22rem; margin: 0 0 12px;
+  padding-bottom: 8px; border-bottom: 1px solid var(--line);
+}
+.legal-section p { color: var(--ink-2); line-height: 1.66; margin: 0 0 12px; }
+.legal-section ul { margin: 0 0 12px; padding-left: 1.2em; display: grid; gap: 8px; }
+.legal-section li { color: var(--ink-2); line-height: 1.6; }
+.legal-section b { color: var(--ink); }

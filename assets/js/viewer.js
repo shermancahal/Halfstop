@@ -11839,11 +11839,42 @@ function renderAccount() {
         onclick: () => account.signOut().catch((error) => toast(error.message, { tone: 'error' })),
       });
       withIcon(signOut, icons.logout);
+
+      /*
+       * Deleting the account, from inside the app.
+       *
+       * Apple requires this of anything offering sign-in, and the privacy
+       * policy promises it. Two confirmations rather than one: the first says
+       * what goes, the second asks for the word, because this is the only
+       * button here that destroys something and cannot be undone.
+       */
+      const deleteAccount = el('button', {
+        class: 'button button-ghost button-small is-danger', type: 'button', text: 'Delete account',
+        title: 'Remove your folders from the server and close the account',
+        onclick: async () => {
+          const warning = 'Delete your account?\n\n'
+            + 'Your folders and pins are removed from the server and will not reach '
+            + 'your other devices again. What is saved on this device is left alone.\n\n'
+            + 'This cannot be undone.';
+          if (!window.confirm(warning)) return;
+          if (window.prompt('Type DELETE to confirm.') !== 'DELETE') {
+            toast('Nothing was deleted.', { tone: 'info' });
+            return;
+          }
+          const result = await account.deleteAccount()
+            .catch((error) => ({ ok: false, reason: error.message }));
+          toast(result.ok ? 'Account deleted.' : `Could not delete: ${result.reason}`,
+            { tone: result.ok ? 'ok' : 'error' });
+        },
+      });
+      withIcon(deleteAccount, icons.trash);
+
       dom.account.append(
         who,
         edit,
         el('div', { class: 'account-meta', text: syncLine }),
         el('div', { class: 'account-actions' }, [syncNow, signOut]),
+        el('div', { class: 'account-actions account-danger' }, [deleteAccount]),
       );
     }
     if (account.message) dom.account.append(el('p', { class: 'hint', text: account.message }));
