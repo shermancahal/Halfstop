@@ -16,7 +16,8 @@ of getting to the spot and knowing what is around it.
 | --- | --- | --- |
 | Site name, tagline, description, copyright holder | `assets/js/config.js` → `SITE` | No — config, rendered into the header and footer on every load |
 | Hero, "What it does", Roadmap | `index.html`, slugs `hero`, `about`, `roadmap` | **Yes** |
-| Help sections | `faq.html`, slugs `photography`, `offline`, `basemaps`, `layers`, `drones`, `directions`, `account` | **Yes** |
+| Help sections | `faq.html`, slugs `photography`, `offline`, `layers`, `directions`, `account` | **Yes** |
+| Header and footer | `index.html`, `faq.html`, `map.html` — identical markup, filled in by `lib/branding.js` | No |
 | `<title>`, `<meta name="description">`, Open Graph | `index.html`, `map.html`, `faq.html` heads | No |
 | App name and store-style description | `manifest.webmanifest` | No |
 | The map's own interface — empty states, buttons, toasts | `assets/js/viewer.js` | No — ships with the code, see **In the app** |
@@ -165,7 +166,25 @@ date is being implied.
 
 ## Help page
 
-`faq.html` opens with **Planning a shoot**, which is the section a photographer
+Five sections, five short headings:
+
+| Heading | Slug | Covers |
+| --- | --- | --- |
+| Planning a Shoot | `photography` | the light panel, the six tabs, the lines on the map, dark-sky layers |
+| Offline Access | `offline` | marking regions, what downloads and what cannot, picture maps vs drawn maps, save as a picture |
+| Layers | `layers` | basemaps and overlays, zoom floors, where the data comes from, the drone layers |
+| Directions and Trip Planning | `directions` | handing a stop to Apple, Google or Waze; what the planner is and is not |
+| Account | `account` | folders in the browser, what signing in syncs, exports |
+
+It was seven. "Why some maps download and some do not" is now the middle of
+**Offline Access**, where the question is actually asked, and "The drone
+layers" is the last part of **Layers**, because that is what they are. Two
+slugs went with them — a saved `basemaps` or `drones` row in `page_sections`
+is now orphaned: still in the table, no longer rendered anywhere. Nothing is
+lost, but if either had been edited in place, that edit needs pasting into its
+new home.
+
+**Planning a Shoot** opens the page, because it is the section a photographer
 arriving from a search result needs, and it is where the honest limits live:
 
 - Light phases, moon and Milky Way are computed on the device, for the pin.
@@ -201,6 +220,29 @@ the doorway to the Photography panel and used to promise a coordinate readout.
 The sign-in line now says what sync does **not** carry: folder rows travel,
 photograph files do not, because uploading megabytes per pin without being
 asked is not a default anybody would choose.
+
+---
+
+## Header and footer
+
+One header and one footer, byte-identical on every page bar the `is-active`
+marker that says which page you are on. `lib/branding.js` writes the name, the
+tagline and the copyright holder into both from `SITE`, so there is one place
+to change them and no page can fall behind.
+
+The footer is three columns: the brand and the attribution line, then **Site**
+(Home, Map, Help & FAQ, Roadmap) and **Help** (the five section anchors). The
+Roadmap link is `./#roadmap` rather than `#roadmap` so the same markup works
+from the help page.
+
+`map.html` carries the header and no footer, on purpose. It is a full-viewport
+app — a footer under it either scrolls the map away or is never reached — and
+its header holds the app's own controls (settings, fit, offline, share) to the
+right of the shared nav. The theme toggle lives inside its settings menu rather
+than in the bar, which is what took that header from eight controls to five.
+
+The catalogue link is gone from the footer. It pointed at `data/catalog.json`,
+which is a build artefact the map reads, not a page anybody wants to open.
 
 ---
 

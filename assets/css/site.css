@@ -273,6 +273,10 @@ pre code { background: none; padding: 0; }
 }
 .site-footer .wrap { display: flex; flex-wrap: wrap; gap: 20px 40px; align-items: flex-start; }
 .site-footer .footer-main { flex: 1 1 280px; }
+/* Two nav columns beside the brand. Fixed-ish rather than 1fr each: a link
+   list is a few short words, and letting it take a third of a wide footer
+   strands the names at the left edge of an empty column. */
+.site-footer .footer-nav { flex: 0 1 210px; }
 .site-footer h4 { font-family: var(--font-sans); font-size: .78rem; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-2); margin-bottom: .6em; }
 .site-footer ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .site-footer a { color: var(--ink-2); text-decoration: none; }

@@ -10,23 +10,19 @@
  */
 
 import { initTheme } from './lib/ui.js';
-import { SITE } from './config.js';
+import { applyBranding } from './lib/branding.js';
 import { enablePageEditing } from './lib/page-edit.js';
 
 const PAGE = 'faq';
 
 initTheme(document.getElementById('theme-toggle'));
-for (const node of document.querySelectorAll('#brand-name')) node.textContent = SITE.name;
-// The parent line and the "A project of ..." note go when there is no parent
-// to name; the markup's fallback would otherwise keep showing the old one.
-const parentName = SITE.parent?.name || '';
-for (const node of document.querySelectorAll('#brand-parent')) {
-  node.textContent = parentName;
-  node.hidden = !parentName;
-}
-for (const node of document.querySelectorAll('#parent-name-footer')) {
-  if (parentName) node.textContent = parentName;
-  else node.closest('p')?.remove();
-}
+/*
+ * The same branding call the homepage makes, because this page now carries the
+ * same header and the same three-column footer. It used to do its own smaller
+ * version of this - brand name, brand parent, and a #parent-name-footer that
+ * no longer exists in the markup - which is exactly the drift the shared
+ * function is there to stop.
+ */
+applyBranding();
 
 enablePageEditing(PAGE).catch((error) => console.warn('[faq]', error?.message || error));
