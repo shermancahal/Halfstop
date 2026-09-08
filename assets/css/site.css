@@ -576,3 +576,56 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 .section-cta { text-align: center; }
 .section-cta h2 { margin: 0 0 10px; }
 .section-cta p { margin: 0 auto 22px; color: var(--ink-2); max-width: 52ch; }
+
+/* ------------------------------------------------------------------- faq */
+
+/*
+ * Questions as native disclosures.
+ *
+ * <details> rather than a script: it opens with JavaScript off, the browser
+ * gives it keyboard handling and the right role for free, and - the reason
+ * that decided it - a browser's own find-in-page opens a closed one to show a
+ * match. A div with a click handler does none of that, and a help page you
+ * cannot search is a help page nobody reads twice.
+ */
+.faq-item {
+  border-bottom: 1px solid var(--line);
+}
+.faq-item > summary {
+  list-style: none; cursor: pointer;
+  display: flex; align-items: baseline; gap: 12px;
+  padding: 15px 0;
+  /* The whole row is the target, not just the words. */
+  margin: 0 -4px; padding-left: 4px; padding-right: 4px;
+  border-radius: var(--radius-sm);
+}
+.faq-item > summary::-webkit-details-marker { display: none; }
+.faq-item > summary:hover { background: var(--paper-2); }
+.faq-item > summary:focus-visible { outline: 2px solid var(--clay); outline-offset: 2px; }
+.faq-item > summary h3 {
+  margin: 0; font-size: 1.02rem; flex: 1; font-family: var(--font-sans); font-weight: 600;
+}
+/* The mark, drawn rather than a glyph, so it turns rather than swapping. */
+.faq-item > summary::after {
+  content: ""; flex: none; align-self: center;
+  width: 9px; height: 9px; margin-left: auto;
+  border-right: 2px solid var(--ink-3); border-bottom: 2px solid var(--ink-3);
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform .15s ease;
+}
+.faq-item[open] > summary::after { transform: rotate(-135deg) translate(-2px, -2px); }
+.faq-item[open] > summary h3 { color: var(--clay-2); }
+.faq-answer { padding: 0 0 6px; }
+.faq-answer > p:first-child { margin-top: 0; }
+
+/* Where the sections are, before any of them is opened. */
+.faq-index {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  margin: 0 0 34px; padding: 0; list-style: none;
+}
+.faq-index a {
+  display: inline-block; padding: 7px 13px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--surface);
+  font-size: .86rem; color: var(--ink-2); text-decoration: none;
+}
+.faq-index a:hover { border-color: var(--line-strong); color: var(--ink); }

@@ -58,19 +58,38 @@
     </div>
   </section>
 
+  <div class="wrap">
+    <ul class="faq-index">
+      <li><a href="#offline">Taking the map offline</a></li>
+      <li><a href="#basemaps">Why some maps download and some do not</a></li>
+      <li><a href="#layers">Layers and what they mean</a></li>
+      <li><a href="#drones">The drone layers</a></li>
+      <li><a href="#directions">Directions and the trip planner</a></li>
+      <li><a href="#account">Accounts and your own files</a></li>
+    </ul>
+  </div>
+
   <div class="wrap faq-wrap">
 
     <section class="faq-section" id="offline">
       <h2>Taking the map offline</h2>
 
-      <h3>On this screen</h3>
+      <details class="faq-item">
+        <summary><h3>On this screen</h3></summary>
+        <div class="faq-answer">
+
       <p>
         Saves the area you are currently looking at as a named region. It records
         the bounding box, a zoom range and which basemap was showing — it does not
         fetch anything yet. Think of it as marking the ground you care about.
       </p>
 
-      <h3>Map regions</h3>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary><h3>Map regions</h3></summary>
+        <div class="faq-answer">
+
       <p>
         The regions you have marked. Each one shows how much ground it covers, how
         many tiles that works out to at the zoom range you chose, and roughly how
@@ -79,7 +98,12 @@
         region costs at zoom 12.
       </p>
 
-      <h3>Download for offline</h3>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary><h3>Download for offline</h3></summary>
+        <div class="faq-answer">
+
       <p>
         Fetches the tiles and keeps them on the device. It stores the basemap you
         have selected plus any layers switched on over it, and the panel names what
@@ -99,43 +123,39 @@
         than estimated, and is what decides whether the next download will fit.
       </p>
 
-      <h3>What cannot be downloaded here, and why</h3>
-      <p>
-        <strong>Anything drawing from Mapbox cannot be stored offline by this
-        app</strong> — Mapbox Outdoors, Satellite Streets, and Byways Topo when it
-        is reading Mapbox geometry. Mapbox reserve offline storage to their own
-        native mobile toolkit. This app is a web view, which is not that toolkit
-        and has no offline facility at all — so it says so rather than offering a
-        button that quietly downloads something else.
-      </p>
-      <p>
-        Worth being exact, because it affects what a paid tier could offer:
-        <em>Mapbox offline is a real capability, it is simply not available on the
-        web.</em> Their mobile toolkit downloads regions properly and is billed
-        under their mobile pricing. Reaching it would mean the app drawing its maps
-        natively on the phone rather than in a web view — a different piece of
-        engineering, not a setting, and not something a paid plan alone unlocks.
-      </p>
-      <p>
-        <strong>Byways Topo drawing from our own archive can be.</strong> The
-        archive is one file rather than a service, so a download reads the region
-        out of it and keeps the pieces on the device — same regions, same counts,
-        same progress line as any other download. It is what the second foundation
-        below was for.
-      </p>
-      <p>
-        Everything else can too: USGS Topo and Imagery, the state aerial and lidar
-        layers, BLM, the FAA layers and the rest. All of it is public data with no
-        such condition attached.
-      </p>
-      <p>
-        The OpenStreetMap community tile servers are also left alone. Nothing
-        forbids downloading from them, but their usage policy asks bulk downloaders
-        to run their own servers, and filling a phone from a volunteer-funded
-        service is what it asks people not to do.
-      </p>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary><h3>What cannot be downloaded, and why</h3></summary>
+        <div class="faq-answer">
 
-      <h3>Save as a picture</h3>
+      <p>
+        <strong>Nearly everything can.</strong> Byways Topo, USGS Topo and
+        Imagery, the state aerial and lidar layers, BLM, the FAA ceilings and the
+        rest of the agency layers are all public data with no condition attached,
+        and a region download keeps them on the device.
+      </p>
+      <p>
+        <strong>Two exceptions.</strong> The OpenStreetMap community tile servers
+        are left alone: nothing forbids downloading from them, but their usage
+        policy asks bulk downloaders to run their own servers, and filling a phone
+        from a volunteer-funded service is the thing it asks people not to do.
+      </p>
+      <p>
+        And Mapbox’s own maps cannot be stored, because Mapbox keep offline
+        downloads inside their native mobile toolkit rather than offering them on
+        the web. Halfstop draws its maps in a web view, so the facility is not
+        available to it at all — which is why those maps say so instead of
+        offering a button that quietly downloads something else. In practice this
+        will not come up: the Mapbox basemaps are not in the layer list, and the
+        Byways Topo you use reads from our own archive rather than from them.
+      </p>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary><h3>Save as a picture</h3></summary>
+        <div class="faq-answer">
+
       <p>
         The one export that always works. It costs no tiles, needs no account and
         no network, and on a phone in a canyon it is often the whole answer. On a
@@ -150,7 +170,12 @@
         can take with you.
       </p>
 
-      <h3>Picture maps</h3>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary><h3>Picture maps</h3></summary>
+        <div class="faq-answer">
+
       <p>
         USGS Topo, the aerial imagery, the state lidar hillshades. These arrive as
         finished pictures — the agency drew them, and the app places them. They are
@@ -158,7 +183,12 @@
         device. Everything you can download is one of these.
       </p>
 
-      <h3>Drawn maps</h3>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary><h3>Drawn maps</h3></summary>
+        <div class="faq-answer">
+
       <p>
         Byways Topo is drawn in the browser: the palette, the road hierarchy, the
         route shields and the labels are all this app's, applied to raw geometry
@@ -174,7 +204,12 @@
         atlas, and is what the section below is about fixing.
       </p>
 
-      <h3>The second foundation</h3>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary><h3>The second foundation</h3></summary>
+        <div class="faq-answer">
+
       <p>
         The cartography is ours; only the geometry underneath is rented. So Byways
         Topo now knows how to draw from a second source: an OpenStreetMap-derived
@@ -206,12 +241,17 @@
         behind — it is that the default should not cost money to look at, or stop
         working where there is no signal.
       </p>
+        </div>
+      </details>
     </section>
 
     <section class="faq-section" id="layers">
       <h2>Layers and what they mean</h2>
 
-      <h3>The map underneath, and the layers over it</h3>
+      <details class="faq-item">
+        <summary><h3>The map underneath, and the layers over it</h3></summary>
+        <div class="faq-answer">
+
       <p>
         One basemap is drawn at a time; layers stack over it, each with its own
         opacity. A layer switched on for one state stays on when you leave that
@@ -219,7 +259,12 @@
         while you are elsewhere.
       </p>
 
-      <h3>Zoom floors</h3>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary><h3>Zoom floors</h3></summary>
+        <div class="faq-answer">
+
       <p>
         Some layers only load past a certain zoom, and say so with an amber
         <em>zoom in to 10</em> badge rather than appearing broken. The floor is not
@@ -229,7 +274,12 @@
         airspace, which is the wrong way to be wrong.
       </p>
 
-      <h3>Where the data comes from</h3>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary><h3>Where the data comes from</h3></summary>
+        <div class="faq-answer">
+
       <p>
         Every layer names its source in its own description. They are agency
         services read live, not copies — so a layer reflects what that agency
@@ -243,7 +293,12 @@
         access.
       </p>
 
-      <h3>Not responding</h3>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary><h3>Not responding</h3></summary>
+        <div class="faq-answer">
+
       <p>
         A red badge means that layer's service is not answering. Some are known to
         be intermittent — the FAA's drone layers sit behind a request quota shared
@@ -260,7 +315,12 @@
         data drawn on a different map, and it can be out of date.
       </p>
 
-      <h3>Drone ceilings</h3>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary><h3>Drone ceilings</h3></summary>
+        <div class="faq-answer">
+
       <p>
         The UAS Facility Map: the grid LAANC reads when it approves a flight. The
         number is how high LAANC will grant that authorisation <em>instantly</em> —
@@ -275,7 +335,12 @@
         no authorisation is needed — an absent cell is an answer, not a gap.
       </p>
 
-      <h3>Restrictions and advisories</h3>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary><h3>Restrictions and advisories</h3></summary>
+        <div class="faq-answer">
+
       <p>
         Red is do-not-fly; amber is permitted with permission or with care.
         <strong>These are standing and scheduled restrictions only.</strong>
@@ -301,7 +366,12 @@
         is handed to whichever of those you already use.
       </p>
 
-      <h3>Why a single stop offers three apps and a whole trip offers one</h3>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary><h3>Why a single stop offers three apps and a whole trip offers one</h3></summary>
+        <div class="faq-answer">
+
       <p>
         Because the three do not agree about what a link may carry, and only one of
         them takes more than one destination.
@@ -328,7 +398,12 @@
         four stops is something you discover in a car park.
       </p>
 
-      <h3>Walk-in stops</h3>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary><h3>Walk-in stops</h3></summary>
+        <div class="faq-answer">
+
       <p>
         A pin dropped at a waterfall is often not on a road. The router does not
         refuse it — it silently routes to the nearest road it can reach — so the
@@ -364,6 +439,8 @@
       <li><a href="map.html">Map</a></li>
     </ul>
   </div>
+        </div>
+      </details>
 </footer>
 
 <script src="assets/js/token.js"></script>
