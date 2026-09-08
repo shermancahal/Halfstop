@@ -1,346 +1,24 @@
 /**
- * A very small SVG-subset rasteriser, and a PNG encoder to go with it.
+ * PNG in, PNG out, and the arithmetic between them.
  *
- * It exists because the app needs real PNG icons — a web manifest will take an
- * SVG, but `apple-touch-icon` will not, and Capacitor's icon generator wants a
- * 1024px bitmap — and this project installs nothing to build itself. Pulling in
- * sharp or resvg for five files would mean the icons could only be regenerated
- * on a machine with a working toolchain, which is exactly the kind of step that
- * rots.
+ * It exists because this project installs nothing to build itself. Pulling in
+ * sharp or resvg to cut six icons out of one picture would mean the icons
+ * could only be regenerated on a machine with a working native toolchain,
+ * which is exactly the kind of step that rots. Node ships zlib, which is the
+ * hard half of both directions.
  *
- * The subset is deliberately tiny: filled rects (with rounded corners), filled
- * circles, and stroked/filled paths with M L H V C S Q T Z, dashes and round
- * caps. That is what assets/img/mark.svg uses. Anything else throws rather than
- * being silently skipped — an icon that renders with a piece missing looks like
- * a design decision, and nobody would catch it.
+ * This was an SVG rasteriser until the mark became a painting. Several hundred
+ * lines of path flattening, dashing and coverage sampling went with it: once
+ * the icons were cut from a PNG, nothing drew the mark, and the only thing
+ * still calling that code was the tests written for it.
+ *
+ * Reading is deliberately narrow - 8-bit RGB or RGBA, no interlace, which is
+ * what an export tool writes and what the committed master is. Anything else
+ * throws rather than returning quietly wrong pixels: an icon that renders with
+ * a piece missing looks like a design decision, and nobody would catch it.
  */
 
-import { deflateSync } from 'node:zlib';
-
-/* ------------------------------------------------------------------ paths -- */
-
-const NUMBER = /-?\d*\.?\d+(?:[eE][-+]?\d+)?/g;
-
-/** Split a `d` attribute into `{ command, args }` steps. */
-export function parsePathCommands(d) {
-  const steps = [];
-  const tokens = String(d).match(/[a-zA-Z]|-?\d*\.?\d+(?:[eE][-+]?\d+)?/g) || [];
-  let i = 0;
-  const ARITY = { M: 2, L: 2, H: 1, V: 1, C: 6, S: 4, Q: 4, T: 2, Z: 0 };
-  let command = null;
-  while (i < tokens.length) {
-    if (/[a-zA-Z]/.test(tokens[i])) command = tokens[i++];
-    else if (!command) throw new Error(`path data starts with a number: ${d}`);
-    // A repeated coordinate set continues the previous command, except that a
-    // repeated moveto is an implicit lineto. Getting this wrong draws a stray
-    // line across the icon, which is at least visible.
-    else if (command === 'M') command = 'L';
-    else if (command === 'm') command = 'l';
-
-    const key = command.toUpperCase();
-    const arity = ARITY[key];
-    if (arity === undefined) throw new Error(`unsupported path command "${command}"`);
-    const args = tokens.slice(i, i + arity).map(Number);
-    if (args.length < arity) throw new Error(`path command "${command}" wants ${arity} numbers`);
-    i += arity;
-    steps.push({ command, args });
-  }
-  return steps;
-}
-
-const cubicAt = (t, a, b, c, d) => {
-  const u = 1 - t;
-  return u * u * u * a + 3 * u * u * t * b + 3 * u * t * t * c + t * t * t * d;
-};
-
-/**
- * Flatten a path to polylines. `segments` is the fixed subdivision count per
- * curve — 32 is smooth well past 1024px for a mark this size, and a fixed count
- * keeps the output identical from run to run.
- */
-export function flattenPath(d, { segments = 32 } = {}) {
-  const subpaths = [];
-  let current = null;
-  let x = 0;
-  let y = 0;
-  let startX = 0;
-  let startY = 0;
-  // Reflection points for the shorthand S and T commands.
-  let lastCubic = null;
-  let lastQuad = null;
-
-  const open = () => {
-    current = { points: [[x, y]], closed: false };
-    subpaths.push(current);
-  };
-  const lineTo = (nx, ny) => {
-    if (!current) open();
-    current.points.push([nx, ny]);
-    x = nx; y = ny;
-  };
-  const curveTo = (x1, y1, x2, y2, nx, ny) => {
-    if (!current) open();
-    for (let s = 1; s <= segments; s += 1) {
-      const t = s / segments;
-      current.points.push([cubicAt(t, x, x1, x2, nx), cubicAt(t, y, y1, y2, ny)]);
-    }
-    x = nx; y = ny;
-  };
-
-  for (const { command, args } of parsePathCommands(d)) {
-    const rel = command === command.toLowerCase();
-    const key = command.toUpperCase();
-    const ax = rel ? x : 0;
-    const ay = rel ? y : 0;
-
-    if (key !== 'C' && key !== 'S') lastCubic = null;
-    if (key !== 'Q' && key !== 'T') lastQuad = null;
-
-    if (key === 'M') {
-      x = args[0] + ax; y = args[1] + ay;
-      startX = x; startY = y;
-      open();
-    } else if (key === 'L') {
-      lineTo(args[0] + ax, args[1] + ay);
-    } else if (key === 'H') {
-      lineTo(args[0] + ax, y);
-    } else if (key === 'V') {
-      lineTo(x, args[0] + ay);
-    } else if (key === 'C') {
-      const [x1, y1, x2, y2, nx, ny] = [args[0] + ax, args[1] + ay, args[2] + ax, args[3] + ay, args[4] + ax, args[5] + ay];
-      curveTo(x1, y1, x2, y2, nx, ny);
-      lastCubic = [x2, y2];
-    } else if (key === 'S') {
-      const [rx, ry] = lastCubic ? [2 * x - lastCubic[0], 2 * y - lastCubic[1]] : [x, y];
-      const [x2, y2, nx, ny] = [args[0] + ax, args[1] + ay, args[2] + ax, args[3] + ay];
-      curveTo(rx, ry, x2, y2, nx, ny);
-      lastCubic = [x2, y2];
-    } else if (key === 'Q' || key === 'T') {
-      let cx; let cy; let nx; let ny;
-      if (key === 'Q') {
-        [cx, cy, nx, ny] = [args[0] + ax, args[1] + ay, args[2] + ax, args[3] + ay];
-      } else {
-        [cx, cy] = lastQuad ? [2 * x - lastQuad[0], 2 * y - lastQuad[1]] : [x, y];
-        [nx, ny] = [args[0] + ax, args[1] + ay];
-      }
-      // A quadratic is a cubic with the control points at two thirds.
-      curveTo(x + (2 / 3) * (cx - x), y + (2 / 3) * (cy - y),
-              nx + (2 / 3) * (cx - nx), ny + (2 / 3) * (cy - ny), nx, ny);
-      lastQuad = [cx, cy];
-    } else if (key === 'Z') {
-      if (current) {
-        current.points.push([startX, startY]);
-        current.closed = true;
-        current = null;
-      }
-      x = startX; y = startY;
-    }
-  }
-  return subpaths.filter((sub) => sub.points.length > 1 || sub.closed);
-}
-
-/** Cut polylines into dashes. `pattern` is an SVG stroke-dasharray, in user units. */
-export function dashPolyline(points, pattern) {
-  if (!pattern || !pattern.length) return [points];
-  const lengths = pattern.length % 2 ? [...pattern, ...pattern] : [...pattern];
-  const total = lengths.reduce((sum, n) => sum + n, 0);
-  if (!(total > 0)) return [points];
-
-  const out = [];
-  let index = 0;
-  let left = lengths[0];
-  let on = true;
-  let run = on ? [points[0]] : null;
-  // The nominal length of the dash the open run belongs to. A run that ends up
-  // a single point is a dot when the pattern asked for a zero-length dash, and
-  // a phantom when the path merely ran out on a dash boundary; SVG draws the
-  // first and not the second, and they are indistinguishable after the fact.
-  let nominal = lengths[0];
-
-  for (let i = 1; i < points.length; i += 1) {
-    let [px, py] = points[i - 1];
-    const [qx, qy] = points[i];
-    let remaining = Math.hypot(qx - px, qy - py);
-    while (remaining > 1e-12) {
-      // A zero-length dash is a dot once round caps are applied, so it has to
-      // survive as a one-point run rather than being collapsed away.
-      const step = Math.min(left, remaining);
-      const t = step / remaining;
-      const nx = px + (qx - px) * t;
-      const ny = py + (qy - py) * t;
-      if (on) run.push([nx, ny]);
-      remaining -= step;
-      left -= step;
-      px = nx; py = ny;
-      if (left <= 1e-12) {
-        do {
-          if (on && run) out.push(run);
-          on = !on;
-          index = (index + 1) % lengths.length;
-          left = lengths[index];
-          nominal = left;
-          run = on ? [[px, py]] : null;
-        } while (left <= 1e-12);
-      }
-    }
-  }
-  if (on && run && (run.length > 1 || nominal <= 1e-9)) out.push(run);
-  return out;
-}
-
-/* ------------------------------------------------------------- rasterising -- */
-
-const clamp01 = (n) => (n < 0 ? 0 : n > 1 ? 1 : n);
-
-export function parseColor(value) {
-  const text = String(value || '').trim();
-  const hex = text.replace('#', '');
-  if (/^[0-9a-f]{3}$/i.test(hex)) {
-    return [...hex].map((c) => parseInt(c + c, 16));
-  }
-  if (/^[0-9a-f]{6}$/i.test(hex)) {
-    return [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
-  }
-  throw new Error(`unsupported colour "${value}" — use #rgb or #rrggbb`);
-}
-
-/** An RGBA canvas with straight (non-premultiplied) 0..1 channels. */
-export function createCanvas(width, height) {
-  return { width, height, data: new Float32Array(width * height * 4) };
-}
-
-/**
- * Blend one coverage mask over the canvas.
- *
- * Coverage is accumulated per shape and composited once, rather than blended
- * per sample: a stroke overlaps itself at every joint, and blending twice at
- * partial coverage draws a visible dark bead along the inside of every corner.
- */
-function composite(canvas, coverage, [r, g, b], opacity) {
-  const { data } = canvas;
-  for (let i = 0; i < coverage.length; i += 1) {
-    const a = coverage[i] * opacity;
-    if (a <= 0) continue;
-    const o = i * 4;
-    const inv = 1 - a;
-    const outA = a + data[o + 3] * inv;
-    if (outA <= 0) continue;
-    data[o] = (r / 255 * a + data[o] * data[o + 3] * inv) / outA;
-    data[o + 1] = (g / 255 * a + data[o + 1] * data[o + 3] * inv) / outA;
-    data[o + 2] = (b / 255 * a + data[o + 2] * data[o + 3] * inv) / outA;
-    data[o + 3] = outA;
-  }
-}
-
-/**
- * Sample a shape over its bounding box only.
- *
- * `inside(x, y)` is called at `samples²` points per pixel. Restricting the loop
- * to the shape's own box is what keeps a 1024px icon to a couple of seconds
- * instead of a couple of minutes: a dashed stroke is thousands of tiny shapes,
- * and each one only touches a handful of pixels.
- */
-function paint(canvas, box, inside, color, opacity, samples) {
-  const x0 = Math.max(0, Math.floor(box[0]));
-  const y0 = Math.max(0, Math.floor(box[1]));
-  const x1 = Math.min(canvas.width, Math.ceil(box[2]));
-  const y1 = Math.min(canvas.height, Math.ceil(box[3]));
-  if (x1 <= x0 || y1 <= y0) return null;
-
-  const coverage = new Float32Array(canvas.width * canvas.height);
-  const step = 1 / samples;
-  const offset = step / 2;
-  const per = 1 / (samples * samples);
-  for (let py = y0; py < y1; py += 1) {
-    for (let px = x0; px < x1; px += 1) {
-      let hits = 0;
-      for (let sy = 0; sy < samples; sy += 1) {
-        const y = py + offset + sy * step;
-        for (let sx = 0; sx < samples; sx += 1) {
-          if (inside(px + offset + sx * step, y)) hits += 1;
-        }
-      }
-      if (hits) coverage[py * canvas.width + px] = hits * per;
-    }
-  }
-  if (color) composite(canvas, coverage, color, opacity);
-  return coverage;
-}
-
-/** Distance from a point to a segment; a degenerate segment is a point. */
-function segmentDistance(x, y, ax, ay, bx, by) {
-  const dx = bx - ax;
-  const dy = by - ay;
-  const len = dx * dx + dy * dy;
-  let t = 0;
-  if (len > 1e-18) t = clamp01(((x - ax) * dx + (y - ay) * dy) / len);
-  return Math.hypot(x - (ax + dx * t), y - (ay + dy * t));
-}
-
-export function fillRect(canvas, { x, y, width, height, rx = 0, ry = rx }, color, opacity = 1, samples = 4) {
-  const a = Math.min(rx, width / 2);
-  const b = Math.min(ry === undefined ? rx : ry, height / 2);
-  const inside = (px, py) => {
-    if (px < x || px > x + width || py < y || py > y + height) return false;
-    if (a <= 0 || b <= 0) return true;
-    // Only the four corner boxes can be outside a rounded rectangle.
-    const cx = px < x + a ? x + a : px > x + width - a ? x + width - a : px;
-    const cy = py < y + b ? y + b : py > y + height - b ? y + height - b : py;
-    if (cx === px && cy === py) return true;
-    const u = (px - cx) / a;
-    const v = (py - cy) / b;
-    return u * u + v * v <= 1;
-  };
-  paint(canvas, [x, y, x + width, y + height], inside, color, opacity, samples);
-}
-
-export function fillCircle(canvas, { cx, cy, r }, color, opacity = 1, samples = 4) {
-  const inside = (px, py) => (px - cx) ** 2 + (py - cy) ** 2 <= r * r;
-  paint(canvas, [cx - r, cy - r, cx + r, cy + r], inside, color, opacity, samples);
-}
-
-/**
- * Stroke polylines with round caps and joins.
- *
- * Round joins are not a stylistic choice here — they fall out of measuring the
- * distance to the nearest segment, which is also the cheapest thing to compute.
- * The mark asks for round caps anyway.
- */
-export function strokePolylines(canvas, runs, width, color, opacity = 1, samples = 4) {
-  const half = width / 2;
-  const coverage = new Float32Array(canvas.width * canvas.height);
-  for (const points of runs) {
-    if (!points.length) continue;
-    const segments = points.length > 1
-      ? points.slice(1).map((p, i) => [points[i][0], points[i][1], p[0], p[1]])
-      : [[points[0][0], points[0][1], points[0][0], points[0][1]]];
-    for (const [ax, ay, bx, by] of segments) {
-      const box = [
-        Math.min(ax, bx) - half, Math.min(ay, by) - half,
-        Math.max(ax, bx) + half, Math.max(ay, by) + half,
-      ];
-      const mask = paint(canvas, box, (px, py) => segmentDistance(px, py, ax, ay, bx, by) <= half, null, 1, samples);
-      if (!mask) continue;
-      // Max, not sum: neighbouring segments share their joint.
-      for (let i = 0; i < mask.length; i += 1) {
-        if (mask[i] > coverage[i]) coverage[i] = mask[i];
-      }
-    }
-  }
-  composite(canvas, coverage, color, opacity);
-}
-
-export function canvasToRGBA(canvas) {
-  const out = new Uint8Array(canvas.width * canvas.height * 4);
-  for (let i = 0; i < out.length; i += 4) {
-    const a = clamp01(canvas.data[i + 3]);
-    out[i] = Math.round(clamp01(canvas.data[i]) * 255);
-    out[i + 1] = Math.round(clamp01(canvas.data[i + 1]) * 255);
-    out[i + 2] = Math.round(clamp01(canvas.data[i + 2]) * 255);
-    out[i + 3] = Math.round(a * 255);
-  }
-  return out;
-}
+import { deflateSync, inflateSync } from 'node:zlib';
 
 /* -------------------------------------------------------------------- png -- */
 
@@ -388,4 +66,141 @@ export function encodePNG(width, height, rgba) {
     pngChunk('IDAT', deflateSync(raw, { level: 9 })),
     pngChunk('IEND', Buffer.alloc(0)),
   ]);
+}
+
+/* ------------------------------------------------------------------ reading */
+
+/**
+ * A PNG back into pixels, for the icons that start life as artwork.
+ *
+ * The sizes are still derived from one master rather than exported by hand, so
+ * this has to read as well as write. Node ships the hard half (zlib), which
+ * leaves the chunk walk and undoing the per-row filters.
+ */
+export function decodePNG(bytes) {
+  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+  if (sig.some((b, i) => data[i] !== b)) throw new Error('not a PNG');
+
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  let at = 8;
+  let width = 0;
+  let height = 0;
+  let channels = 0;
+  const idat = [];
+
+  while (at < data.length) {
+    const length = view.getUint32(at);
+    const type = String.fromCharCode(data[at + 4], data[at + 5], data[at + 6], data[at + 7]);
+    const body = data.subarray(at + 8, at + 8 + length);
+    if (type === 'IHDR') {
+      width = view.getUint32(at + 8);
+      height = view.getUint32(at + 12);
+      if (body[8] !== 8) throw new Error(`PNG bit depth ${body[8]} is not supported; use 8`);
+      if (body[9] !== 2 && body[9] !== 6) throw new Error(`PNG colour type ${body[9]} is not supported; use RGB or RGBA`);
+      if (body[12] !== 0) throw new Error('interlaced PNG is not supported');
+      channels = body[9] === 6 ? 4 : 3;
+    } else if (type === 'IDAT') {
+      idat.push(body);
+    } else if (type === 'IEND') break;
+    at += 12 + length;
+  }
+  if (!width || !height) throw new Error('PNG has no header');
+
+  const joined = new Uint8Array(idat.reduce((n, part) => n + part.length, 0));
+  let offset = 0;
+  for (const part of idat) { joined.set(part, offset); offset += part.length; }
+  const raw = new Uint8Array(inflateSync(joined));
+
+  const stride = width * channels;
+  const rgba = new Uint8ClampedArray(width * height * 4);
+  const line = new Uint8Array(stride);
+  const prev = new Uint8Array(stride);
+
+  for (let y = 0; y < height; y += 1) {
+    const filter = raw[y * (stride + 1)];
+    const row = raw.subarray(y * (stride + 1) + 1, y * (stride + 1) + 1 + stride);
+    for (let i = 0; i < stride; i += 1) {
+      const a = i >= channels ? line[i - channels] : 0;
+      const b = prev[i];
+      const c = i >= channels ? prev[i - channels] : 0;
+      let value = row[i];
+      if (filter === 1) value += a;
+      else if (filter === 2) value += b;
+      else if (filter === 3) value += (a + b) >> 1;
+      else if (filter === 4) {
+        const p = a + b - c;
+        const pa = Math.abs(p - a);
+        const pb = Math.abs(p - b);
+        const pc = Math.abs(p - c);
+        value += (pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c);
+      } else if (filter !== 0) throw new Error(`unknown PNG row filter ${filter}`);
+      line[i] = value & 0xff;
+    }
+    for (let x = 0; x < width; x += 1) {
+      const from = x * channels;
+      const to = (y * width + x) * 4;
+      rgba[to] = line[from];
+      rgba[to + 1] = line[from + 1];
+      rgba[to + 2] = line[from + 2];
+      rgba[to + 3] = channels === 4 ? line[from + 3] : 255;
+    }
+    prev.set(line);
+  }
+  return { width, height, rgba };
+}
+
+/**
+ * Resize by averaging the source pixels each destination pixel covers.
+ *
+ * A box average rather than picking the nearest: every icon here is a large
+ * downscale, and sampling one source pixel out of a 32-pixel square throws
+ * away the other 1,023 — which on a design with fine detail turns tick marks
+ * into noise that changes between sizes. Averaging is what makes the 32px
+ * favicon read as the same object as the 1024px icon.
+ */
+export function resizeRGBA({ width, height, rgba }, size) {
+  const out = new Uint8ClampedArray(size * size * 4);
+  const scaleX = width / size;
+  const scaleY = height / size;
+
+  for (let y = 0; y < size; y += 1) {
+    const y0 = Math.floor(y * scaleY);
+    const y1 = Math.max(y0 + 1, Math.ceil((y + 1) * scaleY));
+    for (let x = 0; x < size; x += 1) {
+      const x0 = Math.floor(x * scaleX);
+      const x1 = Math.max(x0 + 1, Math.ceil((x + 1) * scaleX));
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let a = 0;
+      let n = 0;
+      for (let sy = y0; sy < y1 && sy < height; sy += 1) {
+        for (let sx = x0; sx < x1 && sx < width; sx += 1) {
+          const i = (sy * width + sx) * 4;
+          r += rgba[i]; g += rgba[i + 1]; b += rgba[i + 2]; a += rgba[i + 3];
+          n += 1;
+        }
+      }
+      const to = (y * size + x) * 4;
+      out[to] = r / n; out[to + 1] = g / n; out[to + 2] = b / n; out[to + 3] = a / n;
+    }
+  }
+  return { width: size, height: size, rgba: out };
+}
+
+/** A square out of an image, clamped to its edges. */
+export function cropRGBA({ width, height, rgba }, { x = 0, y = 0, size }) {
+  const out = new Uint8ClampedArray(size * size * 4);
+  for (let row = 0; row < size; row += 1) {
+    const sy = Math.min(height - 1, Math.max(0, y + row));
+    for (let col = 0; col < size; col += 1) {
+      const sx = Math.min(width - 1, Math.max(0, x + col));
+      const from = (sy * width + sx) * 4;
+      const to = (row * size + col) * 4;
+      out[to] = rgba[from]; out[to + 1] = rgba[from + 1];
+      out[to + 2] = rgba[from + 2]; out[to + 3] = rgba[from + 3];
+    }
+  }
+  return { width: size, height: size, rgba: out };
 }

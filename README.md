@@ -399,7 +399,7 @@ capacitor.config.json       the native shell's config (see docs/mobile-app.md)
 tools/
   build-catalog.mjs         scans data/maps/, writes data/catalog.json
   build-dist.mjs            stages an upload-ready copy in dist/
-  build-app-icons.mjs       renders mark.svg to the PNG icons the app needs
+  build-app-icons.mjs       cuts every icon size from mark-master.png
   raster.mjs                dependency-free SVG rasteriser and PNG writer
   zip.mjs                   dependency-free ZIP writer used by build-dist
   serve.mjs                 local dev server

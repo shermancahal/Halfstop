@@ -22,7 +22,7 @@ prerequisite for the Capacitor shell being any good:
 | `manifest.webmanifest` | Name, colours, icons, `display: standalone`. Android and desktop Chrome read this to offer "Install". |
 | `sw.js` | Service worker. Precaches the whole 900 KB site so the app shell opens with no network. |
 | `assets/js/lib/pwa.js` | Registers the worker, and handles handing over to a newer one. |
-| `assets/img/icon-*.png` | Generated from `assets/img/mark.svg` by `tools/build-app-icons.mjs`. |
+| `assets/img/icon-*.png` | Cut from `assets/img/mark-master.png` by `tools/build-app-icons.mjs`. |
 | `--safe-*` in `site.css` | Keeps the header out from under the iOS status bar when running installed. |
 
 You can try it now: open the site on an Android phone and Chrome offers "Add to
@@ -115,9 +115,11 @@ cp assets/img/icon-1024.png assets-src/icon.png
 npx @capacitor/assets generate --iconBackgroundColor '#b4441f' --splashBackgroundColor '#faf7f2'
 ```
 
-Regenerate `assets/img/icon-1024.png` with `node tools/build-app-icons.mjs`
-whenever `mark.svg` changes; `npm test` fails if the committed icons and the
-mark have drifted apart.
+Regenerate every size with `node tools/build-app-icons.mjs` whenever
+`mark-master.png` changes; `npm test` fails if the committed icons and the
+master have drifted apart. The master is a square PNG of at least 1024px,
+full-bleed and opaque to the corner — Apple rejects transparency and applies
+its own rounding, so artwork that arrives already rounded is rounded twice.
 
 ## 5. Permissions
 

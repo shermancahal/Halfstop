@@ -46,6 +46,18 @@ const INCLUDE_DIRS = ['assets', 'data'];
 /** Never ship these, even from inside an included directory. */
 const EXCLUDE = new Set(['.DS_Store', 'Thumbs.db', '.gitkeep']);
 
+/*
+ * Build inputs that live in assets/ but are not part of the site.
+ *
+ * The icon master and the artwork it was cut from are here so one file changes
+ * the whole set and a test can prove the set matches it. Nothing on the web
+ * asks for either: the master is what tools/build-app-icons.mjs reads, and the
+ * 1024 is what the App Store and @capacitor/assets take. Between them they are
+ * three megabytes of pixels that would otherwise be uploaded on every deploy
+ * and downloaded by nobody.
+ */
+const NOT_THE_SITE = /^assets\/img\/(mark-master\.png|icon-1024\.png|Halfstop logo.*\.jpg)$/;
+
 const wantsZip = process.argv.includes('--zip');
 const wantsApp = process.argv.includes('--app');
 
@@ -415,7 +427,7 @@ async function main() {
    * Pictures that sell the site rather than run it. Fetched when the homepage
    * is looked at, never as part of the offline shell.
    */
-  const NEVER_PRECACHE = /^assets\/img\/(hero-topo|app-screenshot)\./;
+  const NEVER_PRECACHE = /^assets\/img\/(hero-topo|app-screenshot|icon-|apple-touch-icon)/;
 
   const assets = [];
   for (const dir of INCLUDE_DIRS) {
@@ -423,6 +435,7 @@ async function main() {
     if (!existsSync(source)) continue;
     for (const file of await collect(source)) {
       const relative = path.relative(ROOT, file).split(path.sep).join('/');
+      if (NOT_THE_SITE.test(relative)) continue;
       assets.push({ name: relative, data: new Uint8Array(await readFile(file)) });
     }
   }
