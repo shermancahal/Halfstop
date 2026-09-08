@@ -98,6 +98,68 @@ function groundColour({ width, rgba }, patch = 24) {
   return [r / n, g / n, b / n];
 }
 
+/**
+ * How far two neighbouring pixels may differ and still be the same ground.
+ *
+ * The ground is a gradient - about #2e385c at the top of the panel down to
+ * #101533 at the bottom - so no single tolerance against a seed colour covers
+ * it. Every *step* of it is small, though, and the bezel is light grey, which
+ * is a jump nothing on the ground makes. Compared against the neighbour, not
+ * the seed.
+ */
+const GROUND_STEP = 26;
+
+/**
+ * The square ground behind the medallion, made transparent.
+ *
+ * The medallion is a circle and the panel it was painted on is a square, so a
+ * tight crop leaves four corners of navy. That is right for an app icon, where
+ * the platform wants an opaque square it can mask itself, and wrong everywhere
+ * this mark is 30 pixels on a bar: the panel's gradient is lighter than the
+ * bar at the top and much darker at the bottom, which draws a dark square
+ * under the circle. Measured against the bar as it actually renders, the
+ * bottom corners came out at a third of its luminance.
+ *
+ * Cutting it rather than repainting it in the bar's colour is what survives:
+ * the header is `--chrome` at 92% over whatever the page is, so the colour it
+ * renders at is not a value this build can know, and the footer, the tab and
+ * a future theme are all different again.
+ *
+ * The ground is whatever the four corners can reach without crossing an edge.
+ * The dark sky inside the medallion is dark enough to match on colour alone
+ * and is never reached, because it is not connected to a corner.
+ */
+function cutGround({ width, height, rgba }) {
+  const ground = new Uint8Array(width * height);
+  const queue = [[0, 0], [width - 1, 0], [0, height - 1], [width - 1, height - 1]];
+  for (const [x, y] of queue) ground[y * width + x] = 1;
+
+  while (queue.length) {
+    const [x, y] = queue.pop();
+    const from = (y * width + x) * 4;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+      if (ground[ny * width + nx]) continue;
+      const to = (ny * width + nx) * 4;
+      const step = Math.abs(rgba[to] - rgba[from])
+        + Math.abs(rgba[to + 1] - rgba[from + 1])
+        + Math.abs(rgba[to + 2] - rgba[from + 2]);
+      if (step > GROUND_STEP) continue;
+      ground[ny * width + nx] = 1;
+      queue.push([nx, ny]);
+    }
+  }
+
+  // Colour is left alone under the cut. The resize averages both, so an edge
+  // pixel keeps blending towards the ground the artwork was drawn against,
+  // which is what its anti-aliasing already assumed.
+  const out = Uint8ClampedArray.from(rgba);
+  for (let i = 0; i < ground.length; i += 1) if (ground[i]) out[i * 4 + 3] = 0;
+  return { width, height, rgba: out };
+}
+
 /** One icon's pixels, from the master. */
 export function renderIcon(master, icon) {
   if (icon.shape === 'bleed') return resizeRGBA(master, icon.size);
@@ -105,7 +167,9 @@ export function renderIcon(master, icon) {
   if (icon.shape === 'tight') {
     const side = Math.round(master.width * TIGHT);
     const inset = Math.round((master.width - side) / 2);
-    return resizeRGBA(cropRGBA(master, { x: inset, y: inset, size: side }), icon.size);
+    // Cut before the resize, so the box filter turns the hard mask into an
+    // anti-aliased edge on the way down rather than a staircase.
+    return resizeRGBA(cutGround(cropRGBA(master, { x: inset, y: inset, size: side })), icon.size);
   }
 
   // safe: the whole artwork, shrunk onto its own ground so a circular crop
