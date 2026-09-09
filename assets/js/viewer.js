@@ -790,7 +790,20 @@ async function main() {
   state.account.init().catch((error) => console.warn('[account]', error.message));
   // Photos whose pin was deleted linger in IndexedDB; clear them once per load
   // rather than at deletion time, where a shared photo could be lost.
-  pruneUnreferenced(state.folders.referencedPhotoIds()).catch(() => {});
+  /*
+   * Not when there are no folders at all.
+   *
+   * The sweep deletes every photo no pin points at, which is right after a pin
+   * is deleted and catastrophic when the collection is empty: photographs are
+   * never uploaded, so this device holds the only copy, and "nothing
+   * references them" is exactly what an empty collection says about all of
+   * them. Empty happens for reasons that are not deletion - signing out now
+   * clears the folders, and a browser that refuses storage hydrates to
+   * nothing - and neither is an instruction to destroy somebody's pictures.
+   */
+  if (state.folders.list().length) {
+    pruneUnreferenced(state.folders.referencedPhotoIds()).catch(() => {});
+  }
 
   // The catalogue is optional: the viewer still works as a drop-and-view tool.
   try {

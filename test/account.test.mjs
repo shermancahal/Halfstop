@@ -138,6 +138,58 @@ test('account: signing out clears the device even when the server refuses', asyn
 });
 
 
+test('account: signing out takes the folders off the screen, once they are safe', async () => {
+  /*
+   * The report was "it is almost as if I'm still signed in": the pins, the
+   * folders and the waypoint list all survived a sign-out, which is the state
+   * somebody signs out to leave behind.
+   */
+  const held = [{ id: 'f1', name: 'Gorge', items: [], updatedAt: 1 }];
+  const store = {
+    list: () => held,
+    snapshot: () => held,
+    replaceAll(next) { held.length = 0; held.push(...next); },
+    toGeoJSON: () => ({ features: [] }),
+  };
+  const client = fakeClient();
+  const account = new Account(store, { client: async () => client, configured: () => true });
+  withHash('');
+  account.user = { id: 'u1' };
+
+  await account.signOut();
+  assert.equal(account.status, 'signed-out');
+  assert.deepEqual(held, [], 'the folders were left on the screen after signing out');
+});
+
+test('account: a sign-out that could not sync keeps the folders rather than losing them', async () => {
+  /*
+   * The other half, and the one that decides whether clearing is safe at all.
+   * A folder that never reached the server exists in one place, so a sign-out
+   * that cannot push must leave it there and say so.
+   */
+  const held = [{ id: 'f1', name: 'Gorge', items: [], updatedAt: 1 }];
+  const store = {
+    list: () => held,
+    snapshot: () => held,
+    replaceAll(next) { held.length = 0; held.push(...next); },
+    toGeoJSON: () => ({ features: [] }),
+  };
+  const client = fakeClient();
+  // The read the sync starts with fails, so nothing was pushed.
+  client.from = () => ({
+    select() { return { async eq() { return { data: null, error: { message: 'offline' } }; } }; },
+    async upsert() { return { error: null }; },
+  });
+  const account = new Account(store, { client: async () => client, configured: () => true });
+  withHash('');
+  account.user = { id: 'u1' };
+
+  await account.signOut();
+  assert.equal(account.status, 'signed-out');
+  assert.equal(held.length, 1, 'an unsynced folder was cleared off the device');
+  assert.match(account.message, /still on this device/);
+});
+
 test('account: a provider sign-in says where to come back to', async () => {
   /*
    * The reason these exist is that there is no emailed link to break. They

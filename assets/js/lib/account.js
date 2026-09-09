@@ -278,6 +278,26 @@ export class Account extends EventTarget {
      * signed in", the second is the one that matters to whoever is holding the
      * phone. Clear it either way; the token expires on its own.
      */
+    /*
+     * Everything goes to the server before the screen is cleared, and the
+     * screen is not cleared unless that worked.
+     *
+     * Folders used to stay put, on the reasoning that removing them would look
+     * like data loss. In practice it looked like the sign-out had not
+     * happened: the pins, the folders and the waypoint list were all still
+     * there, which is the state somebody signs out to leave behind - on a
+     * shared machine especially.
+     *
+     * So they go, but only once they are somewhere else. A sync that fails
+     * leaves them exactly where they are and says so, because "signed out" is
+     * worth less than the only copy of a folder.
+     *
+     * Photographs are not touched either way. They are never uploaded, so this
+     * device holds the only copy; the pins that point at them come back with
+     * the folders on the next sign-in, ids and all.
+     */
+    const saved = this.user ? await this.sync() : null;
+
     try {
       const client = await this.getClient();
       await client.auth.signOut();
@@ -285,9 +305,16 @@ export class Account extends EventTarget {
       console.warn('[account] the sign-out call failed:', error?.message || error);
     }
     this.user = null;
-    // Folders stay on the device after signing out. Clearing them would look
-    // like data loss, and they are still this browser's own working set.
-    this.setStatus('signed-out', 'Signed out. Your folders are still on this device.');
+
+    if (saved) {
+      this.folders.replaceAll([]);
+      this.setStatus('signed-out',
+        'Signed out. Your folders are on your account and come back when you sign in.');
+      return;
+    }
+    this.setStatus('signed-out',
+      'Signed out. The last sync did not go through, so your folders are still on this '
+      + 'device rather than lost.');
   }
 
   /**
