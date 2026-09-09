@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 import { decodePNG, encodePNG, resizeRGBA, cropRGBA } from '../tools/raster.mjs';
-import { ICONS, TIGHT, SAFE, renderIcon, readMaster } from '../tools/build-app-icons.mjs';
+import { ICONS, TIGHT, SAFE, renderIcon, readMaster, medallionExtent } from '../tools/build-app-icons.mjs';
 
 const solid = (size, [r, g, b, a = 255]) => {
   const rgba = new Uint8ClampedArray(size * size * 4);
@@ -97,6 +97,55 @@ test('the bleed icons are opaque to the corner, and not pre-rounded', async () =
     for (const [x, y] of [[0, 0], [last, 0], [0, last], [last, last]]) {
       assert.equal(at(image, x, y)[3], 255, `${icon.file} has a see-through corner at ${x},${y}`);
     }
+  }
+});
+
+test('the tight icons keep the whole medallion, with nothing touching an edge', async () => {
+  /*
+   * TIGHT used to be 0.80, described as leaving the artwork "a little air".
+   * It was measured against an older master; against this one it cut 38px off
+   * every side, and the report was that the logo looked cut on the sides,
+   * which it was. Nothing here trusts a constant: it renders the icon and
+   * looks at where the bezel actually lands.
+   */
+  const master = await readMaster();
+  for (const icon of ICONS.filter((i) => i.shape === 'tight')) {
+    const image = renderIcon(master, icon);
+    const box = medallionExtent(image);
+    assert.ok(box, `${icon.file}: no artwork found at all`);
+    const reach = box.radius + Math.max(Math.abs(box.cx - icon.size / 2), Math.abs(box.cy - icon.size / 2));
+    assert.ok(reach < icon.size / 2,
+      `${icon.file}: the medallion reaches ${reach.toFixed(1)}px from centre in a ${icon.size}px frame — it is being clipped`);
+  }
+});
+
+test('the tight icons cut the corners and leave the artwork alone', async () => {
+  /*
+   * The first cut was a flood fill from the corners, and it only behaved while
+   * the crop was clipping: a medallion touching all four edges seals the
+   * ground into corners the fill cannot leave. Widen the crop to what the
+   * artwork wants and the ground becomes a ring, the fill goes round it and
+   * seeps through the softest pixel of the bezel into a sky smooth enough to
+   * cross. It cleared 71% of the mark and the header rendered a ghost, which
+   * every other test in this file was happy with.
+   */
+  const master = await readMaster();
+  for (const icon of ICONS.filter((i) => i.shape === 'tight')) {
+    const image = renderIcon(master, icon);
+    const last = icon.size - 1;
+    const mid = Math.floor(icon.size / 2);
+    for (const [x, y] of [[0, 0], [last, 0], [0, last], [last, last]]) {
+      assert.equal(at(image, x, y)[3], 0, `${icon.file}: the corner at ${x},${y} was not cut`);
+    }
+    assert.equal(at(image, mid, mid)[3], 255, `${icon.file}: the middle of the medallion is see-through`);
+
+    let solid = 0;
+    for (let i = 3; i < image.rgba.length; i += 4) if (image.rgba[i] === 255) solid += 1;
+    const share = solid / (icon.size * icon.size);
+    // A disc inscribed in its square is 78.5% of it. Anything far under that
+    // means the cut has reached inside the bezel.
+    assert.ok(share > 0.6 && share < 0.85,
+      `${icon.file}: ${(share * 100).toFixed(1)}% of it is opaque, which is not a disc in a square`);
   }
 });
 

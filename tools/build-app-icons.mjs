@@ -41,10 +41,19 @@ const OUT_DIR = path.join(ROOT, 'assets', 'img');
 /**
  * How much of the master the "tight" crop keeps.
  *
- * The medallion measures 456px across a 768px frame in the artwork, which is
- * 59%. Two thirds keeps it whole with a little air, and no more.
+ * Measured, because the number this used to carry described a different
+ * master. The medallion spans 896px of the current 1024px artwork - 87.5%,
+ * centred with a 64px margin - so a crop at 0.80 cut 38px off every side of
+ * the bezel. It read as a logo with its sides shaved flat, which is exactly
+ * what it was.
+ *
+ * 0.94 keeps the whole medallion and about 33px of margin. The margin is
+ * chosen from the smallest size rather than the largest: at 32px the frame is
+ * 32 pixels, and a medallion filling more than about 94% of it loses its
+ * outermost anti-aliased ring off the edge. That margin costs nothing now
+ * that cutGround makes it transparent - it is not empty navy any more.
  */
-export const TIGHT = 0.80;
+export const TIGHT = 0.94;
 
 /*
  * How much of a maskable icon the artwork is allowed to fill.
@@ -68,10 +77,10 @@ export const SAFE = 0.84;
  */
 export const ICONS = [
   { file: 'favicon-32.png', size: 32, shape: 'tight' },
-  // The mark in the page header, drawn at 30px. Sized for a retina screen
-  // rather than reusing icon-192: a 68 KB file behind a 30px slot is fetched
-  // on every page, and this is three.
-  { file: 'brand-64.png', size: 64, shape: 'tight' },
+  // The mark in the page header, drawn at 44px. Sized for a retina screen
+  // rather than reusing icon-192: a 68 KB file behind a 44px slot is fetched
+  // on every page, and this is a fraction of it.
+  { file: 'brand-128.png', size: 128, shape: 'tight' },
   { file: 'apple-touch-icon.png', size: 180, shape: 'bleed' },
   { file: 'icon-192.png', size: 192, shape: 'bleed' },
   { file: 'icon-512.png', size: 512, shape: 'bleed' },
@@ -99,15 +108,45 @@ function groundColour({ width, rgba }, patch = 24) {
 }
 
 /**
- * How far two neighbouring pixels may differ and still be the same ground.
+ * Anything brighter than this is artwork rather than ground.
  *
- * The ground is a gradient - about #2e385c at the top of the panel down to
- * #101533 at the bottom - so no single tolerance against a seed colour covers
- * it. Every *step* of it is small, though, and the bezel is light grey, which
- * is a jump nothing on the ground makes. Compared against the neighbour, not
- * the seed.
+ * The ground runs from luminance 57 at the top of the panel to 20 at the
+ * bottom; the bezel is a bright brushed grey. 80 sits in the gap with room
+ * either side.
  */
-const GROUND_STEP = 26;
+const ART_LUMA = 80;
+
+/** How far past the artwork the mask keeps, and how soft its edge is, in master pixels. */
+const MASK_MARGIN = 2;
+const MASK_FEATHER = 2;
+
+/**
+ * Where the medallion is: its centre, and how far it reaches.
+ *
+ * Measured rather than declared. The last constant here described an older
+ * master and quietly cropped 38px off every side of this one, so the numbers
+ * come from the artwork now and follow it when it is replaced.
+ */
+export function medallionExtent({ width, height, rgba }) {
+  let minX = width; let maxX = -1; let minY = height; let maxY = -1;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const i = (y * width + x) * 4;
+      const luma = 0.2126 * rgba[i] + 0.7152 * rgba[i + 1] + 0.0722 * rgba[i + 2];
+      if (luma < ART_LUMA) continue;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (maxX < 0) return null;
+  return {
+    cx: (minX + maxX + 1) / 2,
+    cy: (minY + maxY + 1) / 2,
+    radius: Math.max(maxX - minX + 1, maxY - minY + 1) / 2,
+  };
+}
 
 /**
  * The square ground behind the medallion, made transparent.
@@ -115,48 +154,46 @@ const GROUND_STEP = 26;
  * The medallion is a circle and the panel it was painted on is a square, so a
  * tight crop leaves four corners of navy. That is right for an app icon, where
  * the platform wants an opaque square it can mask itself, and wrong everywhere
- * this mark is 30 pixels on a bar: the panel's gradient is lighter than the
- * bar at the top and much darker at the bottom, which draws a dark square
- * under the circle. Measured against the bar as it actually renders, the
- * bottom corners came out at a third of its luminance.
+ * this mark is 44 pixels on a bar: the panel's gradient is lighter than the bar
+ * at the top and much darker at the bottom, which draws a dark square under the
+ * circle. Measured against the bar as it renders, the bottom corners came out
+ * at a third of its luminance.
  *
- * Cutting it rather than repainting it in the bar's colour is what survives:
- * the header is `--chrome` at 92% over whatever the page is, so the colour it
- * renders at is not a value this build can know, and the footer, the tab and
- * a future theme are all different again.
+ * Cutting rather than repainting in the bar's colour is what survives: the
+ * header is `--chrome` at 92% over whatever the page is, so the colour it
+ * renders at is not a value this build can know, and the footer, the tab and a
+ * future theme are each different again.
  *
- * The ground is whatever the four corners can reach without crossing an edge.
- * The dark sky inside the medallion is dark enough to match on colour alone
- * and is never reached, because it is not connected to a corner.
+ * A circle around the measured artwork, and NOT a flood fill from the corners.
+ * The fill was tried and is the reason this comment is long: it worked only
+ * while the crop clipped the medallion, because a medallion touching all four
+ * edges seals the ground into four corners the fill cannot escape. Give it the
+ * whole margin the artwork actually wants and the ground becomes a ring, the
+ * fill goes round it, finds the softest pixel of the bezel and seeps through
+ * into a dusk sky that is smooth enough to cross end to end. It took 71% of
+ * the mark with it and rendered a ghost.
  */
-function cutGround({ width, height, rgba }) {
-  const ground = new Uint8Array(width * height);
-  const queue = [[0, 0], [width - 1, 0], [0, height - 1], [width - 1, height - 1]];
-  for (const [x, y] of queue) ground[y * width + x] = 1;
+function cutGround(image) {
+  const extent = medallionExtent(image);
+  // No artwork found is not a licence to cut: leave it whole and let the eye
+  // catch what the measurement could not.
+  if (!extent) return image;
 
-  while (queue.length) {
-    const [x, y] = queue.pop();
-    const from = (y * width + x) * 4;
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const nx = x + dx;
-      const ny = y + dy;
-      if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-      if (ground[ny * width + nx]) continue;
-      const to = (ny * width + nx) * 4;
-      const step = Math.abs(rgba[to] - rgba[from])
-        + Math.abs(rgba[to + 1] - rgba[from + 1])
-        + Math.abs(rgba[to + 2] - rgba[from + 2]);
-      if (step > GROUND_STEP) continue;
-      ground[ny * width + nx] = 1;
-      queue.push([nx, ny]);
+  const { width, height, rgba } = image;
+  const { cx, cy, radius } = extent;
+  const keep = radius + MASK_MARGIN;
+  const out = Uint8ClampedArray.from(rgba);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+      if (d <= keep) continue;
+      const i = (y * width + x) * 4 + 3;
+      // Feathered rather than cut square on, so the edge is not a staircase
+      // at the sizes that do not get downsampled much.
+      const fade = 1 - Math.min(1, (d - keep) / MASK_FEATHER);
+      out[i] = Math.round(rgba[i] * fade);
     }
   }
-
-  // Colour is left alone under the cut. The resize averages both, so an edge
-  // pixel keeps blending towards the ground the artwork was drawn against,
-  // which is what its anti-aliasing already assumed.
-  const out = Uint8ClampedArray.from(rgba);
-  for (let i = 0; i < ground.length; i += 1) if (ground[i]) out[i * 4 + 3] = 0;
   return { width, height, rgba: out };
 }
 
