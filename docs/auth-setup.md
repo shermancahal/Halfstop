@@ -322,3 +322,44 @@ has not verified. Secrets take effect immediately — no redeploy.
 Sign up with an address that has nothing to do with the project team, then
 share a folder with a second one. Resend's own log says whether each message
 was accepted, and the app says `emailed: true` only when the provider took it.
+
+---
+
+## The auth emails themselves
+
+Six templates in `supabase/email-templates/`, to paste into **Authentication →
+Emails → Templates**. Each file is the body; the subject goes in the field
+above it:
+
+| Dashboard template | File | Subject |
+| --- | --- | --- |
+| Confirm signup | `confirm-signup.html` | Confirm your email |
+| Magic Link | `magic-link.html` | Your sign-in link |
+| Reset Password | `reset-password.html` | Reset your password |
+| Change Email Address | `change-email.html` | Confirm your new address |
+| Invite user | `invite.html` | You have been invited to Halfstop |
+| Reauthentication | `reauthentication.html` | Your confirmation code |
+
+Three things about them are deliberate, and all three come from Supabase's own
+guidance on keeping authentication mail out of spam folders.
+
+**No images.** Not even the mark. An authentication email that depends on a
+remote image looks like every phishing attempt that also does, and the header
+is a navy bar with a word in it for exactly that reason.
+
+**No names or addresses in the body.** Nothing personal is interpolated, so
+there is nothing for an attacker to place there and nothing for a filter to
+weigh. The one exception is the code in Reauthentication, which is the message.
+
+**Short subjects, no emoji**, and the recovery line every one of them ends on:
+what to do if you did not ask for this. Usually "ignore it and nothing
+happens", which is the honest answer and the reassuring one.
+
+Reauthentication carries `{{ .Token }}` rather than a link on purpose: it
+confirms somebody is still there before something irreversible, so it must not
+be openable from an inbox alone.
+
+The "Invite user" template is Supabase's own admin invitation, which is a
+different thing from sharing a folder — that invitation is sent by
+`invite-to-folder` through Resend directly and does not pass through these
+templates at all.
