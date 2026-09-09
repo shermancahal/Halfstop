@@ -12690,6 +12690,60 @@ function renderProfile(profile) {
 
 /* ------------------------------------------------------------------ actions */
 
+/**
+ * This view, as an address that works on somebody else's device.
+ *
+ * `shareableURL` decides the hard part - a link built inside the Capacitor
+ * shell would otherwise point at capacitor://localhost, which opens nothing on
+ * the phone it is sent to and reports no error while doing it.
+ *
+ * The query and hash default to the ones on screen, and a caller that has a
+ * particular place in mind passes its own.
+ */
+function here({ search, hash } = {}) {
+  return shareableURL({
+    href: location.href,
+    protocol: location.protocol,
+    site: SITE.url,
+    search: search ?? location.search,
+    hash: hash ?? location.hash,
+  });
+}
+
+/**
+ * Hand a link over by whatever route this device actually has.
+ *
+ * The share sheet first, where there is one: on a phone that is the difference
+ * between a link and something you can send. Dismissing the sheet is a
+ * decision rather than a failure, so it ends there rather than falling through
+ * to copying something nobody asked for.
+ *
+ * Then the clipboard. Then, last, the link on screen to be copied by hand -
+ * which is the case worth writing out, because the alternative is a button
+ * that appears to do nothing at all.
+ */
+async function offerLink(url, { title = SITE.name, text = '', ok = 'Link copied.' } = {}) {
+  if (navigator.share) {
+    try {
+      await navigator.share({ title, text, url });
+      return;
+    } catch (error) {
+      // A closed sheet is not an error to recover from.
+      if (error?.name === 'AbortError') return;
+    }
+  }
+
+  try {
+    await navigator.clipboard.writeText(url);
+    toast(ok, { tone: 'ok' });
+    return;
+  } catch {
+    // Refused, or no clipboard at all: fall through and show the link.
+  }
+
+  toast(`Copy this link: ${url}`, { timeout: 15000 });
+}
+
 async function shareView() {
   writeURL();
   await offerLink(here(), {

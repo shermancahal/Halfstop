@@ -828,6 +828,23 @@ check('and nothing written under the pins', folderHead.prose, 0);
  * whole screen. The pins went away below the fold, nothing visible changed,
  * and the folder read as refusing to close.
  */
+/*
+ * The share button, pressed rather than read.
+ *
+ * Both link-sharing paths called two functions that did not exist anywhere -
+ * `here()` and `offerLink()` - so the header button and the Details pane's
+ * Share both threw a ReferenceError and did nothing at all. Every unit test
+ * passed, because the two pure halves in lib/share.js were the only part
+ * anything covered, and this file never pressed the button. It does now: a
+ * pageerror already fails the run, and the toast proves the click reached the
+ * end of the path rather than dying quietly halfway.
+ */
+await page.locator('#share-button').click();
+await page.waitForTimeout(400);
+const shareToast = await page.locator('.toast').last().innerText().catch(() => '');
+check('the share button says something', /link/i.test(shareToast), true);
+await page.locator('.toast .icon-button').last().click().catch(() => {});
+
 const firstFolder = (await page.locator('#folder-list .folder').first().getAttribute('data-folder'));
 const folderBox = () => page.locator(`.folder[data-folder="${firstFolder}"]`)
   .evaluate((node) => Math.round(node.getBoundingClientRect().height));
