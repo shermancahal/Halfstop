@@ -261,3 +261,64 @@ nobody receives and an invitation that failed are different problems, and only
 one of them needs the sender to go and tell their friend by hand.
 
 `SITE_URL` is optional and defaults to `https://app.halfstop.app/`.
+
+---
+
+## Wiring Resend, both halves
+
+Two separate things use it, and they authenticate differently: Supabase Auth
+sends the confirmation and magic-link mail over **SMTP**, and
+`invite-to-folder` sends invitations over the **HTTP API**. One API key serves
+both.
+
+### 1. Verify a sending subdomain
+
+Resend → Domains → Add Domain, and use `send.halfstop.app` rather than the bare
+domain. A domain may publish only one SPF record, and the root already has one
+for the mailboxes; a subdomain gets its own and the two cannot collide. Add the
+DKIM and SPF records Resend gives you to the DNS for halfstop.app and wait for
+**Verified**.
+
+### 2. One API key
+
+Resend → API Keys → Create, with sending access only. It is shown once.
+
+### 3. Supabase Auth → SMTP
+
+**Authentication → Emails → SMTP Settings → Enable Custom SMTP:**
+
+| Field | Value |
+| --- | --- |
+| Host | `smtp.resend.com` |
+| Port | `465` |
+| Username | `resend` — literally that word, for every account |
+| Password | the API key |
+| Sender email | `no-reply@send.halfstop.app` |
+| Sender name | `Halfstop` |
+
+Then **Authentication → Rate Limits**, and raise "Rate limit for sending
+emails". Supabase imposes 30/hour when custom SMTP is first enabled.
+
+This is also the step that makes signups work for strangers at all. Until
+custom SMTP is configured, **Supabase Auth refuses to deliver to any address
+that is not a member of the project's team** — so an invitation to somebody
+else was never going to arrive, whatever this repository did.
+
+### 4. The function's secrets
+
+**Edge Functions → Secrets:**
+
+| Secret | Value |
+| --- | --- |
+| `RESEND_API_KEY` | the same key |
+| `INVITE_FROM` | `Halfstop <no-reply@send.halfstop.app>` |
+
+`INVITE_FROM` is not optional once a subdomain is verified: the function
+defaults to `no-reply@halfstop.app`, and Resend refuses a sender on a domain it
+has not verified. Secrets take effect immediately — no redeploy.
+
+### 5. Prove it
+
+Sign up with an address that has nothing to do with the project team, then
+share a folder with a second one. Resend's own log says whether each message
+was accepted, and the app says `emailed: true` only when the provider took it.
