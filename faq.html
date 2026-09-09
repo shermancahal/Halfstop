@@ -60,18 +60,56 @@
 
   <div class="wrap">
     <ul class="faq-index">
-      <li><a href="#offline">Taking the map offline</a></li>
+      <li><a href="#photography">Planning a Shoot</a></li>
+      <li><a href="#offline">Offline Access</a></li>
       <li><a href="#layers">Layers</a></li>
-      <li><a href="#drones">The drone layers</a></li>
-      <li><a href="#directions">Directions and the trip planner</a></li>
-      <li><a href="#account">Accounts and your own files</a></li>
+      <li><a href="#directions">Directions and Trip Planning</a></li>
+      <li><a href="#account">Account</a></li>
     </ul>
   </div>
 
   <div class="wrap faq-wrap">
 
+    <section class="faq-section" id="photography">
+      <h2>Planning a Shoot</h2>
+
+      <details class="faq-item">
+        <summary><h3>Where the light times are</h3></summary>
+        <div class="faq-answer">
+          <p>Select a pin, or press anywhere on the map, and the Details panel opens on the light. The bar across the top is the whole day — night, twilight, golden hour, daylight, and back down the other side — with now marked on it. Under the bar are the two numbers most evenings turn on: how long the evening golden hour lasts, and when blue hour starts and ends.</p>
+          <p>All of it is worked out for the coordinates of that pin rather than the nearest city, and it is arithmetic rather than a lookup. There is no request behind it, so it answers the same on a ridge with no bars as it does at the kitchen table.</p>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary><h3>Moon, Milky Way, aurora, eclipse and fog</h3></summary>
+        <div class="faq-answer">
+          <p>Six tabs under the bar. <b>Moon</b> carries rise and set, the phase, and the percentage lit — the number that decides whether a landscape is lit or a sky is dark. <b>Milky Way</b> is the galactic core: whether it is up tonight, how high it gets, the window while the sky is properly dark, and the best nights over the coming weeks.</p>
+          <p><b>Aurora</b> is a chance for your latitude, read from NOAA rather than modelled here, with the Kp index beside it. <b>Eclipse</b> is the next lunar eclipse, its contact times, and whether the moon will be above your horizon for them. <b>Fog</b> is a likelihood hour by hour, with the ingredient that decided each hour named next to it.</p>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary><h3>Which way to face</h3></summary>
+        <div class="faq-answer">
+          <p>The last tab draws the plan on the ground: bearings from the pin to the sun, to the moon and to the galactic core, with the Milky Way band itself as the wide curve. The slider moves time, and the lines swing with it.</p>
+          <p>That is the point of drawing them. A table can tell you the sun comes up on a bearing of 71°; only the map tells you the ridge is in the way.</p>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary><h3>Planning a dark night</h3></summary>
+        <div class="faq-answer">
+          <p>Light pollution and sky brightness as a Bortle class are both in the Conditions group. Turn them on to pick the ground before you plan the night, then fade them back so you can see the roads under them.</p>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary><h3>Why there are no solar eclipses</h3></summary>
+        <div class="faq-answer">
+          <p>A lunar eclipse is one event the whole night side of the planet sees at the same moment, so it can be answered with arithmetic on your device. Where a solar eclipse falls is a different and far fussier calculation, and a wrong answer would send somebody hundreds of miles. It is absent rather than approximated.</p>
+        </div>
+      </details>
+    </section>
+
     <section class="faq-section" id="offline">
-      <h2>Taking the map offline</h2>
+      <h2>Offline Access</h2>
 
       <details class="faq-item">
         <summary><h3>Offline download</h3></summary>
@@ -119,6 +157,12 @@
       <h2>Layers</h2>
 
       <details class="faq-item">
+        <summary><h3>Basemaps and overlays</h3></summary>
+        <div class="faq-answer">
+          <p>One basemap at a time — it is the ground everything else is drawn on. Overlays stack over it in any number, each with its own switch and its own opacity, so public land, forest roads, weather and airspace can be turned up or faded back without disturbing the map underneath.</p>
+        </div>
+      </details>
+      <details class="faq-item">
         <summary><h3>Not responding</h3></summary>
         <div class="faq-answer">
       <p>
@@ -126,10 +170,8 @@
       </p>
         </div>
       </details>
-    </section>
 
-    <section class="faq-section" id="drones">
-      <h2>The drone layers</h2>
+      <h3>The drone layers</h3>
       <p>
         <strong>Nothing here is a flight authorisation.</strong> It is the FAA's own
         data drawn on a different map, and it can be out of date.
@@ -176,27 +218,43 @@
     </section>
 
     <section class="faq-section" id="directions">
-      <h2>Directions and the trip planner</h2>
-      <p>
-        The trip planner works out how far apart your stops are, how many days that
-        is, and where the days break. It will also draw the actual road route. What
-        it will not do is give you turn-by-turn directions.
-      </p>
+      <h2>Directions and Trip Planning</h2>
+
+      <details class="faq-item">
+        <summary><h3>What the trip planner does</h3></summary>
+        <div class="faq-answer">
+          <p>It works out how far apart your stops are, how many days that is, and where the days break. It will also draw the actual road route.</p>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary><h3>Why there are no turn-by-turn directions</h3></summary>
+        <div class="faq-answer">
+          <p>Turn-by-turn is Apple’s and Google’s ground, fought with their traffic data and their voice guidance, and this app is not trying to take it. The drive is planned and drawn here and then handed over: a stop goes to Apple Maps, Google Maps or Waze, whichever you already trust.</p>
+        </div>
+      </details>
     </section>
 
     <section class="faq-section" id="account">
-      <h2>Accounts and your own files</h2>
-      <p>
-        Everything you save — folders, waypoints, notes, imported files — lives in
-        your browser by default and needs no account. Signing in syncs those folders
-        between devices; signing out leaves them on the device, because clearing
-        them would look like data loss.
-      </p>
-      <p>
-        Exports are GPX by default, which is what Garmin, Gaia, AllTrails and every
-        handheld will import. GeoJSON is offered alongside it for anything that
-        wants the full properties.
-      </p>
+      <h2>Account</h2>
+
+      <details class="faq-item">
+        <summary><h3>Do I need one?</h3></summary>
+        <div class="faq-answer">
+          <p>No. Everything you save stays in your browser and needs no account. Sign in and your folders sync between devices; sign out and they stay on this one.</p>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary><h3>What syncing carries</h3></summary>
+        <div class="faq-answer">
+          <p>Folders and the pins in them. Photographs stay on the device they were added to — only the identifier travels, so a picture taken on your phone will not appear on your laptop. Uploading megabytes per pin is not something to do to somebody without asking.</p>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary><h3>Exports</h3></summary>
+        <div class="faq-answer">
+          <p>GPX by default, which is what Garmin, Gaia, AllTrails and every handheld will import. GeoJSON is offered alongside it for anything that wants the full properties.</p>
+        </div>
+      </details>
     </section>
 
   </div>
