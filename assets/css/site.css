@@ -663,3 +663,15 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 .legal-section ul { margin: 0 0 12px; padding-left: 1.2em; display: grid; gap: 8px; }
 .legal-section li { color: var(--ink-2); line-height: 1.6; }
 .legal-section b { color: var(--ink); }
+
+/* ---------- sharing a folder ---------- */
+
+.editor-share { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.editor-share input { flex: 1 1 auto; min-width: 0; }
+.share-list { display: grid; gap: 4px; }
+.share-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: .85rem; color: var(--ink-2);
+}
+.share-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folder-shared-by { color: var(--ink-3); }

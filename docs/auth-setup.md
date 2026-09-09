@@ -209,3 +209,55 @@ so it survives the move from `service_role` to the newer secret keys.
 If the function is unreachable the app still deletes the rows and says the
 account itself was not closed, pointing at support@halfstop.app — one of the
 two outcomes needs a human, and they should not read the same.
+
+---
+
+## Sharing a folder with somebody
+
+Stage one of collaboration: the owner invites an address, and that person can
+**read** the folder. Nobody but the owner can write to it, which is what keeps
+the sync model honest — last-write-wins per folder is safe while a folder has
+exactly one writer, and is not safe the moment it has two.
+
+**The grant is the email address, not a token in a link.** A bearer link is
+forwardable; one "look at this" into a group chat and a folder of somebody's
+saved places is public. The invitation names an address, the row records it,
+and the row-level policy matches it against the address on the reader's own
+session. A forwarded invitation is useless to anybody but the person it names.
+
+What is in `schema.sql`:
+
+- `folder_shares` — one row per (owner, folder, invited address), `revoked`
+  rather than deleted so a withdrawn invitation is distinguishable from one
+  that never existed.
+- A **select** policy on `folders` that consults it. A second policy rather
+  than a change to the first: policies are OR'd, so this adds a way to read and
+  leaves insert, update and delete owner-only.
+
+The reader's copy is marked `sharedFrom` in the browser, and that marker is
+what keeps it out of the push — `mergeFolders` holds it back, and the folder
+row offers no editing controls. Both are belt and braces: the policy would
+refuse the write anyway.
+
+### The email
+
+`supabase/functions/invite-to-folder` writes the row and sends the invitation.
+Deploy it with the CLI or the dashboard:
+
+```sh
+supabase functions deploy invite-to-folder
+```
+
+It needs two secrets, and **sends nothing until they are set**:
+
+| Secret | What it is |
+| --- | --- |
+| `RESEND_API_KEY` | An API key from the mail provider |
+| `INVITE_FROM` | The sender, e.g. `Halfstop <no-reply@halfstop.app>` |
+
+Without them the invitation is still recorded, and the app says so rather than
+claiming somebody was emailed. That distinction is deliberate: an invitation
+nobody receives and an invitation that failed are different problems, and only
+one of them needs the sender to go and tell their friend by hand.
+
+`SITE_URL` is optional and defaults to `https://app.halfstop.app/`.

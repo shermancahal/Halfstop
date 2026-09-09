@@ -11,6 +11,7 @@
 
 import { SUPABASE_URL, SUPABASE_KEY } from '../config.js';
 import { mergeFolders, rowToFolder, folderToRow, missingColumn } from './sync.js';
+import { markShared, normaliseEmail } from './shares.js';
 
 const SUPABASE_VERSION = '2.45.4';
 const CDN = `https://cdn.jsdelivr.net/npm/@supabase/supabase-js@${SUPABASE_VERSION}/+esm`;
@@ -18,6 +19,12 @@ const TABLE = 'folders';
 
 /** The Edge Function that closes an account; see supabase/functions/. */
 const DELETE_FUNCTION = 'delete-account';
+
+/** The one that writes an invitation and sends it. */
+const INVITE_FUNCTION = 'invite-to-folder';
+
+/** Invitations, kept beside the folders they are about. */
+const SHARES = 'folder_shares';
 
 export function isConfigured() {
   return Boolean(SUPABASE_URL && SUPABASE_KEY);
@@ -392,6 +399,96 @@ export class Account extends EventTarget {
   }
 
   /**
+   * The folders other people have shared with this account.
+   *
+   * Two reads rather than a join: the folder rows come back through the
+   * row-level policy that matches the invitation to this session's address,
+   * and the invitation itself carries the owner's name, which the folders
+   * table has no column for.
+   *
+   * Returns null rather than [] when the read fails, because the two mean
+   * opposite things to the caller - "nobody has shared anything" would quietly
+   * remove folders that a dropped connection simply could not fetch.
+   */
+  async pullShared(client) {
+    if (!this.user) return null;
+    try {
+      const [{ data: rows, error: rowsError }, { data: invites, error: invitesError }] = await Promise.all([
+        client.from(TABLE).select('*').neq('user_id', this.user.id),
+        client.from(SHARES).select('owner_id, client_id, invited_by').neq('owner_id', this.user.id),
+      ]);
+      if (rowsError) throw new Error(rowsError.message);
+      if (invitesError) throw new Error(invitesError.message);
+
+      const named = new Map((invites || []).map((row) => [`${row.owner_id}:${row.client_id}`, row.invited_by]));
+      return (rows || [])
+        .filter((row) => !row.deleted)
+        .map((row) => markShared(rowToFolder(row), {
+          ownerId: row.user_id,
+          ownerName: named.get(`${row.user_id}:${row.client_id}`) || 'somebody',
+        }));
+    } catch (error) {
+      console.warn('[account] could not read shared folders:', error?.message || error);
+      return null;
+    }
+  }
+
+  /**
+   * Invite somebody to view one folder.
+   *
+   * The row is written by the Edge Function rather than from here: it checks
+   * the folder is actually the caller's before an invitation goes out naming
+   * it, and it holds the key that sends the email. `emailed` is reported
+   * separately from `ok` because an invitation recorded and not delivered is a
+   * different thing to tell somebody about than one that failed outright.
+   */
+  async invite(clientId, email, folderName = '') {
+    if (!this.user) return { ok: false, reason: 'Sign in first.' };
+    const client = await this.getClient();
+    if (!client) return { ok: false, reason: 'Accounts are not configured here.' };
+
+    const { data, error } = await client.functions.invoke(INVITE_FUNCTION, {
+      body: { clientId, email: normaliseEmail(email), folderName },
+    });
+    if (error) return { ok: false, reason: error.message };
+    if (!data?.ok) return { ok: false, reason: data?.error || 'The invitation was not accepted.' };
+    return { ok: true, emailed: Boolean(data.emailed), reason: data.reason || '' };
+  }
+
+  /** Who a folder has been shared with, withdrawn invitations included. */
+  async sharesFor(clientId) {
+    if (!this.user) return [];
+    const client = await this.getClient();
+    if (!client) return [];
+    const { data, error } = await client.from(SHARES).select('*')
+      .eq('owner_id', this.user.id).eq('client_id', clientId);
+    if (error) {
+      console.warn('[account] could not read the invitations:', error.message);
+      return [];
+    }
+    return data || [];
+  }
+
+  /**
+   * Withdraw one invitation.
+   *
+   * Marked rather than deleted, so the row still says this was shared once -
+   * and so the same address can be invited again without tripping the unique
+   * key.
+   */
+  async revokeShare(clientId, email) {
+    if (!this.user) return { ok: false, reason: 'Sign in first.' };
+    const client = await this.getClient();
+    if (!client) return { ok: false, reason: 'Accounts are not configured here.' };
+    const { error } = await client.from(SHARES).update({ revoked: true })
+      .eq('owner_id', this.user.id)
+      .eq('client_id', clientId)
+      .eq('invited_email', normaliseEmail(email));
+    if (error) return { ok: false, reason: error.message };
+    return { ok: true };
+  }
+
+  /**
    * Change the name or the address.
    *
    * Only what actually changed is sent. Supabase treats a new address as a
@@ -477,7 +574,19 @@ export class Account extends EventTarget {
       });
       const result = mergeFolders(local, remote);
 
-      this.folders.replaceAll(result.merged);
+      /*
+       * The server is the authority on what is shared, every sync.
+       *
+       * mergeFolders holds shared folders back so a sync cannot offer them
+       * up, which also means it hands them back unchanged. Replacing them
+       * with a fresh read is what makes a withdrawn invitation disappear
+       * rather than linger as a copy nobody can see any more. A read that
+       * failed returns null and keeps what is already there.
+       */
+      const shared = await this.pullShared(client);
+      this.folders.replaceAll(shared === null
+        ? result.merged
+        : [...result.merged.filter((folder) => !folder.sharedFrom), ...shared]);
 
       if (result.toPush.length) {
         const { error: upsertError } = await this.upsertFolders(client, result.toPush);

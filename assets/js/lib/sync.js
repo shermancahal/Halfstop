@@ -81,6 +81,27 @@ export function folderToRow(folder, userId, { withParent = true } = {}) {
  * @returns {{merged: object[], toPush: object[], pulled: number, pushed: number, conflicts: object[]}}
  */
 export function mergeFolders(local, remote) {
+  /*
+   * A folder somebody else shared is not this device's to push.
+   *
+   * It arrives through the same store as everything else so the map and the
+   * folder list can draw it without special cases, which means it also reaches
+   * this function looking exactly like a local folder that the server has not
+   * heard of - and the next line would offer it back under the reader's own
+   * user id. The row-level policy refuses that write, so the failure is a
+   * rejected upsert rather than a stolen folder, but a sync that reports
+   * "failed" every time somebody looks at a shared trip is its own bug.
+   *
+   * Held out of the merge entirely and put back at the end, so it survives
+   * replaceAll without ever being a candidate to send.
+   */
+  const heldBack = local.filter((folder) => folder?.sharedFrom);
+  const mine = local.filter((folder) => !folder?.sharedFrom);
+  const result = mergeOwnFolders(mine, remote);
+  return { ...result, merged: [...result.merged, ...heldBack] };
+}
+
+function mergeOwnFolders(local, remote) {
   const byId = new Map();
   const conflicts = [];
 

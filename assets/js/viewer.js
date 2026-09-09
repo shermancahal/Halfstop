@@ -78,6 +78,7 @@ import { describeSync } from './lib/sync.js';
 import { registerServiceWorker, applyServiceWorkerUpdate } from './lib/pwa.js';
 import { mayEdit } from './lib/editors.js';
 import { shareableURL, readSharedPin, pinLinkParts } from './lib/share.js';
+import { isShared, looksLikeEmail, describeShares } from './lib/shares.js';
 import {
   OfflineStore, MAX_ZOOM as OFFLINE_MAX_ZOOM, TILE_BUDGET,
   mayCacheTiles, tileURLsFor, downloadTiles, clearTiles, tileKeysFor, downloadArchiveTiles,
@@ -535,7 +536,11 @@ async function main() {
     if (!changed || !state.account?.user) return;
     for (const folderId of [].concat(changed)) {
       const folder = state.folders.get(folderId);
-      if (folder) state.account.pushFolder(folder);
+      // Hiding somebody else's shared folder is a view preference on this
+      // device, not an edit to their data - and the policy would refuse the
+      // write anyway. mergeFolders holds them out of a full sync for the same
+      // reason; this is the other door.
+      if (folder && !isShared(folder)) state.account.pushFolder(folder);
     }
   });
   state.folders.onChange(() => {
@@ -10747,7 +10752,15 @@ function renderFolder(folder, drawn = new Set()) {
      * in the panel this opens, where there is room for words and for spacing
      * between something reversible and something that is not.
      */
-    el('button', {
+    /*
+     * Nothing to edit on a folder that is not yours.
+     *
+     * The controls behind this button rename, restyle, export and delete, and
+     * three of the four are writes the row-level policy would refuse. Offering
+     * them and letting the database say no is a worse answer than not offering
+     * them: the byline below says whose folder it is instead.
+     */
+    isShared(folder) ? null : el('button', {
       class: `icon-button folder-menu-button${chosen.length ? ' is-armed' : ''}`,
       type: 'button',
       title: chosen.length
@@ -10851,6 +10864,20 @@ function renderFolder(folder, drawn = new Set()) {
   });
 
   node.append(head);
+  /*
+   * Whose folder this is, said once, under the name.
+   *
+   * Without it a folder somebody shared is indistinguishable from one you made
+   * yourself until you press something and find the controls missing - and it
+   * would be filed among your own with no way to tell why it cannot be
+   * renamed.
+   */
+  if (isShared(folder)) {
+    node.append(el('p', {
+      class: 'hint folder-shared-by', style: 'margin:0 0 6px 30px; font-size:.8rem',
+      text: `Shared with you by ${folder.sharedFrom.ownerName}. You can look, not change.`,
+    }));
+  }
   if (trip) node.append(trip);
   // A drawer of folders needs no rule of its own above them, but it does need
   // the body: that is where they are.
@@ -12061,7 +12088,10 @@ function openStyleEditor(folder, itemIds, anchor) {
      * right for the styling half, and left a folder made by mistake with no
      * way out but filling it first.
      */
-    const editor = el('div', { class: 'style-editor' }, [folderNameRow(folder), folderActionsRow(folder)]);
+    const editor = el('div', { class: 'style-editor' }, [
+      folderNameRow(folder), folderActionsRow(folder),
+      state.account?.user && !isShared(folder) ? folderShareRow(folder) : null,
+    ]);
     anchor.after(editor);
     editor.querySelector('input')?.focus();
     return;
@@ -12265,7 +12295,11 @@ function openStyleEditor(folder, itemIds, anchor) {
    * place to offer to delete the folder it is in. Delete sits apart from the
    * others and asks first, because it is the one that cannot be undone.
    */
-  if (itemIds === null) editor.append(folderNameRow(folder), folderActionsRow(folder));
+  if (itemIds === null) {
+    editor.append(folderNameRow(folder), folderActionsRow(folder));
+    const sharing = state.account?.user && !isShared(folder) ? folderShareRow(folder) : null;
+    if (sharing) editor.append(sharing);
+  }
 
   anchor.after(editor);
   editor.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -12321,6 +12355,77 @@ function folderNameRow(folder) {
  * place to offer to delete the folder it is in. Delete sits apart from the
  * others and asks first, because it is the one that cannot be undone.
  */
+/**
+ * Invite somebody to look at this folder.
+ *
+ * An address rather than a link, because a link is forwardable and this is
+ * somebody's collection of places. What goes out names the folder, says what
+ * Halfstop is and says a free account is needed - the person receiving it has
+ * had no relationship with any of this until now.
+ *
+ * `emailed` is reported apart from `ok`: until a mail provider is configured
+ * the invitation is recorded and nothing is delivered, and telling somebody
+ * their friend has been emailed when nothing was sent is the one outcome worth
+ * writing extra code to avoid.
+ */
+function folderShareRow(folder) {
+  const row = el('div', { class: 'editor-share' });
+  const status = el('p', { class: 'hint', style: 'margin:6px 0 0', text: '' });
+
+  const field = el('input', {
+    type: 'email', placeholder: 'their@email.address', autocomplete: 'off',
+    'aria-label': `Invite somebody to view ${folder.name}`,
+  });
+  const send = el('button', {
+    class: 'button button-secondary button-small', type: 'button', text: 'Invite',
+    onclick: async () => {
+      const email = field.value.trim();
+      if (!looksLikeEmail(email)) { status.textContent = 'That does not look like an email address.'; return; }
+      send.disabled = true;
+      status.textContent = 'Sending…';
+      const result = await state.account.invite(folder.id, email, folder.name);
+      send.disabled = false;
+      if (!result.ok) { status.textContent = result.reason; return; }
+      field.value = '';
+      status.textContent = result.emailed
+        ? `Invited ${email}. They will need a free account on this address to see it.`
+        : `Recorded for ${email}, but no email was sent — ${result.reason} Tell them yourself and `
+          + 'it will be waiting when they sign in.';
+      paint();
+    },
+  });
+
+  const paint = async () => {
+    const shares = await state.account.sharesFor(folder.id);
+    const live = shares.filter((share) => !share.revoked);
+    list.replaceChildren(
+      el('p', { class: 'hint', style: 'margin:8px 0 4px', text: describeShares(shares) }),
+      ...live.map((share) => el('div', { class: 'share-row' }, [
+        el('span', { text: share.invited_email }),
+        el('button', {
+          class: 'button button-ghost button-small', type: 'button', text: 'Withdraw',
+          onclick: async () => {
+            const result = await state.account.revokeShare(folder.id, share.invited_email);
+            if (!result.ok) { status.textContent = result.reason; return; }
+            status.textContent = `${share.invited_email} can no longer see it.`;
+            paint();
+          },
+        }),
+      ])),
+    );
+  };
+  const list = el('div', { class: 'share-list' });
+
+  row.append(
+    el('div', { class: 'settings-label', text: 'Share with someone' }),
+    el('div', { class: 'picker-row' }, [field, send]),
+    list,
+    status,
+  );
+  paint();
+  return row;
+}
+
 function folderActionsRow(folder) {
   return el('div', { class: 'picker-row editor-folder-actions' }, [
       // Icon plus label. Three text-only buttons could not fit the panel and
