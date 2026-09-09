@@ -284,6 +284,8 @@ const state = {
   dropPopup: null,
   /** [lon, lat] of a place being described that is not a saved pin. */
   scratchPoint: null,
+  /** Its name, when it arrived from somebody else's link rather than a tap. */
+  scratchName: '',
   // Where the last "what is here" tap landed, so the map keeps a mark on the
   // spot the card is talking about.
   probeMark: null,
@@ -830,8 +832,7 @@ async function main() {
    */
   if (initial.pin) {
     const { lon, lat, name } = initial.pin;
-    showPointDetails([lon, lat]);
-    if (name) toast(name, { tone: 'info', timeout: 8000 });
+    showPointDetails([lon, lat], name);
   }
 
   renderDetailsTab();
@@ -7748,9 +7749,18 @@ function armProbe(button) {
     : 'Tapping the map drops a pin again.', { tone: 'info' });
 }
 
-/** Show the Details tab for a place that is not a saved pin. */
-function showPointDetails(position) {
+/**
+ * Show the Details tab for a place that is not a saved pin.
+ *
+ * The name is for a point that arrived from somebody else's link. Without it
+ * the receiving end titled every shared place "Dropped pin" and told the
+ * reader it was "wherever you last clicked the map", which they had not done -
+ * and re-sharing from that panel sent the name on as "Dropped pin", so it
+ * degraded on every hop. Clicking the map passes none, which clears it.
+ */
+function showPointDetails(position, name = '') {
   state.selectedPin = null;
+  state.scratchName = String(name || '').trim();
   state.scratchPoint = position;
   setProbeMark(position);
   renderDetailsTab();
@@ -8678,9 +8688,15 @@ function locationSection(position, { recorded = null } = {}) {
  * into a real waypoint and hands off to the full view.
  */
 function renderPointDetails(position) {
+  const shared = state.scratchName || '';
   dom.details.append(el('div', { class: 'panel-section' }, [
-    el('h2', { class: 'panel-title', style: 'margin:0', text: 'Dropped pin' }),
-    el('p', { class: 'hint', style: 'margin:6px 0 11px', text: 'Not saved yet — this is wherever you last clicked the map.' }),
+    el('h2', { class: 'panel-title', style: 'margin:0', text: shared || 'Dropped pin' }),
+    el('p', {
+      class: 'hint', style: 'margin:6px 0 11px',
+      text: shared
+        ? 'Sent to you as a link. Not saved yet — save it to keep it.'
+        : 'Not saved yet — this is wherever you last clicked the map.',
+    }),
     el('div', { class: 'picker-row' }, [
       labelledButton(icons.pin, 'Save as waypoint', {
         tone: 'secondary',
@@ -8690,7 +8706,7 @@ function renderPointDetails(position) {
           const feature = {
             type: 'Feature',
             geometry: { type: 'Point', coordinates: position },
-            properties: { kind: 'waypoint', name: 'Dropped pin', description: '' },
+            properties: { kind: 'waypoint', name: shared || 'Dropped pin', description: '' },
           };
           saveFeatureToFolder(feature, target.id, null);
           state.scratchPoint = null;
@@ -8702,13 +8718,14 @@ function renderPointDetails(position) {
       labelledButton(icons.share, 'Share', {
         tone: 'ghost',
         title: 'Send somebody a link that opens the map here',
-        onclick: () => sharePin({ name: 'Dropped pin' }, position),
+        onclick: () => sharePin({ name: shared }, position),
       }),
       labelledButton(icons.close, 'Clear', {
         tone: 'ghost',
         title: 'Forget this dropped pin',
         onclick: () => {
           state.scratchPoint = null;
+          state.scratchName = '';
           setProbeMark(null);
           state.dropPopup?.remove();
           renderDetailsTab();
@@ -12733,22 +12750,30 @@ async function offerLink(url, { title = SITE.name, text = '', ok = 'Link copied.
     }
   }
 
+  /*
+   * The sentence travels with the link, not just the link.
+   *
+   * A share sheet composes the two itself, which is why they go separately
+   * above. A clipboard does not: paste it into a message and the other person
+   * gets a bare address with no idea what it opens, so the text is joined on
+   * here rather than dropped.
+   */
   try {
-    await navigator.clipboard.writeText(url);
+    await navigator.clipboard.writeText(text ? `${text} ${url}` : url);
     toast(ok, { tone: 'ok' });
     return;
   } catch {
     // Refused, or no clipboard at all: fall through and show the link.
   }
 
-  toast(`Copy this link: ${url}`, { timeout: 15000 });
+  toast(`Copy this link: ${text ? `${text} ${url}` : url}`, { timeout: 15000 });
 }
 
 async function shareView() {
   writeURL();
   await offerLink(here(), {
     title: SITE.name,
-    text: 'A view in Halfstop',
+    text: 'This is a broad view sent from Halfstop:',
     ok: 'Link copied \u2014 it restores these maps, this basemap and this view.',
   });
 }
@@ -12765,7 +12790,10 @@ async function sharePin(props, [lon, lat]) {
   const name = String(props?.name || '').trim();
   await offerLink(here(pinLinkParts({ lon, lat, name })), {
     title: name || SITE.name,
-    text: name ? `${name} \u2014 on Halfstop` : 'A place on Halfstop',
+    // A pin with no name of its own still needs a sentence that reads.
+    text: name
+      ? `This is a view of ${name} sent from Halfstop:`
+      : 'This is a view of a place sent from Halfstop:',
     ok: 'Link copied \u2014 it opens the map on this pin.',
   });
 }
