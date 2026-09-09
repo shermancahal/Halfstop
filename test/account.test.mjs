@@ -17,7 +17,7 @@ import { Account, displayName } from '../assets/js/lib/account.js';
 
 const folders = { list: () => [], replaceAll() {}, toGeoJSON: () => ({ features: [] }) };
 
-function fakeClient({ session = null, signOutError = null } = {}) {
+function fakeClient({ session = null, signOutError = null, functionError = null } = {}) {
   const calls = [];
   return {
     calls,
@@ -28,7 +28,15 @@ function fakeClient({ session = null, signOutError = null } = {}) {
       return {
         select() { return { async eq() { return { data: [], error: null }; } }; },
         async upsert() { return { error: null }; },
+        delete() { return { async eq() { return { error: null }; } }; },
       };
+    },
+    functions: {
+      async invoke(name, options) {
+        calls.push(['invoke', name, options]);
+        if (functionError) return { data: null, error: new Error(functionError) };
+        return { data: { ok: true }, error: null };
+      },
     },
     auth: {
       async getSession() { return { data: { session } }; },
@@ -188,6 +196,46 @@ test('account: a sign-out that could not sync keeps the folders rather than losi
   assert.equal(account.status, 'signed-out');
   assert.equal(held.length, 1, 'an unsynced folder was cleared off the device');
   assert.match(account.message, /still on this device/);
+});
+
+test('account: deleting an account closes it, and never says whose', async () => {
+  /*
+   * The browser can delete its own rows and cannot delete the auth record -
+   * that needs the service key, which must never be in a page. So the record
+   * goes through an Edge Function, and the thing worth pinning is what the
+   * client sends it: nothing. The function reads whose account to close from
+   * the token on the request. A client that could name a user id would be an
+   * unauthenticated delete of anybody's account wearing a signed-in one's
+   * clothes, and privacy.html has been promising this deletion for a while.
+   */
+  const client = fakeClient();
+  const account = new Account(folders, { client: async () => client, configured: () => true });
+  withHash('');
+  account.user = { id: 'u1' };
+
+  const result = await account.deleteAccount();
+  assert.equal(result.ok, true);
+  assert.equal(result.closed, true);
+
+  const invoked = client.calls.filter(([name]) => name === 'invoke');
+  assert.equal(invoked.length, 1, 'the account-closing function was not called');
+  assert.equal(invoked[0][1], 'delete-account');
+  assert.equal(JSON.stringify(invoked[0][2] ?? null).includes('u1'), false,
+    'the client sent a user id, which the server must never take from it');
+});
+
+test('account: an account that could not be closed says so rather than claiming it was', async () => {
+  const client = fakeClient({ functionError: 'function not found' });
+  const account = new Account(folders, { client: async () => client, configured: () => true });
+  withHash('');
+  account.user = { id: 'u1' };
+
+  const result = await account.deleteAccount();
+  // The rows still went, so this is not a failure to report as one - but the
+  // difference has to reach the person, because one of the two needs an email.
+  assert.equal(result.ok, true);
+  assert.equal(result.closed, false);
+  assert.match(account.message, /support@halfstop\.app/);
 });
 
 test('account: a provider sign-in says where to come back to', async () => {

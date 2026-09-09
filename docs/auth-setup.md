@@ -180,3 +180,32 @@ and SES all have free or near-free tiers at this volume.
 
 None of this touches the redirect problem in section 1, which is separate and
 comes first: fixing delivery only means the wrong link arrives reliably.
+
+---
+
+## Deleting an account, all the way
+
+`Settings → Account → Delete account` deletes the person's folder rows from the
+browser, which row-level security allows, and then closes the auth record
+through an Edge Function — because that part needs the service key, and a
+service key in a page is a service key in everybody's devtools.
+
+The function is `supabase/functions/delete-account/index.ts`. It is deployed
+with `verify_jwt` on, and it reads **whose** account to close from the caller's
+own verified token; there is deliberately no way to name a different user in
+the request. Rows first, then the record: deleting the user first would strand
+the rows behind a policy that checks a user who no longer exists.
+
+Deploy it with the CLI, or from the dashboard:
+
+```sh
+supabase functions deploy delete-account
+```
+
+It needs no secrets of its own. `SUPABASE_URL` and the service key are in every
+function's environment already; the code reads either generation of that key,
+so it survives the move from `service_role` to the newer secret keys.
+
+If the function is unreachable the app still deletes the rows and says the
+account itself was not closed, pointing at support@halfstop.app — one of the
+two outcomes needs a human, and they should not read the same.

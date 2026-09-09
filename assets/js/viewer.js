@@ -11880,8 +11880,9 @@ function renderAccount() {
         title: 'Remove your folders from the server and close the account',
         onclick: async () => {
           const warning = 'Delete your account?\n\n'
-            + 'Your folders and pins are removed from the server and will not reach '
-            + 'your other devices again. What is saved on this device is left alone.\n\n'
+            + 'The account itself is closed, and your folders and pins are removed from '
+            + 'the server. Signing in again will not bring any of it back. What is saved '
+            + 'on this device is left alone.\n\n'
             + 'This cannot be undone.';
           if (!window.confirm(warning)) return;
           if (window.prompt('Type DELETE to confirm.') !== 'DELETE') {

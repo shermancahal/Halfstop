@@ -16,6 +16,9 @@ const SUPABASE_VERSION = '2.45.4';
 const CDN = `https://cdn.jsdelivr.net/npm/@supabase/supabase-js@${SUPABASE_VERSION}/+esm`;
 const TABLE = 'folders';
 
+/** The Edge Function that closes an account; see supabase/functions/. */
+const DELETE_FUNCTION = 'delete-account';
+
 export function isConfigured() {
   return Boolean(SUPABASE_URL && SUPABASE_KEY);
 }
@@ -265,7 +268,7 @@ export class Account extends EventTarget {
     return true;
   }
 
-  async signOut() {
+  async signOut({ sync = true } = {}) {
     /*
      * Signing out locally even when the server call fails.
      *
@@ -296,7 +299,7 @@ export class Account extends EventTarget {
      * device holds the only copy; the pins that point at them come back with
      * the folders on the next sign-in, ids and all.
      */
-    const saved = this.user ? await this.sync() : null;
+    const saved = sync && this.user ? await this.sync() : null;
 
     try {
       const client = await this.getClient();
@@ -331,9 +334,16 @@ export class Account extends EventTarget {
    * deleting nothing and report success.
    *
    * The auth record itself cannot be removed from the browser: deleting a user
-   * needs the service_role key, which must never be in a page. So this empties
-   * the account and says plainly that the sign-in record is removed on request,
-   * rather than claiming something it did not do.
+   * needs the service key, and a service key in a page is a service key in
+   * everybody's devtools. So it is removed by the `delete-account` Edge
+   * Function, which holds that key server-side and reads whose account to
+   * close from the caller's own verified token - never from anything the
+   * request body says.
+   *
+   * The rows are still deleted from here first. If the function is unreachable
+   * - not deployed yet, or a network that dropped - the data is gone either
+   * way and the message says which of the two happened, rather than reporting
+   * a deletion that did not finish.
    *
    * What is on the device is deliberately left alone. Somebody deleting an
    * account is asking us to forget them, not asking their phone to throw away
@@ -351,11 +361,34 @@ export class Account extends EventTarget {
       return { ok: false, reason: error.message };
     }
 
-    await this.signOut();
-    this.setStatus('signed-out',
-      'Your folders were deleted from the server. Your sign-in record is removed on request '
-      + '— write to support@halfstop.app. What is on this device is untouched.');
-    return { ok: true };
+    /*
+     * Closing the account itself, while the session is still good for it.
+     *
+     * Invoked before the sign-out, for the same reason the rows are deleted
+     * before it: the function identifies the caller from the token this
+     * request carries, and there is no token after signing out.
+     */
+    let closed = false;
+    let closeReason = '';
+    try {
+      const { data, error: fnError } = await client.functions.invoke(DELETE_FUNCTION);
+      if (fnError) closeReason = fnError.message;
+      else closed = Boolean(data?.ok);
+    } catch (error) {
+      closeReason = error?.message || String(error);
+    }
+    if (!closed && closeReason) console.warn('[account] the account was not closed:', closeReason);
+
+    // Nothing to sync to any more, and a failed sync would report itself as
+    // the reason the folders stayed - which would be the wrong story entirely.
+    await this.signOut({ sync: false });
+
+    this.setStatus('signed-out', closed
+      ? 'Your account is closed and everything on the server is deleted. What is saved on '
+        + 'this device is untouched.'
+      : 'Your folders were deleted from the server, but closing the account itself did not '
+        + 'go through. Write to support@halfstop.app and it will be finished by hand.');
+    return { ok: true, closed };
   }
 
   /**
