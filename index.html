@@ -181,8 +181,8 @@
 
       <p class="costs-lede">
         Everything in Halfstop is free while it is being built, and some of it is
-        going to stay free for good — the parts that cost nothing to give away.
-        The rest is metered: every place search, every folder that syncs between
+        going to stay free for good: the parts that cost nothing to give away.
+        The rest is metered. Every place search, every folder that syncs between
         your phone and your laptop, every region held on a server costs something
         each time somebody uses it. Those are what a paid plan will eventually
         cover. There is no price and no date yet, and nothing to buy.
@@ -190,26 +190,27 @@
 
       <div class="costs-grid">
         <div class="costs-card">
-          <h3>Free, and meant to stay that way</h3>
+          <h3>Free Tier</h3>
           <ul>
-            <li>Every basemap in the list — Byways Topo, the USGS quads, satellite and street</li>
+            <li>Every basemap in the list: Byways Topo, the USGS quads, satellite and street</li>
             <li>Folders, waypoints, icons, colours and the table editor</li>
             <li>Sun, moon, blue hour, eclipse tracks</li>
             <li>Public land, wilderness, forest roads and drone ceilings</li>
-            <li>Offline map regions, up to a handful</li>
-            <li><b>Import and export</b> — GPX, KML, GeoJSON, whenever you like</li>
+            <li>Offline as a screenshot: the view saved as a picture, which costs nothing to give away</li>
+            <li><b>Import and export</b>, whenever you like: GPX, KML and GeoJSON</li>
           </ul>
         </div>
 
         <div class="costs-card">
-          <h3>Paid, one day</h3>
+          <h3>Premium Tier</h3>
           <ul>
             <li>Searching for a place by name</li>
-            <li>Folders that follow you between devices</li>
-            <li>Offline regions without a limit</li>
-            <li>Weather, fog, storm and snow layers</li>
-            <li>Road and RV routing for a trip</li>
-            <li>Photographs attached to a pin</li>
+            <li>Syncing between devices</li>
+            <li>Weather layers</li>
+            <li>Offline downloads</li>
+            <li>Trip routing</li>
+            <li>Photographs attached to a waypoint</li>
+            <li>State level detail maps</li>
           </ul>
         </div>
       </div>
@@ -223,26 +224,42 @@
         Drawing the map is nearly free: the topographic mapping is one file on
         cheap storage, and the public land, aerial and airspace layers are served
         by the agencies that publish them. Sunrise, moonset and eclipse timing are
-        arithmetic done on your own device — a thousand people doing it costs
-        exactly as much as one.
+        arithmetic done on your own device.
       </p>
+
+      <h3 class="costs-why">What this actually runs on</h3>
       <p>
-        Searching for a place is not. Every search, and every time the app names
-        the nearest town, is a request to a geocoding service that bills per
-        request. Syncing folders means a database holding your pins and sending
-        them back on demand. Both grow directly with the number of people using
-        them, which is what makes them the honest things to charge for: the bill
-        arrives in proportion to the use.
+        Three services keep it up, and all three are free at the size Halfstop is
+        now. Here is what they will cost when it is bigger, so the number is on
+        the page before it is on a bill.
       </p>
+      <div class="costs-bill">
+        <div>
+          <b>Supabase</b>
+          <span>Accounts and the folders that sync. Free today. Pro is $25 a month
+          for the organisation once the free database or its bandwidth runs out.</span>
+        </div>
+        <div>
+          <b>Resend</b>
+          <span>Confirmation links, sign-in links and folder invitations. Free to
+          3,000 emails a month, then $20 a month for 50,000.</span>
+        </div>
+        <div>
+          <b>GitHub</b>
+          <span>The code, and the build that publishes the site. Free on a public
+          repository, including the Pages hosting it deploys to.</span>
+        </div>
+      </div>
       <p>
-        Alongside that sits the ordinary cost of existing — an Apple developer
-        account before a single person can install anything, a domain, the servers
-        that keep the archive and the accounts. Those are paid whether one person
-        uses this or ten thousand do.
+        Beyond those sit the costs of simply existing: a domain, an Apple developer
+        account before a single person can install anything from the App Store, and
+        the mapping services that bill per request. Those are paid whether one
+        person uses this or ten thousand do.
       </p>
+
       <p class="costs-promise">
         <b>Two things will not change.</b> Getting your own data out will never be
-        behind a payment — a folder you built is yours and it exports as GPX with
+        behind a payment: a folder you built is yours, and it exports as GPX with
         no account at all. And if a feature that is free today ever moves, it will
         be said here first, plainly, before it happens.
       </p>

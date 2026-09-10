@@ -41,31 +41,62 @@ import { BILLING } from '../config.js';
  * not, and a feature name that leaks the vendor is a rename waiting to happen.
  */
 export const FEATURES = {
-  roadRoute: 'Draw the road route for a trip',
-  rvRouting: 'Route for an RV’s height, width and weight',
-  offlineRegions: 'Save map regions to use with no signal',
-  folderSync: 'Keep folders across devices',
-  fogForecast: 'Fog likelihood and kind',
-  bulkExport: 'Export a whole folder at once',
-  stateLayers: 'State agency layers',
+  placeSearch: 'Searching for a place by name',
+  folderSync: 'Syncing between devices',
+  weatherLayers: 'Weather layers',
+  offlineDownloads: 'Offline downloads',
+  tripRouting: 'Trip routing',
+  pinPhotos: 'Photographs attached to a waypoint',
+  stateLayers: 'State level detail maps',
 };
 
-/**
- * The plan, as it stands today: one tier, everything in it.
+/*
+ * Two names the app still asks for, mapped onto the one that replaced them.
  *
- * A second entry would be a promise about pricing this project has not made, so
- * there is not one. What the structure buys is that adding it later is adding a
- * key here — the callers already ask `can()` rather than asking what tier
- * somebody is on.
+ * The trip planner asks `can('roadRoute')` and the RV form asks
+ * `can('rvRouting')`, and both are now the same purchase. Aliased rather than
+ * renamed at the call sites so a stale key cannot silently answer false and
+ * close a gate nobody meant to close.
+ */
+const ALIASES = {
+  roadRoute: 'tripRouting',
+  rvRouting: 'tripRouting',
+  fogForecast: 'weatherLayers',
+  offlineRegions: 'offlineDownloads',
+};
+
+/** The feature a key means, following an alias where there is one. */
+function resolve(feature) {
+  return ALIASES[feature] || feature;
+}
+
+/**
+ * Two plans, drawn where the website says they are drawn.
+ *
+ * Free grants none of the metered features and Premium grants all of them,
+ * which is the split on the What it costs section rather than a second opinion
+ * about it. That matters more than it sounds: the day BILLING.live is turned
+ * on, these lists are what closes, and a matrix that disagreed with the page
+ * would take somebody's money for something they already had.
+ *
+ * Nothing is gated today. `can()` returns true for everything while billing is
+ * off, so every account behaves as Premium and the free plan's empty grants
+ * are a description of the future rather than of now.
  */
 export const TIERS = {
   free: {
     id: 'free',
     name: 'Free',
-    // Everything, and the note says whether that is the plan or the moment.
-    grants: Object.keys(FEATURES),
+    grants: [],
     note: 'Everything is free while Halfstop is being built. '
       + 'If that ever changes, it will change here first and it will say so.',
+  },
+  premium: {
+    id: 'premium',
+    name: 'Premium',
+    grants: Object.keys(FEATURES),
+    note: 'The metered parts: searching, syncing, weather, offline downloads, '
+      + 'routing, photographs on a pin and the state maps.',
   },
 };
 
@@ -93,11 +124,12 @@ export function tierFor(account = null, { billing = BILLING } = {}) {
  * it as though it does.
  */
 export function can(feature, { tier = null, billing = BILLING } = {}) {
-  if (!Object.hasOwn(FEATURES, feature)) return false;
+  const key = resolve(feature);
+  if (!Object.hasOwn(FEATURES, key)) return false;
   // Every gate open until there is a server-side half to close it against.
   if (!billing.live) return true;
   const plan = tier || TIERS[DEFAULT_TIER];
-  return plan.grants.includes(feature);
+  return plan.grants.includes(key);
 }
 
 /**
@@ -108,7 +140,7 @@ export function can(feature, { tier = null, billing = BILLING } = {}) {
  * against what they were trying to do.
  */
 export function gateReason(feature, { tier = null } = {}) {
-  const what = FEATURES[feature];
+  const what = FEATURES[resolve(feature)];
   if (!what) return 'That is not something this app does.';
   const plan = tier || TIERS[DEFAULT_TIER];
   return `${what} is not included in ${plan.name}.`;
@@ -128,6 +160,16 @@ export function planSummary(account = null, { billing = BILLING } = {}) {
     note: tier.note,
     /* Whether any of this is real yet, which the interface should not hide. */
     live: Boolean(billing.live),
-    includes: tier.grants.map((key) => FEATURES[key]).filter(Boolean),
+    /*
+     * What this account actually gets, which is not the same as what the plan
+     * grants until billing is live.
+     *
+     * Free grants nothing metered, because that is the split the website
+     * prints and the one that will close on the day there is something to buy.
+     * Reading the grants today would tell somebody they have none of it while
+     * they are using all of it.
+     */
+    includes: (billing.live ? tier.grants : Object.keys(FEATURES))
+      .map((key) => FEATURES[key]).filter(Boolean),
   };
 }

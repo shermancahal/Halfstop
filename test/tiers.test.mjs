@@ -22,8 +22,32 @@ test('tiers: today, every feature is offered to everybody', () => {
   }
 });
 
-test('tiers: and the free plan really does list them all', () => {
-  assert.deepEqual(TIERS.free.grants.slice().sort(), Object.keys(FEATURES).sort());
+test('tiers: the plans are drawn where the website says they are', () => {
+  /*
+   * Premium grants the metered features and Free grants none of them, which is
+   * the split printed on What it costs rather than a second opinion about it.
+   * The day BILLING.live goes on, this matrix is what closes - and one that
+   * disagreed with the page would take somebody's money for something they
+   * already had.
+   */
+  assert.deepEqual(TIERS.premium.grants.slice().sort(), Object.keys(FEATURES).sort());
+  assert.deepEqual(TIERS.free.grants, []);
+});
+
+test('tiers: the keys the app still asks for reach the feature that replaced them', () => {
+  /*
+   * roadRoute and rvRouting are one purchase now, and the trip planner and the
+   * RV form still ask for them by their old names. An alias that stopped
+   * resolving would answer false and close a gate nobody meant to close - so
+   * the closed world is where this is checked.
+   */
+  const premium = TIERS.premium;
+  for (const [asked, means] of [['roadRoute', 'tripRouting'], ['rvRouting', 'tripRouting'],
+    ['fogForecast', 'weatherLayers'], ['offlineRegions', 'offlineDownloads']]) {
+    assert.equal(can(asked, { tier: premium, billing: LIVE }), true, `${asked} should reach ${means}`);
+    assert.equal(can(asked, { tier: TIERS.free, billing: LIVE }), false, `${asked} should be gated on Free`);
+    assert.match(gateReason(asked), new RegExp(FEATURES[means].split(' ')[0], 'i'));
+  }
 });
 
 /*
@@ -33,11 +57,11 @@ test('tiers: and the free plan really does list them all', () => {
  * grants one feature.
  */
 test('tiers: with billing live, the matrix is what decides', () => {
-  const limited = { id: 'trial', name: 'Trial', grants: ['fogForecast'], note: '' };
-  assert.equal(can('fogForecast', { tier: limited, billing: LIVE }), true);
-  assert.equal(can('roadRoute', { tier: limited, billing: LIVE }), false);
+  const limited = { id: 'trial', name: 'Trial', grants: ['weatherLayers'], note: '' };
+  assert.equal(can('weatherLayers', { tier: limited, billing: LIVE }), true);
+  assert.equal(can('tripRouting', { tier: limited, billing: LIVE }), false);
   // And the same call with billing off is open again, so the flag is the switch.
-  assert.equal(can('roadRoute', { tier: limited, billing: FREE }), true);
+  assert.equal(can('tripRouting', { tier: limited, billing: FREE }), true);
 });
 
 test('tiers: a feature nobody has heard of is not quietly allowed', () => {
@@ -70,7 +94,7 @@ test('tiers: everyone is on the free plan until there is a server saying otherwi
  */
 test('tiers: a refusal names the feature, not just the plan', () => {
   const said = gateReason('rvRouting');
-  assert.match(said, /height, width and weight/);
+  assert.match(said, /Trip routing/);
   assert.match(said, /Free/);
   assert.match(gateReason('nonsense'), /not something this app does/);
 });
@@ -79,8 +103,16 @@ test('tiers: the plan summary says both what you have and whether it is real yet
   const summary = planSummary(null, { billing: FREE });
   assert.equal(summary.name, 'Free');
   assert.equal(summary.live, false);
+  // Everything, because that is what an account gets while billing is off -
+  // not the empty list Free grants for the day it is on.
   assert.equal(summary.includes.length, Object.keys(FEATURES).length);
   assert.match(summary.note, /free while Halfstop is being built/);
+
+  // And once it is real, the plan is what decides.
+  const paying = planSummary({ tier: 'premium' }, { billing: LIVE });
+  assert.equal(paying.name, 'Premium');
+  assert.equal(paying.includes.length, Object.keys(FEATURES).length);
+  assert.equal(planSummary(null, { billing: LIVE }).includes.length, 0);
 });
 
 /*

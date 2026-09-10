@@ -632,7 +632,10 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 
 /* ----------------------------------------------------------------- costs */
 
-.costs-lede { max-width: 68ch; color: var(--ink-2); font-size: 1.02rem; margin: 0 0 28px; }
+/* Full width, not a 68ch column with a third of the page beside it.
+   The wrap already caps the page; a second cap inside it read as a layout
+   that had gone wrong rather than as a measure somebody chose. */
+.costs-lede { color: var(--ink-2); font-size: 1.02rem; margin: 0 0 28px; }
 .costs-grid { display: grid; gap: 18px; margin-bottom: 34px; }
 @media (min-width: 760px) { .costs-grid { grid-template-columns: 1fr 1fr; } }
 .costs-card {
@@ -645,7 +648,7 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 /* The free card is the one to read first, so it is the one with the accent. */
 .costs-grid .costs-card:first-child { border-color: var(--clay); box-shadow: 0 0 0 1px var(--clay-soft); }
 .costs-why { margin: 0 0 10px; }
-.section-costs p { max-width: 68ch; color: var(--ink-2); }
+.section-costs p { color: var(--ink-2); }
 .costs-promise {
   border-left: 3px solid var(--clay); padding: 2px 0 2px 16px; margin-top: 26px;
 }
@@ -675,3 +678,14 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 }
 .share-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .folder-shared-by { color: var(--ink-3); }
+
+/* What the project pays for, in a row that wraps rather than a table that
+   scrolls: three short items, each a name, a price now and a price later. */
+.costs-bill { display: grid; gap: 14px; margin: 0 0 26px; }
+@media (min-width: 720px) { .costs-bill { grid-template-columns: repeat(3, 1fr); } }
+.costs-bill div {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); padding: 14px 16px;
+}
+.costs-bill b { display: block; font-size: .95rem; margin-bottom: 4px; }
+.costs-bill span { display: block; font-size: .88rem; color: var(--ink-2); line-height: 1.55; }
