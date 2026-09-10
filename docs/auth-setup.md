@@ -384,11 +384,22 @@ Resend receives inbound mail and posts it to a webhook, which
 
 1. **An MX record on a subdomain.** Resend's own guidance, and worth following:
    an MX on the bare domain routes *all* mail for halfstop.app to Resend, which
-   is not what you want while the mailboxes live elsewhere. Use something like
-   `inbound.halfstop.app` and forward support@ to it, or take the managed
-   address Resend offers, which needs no DNS at all.
+   is not what you want while the mailboxes live elsewhere. Add
+   `inbound.halfstop.app` to Resend for receiving, then create the MX record it
+   gives you: host `inbound`, priority `10`, value copied from the dashboard
+   rather than from anywhere else. Nothing else may sit on that host, and the
+   priority has to be the lowest number there, or the mail goes elsewhere.
+
+   Then forward support@halfstop.app to an address on that subdomain, from
+   whichever host holds the mailbox. Resend also offers a managed address that
+   needs no DNS at all, which is the quicker way to see it working.
 2. **Point the webhook at the function**, with the secret:
-   `https://<project>.functions.supabase.co/support-inbound?secret=<value>`
+   `https://gqemcvuushtfbbbxypvf.supabase.co/functions/v1/support-inbound?secret=<value>`
+
+   That is the documented form, `https://<project-ref>.supabase.co/functions/v1/<slug>`.
+   The shorter `<ref>.functions.supabase.co` host exists but is not the one the
+   dashboard shows, and a webhook pointed at a host that does not resolve fails
+   silently at the provider rather than in anything you are watching.
 3. **Set `SUPPORT_WEBHOOK_SECRET`** in Edge Functions → Secrets to that value.
 
 Deploy it with `verify_jwt` **off**, which is the one function here that does:
