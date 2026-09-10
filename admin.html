@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Support queue — Halfstop</title>
+<meta name="description" content="The support queue. Signed-in administrators only.">
+<meta property="og:title" content="Support queue — Halfstop">
+<meta property="og:description" content="The support queue. Signed-in administrators only.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#1f2846" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1f2846" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="assets/img/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="assets/img/icon-192.png" sizes="192x192" type="image/png">
+<link rel="manifest" href="manifest.webmanifest">
+<!-- iOS ignores the manifest for "Add to Home Screen"; these three are what it
+     reads instead. apple-touch-icon must be a PNG with no transparency: Safari
+     composites anything transparent onto black. -->
+<link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Halfstop">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="./">
+      <img class="brand-mark" src="assets/img/brand-128.png" alt="" width="44" height="44">
+      <span class="brand-text">
+        <span class="brand-name" id="brand-name">Halfstop</span>
+        <span class="brand-parent" id="brand-parent" hidden></span>
+      </span>
+    </a>
+    <nav class="nav nav-icons">
+      <a href="./" title="Home" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 10.5 9-7 9 7"/><path d="M5.5 9.4V20a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V9.4"/><path d="M9.5 21v-6h5v6"/></svg></a>
+      <a href="map.html" title="Map" aria-label="Map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 3-6 3v15l6-3 6 3 6-3V3l-6 3Z"/><path d="M9 3v15"/><path d="M15 6v15"/></svg></a>
+      <a href="faq.html" title="Help" aria-label="Help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.9.7c0 1.7-2.5 2.5-2.5 2.5"/><path d="M12 17h.01"/></svg></a>
+    </nav>
+    <button class="icon-button" id="theme-toggle" type="button" aria-label="Toggle theme"></button>
+  </div>
+</header>
+
+<main>
+
+  <section class="hero hero-compact">
+    <div class="wrap">
+      <div class="hero-inner">
+        <span class="eyebrow">Admin</span>
+        <h1>Support queue</h1>
+        <p class="lede" id="queue-lede">
+          Everything written to support@halfstop.app, oldest unfinished first.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap admin-wrap">
+    <!--
+      Three states, and only one is ever shown: signed out, signed in as
+      somebody else, or the queue. The page decides which to draw; the database
+      decides whether the rows arrive, which is the check that matters.
+    -->
+    <div id="admin-gate" class="admin-gate" hidden></div>
+    <div id="admin-queue" hidden></div>
+  </div>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <ul class="footer-links">
+      <li><a href="./">Home</a></li>
+      <li><a href="map.html">Map</a></li>
+    </ul>
+  </div>
+</footer>
+
+<script src="assets/js/token.js"></script>
+<!--
+  build.js sets ABMAP_BUILD, and registerServiceWorker treats its absence as
+  "this page was never built" and UNREGISTERS the worker. Without this line the
+  homepage silently tore down offline support for the whole site every time
+  somebody opened it - which was already true of the old library page, and
+  became much more consequential when that page became the homepage.
+-->
+<script src="assets/js/build.js"></script>
+<script type="module" src="assets/js/admin.js"></script>
+</body>
+</html>

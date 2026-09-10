@@ -166,3 +166,52 @@ create policy "a shared folder is readable by whoever it names"
         and lower(s.invited_email) = lower(auth.jwt() ->> 'email')
     )
   );
+
+-- ---------------------------------------------------------------- support
+--
+-- Mail written to support@halfstop.app, as a queue one person works through.
+--
+-- Not linked to auth.users on purpose: most people writing to support have no
+-- account, and the ones who do may write from a different address than the one
+-- they signed up with.
+create table if not exists public.support_tickets (
+  id           uuid primary key default gen_random_uuid(),
+  received_at  timestamptz not null default now(),
+
+  from_email   text not null default '',
+  from_name    text not null default '',
+  subject      text not null default '',
+  body         text not null default '',
+
+  -- new, open, done. Text rather than an enum so adding one is not a migration.
+  status       text not null default 'new',
+  note         text not null default '',
+
+  -- 'email' from the inbound webhook, 'manual' for a row typed in by hand.
+  source       text not null default 'email',
+  -- The provider's own id, so a redelivered webhook is recognisable rather
+  -- than a second ticket about the same message.
+  external_id  text not null default '',
+
+  updated_at   timestamptz not null default now()
+);
+
+create index if not exists support_tickets_queue_idx
+  on public.support_tickets (status, received_at desc);
+
+alter table public.support_tickets enable row level security;
+
+-- One address, checked server-side.
+--
+-- admin.html hides itself from everybody else, and hiding a page stops an
+-- accident rather than an attacker. This is the part that decides, and it
+-- reads the signed-in email as the server sees it rather than anything the
+-- browser sent. Rows are written by the inbound function with the service key,
+-- which is not subject to this policy.
+drop policy if exists "support is for the administrator" on public.support_tickets;
+create policy "support is for the administrator"
+  on public.support_tickets
+  for all
+  to authenticated
+  using (lower(auth.jwt() ->> 'email') = 'shermancahal@gmail.com')
+  with check (lower(auth.jwt() ->> 'email') = 'shermancahal@gmail.com');

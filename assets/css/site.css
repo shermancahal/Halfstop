@@ -682,10 +682,31 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 /* What the project pays for, in a row that wraps rather than a table that
    scrolls: three short items, each a name, a price now and a price later. */
 .costs-bill { display: grid; gap: 14px; margin: 0 0 26px; }
-@media (min-width: 720px) { .costs-bill { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 720px) { .costs-bill { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1040px) { .costs-bill { grid-template-columns: repeat(4, 1fr); } }
 .costs-bill div {
   border: 1px solid var(--line); border-radius: var(--radius);
   background: var(--surface); padding: 14px 16px;
 }
 .costs-bill b { display: block; font-size: .95rem; margin-bottom: 4px; }
 .costs-bill span { display: block; font-size: .88rem; color: var(--ink-2); line-height: 1.55; }
+
+/* ---------- the support queue ---------- */
+
+.admin-wrap { padding-bottom: 56px; display: grid; gap: 12px; }
+.admin-gate { padding: 18px 0; }
+.ticket {
+  border: 1px solid var(--line); border-left: 3px solid var(--line-strong);
+  border-radius: var(--radius); background: var(--surface); padding: 14px 16px;
+}
+/* Waiting is marked, finished recedes. The eye should find the queue, not the archive. */
+.ticket.is-new { border-left-color: var(--clay); }
+.ticket.is-open { border-left-color: var(--pine); }
+.ticket.is-done { opacity: .62; }
+.ticket-head { display: flex; justify-content: space-between; gap: 12px; font-size: .82rem; color: var(--ink-3); }
+.ticket-from { font-weight: 600; color: var(--ink-2); }
+.ticket-subject { margin: 4px 0 6px; font-size: 1rem; }
+.ticket-address { margin: 0 0 8px; font-size: .85rem; }
+.ticket-body { margin: 0 0 10px; font-size: .92rem; color: var(--ink-2); white-space: pre-wrap; }
+.ticket-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ticket-actions input { flex: 1 1 220px; min-width: 0; }

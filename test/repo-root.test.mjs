@@ -20,7 +20,7 @@ const ALLOWED = new Set([
   '.gitignore', '.nojekyll',
   'README.md',
   'capacitor.config.json',
-  'faq.html', 'index.html', 'map.html', 'privacy.html', 'terms.html',
+  'admin.html', 'faq.html', 'index.html', 'map.html', 'privacy.html', 'terms.html',
   'manifest.webmanifest',
   'package.json', 'package-lock.json',
   'sw.js',

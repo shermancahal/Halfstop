@@ -26,6 +26,9 @@ const INVITE_FUNCTION = 'invite-to-folder';
 /** Invitations, kept beside the folders they are about. */
 const SHARES = 'folder_shares';
 
+/** The support queue. Readable by one address, decided server-side. */
+const TICKETS = 'support_tickets';
+
 export function isConfigured() {
   return Boolean(SUPABASE_URL && SUPABASE_KEY);
 }
@@ -484,6 +487,36 @@ export class Account extends EventTarget {
       .eq('owner_id', this.user.id)
       .eq('client_id', clientId)
       .eq('invited_email', normaliseEmail(email));
+    if (error) return { ok: false, reason: error.message };
+    return { ok: true };
+  }
+
+  /**
+   * The support queue, for whoever the policy lets read it.
+   *
+   * No check here that the reader is an administrator. There is one in the
+   * markup, to decide whether to draw the page, and it is presentation: the
+   * policy on the table is what refuses, server-side, where a browser cannot
+   * reach it. Asking twice in the client would only make the weaker check look
+   * like the real one.
+   */
+  async supportTickets({ limit = 200 } = {}) {
+    const client = await this.getClient();
+    if (!client) return { ok: false, reason: 'Accounts are not configured here.', tickets: [] };
+    const { data, error } = await client.from(TICKETS).select('*')
+      .order('received_at', { ascending: false })
+      .limit(limit);
+    if (error) return { ok: false, reason: error.message, tickets: [] };
+    return { ok: true, reason: '', tickets: data || [] };
+  }
+
+  /** Move one ticket along, or write a note on it. */
+  async updateTicket(id, patch = {}) {
+    const client = await this.getClient();
+    if (!client) return { ok: false, reason: 'Accounts are not configured here.' };
+    const { error } = await client.from(TICKETS)
+      .update({ ...patch, updated_at: new Date().toISOString() })
+      .eq('id', id);
     if (error) return { ok: false, reason: error.message };
     return { ok: true };
   }

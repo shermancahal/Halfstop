@@ -27,7 +27,7 @@ const DIST = path.join(ROOT, 'dist');
 const ZIP_NAME = 'halfstop-maps.zip';
 
 /** Everything the deployed site needs, and nothing else. */
-const INCLUDE_FILES = ['index.html', 'map.html', 'faq.html', 'terms.html', 'privacy.html'];
+const INCLUDE_FILES = ['index.html', 'map.html', 'faq.html', 'terms.html', 'privacy.html', 'admin.html'];
 
 /**
  * Root files copied through verbatim, without cache-busting.

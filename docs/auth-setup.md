@@ -363,3 +363,47 @@ The "Invite user" template is Supabase's own admin invitation, which is a
 different thing from sharing a folder — that invitation is sent by
 `invite-to-folder` through Resend directly and does not pass through these
 templates at all.
+
+---
+
+## The support queue
+
+`admin.html` lists everything written to support@halfstop.app as a queue: new,
+in hand, done, with a note on each. It is one person's page.
+
+**The gate is the row-level policy**, not the page. `admin.html` draws itself
+only for an address in `SITE.editors`, and that is presentation: anybody can
+edit that array in their devtools, and the rows still will not arrive, because
+the policy on `support_tickets` compares the signed-in email as the server sees
+it. The page is not secret and does not need to be.
+
+### Getting the mail into it
+
+Resend receives inbound mail and posts it to a webhook, which
+`supabase/functions/support-inbound` turns into a row.
+
+1. **An MX record on a subdomain.** Resend's own guidance, and worth following:
+   an MX on the bare domain routes *all* mail for halfstop.app to Resend, which
+   is not what you want while the mailboxes live elsewhere. Use something like
+   `inbound.halfstop.app` and forward support@ to it, or take the managed
+   address Resend offers, which needs no DNS at all.
+2. **Point the webhook at the function**, with the secret:
+   `https://<project>.functions.supabase.co/support-inbound?secret=<value>`
+3. **Set `SUPPORT_WEBHOOK_SECRET`** in Edge Functions → Secrets to that value.
+
+Deploy it with `verify_jwt` **off**, which is the one function here that does:
+
+```sh
+supabase functions deploy support-inbound --no-verify-jwt
+```
+
+Every other function in this project requires a session because a person is on
+the other end. Resend has no session and never will, so this one authorises the
+caller itself: a shared secret, compared in constant time so a wrong one cannot
+be guessed a character at a time. With no secret set it refuses everything
+rather than accepting anonymous posts into the table.
+
+The event carries metadata rather than the message, so the body is fetched back
+from the Resend API by id using `RESEND_API_KEY`, which is already set. That
+second request is best effort: a ticket with a subject and no body is worth
+having, and losing the whole message because one call failed is not.
