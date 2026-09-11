@@ -382,6 +382,24 @@ it. The page is not secret and does not need to be.
 Resend receives inbound mail and posts it to a webhook, which
 `supabase/functions/support-inbound` turns into a row.
 
+Where this stands: the MX record, the forward from support@halfstop.app, and
+the webhook are all done and proven by real messages. What is outstanding is
+the Supabase side, and it is four things in one visit.
+
+1. `SUPPORT_WEBHOOK_SECRET` in Edge Functions → Secrets, set to the value in
+   the webhook's URL. It is not written down here on purpose. Read it back from
+   Resend rather than inventing a new one, because the two have to agree:
+   the webhook list shows the full endpoint, secret and all.
+2. `RESEND_API_KEY` in Edge Functions → Secrets. It is already a GitHub secret
+   for the site build, which is a different place the function cannot read.
+   Without it every ticket arrives with a subject and an empty body.
+3. Deploy `support-inbound` with JWT verification off.
+4. Re-run the `external_id` block in `schema.sql`.
+
+Nothing is lost while it waits. Resend stores every received message whether or
+not the webhook succeeds, and a delivery that failed can be replayed once the
+function answers.
+
 1. **An MX record on a subdomain.** Resend's own guidance, and worth following:
    an MX on the bare domain routes *all* mail for halfstop.app to Resend, which
    is not what you want while the mailboxes live elsewhere. Add
