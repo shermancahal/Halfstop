@@ -136,32 +136,48 @@ test('tiers: the trial counts down in days a person can check', () => {
   });
 
   const say = (plan) => describePlan(plan, { now: LIVE_NOW, billing: LIVE });
-  assert.equal(say(trial(9)), 'Premium trial, 9 days left.');
-  assert.equal(say(trial(1)), 'Premium trial, 1 day left.', 'not "1 days"');
+  assert.equal(say(trial(9)), 'Trial, 9 days left.');
+  assert.equal(say(trial(1)), 'Trial, 1 day left.', 'not "1 days"');
   // Rounded up, so the last afternoon of a trial does not read as zero.
-  assert.equal(say(trial(0.25)), 'Premium trial, 1 day left.');
-  assert.equal(say(trial(-1)), 'Premium trial, ending today.');
+  assert.equal(say(trial(0.25)), 'Trial, 1 day left.');
+  assert.equal(say(trial(-1)), 'Trial ends today.');
 });
 
-test('tiers: a grant with no end date does not pretend to have one', () => {
+test('tiers: a paid plan with an end date counts down without the word trial', () => {
+  const ends = new Date(LIVE_NOW + 5 * DAY).toISOString();
   assert.equal(
-    describePlan({ tier: 'premium', source: 'granted', until: null }, { now: LIVE_NOW, billing: LIVE }),
-    'Premium.',
+    describePlan({ tier: 'premium', source: 'appstore', until: ends }, { now: LIVE_NOW, billing: LIVE }),
+    '5 days left.',
   );
 });
 
+test('tiers: the line never repeats what the name above it says', () => {
+  // The plan's name is already on screen. "Free." written under the word Free
+  // is the line the one-word decision exists to prevent.
+  const say = (plan) => describePlan(plan, { now: LIVE_NOW, billing: LIVE });
+  assert.equal(say(null), '');
+  assert.equal(say({ tier: 'free', source: 'none', until: null }), '');
+  assert.equal(say({ tier: 'premium', source: 'granted', until: null }), '');
+});
+
 test('tiers: nothing is said about a trial while there is nothing to lose', () => {
-  // Billing is off, so every account has everything and a countdown would be
-  // counting down to nothing happening.
+  /*
+   * Billing is off, so every account has everything and a countdown would be
+   * counting down to nothing happening.
+   *
+   * Empty rather than a reassuring sentence, because the menu shows the plan
+   * as one word and nothing under it by an earlier decision that the smoke
+   * test guards: the explaining belongs in the FAQ rather than somewhere
+   * somebody opened to change their units.
+   */
   assert.equal(
     describePlan({ tier: 'premium', source: 'trial', until: new Date(LIVE_NOW).toISOString() }, { billing: FREE }),
-    'Free, with everything switched on.',
+    '',
   );
 });
 
 test('tiers: a plan nobody has answered with yet is not premium', () => {
   // Null means the question has not been asked, which must not read as a grant.
-  assert.equal(describePlan(null, { billing: LIVE }), 'Free.');
   assert.equal(tierFor({ plan: null }, { billing: LIVE }).name, 'Free');
   assert.equal(daysLeft(null), null);
   assert.equal(daysLeft('not a date'), null);

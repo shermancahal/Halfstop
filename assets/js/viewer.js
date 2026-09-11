@@ -2721,9 +2721,10 @@ function wireSettingsMenu() {
       el('div', { class: 'plan-name', text: plan.name }),
       // A trial that does not say when it ends is a trial that ends as a
       // surprise, so the count goes where the name is rather than in an email
-      // nobody opens.
-      el('div', { class: 'plan-line hint', text: plan.line }),
-    ]));
+      // nobody opens. Only when there is one: the plan is otherwise a single
+      // word on purpose, and an empty line is how describePlan says so.
+      plan.line ? el('div', { class: 'plan-line hint', text: plan.line }) : null,
+    ].filter(Boolean)));
   };
 
   trigger.addEventListener('click', (event) => {

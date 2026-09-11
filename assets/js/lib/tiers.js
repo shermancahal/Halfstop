@@ -147,28 +147,36 @@ export function daysLeft(until, { now = Date.now() } = {}) {
 }
 
 /**
- * What to call the plan, in the words a person would use.
+ * What the plan's name does not already say.
  *
- * A trial that does not say when it ends is a trial that ends as a surprise,
- * so this counts rather than naming a date: "9 days left" is checkable against
- * a calendar, and a date on its own has to be worked out.
+ * Empty most of the time, and that is correct. The menu shows the plan as one
+ * word by an earlier decision the smoke test guards: the explaining belongs in
+ * the FAQ rather than somewhere somebody opened to switch to Celsius, and
+ * "Free." written under the word Free is the kind of line that decision exists
+ * to prevent.
+ *
+ * So this carries the one thing a name cannot, which is when it stops. A trial
+ * that does not say when it ends is a trial that ends as a surprise. It counts
+ * rather than naming a date, because "9 days left" is checkable against a
+ * calendar and a date on its own has to be worked out.
  */
 export function describePlan(plan = null, { now = Date.now(), billing = BILLING } = {}) {
-  if (!billing.live) return 'Free, with everything switched on.';
-  if (plan?.tier !== 'premium') return 'Free.';
+  // Every account has everything, so a countdown would count down to nothing
+  // happening.
+  if (!billing.live) return '';
+  // The name says Free, and a plan that is not premium has no end to report.
+  if (plan?.tier !== 'premium') return '';
+  // Premium with no end date: the ordinary case for whoever runs the service,
+  // and saying "until forever" about it would be worse than silence.
+  if (!plan.until) return '';
 
-  if (plan.source === 'trial') {
-    const left = daysLeft(plan.until, { now });
-    if (left === null) return 'Premium trial.';
-    if (left === 0) return 'Premium trial, ending today.';
-    return `Premium trial, ${left} day${left === 1 ? '' : 's'} left.`;
-  }
-
-  // A grant with no end date is the ordinary case for the people who run the
-  // service, and saying "until forever" about it would be worse than silence.
-  if (!plan.until) return 'Premium.';
   const left = daysLeft(plan.until, { now });
-  return left === null ? 'Premium.' : `Premium, ${left} day${left === 1 ? '' : 's'} left.`;
+  if (left === null) return '';
+
+  const trial = plan.source === 'trial';
+  if (left === 0) return trial ? 'Trial ends today.' : 'Ends today.';
+  const days = `${left} day${left === 1 ? '' : 's'} left`;
+  return trial ? `Trial, ${days}.` : `${days[0].toUpperCase()}${days.slice(1)}.`;
 }
 
 /**
