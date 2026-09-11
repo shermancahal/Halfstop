@@ -116,6 +116,17 @@ Deno.serve(async (req: Request) => {
 
   const clientId = String(body.clientId || '').trim();
   const email = String(body.email || '').trim().toLowerCase();
+
+  /*
+   * The narrower of the two unless the word is exactly 'editor'.
+   *
+   * Narrowed here rather than trusted from the browser, because this is the
+   * difference between showing somebody a folder and letting them change it,
+   * and the request asking for it is written by whatever is on the other end.
+   * The browser narrows it too; that one is a typo guard, this one is the
+   * rule.
+   */
+  const role = String(body.role || '').trim().toLowerCase() === 'editor' ? 'editor' : 'viewer';
   if (!clientId) return reply(400, { error: 'Which folder?' });
   if (!looksLikeEmail(email)) return reply(400, { error: 'That does not look like an email address.' });
   if (email === String(user.email || '').toLowerCase()) {
@@ -154,13 +165,17 @@ Deno.serve(async (req: Request) => {
       invited_email: email,
       folder_name: folderName,
       invited_by: from,
+      role,
+      // Re-inviting somebody who was withdrawn restores them, at whatever the
+      // new invitation says rather than at whatever the old one did.
       revoked: false,
     }, { onConflict: 'owner_id,client_id,invited_email' });
   if (shareError) return reply(500, { error: `Could not record the invitation: ${shareError.message}` });
 
   const subject = `${from} shared “${folderName}” with you on Halfstop`;
-  const line = `${from} has invited you to view ${folderName} on Halfstop, an application `
-    + `— ${WHAT_IT_IS}. It will require you to create a free account on Halfstop.`;
+  const asked = role === 'editor' ? `work on ${folderName} with them` : `view ${folderName}`;
+  const line = `${from} has invited you to ${asked} on Halfstop, `
+    + `${WHAT_IT_IS}. It will require you to create a free account on Halfstop.`;
   const text = `${line}\n\nOpen it here: ${SITE}\n\n`
     + `Sign in with this address (${email}) and the folder will be waiting.`;
   const html = `<p>${escapeHTML(line)}</p>`

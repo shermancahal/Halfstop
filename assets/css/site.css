@@ -677,6 +677,13 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
   font-size: .85rem; color: var(--ink-2);
 }
 .share-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The address is the row; what it allows is a note beside it, and the button
+   keeps the end. Only the address gives up width when there is not enough. */
+.share-row span:first-child { flex: 1 1 auto; min-width: 0; }
+.share-role-tag { flex: 0 0 auto; color: var(--ink-3); font-size: .78rem; }
+/* Narrow enough that the address keeps the room in a 320px panel, and still
+   wide enough to read the longer of the two words. */
+.share-role { flex: 0 0 auto; max-width: 9.5rem; }
 .folder-shared-by { color: var(--ink-3); }
 
 /* What the project pays for, in a row that wraps rather than a table that

@@ -97,10 +97,13 @@ export function splitOwned(folders = []) {
  * covered by a test rather than by somebody remembering to read a deployed
  * function.
  */
-export function invitationLine({ from, folder, what }) {
+export function invitationLine({ from, folder, what, role = 'viewer' }) {
   const who = String(from || 'Somebody').trim();
   const named = String(folder || 'a folder').trim();
-  return `${who} has invited you to view ${named} on Halfstop, an application — ${what}. `
+  const asked = readRole(role) === 'editor'
+    ? `work on ${named} with them`
+    : `view ${named}`;
+  return `${who} has invited you to ${asked} on Halfstop, ${what}. `
     + 'It will require you to create a free account on Halfstop.';
 }
 

@@ -78,7 +78,9 @@ import { describeSync } from './lib/sync.js';
 import { registerServiceWorker, applyServiceWorkerUpdate } from './lib/pwa.js';
 import { mayEdit } from './lib/editors.js';
 import { shareableURL, readSharedPin, pinLinkParts } from './lib/share.js';
-import { isShared, looksLikeEmail, describeShares } from './lib/shares.js';
+import {
+  canEdit, isShared, looksLikeEmail, describeShares, describeRole,
+} from './lib/shares.js';
 import {
   OfflineStore, MAX_ZOOM as OFFLINE_MAX_ZOOM, TILE_BUDGET,
   mayCacheTiles, tileURLsFor, downloadTiles, clearTiles, tileKeysFor, downloadArchiveTiles,
@@ -536,11 +538,11 @@ async function main() {
     if (!changed || !state.account?.user) return;
     for (const folderId of [].concat(changed)) {
       const folder = state.folders.get(folderId);
-      // Hiding somebody else's shared folder is a view preference on this
-      // device, not an edit to their data - and the policy would refuse the
-      // write anyway. mergeFolders holds them out of a full sync for the same
-      // reason; this is the other door.
-      if (folder && !isShared(folder)) state.account.pushFolder(folder);
+      // Hiding somebody else's folder is a view preference on this device
+      // rather than an edit to their data, and on a folder shared only to look
+      // at, the policy would refuse the write anyway. A folder shared for
+      // editing is a different thing and travels like your own.
+      if (folder && canEdit(folder)) state.account.pushFolder(folder);
     }
   });
   state.folders.onChange(() => {
@@ -10753,14 +10755,16 @@ function renderFolder(folder, drawn = new Set()) {
      * between something reversible and something that is not.
      */
     /*
-     * Nothing to edit on a folder that is not yours.
+     * Nothing to edit on a folder that is only yours to look at.
      *
      * The controls behind this button rename, restyle, export and delete, and
-     * three of the four are writes the row-level policy would refuse. Offering
-     * them and letting the database say no is a worse answer than not offering
-     * them: the byline below says whose folder it is instead.
+     * on a read-only folder three of the four are writes the row-level policy
+     * would refuse. Offering them and letting the database say no is a worse
+     * answer than not offering them: the byline below says whose folder it is
+     * instead. A folder shared for editing has the menu, because the point of
+     * accepting that invitation was to use it.
      */
-    isShared(folder) ? null : el('button', {
+    canEdit(folder) ? el('button', {
       class: `icon-button folder-menu-button${chosen.length ? ' is-armed' : ''}`,
       type: 'button',
       title: chosen.length
@@ -10773,7 +10777,7 @@ function renderFolder(folder, drawn = new Set()) {
         chosen.length ? chosen : null,
         event.currentTarget.closest('.folder-head'),
       ),
-    }),
+    }) : null,
   ]);
 
   const trip = tripBar(folder);
@@ -10875,7 +10879,9 @@ function renderFolder(folder, drawn = new Set()) {
   if (isShared(folder)) {
     node.append(el('p', {
       class: 'hint folder-shared-by', style: 'margin:0 0 6px 30px; font-size:.8rem',
-      text: `Shared with you by ${folder.sharedFrom.ownerName}. You can look, not change.`,
+      text: canEdit(folder)
+      ? `Shared with you by ${folder.sharedFrom.ownerName}. You can work on this together.`
+      : `Shared with you by ${folder.sharedFrom.ownerName}. You can look, not change.`,
     }));
   }
   if (trip) node.append(trip);
@@ -12374,8 +12380,21 @@ function folderShareRow(folder) {
 
   const field = el('input', {
     type: 'email', placeholder: 'their@email.address', autocomplete: 'off',
-    'aria-label': `Invite somebody to view ${folder.name}`,
+    'aria-label': `Invite somebody to ${folder.name}`,
   });
+
+  /*
+   * Two words, because there are two things people mean.
+   *
+   * Defaulted to viewing: handing somebody the ability to change a collection
+   * of places should be a thing you chose, not a thing you failed to notice.
+   */
+  const role = el('select', {
+    class: 'share-role', 'aria-label': `What ${folder.name} is shared for`,
+  }, [
+    el('option', { value: 'viewer', text: 'to view' }),
+    el('option', { value: 'editor', text: 'to edit together' }),
+  ]);
   const send = el('button', {
     class: 'button button-secondary button-small', type: 'button', text: 'Invite',
     onclick: async () => {
@@ -12383,12 +12402,13 @@ function folderShareRow(folder) {
       if (!looksLikeEmail(email)) { status.textContent = 'That does not look like an email address.'; return; }
       send.disabled = true;
       status.textContent = 'Sending…';
-      const result = await state.account.invite(folder.id, email, folder.name);
+      const result = await state.account.invite(folder.id, email, folder.name, role.value);
       send.disabled = false;
       if (!result.ok) { status.textContent = result.reason; return; }
       field.value = '';
       status.textContent = result.emailed
-        ? `Invited ${email}. They will need a free account on this address to see it.`
+        ? `Invited ${email}. They will need a free account on this address to ${
+          role.value === 'editor' ? 'work on it' : 'see it'}.`
         : `Recorded for ${email}, but no email was sent — ${result.reason} Tell them yourself and `
           + 'it will be waiting when they sign in.';
       paint();
@@ -12402,6 +12422,7 @@ function folderShareRow(folder) {
       el('p', { class: 'hint', style: 'margin:8px 0 4px', text: describeShares(shares) }),
       ...live.map((share) => el('div', { class: 'share-row' }, [
         el('span', { text: share.invited_email }),
+        el('span', { class: 'share-role-tag', text: describeRole(share.role) }),
         el('button', {
           class: 'button button-ghost button-small', type: 'button', text: 'Withdraw',
           onclick: async () => {
@@ -12418,7 +12439,7 @@ function folderShareRow(folder) {
 
   row.append(
     el('div', { class: 'settings-label', text: 'Share with someone' }),
-    el('div', { class: 'picker-row' }, [field, send]),
+    el('div', { class: 'picker-row' }, [field, role, send]),
     list,
     status,
   );

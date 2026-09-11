@@ -11,7 +11,7 @@
 
 import { SUPABASE_URL, SUPABASE_KEY } from '../config.js';
 import { mergeFolders, rowToFolder, folderToRow, missingColumn } from './sync.js';
-import { canEdit, markShared, normaliseEmail } from './shares.js';
+import { canEdit, markShared, normaliseEmail, readRole } from './shares.js';
 
 const SUPABASE_VERSION = '2.45.4';
 const CDN = `https://cdn.jsdelivr.net/npm/@supabase/supabase-js@${SUPABASE_VERSION}/+esm`;
@@ -471,13 +471,16 @@ export class Account extends EventTarget {
    * separately from `ok` because an invitation recorded and not delivered is a
    * different thing to tell somebody about than one that failed outright.
    */
-  async invite(clientId, email, folderName = '') {
+  async invite(clientId, email, folderName = '', role = 'viewer') {
     if (!this.user) return { ok: false, reason: 'Sign in first.' };
     const client = await this.getClient();
     if (!client) return { ok: false, reason: 'Accounts are not configured here.' };
 
     const { data, error } = await client.functions.invoke(INVITE_FUNCTION, {
-      body: { clientId, email: normaliseEmail(email), folderName },
+      // Narrowed here as well as in the function. Not because the browser can
+      // be trusted about it - it cannot, which is why the function narrows it
+      // too - but so that a typo asks for less rather than for more.
+      body: { clientId, email: normaliseEmail(email), folderName, role: readRole(role) },
     });
     if (error) return { ok: false, reason: error.message };
     if (!data?.ok) return { ok: false, reason: data?.error || 'The invitation was not accepted.' };
