@@ -23,8 +23,21 @@
  * Because the alternative is discovering later that the decision "is this
  * reader allowed to do this" is spelled eleven different ways in eleven places.
  * One list, one function, one flag. When a tier does launch, the work is
- * turning `BILLING.live` on and writing the server-side half — not finding
- * every call site.
+ * turning `BILLING.live` on and writing the server-side half, not finding every
+ * call site.
+ *
+ * WHERE THE ENTITLEMENT IS EXPECTED TO COME FROM
+ *
+ * An App Store subscription, which means it arrives as a claim this code reads
+ * and cannot write: Apple tells a server, the server sets the claim, the client
+ * is told. It does not arrive as a receipt the app hands up, because a receipt
+ * the app can hand up is a string the app can invent, and renewals and
+ * cancellations happen when nobody has the app open.
+ *
+ * That decision is worth knowing here because it rules something out. Do not
+ * build a web checkout against this module: in-app purchase only exists inside
+ * a shipped native app, so billing cannot go live before that app does.
+ * `docs/mobile-app.md` has the staging and what the commission actually is.
  *
  * `EVERYTHING` is the honest state today: a free tier that includes all of it.
  * The matrix below is a plan, not a promise, and nothing in the app reads it

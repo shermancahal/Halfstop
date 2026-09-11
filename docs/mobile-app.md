@@ -416,3 +416,73 @@ on the difference between a service existing and a service answering. Native
 code written blind is the same failure with a compiler instead of an HTTP
 request: it looks like progress, and the first honest test is the one that has
 not happened yet.
+
+---
+
+## 10. Charging for it, if the money goes through Apple
+
+Nothing here is built. This section exists so that the next person to open the
+billing question starts from the decision rather than from a blank page, and so
+that nobody builds a web checkout that the App Store would make redundant.
+
+### What choosing Apple actually decides
+
+It decides where the entitlement comes from, and that is the only part the code
+cares about. `assets/js/lib/tiers.js` already has one list, one `can()`, and one
+flag, so the work is never "find every call site". It is: something server-side
+learns that an account has paid, and says so in a claim the client cannot
+write. Apple changes who tells the server, not the shape of the answer.
+
+It also decides that there has to be a native app at all. A web page can take a
+card today with nothing from this section. In-app purchase only exists inside a
+shipped iOS app, which means section 3 onwards is a prerequisite rather than an
+option.
+
+### What it costs
+
+| | |
+| --- | --- |
+| Commission, standard | 30% |
+| Commission, Small Business Program | 15% under $1M/yr across all your apps |
+| Commission, subscriptions after year one | 15% |
+| Apple Developer Program | $99/yr, already in the table above |
+
+The Small Business Program is the realistic rate here and has to be applied for.
+Note that it is assessed across everything you ship, not per app.
+
+Apple's rules on linking out to a web purchase have been through court and have
+moved more than once, most recently in the United States. Treat any specific
+claim about what is permitted today as something to check against the current
+App Store Review Guidelines rather than against this file, including this
+sentence. What is stable enough to plan on: digital content consumed inside the
+app is expected to be sold through in-app purchase, and a subscription bought on
+the web and merely recognised by the app has always been the arrangement with
+the least commission and the most paperwork.
+
+### The order to do it in
+
+1. **Leave `BILLING.live` false and keep shipping.** Every gate is open, every
+   account gets everything, and the matrix is a plan rather than a promise. This
+   is the honest state and costs nothing to hold.
+2. **Decide the entitlement claim before writing any purchase code.** Where it
+   is stored, what signs it, how the client reads it, and what happens when it
+   expires mid-session on a device with no signal. The note at the top of
+   `tiers.js` is deliberate: write the client half first and a plan field ends
+   up in localStorage being treated as true.
+3. **Ship the native shell** (sections 2 to 6), with no purchases in it.
+4. **Then in-app purchase**, product ids and App Store Server Notifications
+   into a Supabase function that sets the claim. Server notifications rather
+   than client receipts: a receipt the app hands you is a string the app can
+   invent, and renewals and cancellations arrive when nobody has the app open.
+5. **Only then turn `BILLING.live` on**, which closes the gates the website
+   already describes.
+
+### The thing to decide before any of it
+
+Whether there is something worth charging for yet. The Premium list on the
+homepage is seven items, and two of them, photographs on a waypoint and offline
+access, are computed or stored on the reader's own device and cost nothing to
+serve. A tier whose headline features are free to provide is one people work
+out, and the credibility of the rest goes with it. Section 9 is the honest
+answer to that: native offline basemaps are a real proposition, and they are
+also the largest piece of work in this document.

@@ -16,14 +16,28 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const SITE = Deno.env.get('SITE_URL') || 'https://app.halfstop.app/';
+/**
+ * An environment value, with whitespace stripped.
+ *
+ * The same hazard that cost a round of debugging on the support webhook: a
+ * value pasted into a dashboard field with a trailing newline looks identical
+ * there and is a different string everywhere else. This function reads the
+ * same hand-entered Resend key, and a padded one fails the send while the
+ * invitation row is written - so the app would report an invitation recorded
+ * and not delivered, for a reason nobody could see.
+ */
+function env(name: string): string {
+  return (Deno.env.get(name) || '').trim();
+}
+
+const SITE = env('SITE_URL') || 'https://app.halfstop.app/';
 
 /** What Halfstop is, in the one sentence an invitation has room for. */
 const WHAT_IT_IS = 'a field atlas for photographers: scout locations, pin waypoints, and time '
   + 'sunrise, moonset, eclipses and aurora on maps that work with no signal';
 
 function keyFrom(jsonName: string, legacyName: string): string {
-  const bundle = Deno.env.get(jsonName);
+  const bundle = env(jsonName);
   if (bundle) {
     try {
       const keys = JSON.parse(bundle);
@@ -33,7 +47,7 @@ function keyFrom(jsonName: string, legacyName: string): string {
       // Fall through to the legacy name rather than failing on a shape change.
     }
   }
-  return Deno.env.get(legacyName) || '';
+  return env(legacyName);
 }
 
 const CORS = {
@@ -70,8 +84,8 @@ const escapeHTML = (value: string) => value.replace(/[&<>"']/g, (c) => (
  * reporting an invitation that no inbox will ever see.
  */
 async function sendInvitation(to: string, subject: string, text: string, html: string) {
-  const key = Deno.env.get('RESEND_API_KEY');
-  const from = Deno.env.get('INVITE_FROM') || 'Halfstop <no-reply@halfstop.app>';
+  const key = env('RESEND_API_KEY');
+  const from = env('INVITE_FROM') || 'Halfstop <no-reply@halfstop.app>';
   if (!key) return { sent: false, reason: 'No RESEND_API_KEY is set on this function.' };
 
   const response = await fetch('https://api.resend.com/emails', {
@@ -89,7 +103,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return reply(405, { error: 'Use POST.' });
 
-  const url = Deno.env.get('SUPABASE_URL') || '';
+  const url = env('SUPABASE_URL');
   const publishable = keyFrom('SUPABASE_PUBLISHABLE_KEYS', 'SUPABASE_ANON_KEY');
   const secret = keyFrom('SUPABASE_SECRET_KEYS', 'SUPABASE_SERVICE_ROLE_KEY');
   if (!url || !publishable || !secret) {
@@ -130,7 +144,7 @@ Deno.serve(async (req: Request) => {
   if (!clientId) return reply(400, { error: 'Which folder?' });
   if (!looksLikeEmail(email)) return reply(400, { error: 'That does not look like an email address.' });
   if (email === String(user.email || '').toLowerCase()) {
-    return reply(400, { error: 'That is your own address — you already have this folder.' });
+    return reply(400, { error: 'That is your own address, so you already have this folder.' });
   }
 
   const admin = createClient(url, secret, { auth: { persistSession: false } });
