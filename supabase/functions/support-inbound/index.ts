@@ -46,6 +46,61 @@ const reply = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
 /**
+ * Mail that arrived as HTML only, made readable.
+ *
+ * The queue renders a ticket body as text, which is the right call for
+ * anything that came out of somebody else's mail client, and it means an
+ * HTML-only message lands as a wall of markup nobody can triage. Apple Mail
+ * sends no plain text part at all, so this is the ordinary case rather than
+ * the awkward one.
+ *
+ * Not a parser and not trying to be. It keeps the line breaks the markup
+ * implies, keeps a link's address beside its text because a support message
+ * is so often a link to the thing that is broken, and discards the rest.
+ */
+const ENTITIES: Record<string, string> = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+  mdash: '\u2014', ndash: '\u2013', hellip: '\u2026', rsquo: '\u2019', lsquo: '\u2018',
+  ldquo: '\u201c', rdquo: '\u201d',
+};
+
+function decodeEntities(value: string): string {
+  return value
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, digits) => String.fromCodePoint(Number(digits)))
+    .replace(/&([a-z]+);/gi, (whole, name) => ENTITIES[name.toLowerCase()] ?? whole);
+}
+
+function htmlToText(html: string): string {
+  const stripped = html
+    .replace(/<(script|style|head)\b[^>]*>[\s\S]*?<\/\1>/gi, '')
+    .replace(
+      /<a\b[^>]*href=["']?(https?:\/\/[^"'\s>]+)["']?[^>]*>([\s\S]*?)<\/a>/gi,
+      (_, href, label) => {
+        const text = label.replace(/<[^>]+>/g, '').trim();
+        return !text || text === href ? href : `${text} (${href})`;
+      },
+    )
+    .replace(/<br\b[^>]*>/gi, '\n')
+    .replace(/<\/(p|div|tr|li|h[1-6]|blockquote)>/gi, '\n')
+    .replace(/<[^>]+>/g, '');
+
+  return decodeEntities(stripped)
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/[ \t\u00a0]+/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/** The plain text part if the sender sent one, otherwise the HTML made plain. */
+function pickBody(source: Record<string, unknown> | null | undefined): string {
+  const text = String(source?.text || '').trim();
+  return text || htmlToText(String(source?.html || ''));
+}
+
+/**
  * A name out of "Sherman Cahal <sherm@example.com>", or nothing.
  *
  * Resend documents this field as the sender's address and name without
@@ -108,7 +163,7 @@ async function fetchBody(id: string, key: string): Promise<string> {
         continue;
       }
       const mail = await response.json();
-      const text = String(mail.text || mail.html || '');
+      const text = pickBody(mail);
       if (text) return text.slice(0, 20000);
     } catch (error) {
       console.warn(`Body fetch failed: ${url}: ${error}`);
@@ -143,7 +198,7 @@ Deno.serve(async (req: Request) => {
   const data = event?.data || event || {};
   const { email, name } = splitFrom(data.from);
   const externalId = String(data.email_id || data.id || '');
-  const body = String(data.text || data.html || '')
+  const body = pickBody(data)
     || await fetchBody(externalId, Deno.env.get('RESEND_API_KEY') || '');
 
   const admin = createClient(url, secret, { auth: { persistSession: false } });
