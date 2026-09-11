@@ -383,18 +383,31 @@ Resend receives inbound mail and posts it to a webhook, which
 `supabase/functions/support-inbound` turns into a row.
 
 Where this stands: the MX record, the forward from support@halfstop.app, and
-the webhook are all done and proven by real messages. What is outstanding is
-the Supabase side, and it is four things in one visit.
+the webhook are done and proven by real messages. So is the Supabase side,
+apart from the two secrets, which can only be typed into the dashboard.
 
-1. `SUPPORT_WEBHOOK_SECRET` in Edge Functions → Secrets, set to the value in
-   the webhook's URL. It is not written down here on purpose. Read it back from
-   Resend rather than inventing a new one, because the two have to agree:
-   the webhook list shows the full endpoint, secret and all.
-2. `RESEND_API_KEY` in Edge Functions → Secrets. It is already a GitHub secret
-   for the site build, which is a different place the function cannot read.
-   Without it every ticket arrives with a subject and an empty body.
-3. Deploy `support-inbound` with JWT verification off.
-4. Re-run the `external_id` block in `schema.sql`.
+Done. `support-inbound` is deployed to `gqemcvuushtfbbbxypvf`, and the API
+reports `verify_jwt: false` on it, which is the one function here that wants
+that. The `external_id` block has been applied as the migration
+`support_tickets_external_id_unique`: the column is nullable with no default,
+and `support_tickets_external_id_key` is a unique index on it. That index is
+not housekeeping. The function upserts with `onConflict: 'external_id'`, and
+Postgres rejects that outright unless a unique constraint matches, so until it
+existed every delivery would have failed at the insert.
+
+Outstanding, and both in Edge Functions → Secrets:
+
+1. `SUPPORT_WEBHOOK_SECRET`, set to the value in the webhook's URL. It is not
+   written down here on purpose. Read it back from Resend rather than inventing
+   a new one, because the two have to agree: the webhook list shows the full
+   endpoint, secret and all.
+2. `RESEND_API_KEY`. It is already a GitHub secret for the site build, which is
+   a different place the function cannot read. Without it every ticket arrives
+   with a subject and an empty body.
+
+Until the first of those is set the function answers every delivery with a 503
+saying it has no secret configured, which is the refusal it is written to make
+rather than a fault. It files nothing until the secret is there.
 
 Nothing is lost while it waits. Resend stores every received message whether or
 not the webhook succeeds, and a delivery that failed can be replayed once the
