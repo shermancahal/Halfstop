@@ -248,6 +248,116 @@ create policy "a co-edited folder is writable by whoever it names"
     )
   );
 
+-- ----------------------------------------------------------- entitlements
+--
+-- What an account is entitled to, decided where the browser cannot reach.
+--
+-- assets/js/lib/tiers.js says at the top that it is not a permission boundary,
+-- and means it: anybody can set their tier in devtools in about four seconds.
+-- This is the other half, and the half that counts.
+
+-- Only explicit grants are stored. The trial is not, because it is already
+-- knowable: an account's thirtieth day is thirty days after the day it was
+-- created, and a stored copy of that is a second answer that can disagree with
+-- the first. Nothing to write on signup, nothing to backfill, nothing to drift.
+create table if not exists public.entitlements (
+  user_id     uuid primary key references auth.users (id) on delete cascade,
+
+  tier        text not null default 'premium',
+
+  -- Where it came from, so a subscription that lapses is distinguishable from
+  -- something given by hand and never meant to end.
+  source      text not null default 'granted',
+
+  -- Null means it does not expire. That is the administrator case.
+  expires_at  timestamptz,
+
+  note        text not null default '',
+  updated_at  timestamptz not null default now()
+);
+
+alter table public.entitlements drop constraint if exists entitlements_tier_check;
+alter table public.entitlements add constraint entitlements_tier_check
+  check (tier in ('free', 'premium'));
+alter table public.entitlements drop constraint if exists entitlements_source_check;
+alter table public.entitlements add constraint entitlements_source_check
+  check (source in ('granted', 'appstore', 'comp'));
+
+alter table public.entitlements enable row level security;
+
+-- Readable by the person it is about, and writable by nobody.
+--
+-- There is deliberately no insert, update or delete policy. With row-level
+-- security on and no policy for a command, that command is refused for every
+-- signed-in user, so the only thing that can write here is the service role: a
+-- migration, or an Edge Function holding the secret key. That is the entire
+-- point of the table, and it is worth checking rather than assuming - see
+-- rls-probe.sql.
+drop policy if exists "your own entitlement is readable by you" on public.entitlements;
+create policy "your own entitlement is readable by you"
+  on public.entitlements
+  for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+-- The one question worth asking, answered for the caller and nobody else.
+--
+-- It takes no argument on purpose. A plan_for(uid) would let any signed-in
+-- account ask about any other, which is not worth handing out to save a
+-- keystroke. Reading auth.users is why it is SECURITY DEFINER, and auth.uid()
+-- is the only row it ever reads.
+--
+-- Precedence is grant, then trial, then free. A grant that has expired falls
+-- back to the trial rather than straight to free, which matters only in the
+-- first month of an account and is the answer somebody would expect if it did.
+create or replace function public.my_plan()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with granted as (
+    select tier, source, expires_at
+    from public.entitlements
+    where user_id = auth.uid()
+      and tier = 'premium'
+      and (expires_at is null or expires_at > now())
+    limit 1
+  ),
+  trial as (
+    -- Thirty days from the day the account was made. One place, one interval.
+    select u.created_at + interval '30 days' as ends
+    from auth.users u
+    where u.id = auth.uid()
+  )
+  select case
+    when exists (select 1 from granted) then jsonb_build_object(
+      'tier', 'premium',
+      'source', (select source from granted),
+      'until', (select expires_at from granted)
+    )
+    when (select ends from trial) > now() then jsonb_build_object(
+      'tier', 'premium',
+      'source', 'trial',
+      'until', (select ends from trial)
+    )
+    else jsonb_build_object('tier', 'free', 'source', 'none', 'until', null)
+  end;
+$$;
+
+revoke execute on function public.my_plan() from anon;
+grant execute on function public.my_plan() to authenticated;
+
+-- Whoever runs the service, premium with no end date. Edit the address, or add
+-- rows here for anybody else who should have it: this is what "code it into the
+-- database" means, and it is one row rather than a special case in the app.
+insert into public.entitlements (user_id, tier, source, expires_at, note)
+select id, 'premium', 'granted', null, 'Runs the service.'
+from auth.users where lower(email) = 'shermancahal@gmail.com'
+on conflict (user_id) do update
+  set tier = 'premium', source = 'granted', expires_at = null, updated_at = now();
+
 -- ---------------------------------------------------------------- support
 --
 -- Mail written to support@halfstop.app, as a queue one person works through.

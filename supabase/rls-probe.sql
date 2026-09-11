@@ -78,3 +78,48 @@ reset role;
 select * from probe;
 
 rollback;
+
+-- ---------------------------------------------------------------------------
+-- And the same question about entitlements.
+--
+-- Run this separately from the block above: the write attempt is refused by
+-- the policy, and a refusal aborts the transaction it is in, which is the
+-- correct behaviour and also means nothing after it would run.
+--
+-- Expected:
+--
+--   the administrator   tier premium, source granted, until null
+--   a new account       tier premium, source trial,   until 30 days on
+--   an old account      tier free
+--   rows it can see     1 for itself, and never anybody else's
+--
+-- Then, on its own, the write attempt below: it must fail with
+-- 42501 "new row violates row-level security policy". A success there means
+-- any signed-in account can hand itself premium, and the table is decoration.
+
+begin;
+create temp table plans (case_name text, result text) on commit drop;
+grant all on plans to authenticated;
+
+set local role authenticated;
+
+set local request.jwt.claims = '{"sub":"OWNER-USER-ID","email":"owner@example.com","role":"authenticated"}';
+insert into plans select 'administrator', public.my_plan()::text;
+insert into plans select 'rows it can see', (select count(*)::text from public.entitlements);
+
+set local request.jwt.claims = '{"sub":"INVITED-USER-ID","email":"invited@example.com","role":"authenticated"}';
+insert into plans select 'other account', public.my_plan()::text;
+insert into plans select 'rows it can see', (select count(*)::text from public.entitlements);
+
+reset role;
+select * from plans;
+rollback;
+
+-- The write attempt, alone, because it aborts what it is in.
+--
+-- begin;
+-- set local role authenticated;
+-- set local request.jwt.claims = '{"sub":"INVITED-USER-ID","email":"invited@example.com","role":"authenticated"}';
+-- insert into public.entitlements (user_id, tier, source)
+-- values ('INVITED-USER-ID', 'premium', 'granted');
+-- rollback;

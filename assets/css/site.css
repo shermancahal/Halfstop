@@ -685,6 +685,9 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
    wide enough to read the longer of the two words. */
 .share-role { flex: 0 0 auto; max-width: 9.5rem; }
 .folder-shared-by { color: var(--ink-3); }
+/* The plan's name, and under it what that actually means today. The second
+   line is the one that counts down, so it is readable rather than fine print. */
+.plan-line { margin: 2px 0 0; font-size: .8rem; }
 
 /* What the project pays for, in a row that wraps rather than a table that
    scrolls: three short items, each a name, a price now and a price later. */

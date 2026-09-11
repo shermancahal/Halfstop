@@ -464,14 +464,25 @@ the least commission and the most paperwork.
 1. **Leave `BILLING.live` false and keep shipping.** Every gate is open, every
    account gets everything, and the matrix is a plan rather than a promise. This
    is the honest state and costs nothing to hold.
-2. **Decide the entitlement claim before writing any purchase code.** Where it
-   is stored, what signs it, how the client reads it, and what happens when it
-   expires mid-session on a device with no signal. The note at the top of
-   `tiers.js` is deliberate: write the client half first and a plan field ends
-   up in localStorage being treated as true.
+2. ~~Decide the entitlement claim before writing any purchase code.~~ **Done.**
+   `public.entitlements` holds explicit grants, readable by the account it is
+   about and writable by nothing short of the service role, and
+   `public.my_plan()` answers grant, then trial, then free. The trial is not
+   stored anywhere: thirty days from the day the account was made is already
+   knowable, and a stored copy is a second answer that can disagree with the
+   first. An administrator is one row with no expiry rather than a special case
+   in the app.
+
+   Two things follow from that which matter on launch day. The trial runs from
+   signup, so every account that exists before billing goes live will already
+   be past it: either accept that, or insert grants for the people who were
+   there early. And nothing is gated yet, so the countdown is currently
+   counting down to nothing happening, which is why the interface says "Free,
+   with everything switched on" rather than showing it.
 3. **Ship the native shell** (sections 2 to 6), with no purchases in it.
 4. **Then in-app purchase**, product ids and App Store Server Notifications
-   into a Supabase function that sets the claim. Server notifications rather
+   into a Supabase function that writes an `entitlements` row with
+   `source = 'appstore'` and the expiry Apple reports. Server notifications rather
    than client receipts: a receipt the app hands you is a string the app can
    invent, and renewals and cancellations arrive when nobody has the app open.
 5. **Only then turn `BILLING.live` on**, which closes the gates the website

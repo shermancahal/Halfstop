@@ -115,18 +115,60 @@ export const TIERS = {
 
 export const DEFAULT_TIER = 'free';
 
-/** The tier a reader is on. One today, and the signature is ready for more. */
+/**
+ * How long a new account gets everything.
+ *
+ * Stated here as well as in the database because the interface counts down
+ * with it. The database is the one that decides; this is the one that can be
+ * wrong without anybody losing access, which is the right way round.
+ */
+export const TRIAL_DAYS = 30;
+
+/**
+ * The tier a reader is on.
+ *
+ * The plan is not computed here and never should be. It is read from the
+ * server by `public.my_plan()`, which knows two things this file cannot: when
+ * the account was created, and whether anybody granted it anything. What
+ * arrives is an answer, not evidence, and it is still only used to decide what
+ * to draw.
+ */
 export function tierFor(account = null, { billing = BILLING } = {}) {
   if (!billing.live) return TIERS[DEFAULT_TIER];
-  /*
-   * Deliberately not reading a claim out of the session yet.
-   *
-   * When this does read one it must come from a signed token the server issued,
-   * not from a field the client can set — and writing the client-side half
-   * first is how a plan field ends up in localStorage and treated as true.
-   */
-  const id = account?.tier;
+  const id = account?.plan?.tier;
   return TIERS[id] || TIERS[DEFAULT_TIER];
+}
+
+/** Whole days left, rounded up, so the last day reads as "1" and not "0". */
+export function daysLeft(until, { now = Date.now() } = {}) {
+  const ends = until ? Date.parse(until) : NaN;
+  if (!Number.isFinite(ends)) return null;
+  return Math.max(0, Math.ceil((ends - now) / 86400000));
+}
+
+/**
+ * What to call the plan, in the words a person would use.
+ *
+ * A trial that does not say when it ends is a trial that ends as a surprise,
+ * so this counts rather than naming a date: "9 days left" is checkable against
+ * a calendar, and a date on its own has to be worked out.
+ */
+export function describePlan(plan = null, { now = Date.now(), billing = BILLING } = {}) {
+  if (!billing.live) return 'Free, with everything switched on.';
+  if (plan?.tier !== 'premium') return 'Free.';
+
+  if (plan.source === 'trial') {
+    const left = daysLeft(plan.until, { now });
+    if (left === null) return 'Premium trial.';
+    if (left === 0) return 'Premium trial, ending today.';
+    return `Premium trial, ${left} day${left === 1 ? '' : 's'} left.`;
+  }
+
+  // A grant with no end date is the ordinary case for the people who run the
+  // service, and saying "until forever" about it would be worse than silence.
+  if (!plan.until) return 'Premium.';
+  const left = daysLeft(plan.until, { now });
+  return left === null ? 'Premium.' : `Premium, ${left} day${left === 1 ? '' : 's'} left.`;
 }
 
 /**
@@ -167,10 +209,16 @@ export function gateReason(feature, { tier = null } = {}) {
  */
 export function planSummary(account = null, { billing = BILLING } = {}) {
   const tier = tierFor(account, { billing });
+  const plan = account?.plan || null;
   return {
     tier,
     name: tier.name,
     note: tier.note,
+    /* Where the entitlement came from: 'trial', 'granted', 'appstore', 'none'. */
+    source: plan?.source || 'none',
+    until: plan?.until || null,
+    /* The same thing as a sentence, which is what the menu actually shows. */
+    line: describePlan(plan, { billing }),
     /* Whether any of this is real yet, which the interface should not hide. */
     live: Boolean(billing.live),
     /*

@@ -2715,10 +2715,14 @@ function wireSettingsMenu() {
      * the day a second plan exists this is a line that changed rather than a
      * panel that appeared.
      */
-    const plan = planSummary(state.account?.user || null);
+    const plan = planSummary(state.account || null);
     drop.append(el('div', { class: 'settings-account' }, [
       el('div', { class: 'settings-label', text: 'Plan' }),
       el('div', { class: 'plan-name', text: plan.name }),
+      // A trial that does not say when it ends is a trial that ends as a
+      // surprise, so the count goes where the name is rather than in an email
+      // nobody opens.
+      el('div', { class: 'plan-line hint', text: plan.line }),
     ]));
   };
 

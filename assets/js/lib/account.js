@@ -126,6 +126,15 @@ export class Account extends EventTarget {
     this.getClient = client;
     this.isConfigured = configured;
     this.user = null;
+    /*
+     * What this account is entitled to, as the server last answered.
+     *
+     * Held rather than computed. The browser cannot know when an account was
+     * created or whether anybody granted it anything, and a version of this
+     * that guessed would be a plan field in localStorage being treated as
+     * true. Null means not asked yet, which is not the same as free.
+     */
+    this.plan = null;
     this.status = configured() ? 'signed-out' : 'unavailable';
     this.message = '';
     this.syncing = false;
@@ -175,6 +184,7 @@ export class Account extends EventTarget {
 
     const { data } = await client.auth.getSession();
     this.user = data?.session?.user || null;
+    if (this.user) this.refreshPlan();
 
     /*
      * A link that came back and did not work has to say so.
@@ -203,6 +213,7 @@ export class Account extends EventTarget {
       this.user = session?.user || null;
       if (event === 'SIGNED_IN') {
         this.setStatus('signed-in');
+        this.refreshPlan();
         this.sync();
       } else if (event === 'SIGNED_OUT') {
         this.setStatus('signed-out');
@@ -337,6 +348,7 @@ export class Account extends EventTarget {
       console.warn('[account] the sign-out call failed:', error?.message || error);
     }
     this.user = null;
+    this.plan = null;
 
     if (saved) {
       this.folders.replaceAll([]);
@@ -695,6 +707,30 @@ export class Account extends EventTarget {
    * without the column and the session remembers, so the next push is one
    * request rather than two.
    */
+  /**
+   * Ask the server what this account is entitled to.
+   *
+   * Quiet on failure, and deliberately: this decides what to draw, not what to
+   * allow, so an unanswered question should leave the interface as it was
+   * rather than announce a billing problem to somebody trying to look at a
+   * map. Whatever is actually metered is refused server-side or it is not
+   * refused at all.
+   */
+  async refreshPlan() {
+    if (!this.user) { this.plan = null; return null; }
+    try {
+      const client = await this.getClient();
+      const { data, error } = await client.rpc('my_plan');
+      if (error) throw new Error(error.message);
+      this.plan = data || null;
+      this.emit();
+      return this.plan;
+    } catch (error) {
+      console.warn('[account] could not read the plan:', error?.message || error);
+      return this.plan;
+    }
+  }
+
   /** Which of the newer columns this server answered with, so a push can re-arm. */
   noteMissingColumns(rows) {
     if (!rows.length) return;

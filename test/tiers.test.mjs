@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  FEATURES, TIERS, DEFAULT_TIER, tierFor, can, gateReason, planSummary,
+  FEATURES, TIERS, DEFAULT_TIER, tierFor, can, gateReason, planSummary, describePlan, daysLeft,
 } from '../assets/js/lib/tiers.js';
 
 const FREE = { live: false };
@@ -108,11 +108,63 @@ test('tiers: the plan summary says both what you have and whether it is real yet
   assert.equal(summary.includes.length, Object.keys(FEATURES).length);
   assert.match(summary.note, /free while Halfstop is being built/);
 
-  // And once it is real, the plan is what decides.
-  const paying = planSummary({ tier: 'premium' }, { billing: LIVE });
+  // And once it is real, the plan the server answered with is what decides.
+  const paying = planSummary({ plan: { tier: 'premium', source: 'granted' } }, { billing: LIVE });
   assert.equal(paying.name, 'Premium');
   assert.equal(paying.includes.length, Object.keys(FEATURES).length);
   assert.equal(planSummary(null, { billing: LIVE }).includes.length, 0);
+});
+
+/* ------------------------------------------------------- the trial */
+
+const DAY = 86400000;
+const LIVE_NOW = 1789000000000;
+
+test('tiers: a tier set on the account itself is not a plan', () => {
+  // The shape matters. A plan arrives from the server under `plan`; a bare
+  // `tier` is the shape a browser could invent for itself, and reading it
+  // would be this module deciding what it is documented not to decide.
+  assert.equal(tierFor({ tier: 'premium' }, { billing: LIVE }).name, 'Free');
+  assert.equal(tierFor({ plan: { tier: 'premium' } }, { billing: LIVE }).name, 'Premium');
+});
+
+test('tiers: the trial counts down in days a person can check', () => {
+  const trial = (days) => ({
+    tier: 'premium',
+    source: 'trial',
+    until: new Date(LIVE_NOW + days * DAY).toISOString(),
+  });
+
+  const say = (plan) => describePlan(plan, { now: LIVE_NOW, billing: LIVE });
+  assert.equal(say(trial(9)), 'Premium trial, 9 days left.');
+  assert.equal(say(trial(1)), 'Premium trial, 1 day left.', 'not "1 days"');
+  // Rounded up, so the last afternoon of a trial does not read as zero.
+  assert.equal(say(trial(0.25)), 'Premium trial, 1 day left.');
+  assert.equal(say(trial(-1)), 'Premium trial, ending today.');
+});
+
+test('tiers: a grant with no end date does not pretend to have one', () => {
+  assert.equal(
+    describePlan({ tier: 'premium', source: 'granted', until: null }, { now: LIVE_NOW, billing: LIVE }),
+    'Premium.',
+  );
+});
+
+test('tiers: nothing is said about a trial while there is nothing to lose', () => {
+  // Billing is off, so every account has everything and a countdown would be
+  // counting down to nothing happening.
+  assert.equal(
+    describePlan({ tier: 'premium', source: 'trial', until: new Date(LIVE_NOW).toISOString() }, { billing: FREE }),
+    'Free, with everything switched on.',
+  );
+});
+
+test('tiers: a plan nobody has answered with yet is not premium', () => {
+  // Null means the question has not been asked, which must not read as a grant.
+  assert.equal(describePlan(null, { billing: LIVE }), 'Free.');
+  assert.equal(tierFor({ plan: null }, { billing: LIVE }).name, 'Free');
+  assert.equal(daysLeft(null), null);
+  assert.equal(daysLeft('not a date'), null);
 });
 
 /*
