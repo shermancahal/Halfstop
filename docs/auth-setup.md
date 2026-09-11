@@ -382,14 +382,15 @@ it. The page is not secret and does not need to be.
 Resend receives inbound mail and posts it to a webhook, which
 `supabase/functions/support-inbound` turns into a row.
 
-Where this stands: mail written to support@halfstop.app becomes a ticket. The
-one thing not yet working is the body.
+Where this stands: finished, and proven the whole way through. Mail written to
+support@halfstop.app becomes a ticket in `admin.html` carrying its sender, its
+subject and its message.
 
-Proven by real messages on 11 September. A test sent to support@halfstop.app
-reached queue@inbound.halfstop.app through the SiteGround forward, Resend
-raised an `email.received` event, `support-inbound` authorised it and filed a
-row, and `admin.html` has a ticket with its sender, subject and status.
-`support-inbound` is deployed to `gqemcvuushtfbbbxypvf` with
+Confirmed on 11 September by a message that travelled every link: the MX record
+on inbound.halfstop.app, the SiteGround forward to queue@inbound.halfstop.app,
+Resend raising an `email.received` event, the webhook, `support-inbound`
+authorising it against the shared secret, the body fetched back from Resend,
+and the row. `support-inbound` is deployed to `gqemcvuushtfbbbxypvf` with
 `verify_jwt: false`, and the `external_id` block is applied as the migration
 `support_tickets_external_id_unique` — nullable column, no default, and
 `support_tickets_external_id_key` unique on it. That index is not housekeeping.
@@ -397,18 +398,21 @@ The function upserts with `onConflict: 'external_id'`, which Postgres rejects
 outright unless a unique constraint matches, so without it every delivery would
 fail at the insert.
 
-Every ticket arrives with an empty body, and the function log says why: all
-three body paths answer `401` from Resend. The key is set, so this is about
-which key. A Resend key created for **sending access** is refused on every
-read endpoint, and the key this project already had was made for the site build
-to send authentication mail. Reading a received message needs **full access**.
-That is the remaining step: create a full-access key in Resend and put it in
-`RESEND_API_KEY` under Edge Functions → Secrets.
+Two things about `RESEND_API_KEY` are worth keeping, because both cost a round.
 
-One thing that step will also settle. The three paths in `BODY_PATHS` are
-tried rather than asserted, and a 401 is returned before a path is resolved, so
-a wrong path and a wrong key look identical from here. With a full-access key
-in place the log says which it was: a body, or three 404s.
+It has to be a key with **full access**. A key scoped to sending access is
+refused on every read endpoint, and the key this project already had was made
+for the site build to send authentication mail — so the queue filed tickets
+with a sender and a subject, an empty body, and a log full of 401s, until a
+full-access key replaced it. That failure is the quiet one: the webhook answers
+200 and the ticket appears, and only the log says the message never arrived
+with it.
+
+And of the three entries in `BODY_PATHS`, the first,
+`https://api.resend.com/emails/receiving/<id>`, is the one that answers — on
+the first try, with neither fallback needed. The other two stay as written. A
+401 is returned before a path is resolved, so while the key was wrong every
+path looked wrong too, and there was no way to tell the two apart from here.
 
 ### Both secrets arrived padded, and it cost two rounds
 
@@ -448,9 +452,13 @@ body rather than the status.
 the full request URL, query string included, so the value Resend actually sent
 can be read back and compared rather than guessed at.
 
-Nothing is lost while it waits. Resend stores every received message whether or
-not the webhook succeeds, and a delivery that failed can be replayed once the
-function answers.
+Nothing is lost when a link breaks. Resend stores every received message
+whether or not the webhook succeeds, so a delivery that failed can be replayed
+once the function answers — the dashboard's Replay button, or the same thing
+over the API. Note that a replay will not repair a ticket that already filed:
+the upsert ignores duplicates on purpose, so that answering a ticket is not
+undone by a redelivery. A ticket that filed without its body keeps the empty
+body, and the message itself stays readable in Resend.
 
 1. **An MX record on a subdomain.** Resend's own guidance, and worth following:
    an MX on the bare domain routes *all* mail for halfstop.app to Resend, which
