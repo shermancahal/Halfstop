@@ -185,16 +185,28 @@ comes first: fixing delivery only means the wrong link arrives reliably.
 
 ## 5. Leaked password protection
 
-**Authentication → Providers → Email**, or **Authentication → Sign In** on a
-newer dashboard: the toggle that checks a new password against
-HaveIBeenPwned.org before accepting it.
+**Authentication → Providers → Email**, which is
+`/dashboard/project/<project-ref>/auth/providers?provider=Email`. Supabase Auth
+can check a new password against the HaveIBeenPwned.org Pwned Passwords API and
+refuse one that appears in it.
 
-It is off. It costs nothing, needs no domain and no provider, and it is now the
-only thing Supabase's security advisor reports about this project. What it
-refuses is the failure a password field actually has — not a weak password
-invented on the spot, but a real one reused from somewhere that has already
-leaked. Nothing in this repository can set it, which is why it sits here with
-the rest of the dashboard list rather than in `schema.sql`.
+**It needs the Pro plan, and this project is on the free one.** So it cannot be
+switched on today; it is a 25 USD a month decision rather than a toggle. Worth
+knowing before going to look for it, because the security advisor reports it
+either way — the linter reads the setting, not the plan, so this is a finding
+that cannot be cleared from where this project sits.
+
+What it would buy is the failure a password field actually has. Not a weak
+password invented on the spot, but a real one reused from somewhere that has
+already leaked, replayed against this site by something automated.
+
+**The two settings beside it are free, and are worth setting now.** On the same
+page: a minimum password length, where the default of 6 is low and 8 is the
+floor worth having, and the required character classes. Neither costs anything
+and both are the same kind of protection from the other direction.
+
+Nothing in this repository can set any of the three, which is why they sit here
+with the rest of the dashboard list rather than in `schema.sql`.
 
 ### What the advisor used to say, and what closed it
 
