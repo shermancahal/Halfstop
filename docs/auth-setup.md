@@ -214,10 +214,10 @@ two outcomes needs a human, and they should not read the same.
 
 ## Sharing a folder with somebody
 
-Stage one of collaboration: the owner invites an address, and that person can
-**read** the folder. Nobody but the owner can write to it, which is what keeps
-the sync model honest — last-write-wins per folder is safe while a folder has
-exactly one writer, and is not safe the moment it has two.
+The owner invites an address, and the invitation says which of two things it
+allows: **view**, or **edit together**. It defaults to view, because handing
+somebody the ability to change a collection of places should be something you
+chose rather than something you failed to notice.
 
 **The grant is the email address, not a token in a link.** A bearer link is
 forwardable; one "look at this" into a group chat and a folder of somebody's
@@ -230,14 +230,65 @@ What is in `schema.sql`:
 - `folder_shares` — one row per (owner, folder, invited address), `revoked`
   rather than deleted so a withdrawn invitation is distinguishable from one
   that never existed.
-- A **select** policy on `folders` that consults it. A second policy rather
-  than a change to the first: policies are OR'd, so this adds a way to read and
-  leaves insert, update and delete owner-only.
+- A `role` on it, `viewer` or `editor`, defaulted to the narrower and
+  constrained to those two. Narrowed again in the Edge Function, because the
+  request asking for it is written by whatever is on the other end.
+- A **select** policy on `folders` that consults it, and an **update** policy
+  that consults it and also requires the editor role. Separate policies rather
+  than changes to the first: policies are OR'd, so an invitation that does not
+  say editor grants exactly what it granted before any of this existed. Insert
+  and delete stay owner-only, so a collaborator cannot create a folder in
+  somebody else's name or remove theirs.
 
-The reader's copy is marked `sharedFrom` in the browser, and that marker is
-what keeps it out of the push — `mergeFolders` holds it back, and the folder
-row offers no editing controls. Both are belt and braces: the policy would
-refuse the write anyway.
+The reader's copy is marked `sharedFrom` in the browser, carrying the role, and
+that marker is what decides whether an edit is offered and whether a change is
+pushed. Both are presentation: the policy is what refuses.
+
+### What a collaborator cannot do, and why the trigger matters
+
+`folders_set_owner` stamped `user_id` from the session on insert **and** update.
+That was harmless while only an owner could write, because the value it wrote
+back was the one already there. The moment a second account can update, the same
+line hands them the folder: it leaves the owner's account on the collaborator's
+first edit and arrives in theirs, silently, with the owner's copy gone.
+
+So an update now keeps the owner it had, and when the writer is not the owner it
+also keeps the filing, the deleted flag and the created date. A collaborator
+changes what is in a folder, not whether the owner still has it or where they
+keep it. A `WITH CHECK` cannot express that because it cannot see the row as it
+was; the trigger has the old row in hand, so it can.
+
+### Checking that any of the above is true
+
+`supabase/rls-probe.sql`. Run it in the SQL editor with two real accounts filled
+in; it invents a folder and an invitation, pushes the most hostile write a
+collaborator could send, prints what the database allowed, and rolls the whole
+thing back.
+
+It exists because the unit tests cover the merge, which is what the app sends,
+and cannot cover what the database accepts. That second one is the boundary.
+Expect: a viewer's update writes nothing, an editor's writes one row and comes
+back with the owner, the filing and the deleted flag unchanged though the update
+set all three, and a delete writes nothing.
+
+### Two writers, and what that does to the merge
+
+Last-write-wins per folder is safe while a folder has exactly one writer and is
+not safe the moment it has two: you add a pin, somebody renames a different one,
+and whoever saved second takes the folder whole and discards the other's work
+without saying so.
+
+So a folder shared for editing is merged item by item instead. Waypoints carry
+the time they changed, removals leave tombstones, and each side keeps what it
+did. Two rules follow from that and are worth knowing:
+
+- **A waypoint edited after it was deleted comes back.** Deliberate. The edit is
+  the later statement of what somebody wanted, and an unwanted pin is easier to
+  delete again than a lost edit is to retype.
+- **A tombstone is kept for ninety days.** Long enough to outlive a phone in a
+  drawer, and bounded so that a folder worked on for years does not carry a
+  record of every pin ever dropped in it. A device offline for longer than that
+  re-adds what it is still holding.
 
 ### The email
 
