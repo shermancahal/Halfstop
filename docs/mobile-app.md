@@ -174,6 +174,20 @@ to look at once it is running.
    today. The product is Halfstop, so `com.halfstop.app` is the
    obvious answer; if you keep `gps`, keep it on purpose.
 
+   **Do not register it on the developer portal while the account is changing
+   entity type.** Deciding the string costs nothing; registering an App ID for
+   it binds the string to a team. If an Individual-to-Organization change ends
+   up producing a new team rather than converting the existing one, the
+   identifier does not come with you, and an app that has never been released
+   cannot be moved by App Transfer either - that path wants a released version
+   on the store. The failure is not dramatic, it is just permanent: the name
+   you wanted is taken, by you, on an account you no longer use.
+
+   Local builds onto your own phone need no registered identifier at all.
+   Xcode will sign with a personal team against a throwaway id such as
+   `com.halfstop.app.dev`, which leaves the real one untouched until there is
+   a team to register it to.
+
 2. **Fill in `assets/js/token.js` completely.** `npm run dist:app` reads that
    file from disk — it does not see the repository variables the website deploy
    uses — and ships whatever is in it. The build now prints what the bundle

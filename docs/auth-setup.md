@@ -91,8 +91,17 @@ Free, and no domain to verify.
 
 **Enrolment.** <https://developer.apple.com/programs/enroll/>. Currently 99 USD
 a year. An Apple ID with two-factor authentication is required. Choose
-**Individual** unless the apps must be published under a company name —
+**Individual** unless the apps must be published under a company name.
 Organization enrolment needs a D-U-N-S number and takes considerably longer.
+
+**Halfstop is switching to Organization**, by a support ticket rather than a
+fresh enrolment. Until that resolves, do not create the Services ID or the Sign
+in with Apple key described below. They are registered to a *team*, not to a
+person, and if the change ends up producing a new team rather than converting
+the existing one in place, they do not follow you across. Worth asking in the
+same ticket whether the Team ID and any identifiers already created survive the
+change, because the answer decides whether the steps below can be done now or
+have to wait.
 
 **Then, in Certificates, Identifiers & Profiles:**
 
