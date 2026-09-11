@@ -49,13 +49,22 @@ alter table public.folders add column if not exists parent_id text;
 -- user's folders, since the publishable key is by design public.
 alter table public.folders enable row level security;
 
+-- Every policy below wraps auth.uid() and auth.jwt() in a scalar subquery, and
+-- that is not decoration.
+--
+-- Both are STABLE rather than IMMUTABLE, so written bare inside a policy they
+-- are re-evaluated once per row: the check on a thousand-row folder list runs
+-- a thousand times and returns the same answer a thousand times. Wrapped in
+-- `(select ...)` the planner makes it an InitPlan, evaluated once for the
+-- statement and reused. The value cannot change mid-statement, so this is the
+-- same rule enforced the same way, and only the row count stops mattering.
 drop policy if exists "folders are private to their owner" on public.folders;
 create policy "folders are private to their owner"
   on public.folders
   for all
   to authenticated
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
 
 -- Belt and braces: even if a client sends someone else's user_id, stamp the
 -- row with the authenticated user. The policy above would reject it anyway.
@@ -77,14 +86,34 @@ create trigger folders_set_owner_trigger
   before insert or update on public.folders
   for each row execute function public.folders_set_owner();
 
--- A trigger function has no business being callable as an endpoint.
+-- A trigger function has no business carrying a grant.
 --
 -- Anything in the public schema is exposed over PostgREST as an RPC, and this
--- one is SECURITY DEFINER - so it was listed at /rest/v1/rpc/folders_set_owner
--- for anybody with the publishable key. Calling it outside a trigger errors on
--- the missing `new` record rather than doing damage, which is luck rather than
--- design. Supabase's own linter flags it; this is the fix it asks for.
-revoke execute on function public.folders_set_owner() from anon, authenticated;
+-- one is SECURITY DEFINER, so the linter reports it at
+-- /rest/v1/rpc/folders_set_owner for anybody with the publishable key.
+--
+-- REVOKE FROM PUBLIC, NOT FROM THE ROLES BY NAME. This said `from anon,
+-- authenticated` for two days and the linter went on reporting it, correctly:
+-- Postgres grants EXECUTE to PUBLIC by default on every function, anon and
+-- authenticated inherit through PUBLIC, and revoking from the two by name
+-- takes away a grant they were never relying on. PUBLIC is the one that has to
+-- go, and any SECURITY DEFINER function added later wants the same line.
+--
+-- Nothing was reachable in the meantime: a function returning `trigger` cannot
+-- be called directly at all, because Postgres refuses one outside a trigger
+-- before any argument is considered. That is the reason the gap was harmless,
+-- not a reason to leave the grant in place.
+revoke execute on function public.folders_set_owner() from public;
+
+-- The same grant on the event trigger that turns RLS on for new public tables.
+-- That function arrived with the project rather than from this file, so the
+-- revoke is guarded and does nothing on a database that has no such function.
+do $$
+begin
+  if to_regprocedure('public.rls_auto_enable()') is not null then
+    execute 'revoke execute on function public.rls_auto_enable() from public, anon, authenticated';
+  end if;
+end $$;
 
 -- ---------------------------------------------------------------- sharing
 --
@@ -132,8 +161,8 @@ create policy "an owner manages their own shares"
   on public.folder_shares
   for all
   to authenticated
-  using (auth.uid() = owner_id)
-  with check (auth.uid() = owner_id);
+  using ((select auth.uid()) = owner_id)
+  with check ((select auth.uid()) = owner_id);
 
 -- The person invited may read the invitation addressed to them, which is how
 -- the app knows what to show them. Reading it grants nothing on its own.
@@ -142,7 +171,7 @@ create policy "an invitation is readable by the person it names"
   on public.folder_shares
   for select
   to authenticated
-  using (not revoked and lower(invited_email) = lower(auth.jwt() ->> 'email'));
+  using (not revoked and lower(invited_email) = lower((select auth.jwt()) ->> 'email'));
 
 -- And the folder itself becomes readable to them.
 --
@@ -163,7 +192,7 @@ create policy "a shared folder is readable by whoever it names"
       where s.owner_id = folders.user_id
         and s.client_id = folders.client_id
         and not s.revoked
-        and lower(s.invited_email) = lower(auth.jwt() ->> 'email')
+        and lower(s.invited_email) = lower((select auth.jwt()) ->> 'email')
     )
   );
 
@@ -226,5 +255,5 @@ create policy "support is for the administrator"
   on public.support_tickets
   for all
   to authenticated
-  using (lower(auth.jwt() ->> 'email') = 'shermancahal@gmail.com')
-  with check (lower(auth.jwt() ->> 'email') = 'shermancahal@gmail.com');
+  using (lower((select auth.jwt()) ->> 'email') = 'shermancahal@gmail.com')
+  with check (lower((select auth.jwt()) ->> 'email') = 'shermancahal@gmail.com');

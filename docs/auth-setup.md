@@ -183,6 +183,53 @@ comes first: fixing delivery only means the wrong link arrives reliably.
 
 ---
 
+## 5. Leaked password protection
+
+**Authentication → Providers → Email**, or **Authentication → Sign In** on a
+newer dashboard: the toggle that checks a new password against
+HaveIBeenPwned.org before accepting it.
+
+It is off. It costs nothing, needs no domain and no provider, and it is now the
+only thing Supabase's security advisor reports about this project. What it
+refuses is the failure a password field actually has — not a weak password
+invented on the spot, but a real one reused from somewhere that has already
+leaked. Nothing in this repository can set it, which is why it sits here with
+the rest of the dashboard list rather than in `schema.sql`.
+
+### What the advisor used to say, and what closed it
+
+Two findings are gone, fixed in `schema.sql` and applied as the migration
+`rls_initplan_and_public_execute_grant`.
+
+**Five policies re-evaluated `auth.uid()` or `auth.jwt()` once per row.** Both
+are STABLE rather than IMMUTABLE, so a check across a thousand rows ran a
+thousand times to reach one answer. Each is wrapped in `(select ...)` now, which
+the planner turns into an InitPlan: evaluated once for the statement and reused.
+The value cannot change mid-statement, so it is the same rule enforced the same
+way.
+
+**Two SECURITY DEFINER functions were still executable by `anon`.** The earlier
+revoke read `from anon, authenticated`, which leaves the default PUBLIC grant
+alone — and PUBLIC is exactly what those two roles inherit through, so it
+revoked something they were never using. It is `from public` now. Neither
+function was ever reachable: one returns `trigger` and the other `event_trigger`,
+and Postgres refuses a direct call to either before it looks at anything else.
+That is why the gap was harmless, and not a reason to have left it, because a
+revoke that does not revoke is worse than none — it reads as done.
+
+Revoking EXECUTE does not stop either trigger firing; Postgres checks that
+privilege when a trigger is created, not each time it runs. Both were checked
+afterwards rather than assumed.
+
+Two findings are left standing on purpose. `support_tickets_queue_idx` reports
+as unused, which is what an index on an empty table looks like. And `folders`
+and `folder_shares` each carry two permissive SELECT policies, which is the
+design rather than an oversight: one gives the owner everything, the second adds
+read for the person a folder was shared with, and policies are OR'd. Satisfying
+the linter would mean splitting the first into separate insert, update and
+delete policies and hand-merging the select halves into one expression doing two
+jobs — more policies, less obvious, same answer.
+
 ## Deleting an account, all the way
 
 `Settings → Account → Delete account` deletes the person's folder rows from the
