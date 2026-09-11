@@ -20,8 +20,26 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const TABLE = 'support_tickets';
 
+/**
+ * An environment value, with whitespace stripped.
+ *
+ * Both values this function needs by hand are typed into a dashboard field,
+ * and a paste that brought a newline with it is invisible there while being a
+ * different string everywhere else. Both arrived that way, and neither said so:
+ * the webhook secret was the right forty-eight characters padded to fifty, and
+ * refused every delivery with a 401 of this function's own; the Resend key was
+ * padded too, and Resend answered the body fetch with a 401 of its own, which
+ * reached the queue as tickets holding a subject and nothing else.
+ *
+ * Only what is read from the environment is trimmed. What arrives in a request
+ * is still compared exactly as it arrived.
+ */
+function env(name: string): string {
+  return (Deno.env.get(name) || '').trim();
+}
+
 function keyFrom(jsonName: string, legacyName: string): string {
-  const bundle = Deno.env.get(jsonName);
+  const bundle = env(jsonName);
   if (bundle) {
     try {
       const keys = JSON.parse(bundle);
@@ -31,7 +49,7 @@ function keyFrom(jsonName: string, legacyName: string): string {
       // Fall through to the legacy name rather than failing on a shape change.
     }
   }
-  return Deno.env.get(legacyName) || '';
+  return env(legacyName);
 }
 
 /** Constant time, so a wrong secret cannot be guessed a character at a time. */
@@ -176,16 +194,7 @@ async function fetchBody(id: string, key: string): Promise<string> {
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return reply(405, { error: 'Use POST.' });
 
-  // Trimmed because this value is typed into a dashboard field, and a paste
-  // that brought a newline along with it looks identical to the right secret
-  // while being a different string to compare against. That cost one full
-  // round of "the secret is set and it still says no": the stored value was
-  // the right forty-eight characters with two more of whitespace around them.
-  //
-  // Only this side is trimmed. What arrives in the request is compared exactly
-  // as it arrived, so this forgives a paste into the dashboard without also
-  // widening what an unknown caller is allowed to send.
-  const expected = (Deno.env.get('SUPPORT_WEBHOOK_SECRET') || '').trim();
+  const expected = env('SUPPORT_WEBHOOK_SECRET');
   if (!expected) return reply(503, { error: 'This endpoint has no secret configured, so it accepts nothing.' });
 
   const given = req.headers.get('x-halfstop-secret')
@@ -193,7 +202,7 @@ Deno.serve(async (req: Request) => {
     || '';
   if (!secretMatches(given, expected)) return reply(401, { error: 'No.' });
 
-  const url = Deno.env.get('SUPABASE_URL') || '';
+  const url = env('SUPABASE_URL');
   const secret = keyFrom('SUPABASE_SECRET_KEYS', 'SUPABASE_SERVICE_ROLE_KEY');
   if (!url || !secret) return reply(500, { error: 'This function is missing its Supabase environment.' });
 
@@ -208,7 +217,7 @@ Deno.serve(async (req: Request) => {
   const { email, name } = splitFrom(data.from);
   const externalId = String(data.email_id || data.id || '');
   const body = pickBody(data)
-    || await fetchBody(externalId, Deno.env.get('RESEND_API_KEY') || '');
+    || await fetchBody(externalId, env('RESEND_API_KEY'));
 
   const admin = createClient(url, secret, { auth: { persistSession: false } });
   const { error } = await admin.from(TABLE).upsert({
