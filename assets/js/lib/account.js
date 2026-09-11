@@ -35,6 +35,14 @@ const SHARES = 'folder_shares';
  */
 const LATER_COLUMNS = ['parent_id', 'trip', 'removed_items'];
 
+/**
+ * The "Continue with ..." buttons this app knows how to draw.
+ *
+ * Which of them to actually offer is not decided here and not decided in
+ * config either: it is asked of the project, because the answer lives there.
+ */
+const PROVIDERS = ['apple', 'google'];
+
 /** The support queue. Readable by one address, decided server-side. */
 const TICKETS = 'support_tickets';
 
@@ -135,6 +143,17 @@ export class Account extends EventTarget {
      * true. Null means not asked yet, which is not the same as free.
      */
     this.plan = null;
+    /*
+     * Which sign-in providers the project has registered, as it last answered.
+     *
+     * Null means not asked yet, and the panel falls back to SITE.authProviders
+     * for as long as that is true - which is empty, so it offers nothing.
+     * Offering nothing is the honest state: a button that starts an OAuth
+     * round trip to a provider nobody registered sends somebody to an error
+     * page wearing Apple's or Google's branding, which reads as this site
+     * being broken rather than unfinished.
+     */
+    this.providers = null;
     this.status = configured() ? 'signed-out' : 'unavailable';
     this.message = '';
     this.syncing = false;
@@ -181,6 +200,11 @@ export class Account extends EventTarget {
       this.setStatus('error', error.message);
       return;
     }
+
+    // Asked before anything else needs it, and regardless of whether anybody
+    // is signed in: the buttons it decides are the ones shown to somebody who
+    // is not.
+    this.refreshProviders();
 
     const { data } = await client.auth.getSession();
     this.user = data?.session?.user || null;
@@ -707,6 +731,39 @@ export class Account extends EventTarget {
    * without the column and the session remembers, so the next push is one
    * request rather than two.
    */
+  /**
+   * Ask the project which sign-in providers it actually has.
+   *
+   * A hand-kept list in config had to be edited to match a setting in a
+   * dashboard, and the two drifting apart fails in both directions: a provider
+   * registered and not listed is a button nobody sees, and a provider listed
+   * and not registered is the error page above. The project already publishes
+   * the answer at /auth/v1/settings, so ask it and let turning one on in
+   * Supabase be the whole of turning one on.
+   *
+   * Unauthenticated on purpose: this is the question somebody asks before they
+   * have a session, which is the only time the answer matters.
+   */
+  async refreshProviders() {
+    if (!this.isConfigured()) return null;
+    try {
+      const response = await fetch(`${SUPABASE_URL}/auth/v1/settings`, {
+        headers: { apikey: SUPABASE_KEY },
+      });
+      if (!response.ok) throw new Error(`the project answered ${response.status}`);
+      const settings = await response.json();
+      const external = settings?.external || {};
+      this.providers = PROVIDERS.filter((id) => external[id] === true);
+      this.emit();
+      return this.providers;
+    } catch (error) {
+      // Left null rather than empty: "could not ask" is not "there are none",
+      // and the panel's fallback is already to offer nothing.
+      console.warn('[account] could not read the sign-in providers:', error?.message || error);
+      return null;
+    }
+  }
+
   /**
    * Ask the server what this account is entitled to.
    *

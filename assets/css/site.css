@@ -689,6 +689,13 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
    line is the one that counts down, so it is readable rather than fine print. */
 .plan-line { margin: 2px 0 0; font-size: .8rem; }
 
+/* The trial, under the list it is a trial of, set back from it so it reads as
+   a note about the card rather than another item in it. */
+.costs-trial { margin: 14px 0 0; font-size: .9rem; color: var(--ink-2); }
+/* And how to begin, which is a sentence rather than a second button: there is
+   already one of those at the foot of the page. */
+.costs-start { margin: 22px 0 0; }
+
 /* What the project pays for, in a row that wraps rather than a table that
    scrolls: three short items, each a name, a price now and a price later. */
 .costs-bill { display: grid; gap: 14px; margin: 0 0 26px; }

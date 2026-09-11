@@ -51,6 +51,25 @@ Each needs enabling and a client ID and secret from the provider's own console.
 Supabase gives the callback URL to register there; it is the project's
 `.../auth/v1/callback`, not this site.
 
+**There is no code change on this side.** The sign-in panel asks the project
+which providers it has, at `/auth/v1/settings`, and draws exactly those. Enable
+Google in the dashboard and the button appears; it does not need a list in
+`config.js` kept in step with a setting in a dashboard. That list still exists
+as `SITE.authProviders` and is now only the fallback for as long as the project
+has not answered, which is empty, so nothing is offered.
+
+That drift is worth avoiding in both directions: a provider registered and not
+listed is a button nobody ever sees, and one listed and not registered sends
+somebody to an error page wearing Apple's or Google's branding, which reads as
+this site being broken rather than unfinished.
+
+**Signing in with Apple is not what lets you charge.** They are separate, and
+it is easy to assume otherwise because both say Apple. Taking subscriptions
+through the App Store needs a shipped native app; see `docs/mobile-app.md`. Sign
+in with Apple becomes *required* by review once the app offers any other
+third-party sign-in, which is the rule at the end of this section, so it is a
+prerequisite for shipping rather than for billing.
+
 ### Google — do this one first
 
 Free, and no domain to verify.

@@ -505,3 +505,71 @@ test('account: a server with no trip column does not clear the dates', async () 
   );
   assert.equal(account.missingColumns.has('trip'), true);
 });
+
+/* ------------------------------------------------- which providers exist */
+
+/*
+ * A hand-kept list had to match a setting in a dashboard, and drift failed
+ * both ways: registered and unlisted is a button nobody sees; listed and
+ * unregistered sends somebody to an error page wearing Apple's branding.
+ */
+
+const withFetch = async (impl, run) => {
+  const real = globalThis.fetch;
+  globalThis.fetch = impl;
+  try { await run(); } finally { globalThis.fetch = real; }
+};
+
+const answering = (body, ok = true) => async () => ({
+  ok,
+  status: ok ? 200 : 500,
+  json: async () => body,
+});
+
+test('account: only the providers the project says it has are offered', async () => {
+  const account = new Account(storeOf([]), { client: async () => ({}), configured: () => true });
+  await withFetch(answering({ external: { apple: true, google: false, github: true } }), async () => {
+    await account.refreshProviders();
+  });
+  // github is registered and this app has no button for it, so it is not one.
+  assert.deepEqual(account.providers, ['apple']);
+});
+
+test('account: both, when both are registered', async () => {
+  const account = new Account(storeOf([]), { client: async () => ({}), configured: () => true });
+  await withFetch(answering({ external: { apple: true, google: true } }), async () => {
+    await account.refreshProviders();
+  });
+  assert.deepEqual(account.providers, ['apple', 'google']);
+});
+
+test('account: a project that answers with nothing registered offers nothing', async () => {
+  const account = new Account(storeOf([]), { client: async () => ({}), configured: () => true });
+  await withFetch(answering({ external: { apple: false, google: false } }), async () => {
+    await account.refreshProviders();
+  });
+  assert.deepEqual(account.providers, [], 'an answer of none is still an answer');
+});
+
+test('account: a question that could not be asked is not an answer of none', async () => {
+  // Null rather than empty, so the panel keeps its own fallback rather than
+  // concluding from a failed request that neither provider exists.
+  const refused = new Account(storeOf([]), { client: async () => ({}), configured: () => true });
+  await withFetch(answering({}, false), async () => { await refused.refreshProviders(); });
+  assert.equal(refused.providers, null);
+
+  const offline = new Account(storeOf([]), { client: async () => ({}), configured: () => true });
+  await withFetch(async () => { throw new Error('offline'); }, async () => {
+    await offline.refreshProviders();
+  });
+  assert.equal(offline.providers, null);
+});
+
+test('account: a deployment with no project does not ask at all', async () => {
+  const account = new Account(storeOf([]), { client: async () => ({}), configured: () => false });
+  let asked = false;
+  await withFetch(async () => { asked = true; return answering({})(); }, async () => {
+    assert.equal(await account.refreshProviders(), null);
+  });
+  assert.equal(asked, false);
+});

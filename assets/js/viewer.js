@@ -12028,15 +12028,21 @@ function renderAccount() {
   /*
    * Only the providers the project has actually set up.
    *
-   * `SITE.authProviders` is empty while neither is configured. A button that
-   * starts an OAuth round trip to a provider nobody has registered sends the
-   * reader to an error page carrying Apple's or Google's branding, which reads
-   * as this site being broken rather than unfinished - so it is not drawn, and
-   * neither is the divider that only makes sense above an email form with
-   * something above it.
+   * Asked of the project rather than kept in config, because the two drift and
+   * the drift fails both ways: a provider registered and not listed is a
+   * button nobody sees, and one listed and not registered sends the reader to
+   * an error page carrying Apple's or Google's branding, which reads as this
+   * site being broken rather than unfinished.
+   *
+   * `SITE.authProviders` is the fallback for as long as the project has not
+   * answered, and it is empty - so nothing is drawn, and neither is the
+   * divider that only makes sense above an email form with something above it.
+   * The panel is rebuilt on every account change, so the answer arriving a
+   * moment later draws the buttons without anybody reloading.
    */
   const PROVIDER_LABELS = { apple: 'Continue with Apple', google: 'Continue with Google' };
-  const offered = (SITE.authProviders || []).filter((id) => PROVIDER_LABELS[id]);
+  const offered = (account?.providers || SITE.authProviders || [])
+    .filter((id) => PROVIDER_LABELS[id]);
 
   dom.account.append(
     el('p', {
