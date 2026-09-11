@@ -412,6 +412,14 @@ Resend receives inbound mail and posts it to a webhook, which
 2. **Point the webhook at the function**, with the secret:
    `https://gqemcvuushtfbbbxypvf.supabase.co/functions/v1/support-inbound?secret=<value>`
 
+   This exists: webhook `458fd969-324e-435c-9b56-50ed9db8b0ae`, enabled, on
+   `email.received` alone. The secret in that URL is the one the function
+   compares against `SUPPORT_WEBHOOK_SECRET`, so changing either without the
+   other turns every delivery into a 401. Resend also issues a signing secret
+   at creation, shown once and never again; the function does not use it today,
+   and switching to signature verification later would mean storing it and
+   replacing the query string check.
+
    That is the documented form, `https://<project-ref>.supabase.co/functions/v1/<slug>`.
    The shorter `<ref>.functions.supabase.co` host exists but is not the one the
    dashboard shows, and a webhook pointed at a host that does not resolve fails
