@@ -393,6 +393,22 @@ Resend receives inbound mail and posts it to a webhook, which
    Then forward support@halfstop.app to an address on that subdomain, from
    whichever host holds the mailbox. Resend also offers a managed address that
    needs no DNS at all, which is the quicker way to see it working.
+
+   The forward is set up in SiteGround under Site Tools, Email, Forwarders:
+   `support` on halfstop.app, delivered to `queue@inbound.halfstop.app`. It
+   passes the original `From:` header through untouched, so a ticket is filed
+   under the person who wrote in rather than under the forwarder.
+
+   The one thing a forward cannot carry is SPF. The message keeps the sender's
+   address but arrives from SiteGround's IP, which the sender's domain never
+   authorised, so it fails SPF on arrival. That is survivable for senders whose
+   domain publishes a DMARC policy of `none`, which is most consumer mail and
+   the reason the first tests arrived. A sender on a domain that publishes
+   `p=reject` can be refused before the webhook ever runs, and the symptom is
+   a message that leaves the SiteGround forwarder log and never appears in
+   Resend. If that starts happening, stop forwarding: either move the MX for
+   halfstop.app itself to Resend, or publish an address on the receiving
+   subdomain as the support address and retire the forward.
 2. **Point the webhook at the function**, with the secret:
    `https://gqemcvuushtfbbbxypvf.supabase.co/functions/v1/support-inbound?secret=<value>`
 
