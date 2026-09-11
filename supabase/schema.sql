@@ -189,15 +189,28 @@ create table if not exists public.support_tickets (
 
   -- 'email' from the inbound webhook, 'manual' for a row typed in by hand.
   source       text not null default 'email',
-  -- The provider's own id, so a redelivered webhook is recognisable rather
-  -- than a second ticket about the same message.
-  external_id  text not null default '',
+  -- The provider's own id. Null for a ticket that did not come from a
+  -- provider, because the unique index below is what makes a redelivery
+  -- recognisable and Postgres lets nulls repeat.
+  external_id  text,
 
   updated_at   timestamptz not null default now()
 );
 
 create index if not exists support_tickets_queue_idx
   on public.support_tickets (status, received_at desc);
+
+-- Resend retries a delivery it could not confirm, so the same message can
+-- arrive twice. Without this the queue grows a second copy of it, which is
+-- worse than a missed ticket because it looks like a second person wrote in.
+-- The alters are here rather than in a migration because the table shipped
+-- with this column not-null and defaulted to the empty string, which would
+-- collide the moment a ticket was typed in by hand.
+alter table public.support_tickets alter column external_id drop not null;
+alter table public.support_tickets alter column external_id drop default;
+update public.support_tickets set external_id = null where external_id = '';
+create unique index if not exists support_tickets_external_id_key
+  on public.support_tickets (external_id);
 
 alter table public.support_tickets enable row level security;
 

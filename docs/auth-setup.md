@@ -442,6 +442,23 @@ be guessed a character at a time. With no secret set it refuses everything
 rather than accepting anonymous posts into the table.
 
 The event carries metadata rather than the message, so the body is fetched back
-from the Resend API by id using `RESEND_API_KEY`, which is already set. That
-second request is best effort: a ticket with a subject and no body is worth
-having, and losing the whole message because one call failed is not.
+from the Resend API by id using `RESEND_API_KEY`. That key has to be in Edge
+Functions → Secrets, not only in the site build: without it every ticket
+arrives with a subject and an empty body, and the function log says so. The
+second request is otherwise best effort, because a ticket with a subject and no
+body is worth having and losing the whole message because one call failed is
+not.
+
+The route for that second request is tried rather than asserted. Resend
+describes the call by its SDK name and versions its REST paths, so the function
+walks a short list and takes the first that answers with a body, logging when
+none do. If the queue fills with empty bodies, the function log names every URL
+it tried, and the fix is to add the current one to `BODY_PATHS`.
+
+Re-run `schema.sql` before the first real message. `support_tickets.external_id`
+shipped not-null and defaulted to the empty string, with a comment claiming a
+redelivered webhook would be recognised. Nothing enforced that. Resend retries
+any delivery it cannot confirm, so the same message would have been filed twice
+and read as two people writing in. The column is now nullable with a unique
+index, and the function upserts and drops the second arrival rather than
+merging it, since the ticket may already have been answered.
