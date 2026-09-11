@@ -2725,6 +2725,23 @@ function wireSettingsMenu() {
       // word on purpose, and an empty line is how describePlan says so.
       plan.line ? el('div', { class: 'plan-line hint', text: plan.line }) : null,
     ].filter(Boolean)));
+
+    /*
+     * Where the terms and the privacy policy are, from inside the app.
+     *
+     * They have always existed and were only ever reachable from the website.
+     * That is fine for a browser tab, where the reader can get to the site,
+     * and not fine once this is wrapped as an app: the map is then the only
+     * page there is, and App Review expects both to be findable in a build
+     * that asks people to make an account. Here rather than in a footer
+     * because this app has no footer, and this is where the account already
+     * is.
+     */
+    drop.append(el('div', { class: 'settings-account settings-legal' }, [
+      el('a', { href: 'privacy.html', target: '_blank', rel: 'noopener', text: 'Privacy' }),
+      el('a', { href: 'terms.html', target: '_blank', rel: 'noopener', text: 'Terms' }),
+      el('a', { href: 'faq.html', target: '_blank', rel: 'noopener', text: 'Help' }),
+    ]));
   };
 
   trigger.addEventListener('click', (event) => {

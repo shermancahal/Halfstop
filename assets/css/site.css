@@ -696,6 +696,12 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
    already one of those at the foot of the page. */
 .costs-start { margin: 22px 0 0; }
 
+/* Terms, privacy and help at the foot of the settings menu: one row, small,
+   and not competing with the controls above them. */
+.settings-legal { display: flex; flex-wrap: wrap; gap: 14px; }
+.settings-legal a { font-size: .8rem; color: var(--ink-3); }
+.settings-legal a:hover { color: var(--ink-1); }
+
 /* What the project pays for, in a row that wraps rather than a table that
    scrolls: three short items, each a name, a price now and a price later. */
 .costs-bill { display: grid; gap: 14px; margin: 0 0 26px; }

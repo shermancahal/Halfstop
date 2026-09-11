@@ -11,7 +11,7 @@
     "start": "node tools/serve.mjs",
     "build": "node tools/build-catalog.mjs",
     "build:icons": "node tools/build-app-icons.mjs",
-    "vendor": "node tools/vendor-maplibre.mjs",
+    "vendor": "node tools/vendor-maplibre.mjs && node tools/vendor-supabase.mjs",
     "check": "node tools/build-catalog.mjs --check",
     "dist": "node tools/build-dist.mjs --zip",
     "dist:app": "node tools/build-dist.mjs --app",

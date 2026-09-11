@@ -14,7 +14,24 @@ import { mergeFolders, rowToFolder, folderToRow, missingColumn } from './sync.js
 import { canEdit, markShared, normaliseEmail, readRole } from './shares.js';
 
 const SUPABASE_VERSION = '2.45.4';
-const CDN = `https://cdn.jsdelivr.net/npm/@supabase/supabase-js@${SUPABASE_VERSION}/+esm`;
+
+/*
+ * From this repository, not from a CDN.
+ *
+ * It used to be imported from jsdelivr at runtime, which meant signing in
+ * needed the network in an app that otherwise does not, the service worker
+ * could not cache it because it is cross-origin, and jsdelivr could serve any
+ * code it liked into a page holding somebody's session. Wrapped as a native
+ * app it is also executable code downloaded at runtime that Apple never
+ * reviewed. MapLibre was vendored for the first three reasons; this is the
+ * same fix, run by tools/vendor-supabase.mjs.
+ *
+ * The UMD build rather than the ESM one, because it is the single
+ * self-contained file: the package's ESM entry imports its dependencies by
+ * bare specifier and would need a bundler, which this project deliberately
+ * does not have.
+ */
+const VENDORED = `assets/vendor/supabase-js-${SUPABASE_VERSION}/supabase.js`;
 const TABLE = 'folders';
 
 /** The Edge Function that closes an account; see supabase/functions/. */
@@ -94,13 +111,43 @@ const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 let clientPromise = null;
 
+/**
+ * Load the library, once, from a script tag.
+ *
+ * A UMD bundle rather than a module, so it arrives as a global instead of an
+ * import. Its own loader lives here rather than being borrowed from engine.js,
+ * which has the same twelve lines: importing that would pull the entire map
+ * engine into admin.html, a page with no map on it.
+ */
+function loadVendored(src) {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${src}"]`);
+    if (existing) {
+      if (existing.dataset.loaded === 'true') resolve();
+      else existing.addEventListener('load', () => resolve(), { once: true });
+      existing.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true });
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    script.addEventListener('load', () => { script.dataset.loaded = 'true'; resolve(); }, { once: true });
+    script.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true });
+    document.head.append(script);
+  });
+}
+
 async function getClient() {
   if (!isConfigured()) return null;
   if (!clientPromise) {
-    clientPromise = import(/* @vite-ignore */ CDN)
-      .then(({ createClient }) => createClient(SUPABASE_URL, SUPABASE_KEY, {
-        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
-      }))
+    clientPromise = loadVendored(VENDORED)
+      .then(() => {
+        const createClient = globalThis.supabase?.createClient;
+        if (!createClient) throw new Error('the library loaded without createClient on it');
+        return createClient(SUPABASE_URL, SUPABASE_KEY, {
+          auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+        });
+      })
       .catch((error) => {
         clientPromise = null;
         throw new Error(`Could not load the accounts library: ${error.message}`);
