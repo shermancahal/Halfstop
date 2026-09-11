@@ -19,6 +19,9 @@
  * deletion would let a fresh sign-in wipe everything.
  */
 
+import { canEdit } from './shares.js';
+import { readRemovals } from './folders.js';
+
 /** Rows Supabase returns, mapped to the shape FolderStore uses. */
 export function rowToFolder(row) {
   return {
@@ -33,6 +36,12 @@ export function rowToFolder(row) {
     created: row.created_at ? Date.parse(row.created_at) : null,
     updatedAt: row.updated_at ? Date.parse(row.updated_at) : 0,
     deleted: row.deleted === true,
+    // Null on a server that predates the column, which reads as "not a trip" -
+    // and a folder that is one keeps its dates locally until the column is
+    // there, rather than having them cleared by a database that cannot hold
+    // them.
+    trip: row.trip || null,
+    removedItems: Array.isArray(row.removed_items) ? row.removed_items : [],
     items: Array.isArray(row.items) ? row.items : [],
   };
 }
@@ -51,10 +60,16 @@ export function missingColumn(message, column) {
 }
 
 /** A folder, mapped to the row shape Supabase expects. */
-export function folderToRow(folder, userId, { withParent = true } = {}) {
-  if (!withParent) {
-    const { parent_id: _dropped, ...rest } = folderToRow(folder, userId);
-    return rest;
+export function folderToRow(folder, userId, { withParent = true, withTrip = true, withRemovals = true } = {}) {
+  if (!withParent || !withTrip || !withRemovals) {
+    // Dropped from the full row rather than assembled from the parts, so the
+    // row a degraded server receives is the ordinary one minus a column, in
+    // the order it would otherwise have had.
+    const row = folderToRow(folder, userId);
+    if (!withParent) delete row.parent_id;
+    if (!withTrip) delete row.trip;
+    if (!withRemovals) delete row.removed_items;
+    return row;
   }
   return {
     user_id: userId,
@@ -69,6 +84,13 @@ export function folderToRow(folder, userId, { withParent = true } = {}) {
     // taken on the phone will not appear on the laptop until file sync exists;
     // the alternative is uploading megabytes per pin without being asked.
     items: folder.items || [],
+    // {from, to, retired}, or null when this folder is not a trip. Read back
+    // through readTrip, so a shape this version does not recognise becomes
+    // "not a trip" rather than an error on the next device to open it.
+    trip: folder.trip || null,
+    // Which items are gone, so the other side can tell a deletion from a pin
+    // it has simply never been told about.
+    removed_items: folder.removedItems || [],
     updated_at: new Date(folder.updatedAt || Date.now()).toISOString(),
   };
 }
@@ -80,25 +102,130 @@ export function folderToRow(folder, userId, { withParent = true } = {}) {
  * @param {object[]} remote  folders from rowToFolder()
  * @returns {{merged: object[], toPush: object[], pulled: number, pushed: number, conflicts: object[]}}
  */
-export function mergeFolders(local, remote) {
+/**
+ * One folder, worked on by two people, reconciled item by item.
+ *
+ * This is the whole of what co-editing is. Everywhere else the unit is the
+ * folder and the newer save wins it entire, which is right for one person on
+ * two devices and quietly destructive for two people on one folder: you add a
+ * pin, I rename a different one, and whoever saved second takes the folder
+ * whole and throws the other's work away without saying so.
+ *
+ * So items are merged one at a time, by the stamp each carries, and removals
+ * are read from the tombstones rather than from absence. An item edited after
+ * it was deleted comes back, deliberately: the edit is the later statement of
+ * what somebody wanted, and undoing a deletion is recoverable where discarding
+ * an edit is not.
+ *
+ * The folder's own fields - its name, its colour, its trip dates - are still
+ * one decision rather than several, and go with the newer save whole. A name
+ * and a colour chosen together should not be able to arrive half from each
+ * side.
+ */
+export function mergeCoEdited(mine, theirs, { now = Date.now() } = {}) {
+  const removedItems = readRemovals(
+    [...(mine.removedItems || []), ...(theirs.removedItems || [])],
+    { now },
+  );
+  const buriedAt = new Map(removedItems.map((gone) => [gone.id, gone.at]));
+
+  // Their order first, so both devices settle on the order the server holds
+  // and anything only this one knows about is appended in the order it was
+  // made, rather than the two of them shuffling on every sync.
+  const byId = new Map();
+  for (const item of theirs.items || []) byId.set(item.id, item);
+  for (const item of mine.items || []) {
+    const held = byId.get(item.id);
+    if (!held || (item.updatedAt || 0) > (held.updatedAt || 0)) byId.set(item.id, item);
+  }
+
+  const items = [...byId.values()].filter((item) => {
+    const at = buriedAt.get(item.id);
+    return at === undefined || (item.updatedAt || 0) > at;
+  });
+
+  const newer = (theirs.updatedAt || 0) > (mine.updatedAt || 0) ? theirs : mine;
+  return {
+    ...newer,
+    // Always the server's word on who owns this and what they allowed. Taking
+    // it from the newer side would let a withdrawn editor invitation keep
+    // working for as long as that device kept saving.
+    sharedFrom: theirs.sharedFrom || mine.sharedFrom || null,
+    items,
+    removedItems,
+    updatedAt: Math.max(mine.updatedAt || 0, theirs.updatedAt || 0),
+  };
+}
+
+/**
+ * What a folder's items add up to, for asking whether anything moved.
+ *
+ * Compared rather than trusted to the clock: a merge that took one pin from
+ * this device leaves the folder's own timestamp reading exactly as the
+ * server's does, and a push decided on timestamps alone would never send it.
+ */
+function itemSignature(folder) {
+  const items = (folder.items || [])
+    .map((item) => `${item.id}@${item.updatedAt || 0}`).sort().join(',');
+  const gone = (folder.removedItems || [])
+    .map((entry) => `${entry.id}@${entry.at || 0}`).sort().join(',');
+  return `${items}|${gone}`;
+}
+
+/**
+ * Decide what each side needs.
+ *
+ * @param {object[]} local   folders from FolderStore
+ * @param {object[]} remote  the reader's own folders, from rowToFolder()
+ * @param {object[]|null} shared  folders shared with them, already marked, or
+ *   null when that read failed and the ones already in hand should stand
+ * @returns {{merged, toPush, toPushShared, pulled, pushed, conflicts}}
+ */
+export function mergeFolders(local, remote, shared = null, { now = Date.now() } = {}) {
   /*
-   * A folder somebody else shared is not this device's to push.
+   * A folder somebody else shared is not this device's to offer up.
    *
    * It arrives through the same store as everything else so the map and the
    * folder list can draw it without special cases, which means it also reaches
-   * this function looking exactly like a local folder that the server has not
-   * heard of - and the next line would offer it back under the reader's own
-   * user id. The row-level policy refuses that write, so the failure is a
-   * rejected upsert rather than a stolen folder, but a sync that reports
-   * "failed" every time somebody looks at a shared trip is its own bug.
+   * this function looking exactly like a local folder the server has not heard
+   * of - and mergeOwnFolders would offer it back under the reader's own user
+   * id. The row policy refuses that write, so the failure is a rejected upsert
+   * rather than a stolen folder, but a sync that reports "failed" every time
+   * somebody looks at a shared trip is its own bug.
    *
-   * Held out of the merge entirely and put back at the end, so it survives
-   * replaceAll without ever being a candidate to send.
+   * So they are taken out of the ownership merge entirely and settled
+   * separately below, against the server's current view of what is shared.
    */
-  const heldBack = local.filter((folder) => folder?.sharedFrom);
+  const localShared = local.filter((folder) => folder?.sharedFrom);
   const mine = local.filter((folder) => !folder?.sharedFrom);
   const result = mergeOwnFolders(mine, remote);
-  return { ...result, merged: [...result.merged, ...heldBack] };
+
+  // The read of what is shared failed. Keep what is already in hand rather
+  // than concluding from silence that every invitation was withdrawn.
+  if (shared === null) {
+    return { ...result, merged: [...result.merged, ...localShared], toPushShared: [] };
+  }
+
+  const held = new Map(localShared.map((folder) => [folder.id, folder]));
+  const toPushShared = [];
+
+  const settled = shared.map((theirs) => {
+    const ours = held.get(theirs.id);
+    // Nothing of ours to reconcile, or nothing we are allowed to have changed.
+    if (!ours || !canEdit(theirs)) return theirs;
+
+    const merged = mergeCoEdited(ours, theirs, { now });
+    const renamedHere = (ours.updatedAt || 0) > (theirs.updatedAt || 0);
+    if (renamedHere || itemSignature(merged) !== itemSignature(theirs)) toPushShared.push(merged);
+    return merged;
+  });
+
+  return {
+    ...result,
+    merged: [...result.merged, ...settled],
+    toPushShared,
+    pushed: result.pushed + toPushShared.length,
+  };
 }
 
 function mergeOwnFolders(local, remote) {

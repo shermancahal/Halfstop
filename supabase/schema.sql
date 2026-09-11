@@ -33,6 +33,18 @@ create table if not exists public.folders (
   -- included: their bytes stay on the device, and only ids travel.
   items       jsonb not null default '[]'::jsonb,
 
+  -- {from, to, retired} when this folder is a trip, null when it is not. A
+  -- trip is already a property of a folder in the browser, so it wants a
+  -- column here and not a table of its own.
+  trip        jsonb,
+
+  -- Item tombstones: {id, at} for each waypoint removed, beside the items
+  -- rather than inside them. Co-editing has to tell "the other person deleted
+  -- this" from "this device has not seen it yet", which absence cannot say.
+  -- Inside `items` they would be every reader's problem - the map, GPX, KML,
+  -- export - and here they are nobody's but sync's.
+  removed_items jsonb not null default '[]'::jsonb,
+
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),
 
@@ -44,6 +56,8 @@ create index if not exists folders_user_idx on public.folders (user_id, updated_
 -- Added after the table shipped, so an existing install gets the column by
 -- running this file again rather than by dropping anything.
 alter table public.folders add column if not exists parent_id text;
+alter table public.folders add column if not exists trip jsonb;
+alter table public.folders add column if not exists removed_items jsonb not null default '[]'::jsonb;
 
 -- Row-level security. Without this every signed-in user could read every other
 -- user's folders, since the publishable key is by design public.
@@ -57,8 +71,21 @@ create policy "folders are private to their owner"
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
--- Belt and braces: even if a client sends someone else's user_id, stamp the
--- row with the authenticated user. The policy above would reject it anyway.
+-- Belt and braces on insert: even if a client sends someone else's user_id,
+-- stamp the row with the authenticated user. The policy above would reject it
+-- anyway.
+--
+-- An update never changes hands. This stamped user_id on insert and update
+-- alike, which was harmless while only an owner could write, because the value
+-- it wrote back was the one already there. The moment a collaborator can
+-- update, that same line hands them the folder: it would leave the owner's
+-- account on the collaborator's first edit and arrive in theirs, silently,
+-- with the owner's copy simply gone.
+--
+-- Filing and deletion stay with the owner for the same reason. A collaborator
+-- edits what is in a folder, not whether the owner still has it or where they
+-- keep it. A WITH CHECK cannot express that, because it cannot see the row as
+-- it was; here the old row is in hand, so it can.
 create or replace function public.folders_set_owner()
 returns trigger
 language plpgsql
@@ -66,7 +93,16 @@ security definer
 set search_path = public
 as $$
 begin
-  new.user_id := auth.uid();
+  if tg_op = 'INSERT' then
+    new.user_id := auth.uid();
+  else
+    new.user_id := old.user_id;
+    if auth.uid() is distinct from old.user_id then
+      new.parent_id := old.parent_id;
+      new.deleted := old.deleted;
+      new.created_at := old.created_at;
+    end if;
+  end if;
   new.updated_at := coalesce(new.updated_at, now());
   return new;
 end;
@@ -112,6 +148,11 @@ create table if not exists public.folder_shares (
   folder_name    text not null default '',
   invited_by     text not null default '',
 
+  -- What the invitation allows: 'viewer' to look, 'editor' to work on it too.
+  -- Defaulted to the narrower of the two, so an invitation written by anything
+  -- that has not heard of this column grants what it always granted.
+  role           text not null default 'viewer',
+
   -- Revoked rather than deleted, so "this was shared and then withdrawn" is
   -- distinguishable from "never shared".
   revoked        boolean not null default false,
@@ -123,6 +164,11 @@ create table if not exists public.folder_shares (
 
 create index if not exists folder_shares_invited_idx
   on public.folder_shares (lower(invited_email)) where not revoked;
+
+alter table public.folder_shares add column if not exists role text not null default 'viewer';
+alter table public.folder_shares drop constraint if exists folder_shares_role_check;
+alter table public.folder_shares add constraint folder_shares_role_check
+  check (role in ('viewer', 'editor'));
 
 alter table public.folder_shares enable row level security;
 
@@ -163,6 +209,41 @@ create policy "a shared folder is readable by whoever it names"
       where s.owner_id = folders.user_id
         and s.client_id = folders.client_id
         and not s.revoked
+        and lower(s.invited_email) = lower(auth.jwt() ->> 'email')
+    )
+  );
+
+-- And a folder shared for editing becomes writable by them, which being able
+-- to read it never implied.
+--
+-- Again a separate policy: an invitation that does not say 'editor' grants
+-- exactly what it granted before this existed. Insert and delete stay with the
+-- owner, so a collaborator can change what is in a folder and cannot create
+-- one in somebody else's name or remove theirs.
+drop policy if exists "a co-edited folder is writable by whoever it names" on public.folders;
+create policy "a co-edited folder is writable by whoever it names"
+  on public.folders
+  for update
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.folder_shares s
+      where s.owner_id = folders.user_id
+        and s.client_id = folders.client_id
+        and not s.revoked
+        and s.role = 'editor'
+        and lower(s.invited_email) = lower(auth.jwt() ->> 'email')
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.folder_shares s
+      where s.owner_id = folders.user_id
+        and s.client_id = folders.client_id
+        and not s.revoked
+        and s.role = 'editor'
         and lower(s.invited_email) = lower(auth.jwt() ->> 'email')
     )
   );

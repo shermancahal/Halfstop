@@ -9,7 +9,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { mergeFolders, rowToFolder, folderToRow, describeSync, missingColumn } from '../assets/js/lib/sync.js';
+import {
+  mergeFolders, mergeCoEdited, rowToFolder, folderToRow, describeSync, missingColumn,
+} from '../assets/js/lib/sync.js';
+import { markShared } from '../assets/js/lib/shares.js';
+import { REMOVAL_LIFE } from '../assets/js/lib/folders.js';
 import { FolderStore } from '../assets/js/lib/folders.js';
 
 const folder = (id, updatedAt, extra = {}) => ({
@@ -291,4 +295,152 @@ test('merge: a tie over anything but the parent is still quiet', () => {
   );
   assert.deepEqual(result.toPush, []);
   assert.equal(result.pulled, 0);
+});
+
+/* ------------------------------------------------------- co-editing */
+
+/*
+ * The case whole-folder last-write-wins gets wrong, and the reason per-item
+ * merging exists. Everything below is about two people on one folder, where
+ * "the newer save wins" quietly discards somebody's afternoon.
+ */
+
+const shared = (id, updatedAt, extra = {}, role = 'editor') => markShared(
+  folder(id, updatedAt, extra),
+  { ownerId: 'owner-1', ownerName: 'Sherman', role },
+);
+
+const item = (id, updatedAt, name = id) => ({
+  id,
+  updatedAt,
+  feature: { type: 'Feature', geometry: { type: 'Point', coordinates: [0, 0] }, properties: { name } },
+});
+
+test('co-edit: two people adding different pins keep both', () => {
+  const mine = shared('a', 20, { items: [item('p1', 10), item('p2', 20)] });
+  const theirs = shared('a', 30, { items: [item('p1', 10), item('p3', 30)] });
+
+  const merged = mergeCoEdited(mine, theirs);
+  assert.deepEqual(
+    merged.items.map((entry) => entry.id).sort(),
+    ['p1', 'p2', 'p3'],
+    'neither side loses the pin the other did not have',
+  );
+});
+
+test('co-edit: editing different pins in one folder keeps both edits', () => {
+  // The exact failure of folder-level last-write-wins: their folder is newer,
+  // so the whole of it would have won and my rename would have vanished.
+  const mine = shared('a', 20, { items: [item('p1', 20, 'my rename'), item('p2', 5)] });
+  const theirs = shared('a', 30, { items: [item('p1', 5), item('p2', 30, 'their rename')] });
+
+  const merged = mergeCoEdited(mine, theirs);
+  const byId = new Map(merged.items.map((entry) => [entry.id, entry.feature.properties.name]));
+  assert.equal(byId.get('p1'), 'my rename');
+  assert.equal(byId.get('p2'), 'their rename');
+});
+
+test('co-edit: the same pin edited twice keeps the later edit', () => {
+  const mine = shared('a', 20, { items: [item('p1', 20, 'mine')] });
+  const theirs = shared('a', 30, { items: [item('p1', 30, 'theirs')] });
+
+  assert.equal(mergeCoEdited(mine, theirs).items[0].feature.properties.name, 'theirs');
+  assert.equal(mergeCoEdited(theirs, mine).items[0].feature.properties.name, 'theirs');
+});
+
+test('co-edit: a deletion travels, rather than being undone by the other side', () => {
+  // Absence alone cannot say this: without the tombstone, their copy of p2
+  // simply looks like a pin my device has not been told about yet.
+  const mine = shared('a', 40, { items: [item('p1', 10)], removedItems: [{ id: 'p2', at: 40 }] });
+  const theirs = shared('a', 30, { items: [item('p1', 10), item('p2', 20)] });
+
+  // An explicit clock, because a tombstone is pruned once it is older than the
+  // removal life and these timestamps are small numbers rather than real ones.
+  const merged = mergeCoEdited(mine, theirs, { now: 100 });
+  assert.deepEqual(merged.items.map((entry) => entry.id), ['p1']);
+  assert.deepEqual(merged.removedItems, [{ id: 'p2', at: 40 }], 'and stays deleted next time');
+});
+
+test('co-edit: a pin edited after it was deleted comes back', () => {
+  // Deliberate. The edit is the later statement of what somebody wanted, and
+  // an unwanted pin is easier to delete again than a lost edit is to retype.
+  const mine = shared('a', 40, { items: [], removedItems: [{ id: 'p1', at: 20 }] });
+  const theirs = shared('a', 50, { items: [item('p1', 30, 'still wanted')] });
+
+  const merged = mergeCoEdited(mine, theirs, { now: 100 });
+  assert.deepEqual(merged.items.map((entry) => entry.id), ['p1']);
+});
+
+test('co-edit: a tombstone older than the removal life stops holding a pin down', () => {
+  // The bound on how long a deletion is remembered, and the cost of it: a
+  // device that has been in a drawer for longer than this re-adds what it is
+  // still carrying. Bounded on purpose - kept for ever, a folder worked on for
+  // years carries a record of every pin ever dropped in it.
+  const mine = shared('a', 40, { items: [], removedItems: [{ id: 'p1', at: 1000 }] });
+  const theirs = shared('a', 50, { items: [item('p1', 500)] });
+
+  const merged = mergeCoEdited(mine, theirs, { now: 1000 + REMOVAL_LIFE + 1 });
+  assert.deepEqual(merged.items.map((entry) => entry.id), ['p1']);
+  assert.deepEqual(merged.removedItems, [], 'and the tombstone is not carried for ever');
+});
+
+test('co-edit: the folder itself goes with the newer save, whole', () => {
+  const mine = shared('a', 20, { name: 'Mine', color: '#111111' });
+  const theirs = shared('a', 30, { name: 'Theirs', color: '#222222' });
+
+  const merged = mergeCoEdited(mine, theirs);
+  assert.equal(merged.name, 'Theirs');
+  assert.equal(merged.color, '#222222', 'not half of each');
+});
+
+test('co-edit: the role always comes from the server', () => {
+  // A withdrawn editor invitation must not keep working because the device
+  // that had it kept saving and therefore kept winning the timestamp.
+  const mine = shared('a', 90, {}, 'editor');
+  const theirs = shared('a', 10, {}, 'viewer');
+  assert.equal(mergeCoEdited(mine, theirs).sharedFrom.role, 'viewer');
+});
+
+/* --------------------------------------------- co-editing through a sync */
+
+test('sync: a folder shared read-only is never pushed back', () => {
+  const mine = shared('a', 99, { items: [item('p1', 99)] }, 'viewer');
+  const result = mergeFolders([mine], [], [shared('a', 10, { items: [] }, 'viewer')]);
+
+  assert.deepEqual(result.toPushShared, [], 'looking at it is not editing it');
+  assert.deepEqual(result.merged.map((entry) => entry.id), ['a']);
+  assert.deepEqual(result.merged[0].items, [], 'the server is what a viewer sees');
+});
+
+test('sync: a co-edited folder is pushed when this device added a pin', () => {
+  const mine = shared('a', 20, { items: [item('p1', 10), item('p2', 20)] });
+  const theirs = shared('a', 20, { items: [item('p1', 10)] });
+
+  const result = mergeFolders([mine], [], [theirs]);
+  assert.equal(result.toPushShared.length, 1, 'the timestamps tie, so only the items say so');
+  assert.deepEqual(result.toPushShared[0].items.map((entry) => entry.id), ['p1', 'p2']);
+});
+
+test('sync: a co-edited folder with nothing new is left alone', () => {
+  const both = { items: [item('p1', 10)] };
+  const result = mergeFolders([shared('a', 20, both)], [], [shared('a', 20, both)]);
+  assert.deepEqual(result.toPushShared, []);
+});
+
+test('sync: a shared folder is never offered up as one of your own', () => {
+  const result = mergeFolders([shared('a', 20)], [], [shared('a', 20)]);
+  assert.deepEqual(result.toPush, [], 'toPush is for folders this account owns');
+});
+
+test('sync: a failed read of what is shared keeps what is already in hand', () => {
+  // Silence is not the news that every invitation was withdrawn.
+  const mine = shared('a', 20, { items: [item('p1', 10)] });
+  const result = mergeFolders([mine], [], null);
+  assert.deepEqual(result.merged.map((entry) => entry.id), ['a']);
+  assert.deepEqual(result.toPushShared, []);
+});
+
+test('sync: an invitation withdrawn removes the folder from this device', () => {
+  const result = mergeFolders([shared('a', 20)], [], []);
+  assert.deepEqual(result.merged, [], 'the server is the authority on what is shared');
 });
