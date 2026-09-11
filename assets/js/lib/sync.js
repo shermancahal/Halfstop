@@ -319,8 +319,8 @@ export function describeSync({ pulled, pushed, conflicts }) {
   if (conflicts?.length) {
     const kept = conflicts[0].kept;
     text += conflicts.length === 1
-      ? ` — “${conflicts[0].name}” changed in both places, kept the ${kept} copy`
-      : ` — ${conflicts.length} folders changed in both places, kept the newer copy of each`;
+      ? `. “${conflicts[0].name}” changed in both places, kept the ${kept} copy`
+      : `. ${conflicts.length} folders changed in both places, kept the newer copy of each`;
   }
   return text;
 }
