@@ -176,7 +176,16 @@ async function fetchBody(id: string, key: string): Promise<string> {
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return reply(405, { error: 'Use POST.' });
 
-  const expected = Deno.env.get('SUPPORT_WEBHOOK_SECRET') || '';
+  // Trimmed because this value is typed into a dashboard field, and a paste
+  // that brought a newline along with it looks identical to the right secret
+  // while being a different string to compare against. That cost one full
+  // round of "the secret is set and it still says no": the stored value was
+  // the right forty-eight characters with two more of whitespace around them.
+  //
+  // Only this side is trimmed. What arrives in the request is compared exactly
+  // as it arrived, so this forgives a paste into the dashboard without also
+  // widening what an unknown caller is allowed to send.
+  const expected = (Deno.env.get('SUPPORT_WEBHOOK_SECRET') || '').trim();
   if (!expected) return reply(503, { error: 'This endpoint has no secret configured, so it accepts nothing.' });
 
   const given = req.headers.get('x-halfstop-secret')
