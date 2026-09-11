@@ -382,28 +382,51 @@ it. The page is not secret and does not need to be.
 Resend receives inbound mail and posts it to a webhook, which
 `supabase/functions/support-inbound` turns into a row.
 
-Where this stands: every moving part has now been proven by a real message,
-and one string is wrong.
+Where this stands: mail written to support@halfstop.app becomes a ticket. The
+one thing not yet working is the body.
 
-A test sent to support@halfstop.app arrived at queue@inbound.halfstop.app
-twenty-nine seconds later, so the MX record and the SiteGround forward both
-work. Resend raised an `email.received` event, delivered it, and the function
-ran and answered — which is also the proof that the gateway check is off, since
-a reply written in this repository came back rather than one written by
-Supabase. `support-inbound` is deployed to `gqemcvuushtfbbbxypvf` with
+Proven by real messages on 11 September. A test sent to support@halfstop.app
+reached queue@inbound.halfstop.app through the SiteGround forward, Resend
+raised an `email.received` event, `support-inbound` authorised it and filed a
+row, and `admin.html` has a ticket with its sender, subject and status.
+`support-inbound` is deployed to `gqemcvuushtfbbbxypvf` with
 `verify_jwt: false`, and the `external_id` block is applied as the migration
-`support_tickets_external_id_unique`: the column is nullable with no default,
-and `support_tickets_external_id_key` is a unique index on it. That index is
-not housekeeping. The function upserts with `onConflict: 'external_id'`, which
-Postgres rejects outright unless a unique constraint matches, so without it
-every delivery would fail at the insert.
+`support_tickets_external_id_unique` — nullable column, no default, and
+`support_tickets_external_id_key` unique on it. That index is not housekeeping.
+The function upserts with `onConflict: 'external_id'`, which Postgres rejects
+outright unless a unique constraint matches, so without it every delivery would
+fail at the insert.
 
-What is left is that `SUPPORT_WEBHOOK_SECRET` and the secret in the webhook's
-URL are not the same string. The delivery came back `401 {"error":"No."}`.
-`RESEND_API_KEY` is set as well but still unproven, because the body fetch only
-happens after the secret check passes and nothing has got that far.
+Every ticket arrives with an empty body, and the function log says why: all
+three body paths answer `401` from Resend. The key is set, so this is about
+which key. A Resend key created for **sending access** is refused on every
+read endpoint, and the key this project already had was made for the site build
+to send authentication mail. Reading a received message needs **full access**.
+That is the remaining step: create a full-access key in Resend and put it in
+`RESEND_API_KEY` under Edge Functions → Secrets.
 
-### Telling the three refusals apart
+One thing that step will also settle. The three paths in `BODY_PATHS` are
+tried rather than asserted, and a 401 is returned before a path is resolved, so
+a wrong path and a wrong key look identical from here. With a full-access key
+in place the log says which it was: a body, or three 404s.
+
+### Both secrets arrived padded, and it cost two rounds
+
+Both values are typed into a dashboard field, and both were pasted with
+whitespace around them. It is invisible there and changes nothing you can see,
+and it produced two failures that looked unrelated:
+
+- `SUPPORT_WEBHOOK_SECRET` held the right forty-eight characters padded to
+  fifty. Every delivery came back `401 {"error":"No."}` from this function.
+- `RESEND_API_KEY` was padded too, which on its own would have refused the body
+  fetch at Resend's door instead.
+
+The function now reads every environment value through one `env()` that trims,
+so neither can happen again. Only what is read from the environment is
+trimmed — what arrives in a request is still compared exactly as it arrived, so
+this forgives a paste without widening what an unknown caller may send.
+
+### Telling the refusals apart
 
 They look alike from Resend's side and mean quite different things, so read the
 body rather than the status.
@@ -415,14 +438,15 @@ body rather than the status.
   `SUPPORT_WEBHOOK_SECRET` is unset. It is refusing on purpose rather than
   accepting anonymous posts.
 - **401, `{"error":"No."}`.** The function ran, the secret is set, and it does
-  not match what arrived. Expect this after setting the secret to anything but
-  the exact value in the webhook's URL — note that the signing secret Resend
-  shows once at creation is a different string, and is not what this compares
-  against.
+  not match what arrived. The signing secret Resend shows once at creation is a
+  different string and is not what this compares against.
+- **200, and a ticket with no body.** The secret matched and the message filed.
+  The body fetch failed separately — read the function log for the status
+  Resend gave: `401` is the key, `404` on all three is the path.
 
-**Logs → Edge Functions** settles the last one from the other side: it prints
+**Logs → Edge Functions** settles the middle two from the other side: it prints
 the full request URL, query string included, so the value Resend actually sent
-can be read back and compared against the dashboard rather than guessed at.
+can be read back and compared rather than guessed at.
 
 Nothing is lost while it waits. Resend stores every received message whether or
 not the webhook succeeds, and a delivery that failed can be replayed once the
