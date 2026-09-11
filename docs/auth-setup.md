@@ -382,32 +382,47 @@ it. The page is not secret and does not need to be.
 Resend receives inbound mail and posts it to a webhook, which
 `supabase/functions/support-inbound` turns into a row.
 
-Where this stands: the MX record, the forward from support@halfstop.app, and
-the webhook are done and proven by real messages. So is the Supabase side,
-apart from the two secrets, which can only be typed into the dashboard.
+Where this stands: every moving part has now been proven by a real message,
+and one string is wrong.
 
-Done. `support-inbound` is deployed to `gqemcvuushtfbbbxypvf`, and the API
-reports `verify_jwt: false` on it, which is the one function here that wants
-that. The `external_id` block has been applied as the migration
+A test sent to support@halfstop.app arrived at queue@inbound.halfstop.app
+twenty-nine seconds later, so the MX record and the SiteGround forward both
+work. Resend raised an `email.received` event, delivered it, and the function
+ran and answered — which is also the proof that the gateway check is off, since
+a reply written in this repository came back rather than one written by
+Supabase. `support-inbound` is deployed to `gqemcvuushtfbbbxypvf` with
+`verify_jwt: false`, and the `external_id` block is applied as the migration
 `support_tickets_external_id_unique`: the column is nullable with no default,
 and `support_tickets_external_id_key` is a unique index on it. That index is
-not housekeeping. The function upserts with `onConflict: 'external_id'`, and
-Postgres rejects that outright unless a unique constraint matches, so until it
-existed every delivery would have failed at the insert.
+not housekeeping. The function upserts with `onConflict: 'external_id'`, which
+Postgres rejects outright unless a unique constraint matches, so without it
+every delivery would fail at the insert.
 
-Outstanding, and both in Edge Functions → Secrets:
+What is left is that `SUPPORT_WEBHOOK_SECRET` and the secret in the webhook's
+URL are not the same string. The delivery came back `401 {"error":"No."}`.
+`RESEND_API_KEY` is set as well but still unproven, because the body fetch only
+happens after the secret check passes and nothing has got that far.
 
-1. `SUPPORT_WEBHOOK_SECRET`, set to the value in the webhook's URL. It is not
-   written down here on purpose. Read it back from Resend rather than inventing
-   a new one, because the two have to agree: the webhook list shows the full
-   endpoint, secret and all.
-2. `RESEND_API_KEY`. It is already a GitHub secret for the site build, which is
-   a different place the function cannot read. Without it every ticket arrives
-   with a subject and an empty body.
+### Telling the three refusals apart
 
-Until the first of those is set the function answers every delivery with a 503
-saying it has no secret configured, which is the refusal it is written to make
-rather than a fault. It files nothing until the secret is there.
+They look alike from Resend's side and mean quite different things, so read the
+body rather than the status.
+
+- **401, and a body naming a missing authorization header.** Supabase's own
+  words, not this repository's. The gateway refused before the function ran, so
+  it was deployed with `verify_jwt` on. Redeploy it off.
+- **503, `This endpoint has no secret configured`.** The function ran and
+  `SUPPORT_WEBHOOK_SECRET` is unset. It is refusing on purpose rather than
+  accepting anonymous posts.
+- **401, `{"error":"No."}`.** The function ran, the secret is set, and it does
+  not match what arrived. Expect this after setting the secret to anything but
+  the exact value in the webhook's URL — note that the signing secret Resend
+  shows once at creation is a different string, and is not what this compares
+  against.
+
+**Logs → Edge Functions** settles the last one from the other side: it prints
+the full request URL, query string included, so the value Resend actually sent
+can be read back and compared against the dashboard rather than guessed at.
 
 Nothing is lost while it waits. Resend stores every received message whether or
 not the webhook succeeds, and a delivery that failed can be replayed once the
