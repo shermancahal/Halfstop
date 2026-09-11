@@ -424,6 +424,17 @@ Deploy it with `verify_jwt` **off**, which is the one function here that does:
 supabase functions deploy support-inbound --no-verify-jwt
 ```
 
+`supabase/config.toml` declares the same thing for all three functions, so a
+redeploy from the repo root gets it right without the flag. Deployed with the
+gateway check on, Supabase answers Resend with a 401 before the function runs,
+and the symptom is a webhook that keeps failing with nothing whatever in the
+function log, because the function was never reached.
+
+Resend stores received mail whether or not a webhook exists. Mail sitting in
+the Receiving tab therefore proves the MX record and the forward, and proves
+nothing at all about the webhook, the function, or the table. Until a webhook
+exists, every message simply stops there.
+
 Every other function in this project requires a session because a person is on
 the other end. Resend has no session and never will, so this one authorises the
 caller itself: a shared secret, compared in constant time so a wrong one cannot

@@ -1,0 +1,19 @@
+# Deploy settings the CLI reads, so they are not a flag somebody has to
+# remember on the day they redeploy.
+project_id = "gqemcvuushtfbbbxypvf"
+
+# Resend has no session and never will, so this one authorises its own
+# caller with a shared secret and must be reachable without a JWT. Deployed
+# with the gateway check on, Supabase returns 401 before the function runs,
+# and the symptom is a webhook that fails with nothing in the function log.
+[functions.support-inbound]
+verify_jwt = false
+
+# The other two are called by a signed-in person, and read the user id from
+# the verified token rather than from the request body. The gateway check
+# stays on.
+[functions.delete-account]
+verify_jwt = true
+
+[functions.invite-to-folder]
+verify_jwt = true
