@@ -11,7 +11,7 @@
 
 import { SUPABASE_URL, SUPABASE_KEY } from '../config.js';
 import { mergeFolders, rowToFolder, folderToRow, missingColumn } from './sync.js';
-import { markShared, normaliseEmail } from './shares.js';
+import { canEdit, markShared, normaliseEmail } from './shares.js';
 
 const SUPABASE_VERSION = '2.45.4';
 const CDN = `https://cdn.jsdelivr.net/npm/@supabase/supabase-js@${SUPABASE_VERSION}/+esm`;
@@ -25,6 +25,15 @@ const INVITE_FUNCTION = 'invite-to-folder';
 
 /** Invitations, kept beside the folders they are about. */
 const SHARES = 'folder_shares';
+
+/**
+ * Columns added to `folders` after it shipped.
+ *
+ * Named in one place because the handling is identical: a database that has
+ * not run the current schema.sql rejects the whole row over any one of them,
+ * and the push has to go out again without it rather than lose the edit.
+ */
+const LATER_COLUMNS = ['parent_id', 'trip', 'removed_items'];
 
 /** The support queue. Readable by one address, decided server-side. */
 const TICKETS = 'support_tickets';
@@ -121,6 +130,16 @@ export class Account extends EventTarget {
     this.message = '';
     this.syncing = false;
     this.lastSyncAt = null;
+    /*
+     * Columns this server turns out not to have.
+     *
+     * A set rather than a flag each, because the failure is the same every
+     * time and the handling should be too: Postgres rejects the whole row over
+     * one unknown column, so adding a column to this file once broke every
+     * push for anybody who had not run schema.sql again - a rename, a new pin
+     * and a colour change all stopped travelling, not only the new thing.
+     */
+    this.missingColumns = new Set();
   }
 
   emit() {
@@ -418,18 +437,25 @@ export class Account extends EventTarget {
     try {
       const [{ data: rows, error: rowsError }, { data: invites, error: invitesError }] = await Promise.all([
         client.from(TABLE).select('*').neq('user_id', this.user.id),
-        client.from(SHARES).select('owner_id, client_id, invited_by').neq('owner_id', this.user.id),
+        client.from(SHARES).select('owner_id, client_id, invited_by, role').neq('owner_id', this.user.id),
       ]);
       if (rowsError) throw new Error(rowsError.message);
       if (invitesError) throw new Error(invitesError.message);
 
-      const named = new Map((invites || []).map((row) => [`${row.owner_id}:${row.client_id}`, row.invited_by]));
+      const byFolder = new Map((invites || []).map((row) => [`${row.owner_id}:${row.client_id}`, row]));
       return (rows || [])
         .filter((row) => !row.deleted)
-        .map((row) => markShared(rowToFolder(row), {
-          ownerId: row.user_id,
-          ownerName: named.get(`${row.user_id}:${row.client_id}`) || 'somebody',
-        }));
+        .map((row) => {
+          const invite = byFolder.get(`${row.user_id}:${row.client_id}`);
+          return markShared(rowToFolder(row), {
+            ownerId: row.user_id,
+            ownerName: invite?.invited_by || 'somebody',
+            // Read every sync, never remembered. Withdrawing the right to edit
+            // has to take effect on the next sync, not whenever the device
+            // that had it happens to be reinstalled.
+            role: invite?.role,
+          });
+        });
     } catch (error) {
       console.warn('[account] could not read shared folders:', error?.message || error);
       return null;
@@ -596,34 +622,51 @@ export class Account extends EventTarget {
        */
       const rows = data || [];
       const knowsParents = !rows.length || rows.some((row) => 'parent_id' in row);
-      this.noParentColumn = rows.length > 0 && !knowsParents;
+        this.noteMissingColumns(rows);
 
       const local = this.folders.snapshot();
-      const filedAt = new Map(local.map((folder) => [folder.id, folder.parentId || null]));
+      const held = new Map(local.map((folder) => [folder.id, folder]));
       const remote = rows.map((row) => {
         const folder = rowToFolder(row);
-        if (!knowsParents) folder.parentId = filedAt.get(folder.id) || null;
+        const ours = held.get(folder.id);
+        /*
+         * A column the server does not have comes back as silence, and silence
+         * is not an instruction. Read as an answer, an un-migrated database
+         * flattens the tree, clears the trip dates and forgets every deletion
+         * on every sync - silently, for whichever side happened to be newer.
+         * So each remote row is given back whatever this device already
+         * believes, and nothing travels or is destroyed until the column
+         * exists.
+         */
+        if (!knowsParents) folder.parentId = ours?.parentId || null;
+        if (this.missingColumns.has('trip')) folder.trip = ours?.trip || null;
+        if (this.missingColumns.has('removed_items')) folder.removedItems = ours?.removedItems || [];
         return folder;
       });
-      const result = mergeFolders(local, remote);
 
       /*
        * The server is the authority on what is shared, every sync.
        *
-       * mergeFolders holds shared folders back so a sync cannot offer them
-       * up, which also means it hands them back unchanged. Replacing them
-       * with a fresh read is what makes a withdrawn invitation disappear
-       * rather than linger as a copy nobody can see any more. A read that
-       * failed returns null and keeps what is already there.
+       * Read before the merge rather than after it, because a folder shared
+       * for editing is now merged against its remote copy rather than simply
+       * replaced - and a withdrawn invitation has to disappear rather than
+       * linger as a copy nobody else can see. A read that failed returns null,
+       * which the merge reads as "keep what is in hand" rather than as news
+       * that every invitation was withdrawn.
        */
       const shared = await this.pullShared(client);
-      this.folders.replaceAll(shared === null
-        ? result.merged
-        : [...result.merged.filter((folder) => !folder.sharedFrom), ...shared]);
+      const result = mergeFolders(local, remote, shared);
+
+      this.folders.replaceAll(result.merged);
 
       if (result.toPush.length) {
         const { error: upsertError } = await this.upsertFolders(client, result.toPush);
         if (upsertError) throw new Error(upsertError.message);
+      }
+
+      if (result.toPushShared?.length) {
+        const { error: sharedError } = await this.updateShared(client, result.toPushShared);
+        if (sharedError) throw new Error(sharedError.message);
       }
 
       this.lastSyncAt = Date.now();
@@ -649,22 +692,86 @@ export class Account extends EventTarget {
    * without the column and the session remembers, so the next push is one
    * request rather than two.
    */
+  /** Which of the newer columns this server answered with, so a push can re-arm. */
+  noteMissingColumns(rows) {
+    if (!rows.length) return;
+    for (const column of LATER_COLUMNS) {
+      if (rows.some((row) => column in row)) this.missingColumns.delete(column);
+      else this.missingColumns.add(column);
+    }
+  }
+
+  /** What to send, given what this server has turned out not to have. */
+  columnOptions() {
+    return {
+      withParent: !this.missingColumns.has('parent_id'),
+      withTrip: !this.missingColumns.has('trip'),
+      withRemovals: !this.missingColumns.has('removed_items'),
+    };
+  }
+
+  /**
+   * Send rows, dropping any column the server turns out not to have.
+   *
+   * Retried rather than guessed at, and only for the one rejection that means
+   * "this database has not been migrated". Anything else the server refuses is
+   * returned as it came, because a push that quietly strips columns until
+   * something is accepted is a push that loses an edit without saying so.
+   */
+  async sendTolerantly(send) {
+    for (let attempt = 0; attempt <= LATER_COLUMNS.length; attempt += 1) {
+      const result = await send(this.columnOptions());
+      if (!result?.error) return result;
+
+      const named = LATER_COLUMNS.find((column) => !this.missingColumns.has(column)
+        && missingColumn(result.error.message, column));
+      if (!named) return result;
+
+      // Said once per column. Worth knowing that something is not travelling,
+      // not worth saying again on every edit for the rest of the session.
+      this.missingColumns.add(named);
+      console.warn(`[account] folders.${named} is missing; run supabase/schema.sql again so it can sync.`);
+    }
+    return send(this.columnOptions());
+  }
+
   async upsertFolders(client, folders) {
-    const send = (withParent) => client
+    return this.sendTolerantly((options) => client
       .from(TABLE)
-      .upsert(folders.map((folder) => folderToRow(folder, this.user.id, { withParent })),
-        { onConflict: 'user_id,client_id' });
+      .upsert(folders.map((folder) => folderToRow(folder, this.user.id, options)),
+        { onConflict: 'user_id,client_id' }));
+  }
 
-    if (this.noParentColumn) return send(false);
+  /**
+   * Write back a folder somebody else owns and shared for editing.
+   *
+   * An update rather than an upsert, deliberately. Insert on this table is
+   * owner-only, and an upsert is an insert that may turn into an update - so
+   * it asks the policy for a permission a collaborator must not have, and gets
+   * a rejection that reads like a bug rather than like the rule it is. There
+   * is nothing to create here in any case: a collaborator can only change a
+   * folder that already exists.
+   *
+   * One at a time because each row is keyed by a different owner. The first
+   * refusal stops the rest, so a revoked invitation does not spend a request
+   * per folder finding that out.
+   */
+  async updateShared(client, folders) {
+    for (const folder of folders) {
+      const ownerId = folder?.sharedFrom?.ownerId;
+      if (!ownerId || !canEdit(folder)) continue;
 
-    const first = await send(true);
-    if (!first.error || !missingColumn(first.error.message, 'parent_id')) return first;
-
-    // Said once. It is worth knowing that nesting is not travelling, and not
-    // worth saying again on every edit for the rest of the session.
-    this.noParentColumn = true;
-    console.warn('[account] folders.parent_id is missing; run supabase/schema.sql again for nesting to sync.');
-    return send(false);
+      const result = await this.sendTolerantly((options) => {
+        // The key identifies the row; sending it back as a value would be
+        // asking to change it. The trigger would refuse anyway.
+        const { user_id: _owner, client_id: _id, ...row } = folderToRow(folder, ownerId, options);
+        return client.from(TABLE).update(row)
+          .eq('user_id', ownerId)
+          .eq('client_id', folder.id);
+      });
+      if (result?.error) return result;
+    }
+    return { error: null };
   }
 
   /**
@@ -677,9 +784,14 @@ export class Account extends EventTarget {
    */
   async pushFolder(folder) {
     if (!this.user) return;
+    // Looking at somebody's folder is not editing it, and a push that the
+    // policy is certain to refuse is worth not making.
+    if (folder?.sharedFrom && !canEdit(folder)) return;
     try {
       const client = await this.getClient();
-      const { error } = await this.upsertFolders(client, [folder]);
+      const { error } = folder?.sharedFrom
+        ? await this.updateShared(client, [folder])
+        : await this.upsertFolders(client, [folder]);
       // A network error is left quiet - the next full sync carries it, and
       // interrupting an edit to say the wifi dropped helps nobody. Anything
       // the server actively refused is a different thing and has to be said.

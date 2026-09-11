@@ -457,7 +457,8 @@ test('account: a server with no parent_id column does not unfile anything', asyn
 
   await account.sync();
   assert.equal(store.list()[0].parentId, 'transport', 'the tree this device knows is left alone');
-  assert.equal(account.noParentColumn, true, 'and the push knows not to send a column that is not there');
+  assert.equal(account.missingColumns.has('parent_id'), true,
+    'and the push knows not to send a column that is not there');
 });
 
 test('account: the column appearing is noticed on the next sync, with no reload', async () => {
@@ -468,10 +469,11 @@ test('account: the column appearing is noticed on the next sync, with no reload'
     configured: () => true,
   });
   account.user = { id: 'u1' };
-  account.noParentColumn = true;
+  account.missingColumns.add('parent_id');
 
   await account.sync();
-  assert.equal(account.noParentColumn, false, 'a row carrying the key says the migration has been run');
+  assert.equal(account.missingColumns.has('parent_id'), false,
+    'a row carrying the key says the migration has been run');
 });
 
 test('account: an empty table is not evidence the column is missing', async () => {
@@ -480,5 +482,26 @@ test('account: an empty table is not evidence the column is missing', async () =
   account.user = { id: 'u1' };
 
   await account.sync();
-  assert.equal(account.noParentColumn, false);
+  assert.equal(account.missingColumns.has('parent_id'), false);
+});
+
+test('account: a server with no trip column does not clear the dates', async () => {
+  // The same silence, about a different column. Read as an answer, an
+  // un-migrated database retires every trip on the device that syncs against
+  // it - and the dates are not recoverable from anything else.
+  const rows = [{ ...row('rail'), updated_at: new Date(9000).toISOString() }];
+  const store = storeOf([{
+    id: 'rail', name: 'rail', updatedAt: 5000, items: [], deleted: false,
+    trip: { from: '2026-05-01', to: '2026-05-04' },
+  }]);
+  const account = new Account(store, { client: async () => dataClient(rows), configured: () => true });
+  account.user = { id: 'u1' };
+
+  await account.sync();
+  assert.deepEqual(
+    store.list()[0].trip,
+    { from: '2026-05-01', to: '2026-05-04' },
+    'the trip this device knows is left alone',
+  );
+  assert.equal(account.missingColumns.has('trip'), true);
 });
