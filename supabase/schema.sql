@@ -346,6 +346,20 @@ as $$
   end;
 $$;
 
+-- From PUBLIC, not only from anon.
+--
+-- Postgres grants EXECUTE on a new function to PUBLIC, and anon inherits that,
+-- so revoking from anon alone leaves the PUBLIC grant sitting behind it and the
+-- function stays callable with no session at all. Supabase's linter catches it;
+-- this is the fix it asks for.
+--
+-- The linter also reports that signed-in users can call a SECURITY DEFINER
+-- function, and that one is meant: this is how an account asks what it is
+-- entitled to. It has no arguments and reads auth.uid()'s own row and nothing
+-- else, which is why the answer is safe to give. SECURITY INVOKER is not an
+-- option, because reading auth.users is the whole point and authenticated
+-- cannot.
+revoke execute on function public.my_plan() from public;
 revoke execute on function public.my_plan() from anon;
 grant execute on function public.my_plan() to authenticated;
 
