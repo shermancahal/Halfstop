@@ -20,6 +20,7 @@
  */
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { allowedReturn, withFlag } from './returns.mjs';
 
 /** Trimmed, because a value pasted into a dashboard field brings whitespace. */
 function env(name: string): string {
@@ -193,12 +194,13 @@ Deno.serve(async (req: Request) => {
    * Where to send somebody afterwards, checked rather than trusted.
    *
    * An open redirect here would be a phishing page with our own domain in the
-   * referrer and a payment just behind it. Only our own site is accepted, and
-   * anything else falls back to it rather than being honoured.
+   * referrer and a payment just behind it. Only our own site is accepted -
+   * plus a loopback address while the keys are test keys, so a checkout begun
+   * on a development server ends on the same origin it began on and therefore
+   * on the same session. The rule is in returns.mjs, where it is tested.
    */
   const site = env('SITE_URL') || 'https://app.halfstop.app/';
-  const asked = String(body.returnTo || '');
-  const returnTo = asked.startsWith(site) ? asked : site;
+  const returnTo = allowedReturn(String(body.returnTo || ''), site, stripeKey.startsWith('sk_test_'));
 
   const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
     method: 'POST',
@@ -213,7 +215,7 @@ Deno.serve(async (req: Request) => {
       mode: 'subscription',
       'line_items[0][price]': priceId,
       'line_items[0][quantity]': '1',
-      success_url: `${returnTo}${returnTo.includes('?') ? '&' : '?'}subscribed=1`,
+      success_url: withFlag(returnTo),
       cancel_url: returnTo,
       // Prefilled so nobody pays under an address that is not their account,
       // which is the commonest way a payment ends up attached to nothing.
