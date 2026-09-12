@@ -259,8 +259,13 @@ The whole run, end to end:
    asks up to eight times over about twelve seconds, because the return trip
    and the webhook are two separate things and the webhook is usually, but not
    always, the faster of the two.
-6. The plan panel now reads Premium, and the buttons are replaced by **Manage
-   subscription**.
+6. The two price buttons are replaced by **Manage subscription**. That is the
+   visible proof, and it is the only one: the plan still reads *Free*, because
+   with `ABMAP_BILLING_LIVE` off the tier names and the countdown are
+   deliberately silent — every feature is open to everybody, and calling an
+   account Premium while that is true would be describing a restriction that
+   does not exist. Turn `ABMAP_BILLING_LIVE` on locally and the panel names the
+   tier and counts the days.
 
 And underneath, in the Supabase SQL editor:
 
