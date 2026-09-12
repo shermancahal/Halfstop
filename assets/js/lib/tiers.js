@@ -247,10 +247,34 @@ export function isBillingTester(user, { billing = BILLING } = {}) {
  * kept it. Backwards, and invisible, because the person it happened to would
  * simply not see a button.
  */
+/**
+ * Where an entitlement came from, when the answer is "somebody already has it".
+ *
+ * A list of what counts as settled rather than a list of what does not, with
+ * anything unrecognised falling through to being offered a purchase. That way
+ * round on purpose: a source nobody taught this about means at worst a button
+ * somebody presses and the checkout refuses with "you already subscribe",
+ * which is visible and harmless, while the other way round means a free
+ * account that is silently never shown a way to pay.
+ */
+const SETTLED = new Set(['granted', 'stripe', 'appstore']);
+
 export function offersUpgrade(summary) {
   if (!summary?.live) return false;
-  if (summary.tier?.id !== 'premium') return true;
-  return summary.source === 'trial';
+  /*
+   * Read off the source, never off the tier.
+   *
+   * `tierFor` flattens every account to Free while billing is off - correct
+   * for the panel, because every feature is open to everybody and naming a
+   * tier would describe a restriction that does not exist. But the test-mode
+   * preview forces `live: true` onto a summary built with billing off, so a
+   * check on `tier.id` saw Free for everybody and offered to sell Premium to
+   * an account that already had it, including one already paying by card.
+   *
+   * The source is the one field that says the same thing either way, so it is
+   * the one to ask.
+   */
+  return !SETTLED.has(summary.source);
 }
 
 /**

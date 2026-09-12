@@ -416,6 +416,49 @@ test('tiers: a trial is offered the thing that stops it ending', () => {
   assert.equal(offersUpgrade(null), false);
 });
 
+test('tiers: the test-mode panel does not try to sell to somebody who already pays', () => {
+  /*
+   * Reported from a phone: signed in on an account holding a permanent granted
+   * entitlement, the panel drew "$4.99 a month" and "$49 a year".
+   *
+   * The test above missed it by building its summaries by hand with
+   * `tier: { id: 'premium' }` - a shape planSummary never produces while
+   * billing is off, because tierFor flattens everybody to Free then. The
+   * preview forces `live: true` onto exactly such a summary, so the old check
+   * on tier.id saw Free for everybody and offered to sell Premium to an
+   * account that already had it. The server refused with a 409, which is the
+   * safety net working and not an interface anybody should meet.
+   *
+   * So this one goes through the real planSummary, with billing off, the way
+   * the panel does.
+   */
+  const asPanel = (source) => {
+    const account = source === 'none' ? null : { plan: { tier: 'premium', source, until: null } };
+    // Exactly what upgradeBlock does: summarise with billing off, then force
+    // live on for the preview.
+    return offersUpgrade({ ...planSummary(account, { billing: FREE }), live: true });
+  };
+
+  assert.equal(asPanel('granted'), false, 'a granted account is not sold what it was given');
+  assert.equal(asPanel('stripe'), false, 'and an account already paying by card is not sold it twice');
+  assert.equal(asPanel('appstore'), false);
+  // The two that should still see the buttons, because neither is paying.
+  assert.equal(asPanel('trial'), true);
+  assert.equal(asPanel('none'), true);
+});
+
+test('tiers: an entitlement source nobody taught this about still gets a button', () => {
+  /*
+   * Which way an unknown source should fail, decided rather than left to
+   * whichever branch happened to come first. Offering a purchase to somebody
+   * who turns out to be paying already ends at a refusal they can read;
+   * withholding it from somebody who is not ends in a free account that is
+   * never shown a way to pay and never says why.
+   */
+  assert.equal(offersUpgrade({ live: true, source: 'play' }), true);
+  assert.equal(offersUpgrade({ live: true }), true);
+});
+
 test('tiers: a preview offers the web checkout before billing is live', () => {
   /*
    * How the people who run this reach a checkout to test one, without a
