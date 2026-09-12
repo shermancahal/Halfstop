@@ -402,6 +402,43 @@ Sign up with an address that has nothing to do with the project team, then
 share a folder with a second one. Resend's own log says whether each message
 was accepted, and the app says `emailed: true` only when the provider took it.
 
+### 6. DMARC, which Resend does not ask for and Outlook does
+
+Resend's checklist ends at DKIM and SPF, and a domain shows **Verified** with
+no DMARC record at all. Verified means the mail is signed; it does not mean
+anybody will put it in an inbox.
+
+Observed, not theorised: a confirmation to an `outlook.com` address was
+accepted by Resend, delivered by SES, and filed as junk. Nothing in the chain
+failed. Outlook and Hotmail weigh a missing DMARC policy heavily, and weigh it
+hardest against a domain with no sending history — `send.halfstop.app` was
+three days old.
+
+One TXT record on the **root** domain, not the subdomain, because DMARC is
+inherited:
+
+| Name | Value |
+| --- | --- |
+| `_dmarc.halfstop.app` | `v=DMARC1; p=none; rua=mailto:support@halfstop.app; adkim=r; aspf=r` |
+
+`p=none` asks nobody to reject anything — it publishes a policy and requests
+reports, which is the whole point at this stage. Relaxed alignment (`adkim=r`,
+`aspf=r`) is what lets mail from `send.halfstop.app` align with the
+organisational domain; strict alignment would fail every message this project
+sends. Tighten to `p=quarantine` later, once the reports show only your own
+senders.
+
+The rest is time. A new sending domain has no reputation and earns one by
+sending mail people do not mark as spam, which nothing in DNS can shortcut.
+Marking the first few as "not junk" in Outlook does more than anything in this
+file.
+
+**What this does not fix**, and is worth knowing before chasing it: the
+confirmation link points at `<project>.supabase.co`, not at halfstop.app, and a
+link on a domain unrelated to the sender is its own small spam signal. Changing
+that needs a custom auth domain on Supabase, which is a paid add-on. Do the
+DMARC record first and see whether it is still a problem.
+
 ---
 
 ## The auth emails themselves
