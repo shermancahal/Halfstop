@@ -17,3 +17,14 @@ verify_jwt = true
 
 [functions.invite-to-folder]
 verify_jwt = true
+
+# Stripe has no session either, so the webhook authorises its own caller with
+# the signature on the request. Everything protecting it is in
+# stripe-webhook/signature.mjs, which is plain JavaScript and unit tested.
+[functions.stripe-webhook]
+verify_jwt = false
+
+# The checkout is started by a signed-in person, and who is paying is read from
+# their token rather than from the request body.
+[functions.stripe-checkout]
+verify_jwt = true

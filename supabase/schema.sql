@@ -266,8 +266,17 @@ create table if not exists public.entitlements (
   tier        text not null default 'premium',
 
   -- Where it came from, so a subscription that lapses is distinguishable from
-  -- something given by hand and never meant to end.
+  -- something given by hand and never meant to end. 'appstore' and 'stripe'
+  -- are the two that can sell: the App Store only inside a shipped app, and
+  -- Stripe for anybody using Halfstop in a browser, who otherwise has no way
+  -- to pay at all.
   source      text not null default 'granted',
+
+  -- Whose subscription this is, in the provider's own words: a Stripe
+  -- subscription id, or an App Store original transaction id. Kept so a later
+  -- event can be matched to the row it belongs to, and so a row can be audited
+  -- against the provider without guessing. Null for a grant made by hand.
+  external_ref text,
 
   -- Null means it does not expire. That is the administrator case.
   expires_at  timestamptz,
@@ -281,7 +290,8 @@ alter table public.entitlements add constraint entitlements_tier_check
   check (tier in ('free', 'premium'));
 alter table public.entitlements drop constraint if exists entitlements_source_check;
 alter table public.entitlements add constraint entitlements_source_check
-  check (source in ('granted', 'appstore', 'comp'));
+  check (source in ('granted', 'appstore', 'stripe', 'comp'));
+alter table public.entitlements add column if not exists external_ref text;
 
 alter table public.entitlements enable row level security;
 

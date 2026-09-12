@@ -573,3 +573,66 @@ test('account: a deployment with no project does not ask at all', async () => {
   });
   assert.equal(asked, false);
 });
+
+/* ----------------------------------------------------------- the checkout */
+
+/*
+ * Nothing about who is paying travels in the request.
+ *
+ * The function reads the user from the token on the session, because a body
+ * saying which account to subscribe is a body somebody else can write. What
+ * these check is the part on this side: that a failure is reported rather than
+ * swallowed, and that a browser is never sent somewhere on a maybe.
+ */
+
+const checkoutClient = (answer) => ({
+  functions: { invoke: async (name, options) => { checkoutClient.saw = { name, options }; return answer; } },
+});
+
+test('account: a checkout that opens hands back somewhere to go', async () => {
+  const account = new Account(storeOf([]), {
+    client: async () => checkoutClient({ data: { ok: true, url: 'https://checkout.stripe.com/c/pay/abc' }, error: null }),
+    configured: () => true,
+  });
+  account.user = { id: 'u1', email: 'a@b.com' };
+
+  const result = await account.startCheckout({ returnTo: 'https://app.halfstop.app/map.html' });
+  assert.deepEqual(result, { ok: true, url: 'https://checkout.stripe.com/c/pay/abc' });
+  assert.equal(checkoutClient.saw.name, 'stripe-checkout');
+  // The return address is the only thing sent. No user id, no price, no email.
+  assert.deepEqual(Object.keys(checkoutClient.saw.options.body), ['returnTo']);
+});
+
+test('account: a refused checkout says why and sends nobody anywhere', async () => {
+  const account = new Account(storeOf([]), {
+    client: async () => checkoutClient({ data: null, error: { message: 'Payments are not configured on this project.' } }),
+    configured: () => true,
+  });
+  account.user = { id: 'u1' };
+
+  const result = await account.startCheckout();
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /not configured/);
+  assert.equal(result.url, undefined, 'no url on a failure, so nothing can redirect on one');
+});
+
+test('account: an answer with no url is a failure, not a redirect to nothing', async () => {
+  // The shape that would otherwise send a browser to "undefined".
+  const account = new Account(storeOf([]), {
+    client: async () => checkoutClient({ data: { ok: true }, error: null }),
+    configured: () => true,
+  });
+  account.user = { id: 'u1' };
+  assert.equal((await account.startCheckout()).ok, false);
+});
+
+test('account: signed out, no checkout is even attempted', async () => {
+  let asked = false;
+  const account = new Account(storeOf([]), {
+    client: async () => { asked = true; return checkoutClient({ data: null, error: null }); },
+    configured: () => true,
+  });
+  const result = await account.startCheckout();
+  assert.equal(result.ok, false);
+  assert.equal(asked, false, 'nothing is asked of the server without a session to ask with');
+});

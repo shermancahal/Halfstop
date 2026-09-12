@@ -2773,17 +2773,42 @@ function wireSettingsMenu() {
  * So the function is real, it is reachable, and it reports the truth. When
  * StoreKit arrives it replaces the body and nothing else has to move.
  */
-async function startSubscription() {
+async function startSubscription(button = null) {
   const route = purchaseRoute();
   if (!route.available) {
     toast('There is nothing to subscribe to yet.', { tone: 'info', timeout: 7000 });
     return false;
   }
-  // BILLING.store says 'appstore' and no purchase plugin is bridged in yet.
-  // Reported rather than swallowed: a button that appears to do nothing is
-  // the thing this whole comment exists to prevent.
-  toast('The App Store purchase is not wired into this build yet.', { tone: 'error', timeout: 9000 });
-  return false;
+
+  if (route.where !== 'stripe') {
+    // Only reachable if a third route is added and this is not taught about
+    // it. Said out loud rather than falling through to a silent return.
+    toast('This build does not know how to open that checkout.', { tone: 'error', timeout: 9000 });
+    return false;
+  }
+
+  /*
+   * Disabled while the round trip is in flight.
+   *
+   * Creating a checkout is a network call that takes a moment, and a payment
+   * button that looks idle is a payment button somebody presses twice. The
+   * function is idempotent within the hour for the same person, so a second
+   * press cannot make a second subscription - this is so it does not look
+   * broken in the meantime.
+   */
+  if (button) { button.disabled = true; button.textContent = 'Opening…'; }
+  const result = await state.account.startCheckout();
+  if (button) { button.disabled = false; button.textContent = 'Subscribe'; }
+
+  if (!result.ok) {
+    toast(result.reason, { tone: 'error', timeout: 9000 });
+    return false;
+  }
+
+  // Stripe's own page, on Stripe's domain. Nothing about a card is typed into
+  // this app, which is the whole reason for sending people there.
+  window.location.assign(result.url);
+  return true;
 }
 
 /**
@@ -2811,12 +2836,14 @@ function upgradeBlock(plan) {
     route.available
       ? el('button', {
         class: 'button button-primary button-small', type: 'button', text: 'Subscribe',
-        onclick: () => startSubscription(),
+        onclick: (event) => startSubscription(event.currentTarget),
       })
       : el('p', {
         class: 'hint', style: 'margin:8px 0 0',
-        text: 'Subscriptions are handled by the App Store, so this is in the '
-          + 'iPhone and iPad app rather than here.',
+        text: route.why === 'in-app-only'
+          ? 'Subscriptions are handled by the App Store, so this is in the '
+            + 'iPhone and iPad app rather than here.'
+          : 'There is no way to subscribe yet.',
       }),
   ]);
 }

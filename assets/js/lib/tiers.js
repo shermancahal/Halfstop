@@ -196,7 +196,12 @@ export function describePrice({ billing = BILLING } = {}) {
  */
 export function purchaseRoute({ billing = BILLING } = {}) {
   if (!billing.live) return { available: false, why: 'not-live' };
-  if (billing.store === 'appstore') return { available: true, where: 'appstore' };
+  // Stripe is the one a browser can actually complete. The App Store is the
+  // one a browser cannot, so it is reported as a place rather than a button:
+  // the panel sends people to the app instead of showing a control that
+  // cannot work where they are standing.
+  if (billing.store === 'stripe') return { available: true, where: 'stripe' };
+  if (billing.store === 'appstore') return { available: false, why: 'in-app-only' };
   return { available: false, why: 'no-store' };
 }
 

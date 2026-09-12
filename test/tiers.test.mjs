@@ -315,15 +315,23 @@ test('tiers: the price is written the way a person writes it', () => {
   assert.equal(at(undefined), '');
 });
 
-test('tiers: how somebody would buy it, and the three answers that differ', () => {
-  // Not live is not the same as live with nowhere to buy, and the panel draws
-  // them differently: one says nothing at all, the other says where to go.
-  assert.deepEqual(purchaseRoute({ billing: { live: false, store: 'appstore' } }),
-    { available: false, why: 'not-live' });
+test('tiers: how somebody would buy it, and the answers that differ', () => {
+  /*
+   * Four states, not a boolean, because the panel draws each differently and
+   * conflating any two of them shows somebody the wrong thing.
+   *
+   * The one worth keeping straight: a browser cannot complete an App Store
+   * purchase. Reporting that as "buyable" would put a button on a page where
+   * pressing it can only fail, so it is reported as a place to go instead.
+   */
+  assert.deepEqual(purchaseRoute({ billing: { live: false, store: 'stripe' } }),
+    { available: false, why: 'not-live' }, 'nothing is for sale before billing is live');
   assert.deepEqual(purchaseRoute({ billing: { live: true, store: 'none' } }),
-    { available: false, why: 'no-store' });
+    { available: false, why: 'no-store' }, 'live with nowhere to buy');
   assert.deepEqual(purchaseRoute({ billing: { live: true, store: 'appstore' } }),
-    { available: true, where: 'appstore' });
+    { available: false, why: 'in-app-only' }, 'the App Store cannot be reached from a browser');
+  assert.deepEqual(purchaseRoute({ billing: { live: true, store: 'stripe' } }),
+    { available: true, where: 'stripe' }, 'Stripe is the one a browser can finish');
 });
 
 test('tiers: nothing is for sale today', () => {

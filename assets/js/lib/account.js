@@ -41,6 +41,9 @@ const DELETE_FUNCTION = 'delete-account';
 /** The one that writes an invitation and sends it. */
 const INVITE_FUNCTION = 'invite-to-folder';
 
+/** The one that opens a Stripe Checkout for whoever is signed in. */
+const CHECKOUT_FUNCTION = 'stripe-checkout';
+
 /** Invitations, kept beside the folders they are about. */
 const SHARES = 'folder_shares';
 
@@ -569,6 +572,26 @@ export class Account extends EventTarget {
     if (error) return { ok: false, reason: error.message };
     if (!data?.ok) return { ok: false, reason: data?.error || 'The invitation was not accepted.' };
     return { ok: true, emailed: Boolean(data.emailed), reason: data.reason || '' };
+  }
+
+  /**
+   * Ask for a Stripe Checkout, and get back somewhere to send the browser.
+   *
+   * Nothing about who is paying travels in the request. The function reads the
+   * user from the token on this session, because a body saying which account
+   * to subscribe is a body somebody else can write.
+   */
+  async startCheckout({ returnTo = '' } = {}) {
+    if (!this.user) return { ok: false, reason: 'Sign in first.' };
+    const client = await this.getClient();
+    if (!client) return { ok: false, reason: 'Accounts are not configured here.' };
+
+    const { data, error } = await client.functions.invoke(CHECKOUT_FUNCTION, {
+      body: { returnTo: returnTo || window.location.href.split('#')[0] },
+    });
+    if (error) return { ok: false, reason: error.message };
+    if (!data?.ok || !data.url) return { ok: false, reason: data?.error || 'The checkout did not open.' };
+    return { ok: true, url: data.url };
   }
 
   /** Who a folder has been shared with, withdrawn invitations included. */
