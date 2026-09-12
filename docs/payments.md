@@ -141,9 +141,20 @@ to live, and the secret is different. Until it is set, the function answers
 every delivery with a 503 saying it has no signing secret, which is the
 intended behaviour rather than a fault.
 
-**The API version does not matter here.** A new destination uses whatever
-version is current, and Stripe has moved `current_period_end` from the top of a
-Subscription onto its items; the function reads both shapes.
+**Check the API version on the destination.** It defaults to the account's
+default, which is whatever version the Stripe account was first created under -
+on this account, `2015-02-10`. That governs the shape of every event Stripe
+sends. The function reads `current_period_end` both where it used to live and
+where it lives now, so an old version is survivable, but a decade of drift is
+not something to rely on: set the destination to a current version if the
+dashboard lets you.
+
+The calls the functions *make* no longer depend on it. They send an explicit
+`Stripe-Version` header, because Checkout Sessions did not exist in 2015 and
+`mode`, `line_items` and `subscription_data` are all newer than the account
+default they would otherwise have inherited. Raising it is a deliberate edit in
+`stripe-checkout/index.ts` and `stripe-portal/index.ts`, not a dashboard
+setting somebody flips.
 
 ### 5. Turn it on
 

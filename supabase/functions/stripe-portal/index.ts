@@ -33,6 +33,21 @@ function keyFrom(jsonName: string, legacyName: string): string {
   return env(legacyName);
 }
 
+/**
+ * The API version these calls speak, pinned rather than inherited.
+ *
+ * Without this header Stripe uses the account's default version, which is
+ * whatever the account was created under. On this account that is 2015-02-10,
+ * and Checkout Sessions did not exist in 2015: `mode`, `line_items` and
+ * `subscription_data` are all newer than the version the calls would otherwise
+ * have been made under.
+ *
+ * Pinning also means a future account-wide version change cannot quietly alter
+ * what these functions send or receive. Raising it is then a deliberate edit
+ * here, tested, rather than a setting somebody flips in a dashboard.
+ */
+const STRIPE_VERSION = '2024-06-20';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -95,7 +110,7 @@ Deno.serve(async (req: Request) => {
    * request on a page somebody opens rarely.
    */
   const found = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(held.external_ref)}`, {
-    headers: { Authorization: `Bearer ${stripeKey}` },
+    headers: { Authorization: `Bearer ${stripeKey}`, 'Stripe-Version': STRIPE_VERSION },
   });
   const subscription = await found.json();
   if (!found.ok || !subscription?.customer) {
@@ -108,6 +123,7 @@ Deno.serve(async (req: Request) => {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${stripeKey}`,
+      'Stripe-Version': STRIPE_VERSION,
       'Content-Type': 'application/x-www-form-urlencoded',
     },
     body: form({ customer: String(subscription.customer), return_url: site }),
