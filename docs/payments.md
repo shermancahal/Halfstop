@@ -112,17 +112,38 @@ looks like strangers with subscriptions.
 
 ### 4. The webhook
 
-Stripe → **Developers → Webhooks → Add endpoint**.
+Stripe has moved this more than once, and the current dashboard calls a webhook
+an **event destination**. Look for **Workbench → Webhooks → Add destination**;
+older accounts and older guides say *Developers → Webhooks → Add endpoint*, and
+it is the same thing.
 
-- URL: `https://gqemcvuushtfbbbxypvf.supabase.co/functions/v1/stripe-webhook`
-- Events: `checkout.session.completed`, `customer.subscription.created`,
-  `customer.subscription.updated`, `customer.subscription.deleted`.
+- **Events**: `customer.subscription.created`, `customer.subscription.updated`,
+  `customer.subscription.deleted`. The newer flow asks for these first, before
+  it asks where to send them.
+- **Destination type**: an endpoint of your own, rather than Amazon
+  EventBridge or Azure Event Grid.
+- **URL**: `https://gqemcvuushtfbbbxypvf.supabase.co/functions/v1/stripe-webhook`
 
-Then copy the **signing secret** it shows you into `STRIPE_WEBHOOK_SECRET` and
-redeploy the function so it picks the value up.
+Those three and no more. `checkout.session.completed` is deliberately *not*
+one of them: a Checkout Session carries no status and no period end, and its id
+is the session's rather than the subscription's, so granting from it produced
+an entitlement with the wrong reference and no expiry at all. See
+`stripe-webhook/events.mjs`. Every other event is answered 200 and ignored, so
+subscribing to more only makes the log harder to read.
 
-Subscribe to those four and no more. Every other event is answered 200 and
-ignored, so adding them only makes the log harder to read.
+**The signing secret** is on the destination's own page once it exists, under
+**Signing secret**, behind a *Reveal* or *Click to reveal*. It reads
+`whsec_...`. That value goes in `STRIPE_WEBHOOK_SECRET` in Supabase, and the
+function has to be redeployed afterwards to pick it up.
+
+It belongs to that one destination: create a second, or switch from test mode
+to live, and the secret is different. Until it is set, the function answers
+every delivery with a 503 saying it has no signing secret, which is the
+intended behaviour rather than a fault.
+
+**The API version does not matter here.** A new destination uses whatever
+version is current, and Stripe has moved `current_period_end` from the top of a
+Subscription onto its items; the function reads both shapes.
 
 ### 5. Turn it on
 
