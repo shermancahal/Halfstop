@@ -646,12 +646,23 @@ export class Account extends EventTarget {
    * last try the caller is told plainly that the payment went through and the
    * account has not caught up, which is true and is something support can act
    * on.
+   *
+   * WAIT ON THE SOURCE, NOT THE TIER
+   *
+   * `my_plan()` reports premium for anybody inside their first thirty days,
+   * because a trial is premium - everything works, which is the point of it.
+   * So a wait that ends on `tier === 'premium'` ends on the very first read for
+   * every new account, and the app says "Premium is active" to somebody whose
+   * payment never reached us. It would have been right nearly every time and
+   * wrong in exactly the case this function exists for. Pass the source a
+   * purchase writes and the wait means what it says.
    */
-  async waitForPlan({ tries = 8, wait = 1500, sleep = nap, wanted = 'premium' } = {}) {
+  async waitForPlan({ tries = 8, wait = 1500, sleep = nap, wanted = 'premium', source = null } = {}) {
     let plan = null;
+    const arrived = (seen) => seen?.tier === wanted && (!source || seen.source === source);
     for (let attempt = 1; attempt <= tries; attempt += 1) {
       plan = await this.refreshPlan();
-      if (plan?.tier === wanted) return { ok: true, plan, attempts: attempt };
+      if (arrived(plan)) return { ok: true, plan, attempts: attempt };
       if (attempt < tries) await sleep(wait);
     }
     return { ok: false, plan, attempts: tries };

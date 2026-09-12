@@ -798,3 +798,40 @@ test('waiting stops on whatever it was told to wait for', async () => {
   assert.equal(settled.ok, true);
   assert.equal(settled.attempts, 1);
 });
+
+test('a trial does not count as the subscription somebody just paid for', async () => {
+  /*
+   * The near miss this exists for. `my_plan()` reports premium for anybody
+   * inside their first thirty days, because a trial *is* premium — everything
+   * works, which is the whole point. So a wait that ends on the tier ends on
+   * the first read for every new account, and the app announces "Premium is
+   * active on this account" to somebody whose payment never reached us.
+   *
+   * It would have looked right nearly every time, and been wrong in exactly
+   * the case the waiting exists for.
+   */
+  const account = new Account(folders);
+  const answers = [
+    { tier: 'premium', source: 'trial' },
+    { tier: 'premium', source: 'trial' },
+    { tier: 'premium', source: 'stripe' },
+  ];
+  let asked = 0;
+  account.refreshPlan = async () => answers[Math.min(asked++, answers.length - 1)];
+
+  const settled = await account.waitForPlan({ source: 'stripe', sleep: async () => {} });
+  assert.equal(settled.ok, true);
+  assert.equal(settled.attempts, 3, 'the trial reads should not have ended the wait');
+  assert.equal(settled.plan.source, 'stripe');
+});
+
+test('a trial that never becomes a purchase is reported as not arrived', async () => {
+  // And the other half: the webhook does not come, the person is still on
+  // their trial, and the app must say the payment has not been recorded rather
+  // than point at the trial and call it done.
+  const account = new Account(folders);
+  account.refreshPlan = async () => ({ tier: 'premium', source: 'trial' });
+  const settled = await account.waitForPlan({ source: 'stripe', tries: 3, sleep: async () => {} });
+  assert.equal(settled.ok, false);
+  assert.equal(settled.plan.source, 'trial');
+});

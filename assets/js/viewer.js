@@ -2810,7 +2810,12 @@ async function settleCheckoutReturn() {
   }
 
   toast('Thank you. Finishing off your subscription…', { tone: 'info', timeout: 6000 });
-  const settled = await state.account.waitForPlan();
+  /*
+   * Waiting for the source rather than the tier. A trial already reads as
+   * premium, so waiting on the tier would congratulate every new account on a
+   * payment the instant they landed, webhook or no webhook.
+   */
+  const settled = await state.account.waitForPlan({ source: 'stripe' });
   if (settled.ok) {
     toast('Premium is active on this account.', { tone: 'ok', timeout: 8000 });
     return true;
