@@ -100,7 +100,15 @@ export const TIERS = {
   free: {
     id: 'free',
     name: 'Free',
-    grants: [],
+    /*
+     * Place search is metered and free anyway, deliberately.
+     *
+     * It is the first thing anybody does with a map, and a map you cannot
+     * search is a map you have to already know. At this size the bill for it
+     * is small enough to carry, and meeting somebody with a locked search box
+     * in their first minute costs more than the requests do.
+     */
+    grants: ['placeSearch'],
     note: 'Everything is free while Halfstop is being built. '
       + 'If that ever changes, it will change here first and it will say so.',
   },
@@ -108,8 +116,8 @@ export const TIERS = {
     id: 'premium',
     name: 'Premium',
     grants: Object.keys(FEATURES),
-    note: 'The metered parts: searching, syncing, weather, offline downloads, '
-      + 'routing, photographs on a pin and the state maps.',
+    note: 'The metered parts: syncing, weather, offline downloads, routing, '
+      + 'photographs on a pin and the state maps.',
   },
 };
 

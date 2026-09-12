@@ -22,16 +22,39 @@ test('tiers: today, every feature is offered to everybody', () => {
   }
 });
 
-test('tiers: the plans are drawn where the website says they are', () => {
+test('tiers: the plans are drawn where the website says they are', async () => {
   /*
-   * Premium grants the metered features and Free grants none of them, which is
-   * the split printed on What it costs rather than a second opinion about it.
-   * The day BILLING.live goes on, this matrix is what closes - and one that
-   * disagreed with the page would take somebody's money for something they
-   * already had.
+   * Read off the page rather than restated here.
+   *
+   * This used to assert that Free granted nothing, which described the split
+   * without checking it: the matrix and the website are two lists of the same
+   * decision, kept in different files, and the comment claiming they agreed
+   * was the only thing holding them together. Moving one feature between
+   * tiers touches both, and forgetting either is silent.
+   *
+   * The day BILLING.live goes on, this matrix is what closes. One that
+   * disagreed with the page would take somebody's money for something the
+   * page told them they already had.
    */
+  const { readFile } = await import('node:fs/promises');
+  const page = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  const card = (heading) => page.split(`<h3>${heading}</h3>`)[1]?.split('</div>')[0] || '';
+  const free = card('Free Tier');
+  const premium = card('Premium Tier');
+  assert.ok(free && premium, 'the costs section still has both cards');
+
+  for (const [key, text] of Object.entries(FEATURES)) {
+    const onFree = free.includes(text);
+    const onPremium = premium.includes(text);
+    assert.equal(onFree || onPremium, true, `the page never mentions ${key}`);
+    assert.equal(onFree && onPremium, false, `the page lists ${key} under both tiers`);
+    assert.equal(TIERS.free.grants.includes(key), onFree,
+      `the matrix and the page disagree about ${key}`);
+  }
+
+  // Premium is still everything: a feature that fell out of it would be one
+  // nobody could buy.
   assert.deepEqual(TIERS.premium.grants.slice().sort(), Object.keys(FEATURES).sort());
-  assert.deepEqual(TIERS.free.grants, []);
 });
 
 test('tiers: the keys the app still asks for reach the feature that replaced them', () => {
@@ -112,7 +135,11 @@ test('tiers: the plan summary says both what you have and whether it is real yet
   const paying = planSummary({ plan: { tier: 'premium', source: 'granted' } }, { billing: LIVE });
   assert.equal(paying.name, 'Premium');
   assert.equal(paying.includes.length, Object.keys(FEATURES).length);
-  assert.equal(planSummary(null, { billing: LIVE }).includes.length, 0);
+  // Free is no longer empty: place search is metered and given away anyway.
+  assert.deepEqual(
+    planSummary(null, { billing: LIVE }).includes,
+    [FEATURES.placeSearch],
+  );
 });
 
 /* ------------------------------------------------------- the trial */
