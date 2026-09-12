@@ -352,10 +352,20 @@ export class Account extends EventTarget {
       return { confirmed: false, existing: true };
     }
 
-    // With email confirmation on, there is no session yet — say so rather than
-    // leaving the user staring at an unchanged screen.
+    /*
+     * With email confirmation on there is no session yet, so say so rather
+     * than leaving somebody staring at an unchanged screen.
+     *
+     * Spam is named because that is where it went, reported from a real
+     * signup: the confirmation comes from Supabase's shared sender unless the
+     * project is put on its own SMTP, and a shared sender on somebody else's
+     * domain is exactly what a mail filter is built to distrust. Telling
+     * people where to look costs a clause; not telling them costs the account.
+     */
     if (!data.session) {
-      this.setStatus('signed-out', 'Check your email for a confirmation link, then sign in.');
+      this.setStatus('signed-out',
+        'Account created. Check your email for a confirmation link, then sign in. '
+        + 'It often lands in spam or junk, so look there before trying again.');
       return { confirmed: false };
     }
     return { confirmed: true };
@@ -402,7 +412,8 @@ export class Account extends EventTarget {
       options: { emailRedirectTo: returnTo() },
     });
     if (error) throw new Error(error.message);
-    this.setStatus('signed-out', `Sent a sign-in link to ${email}. Open it on this device.`);
+    this.setStatus('signed-out',
+      `Sent a sign-in link to ${email}. Open it on this device, and check spam if it is not there.`);
     return true;
   }
 

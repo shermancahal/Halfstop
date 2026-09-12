@@ -12313,6 +12313,18 @@ function renderAccount() {
   const password = el('input', { type: 'password', placeholder: 'Password', autocomplete: 'current-password', 'aria-label': 'Password' });
   const busy = (on) => { for (const node of [email, password, ...buttons]) node.disabled = on; };
 
+  /*
+   * Say the thing that just happened where somebody will see it.
+   *
+   * The sentence itself stays in account.js, beside the branch that chose it -
+   * signing up as an address that already exists and signing up as a new one
+   * are different messages, and repeating either here would be two copies to
+   * keep in step. This only decides that it is said out loud.
+   */
+  const announce = (tone) => {
+    if (account.message) toast(account.message, { tone, timeout: 15000 });
+  };
+
   const run = async (action) => {
     state.accountEmail = email.value.trim();
     if (!state.accountEmail) { toast('Enter your email address first.', { tone: 'error' }); return; }
@@ -12335,12 +12347,24 @@ function renderAccount() {
     }),
     el('button', {
       class: 'button button-secondary button-small', type: 'button', text: 'Create account',
-      onclick: () => run(() => account.signUp(state.accountEmail, password.value)),
+      onclick: () => run(async () => {
+        const result = await account.signUp(state.accountEmail, password.value);
+        // Nothing visible happens on a successful signup: no session, so the
+        // panel redraws identically and the only sign of life was a muted line
+        // appended below three buttons, off the bottom of a phone screen.
+        // Reported as "creating an account does not state anything", which is
+        // what it looked like - and the person then had no reason to go
+        // looking in their spam folder, where the email was.
+        if (!result.confirmed) announce(result.existing ? 'info' : 'ok');
+      }),
     }),
     el('button', {
       class: 'button button-ghost button-small', type: 'button', text: 'Email me a link',
       title: 'Sign in without a password',
-      onclick: () => run(() => account.signInWithLink(state.accountEmail)),
+      onclick: () => run(async () => {
+        await account.signInWithLink(state.accountEmail);
+        announce('ok');
+      }),
     }),
   ];
 

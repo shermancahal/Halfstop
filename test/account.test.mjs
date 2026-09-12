@@ -835,3 +835,49 @@ test('a trial that never becomes a purchase is reported as not arrived', async (
   assert.equal(settled.ok, false);
   assert.equal(settled.plan.source, 'trial');
 });
+
+test('account: the messages that promise an email say where it lands', async () => {
+  /*
+   * Reported from a real signup: "creating an account does not state
+   * anything", and then, separately, "it did but it went to junk".
+   *
+   * Both halves are one failure. The confirmation is sent by Supabase's shared
+   * sender unless the project is moved onto its own SMTP, which is exactly
+   * what a mail filter distrusts - so the message lands in spam often enough
+   * to be the expected case, not the unlucky one. Somebody who is not told to
+   * look there concludes the signup silently failed and tries again, which
+   * sends a second mail to the same folder.
+   *
+   * Asserted on both messages that promise mail, because the sign-in link has
+   * the same sender and the same problem.
+   */
+  const client = fakeClient();
+  client.auth.signUp = async (options) => {
+    client.calls.push(['signUp', options]);
+    return { data: { session: null, user: { identities: [{ provider: 'email' }] } }, error: null };
+  };
+  const account = new Account(folders, { client: async () => client, configured: () => true });
+
+  await account.signUp('new@example.com', 'hunter2');
+  assert.match(account.message, /spam|junk/i, 'the signup message does not say where to look');
+  // And it confirms the account was made, because the screen is otherwise
+  // unchanged: no session, so the same form redraws exactly as it was.
+  assert.match(account.message, /account created/i);
+
+  await account.signInWithLink('new@example.com');
+  assert.match(account.message, /spam|junk/i, 'the link message does not say where to look');
+});
+
+test('account: being told an address already exists is not told to check the inbox', async () => {
+  // The one case where naming spam would be a lie: nothing was sent. Guarded
+  // separately because the spam clause was added to the neighbouring branch
+  // and pasting it one line further up would be silent.
+  const client = fakeClient();
+  client.auth.signUp = async (options) => {
+    client.calls.push(['signUp', options]);
+    return { data: { session: null, user: { identities: [] } }, error: null };
+  };
+  const account = new Account(folders, { client: async () => client, configured: () => true });
+  await account.signUp('taken@example.com', 'hunter2');
+  assert.doesNotMatch(account.message, /spam|junk|check your email/i);
+});
