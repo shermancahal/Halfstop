@@ -66,9 +66,8 @@ Deno.serve(async (req: Request) => {
   const url = env('SUPABASE_URL');
   const publishable = keyFrom('SUPABASE_PUBLISHABLE_KEYS', 'SUPABASE_ANON_KEY');
   const stripeKey = env('STRIPE_SECRET_KEY');
-  const priceId = env('STRIPE_PRICE_ID');
   if (!url || !publishable) return reply(500, { error: 'This function is missing its Supabase environment.' });
-  if (!stripeKey || !priceId) return reply(503, { error: 'Payments are not configured on this project.' });
+  if (!stripeKey) return reply(503, { error: 'Payments are not configured on this project.' });
 
   const authorization = req.headers.get('Authorization') || '';
   if (!authorization) return reply(401, { error: 'Sign in first.' });
@@ -86,8 +85,29 @@ Deno.serve(async (req: Request) => {
     body = await req.json();
   } catch {
     // A checkout with no options is the ordinary case, so an empty body is not
-    // an error. Only the return address is ever read from it.
+    // an error. Only a plan name and a return address are read from it.
   }
+
+  /*
+   * A plan name, never a price.
+   *
+   * The client says 'month' or 'year' and this maps it to an id held here. A
+   * checkout that accepted a Stripe price id from the browser would be a
+   * checkout where anybody can name what they pay: make a one cent price in
+   * any Stripe account, pass its id, and buy a year of Premium for a penny.
+   *
+   * So the map is closed. Anything that is not one of these two names is
+   * refused rather than defaulted, because defaulting would charge somebody
+   * for a plan they did not ask for.
+   */
+  const PRICES: Record<string, string> = {
+    month: env('STRIPE_PRICE_ID_MONTH') || env('STRIPE_PRICE_ID'),
+    year: env('STRIPE_PRICE_ID_YEAR'),
+  };
+  const plan = String(body.plan || 'month');
+  const priceId = PRICES[plan];
+  if (!Object.hasOwn(PRICES, plan)) return reply(400, { error: 'That is not a plan.' });
+  if (!priceId) return reply(503, { error: `The ${plan} plan is not configured on this project.` });
 
   /*
    * Where to send somebody afterwards, checked rather than trusted.
@@ -106,7 +126,7 @@ Deno.serve(async (req: Request) => {
       Authorization: `Bearer ${stripeKey}`,
       'Content-Type': 'application/x-www-form-urlencoded',
       // Two presses of the button are one checkout, not two subscriptions.
-      'Idempotency-Key': `checkout:${user.id}:${new Date().toISOString().slice(0, 13)}`,
+      'Idempotency-Key': `checkout:${user.id}:${plan}:${new Date().toISOString().slice(0, 13)}`,
     },
     body: form({
       mode: 'subscription',

@@ -59,6 +59,7 @@ import { activeAlerts, describeMotion, alertsToGeoJSON } from './lib/storms.js';
 import { fetchRoute, routeGeoJSON } from './lib/route.js';
 import {
   can, gateReason, planSummary, featureForLayer, describePrice, purchaseRoute, premiumAdds,
+  plansOffered, annualSaving,
 } from './lib/tiers.js';
 import {
   RV_CAVEAT, RV_RANGES, normaliseProfile, isRV, routingFor, profileRows,
@@ -2773,7 +2774,7 @@ function wireSettingsMenu() {
  * So the function is real, it is reachable, and it reports the truth. When
  * StoreKit arrives it replaces the body and nothing else has to move.
  */
-async function startSubscription(button = null) {
+async function startSubscription(button = null, plan = 'month') {
   const route = purchaseRoute();
   if (!route.available) {
     toast('There is nothing to subscribe to yet.', { tone: 'info', timeout: 7000 });
@@ -2796,9 +2797,10 @@ async function startSubscription(button = null) {
    * press cannot make a second subscription - this is so it does not look
    * broken in the meantime.
    */
+  const said = button?.textContent || 'Subscribe';
   if (button) { button.disabled = true; button.textContent = 'Opening…'; }
-  const result = await state.account.startCheckout();
-  if (button) { button.disabled = false; button.textContent = 'Subscribe'; }
+  const result = await state.account.startCheckout({ plan });
+  if (button) { button.disabled = false; button.textContent = said; }
 
   if (!result.ok) {
     toast(result.reason, { tone: 'error', timeout: 9000 });
@@ -2828,16 +2830,28 @@ function upgradeBlock(plan) {
   if (!plan.live || plan.tier.id === 'premium') return null;
 
   const route = purchaseRoute();
-  const price = describePrice();
+  const saving = annualSaving();
+
+  /*
+   * A button per plan rather than a toggle and one button.
+   *
+   * Two buttons say both prices at once, which is the question somebody
+   * actually has. A toggle hides one of the two numbers behind an interaction
+   * and makes the reader work to compare them, in a menu that is already
+   * small.
+   */
+  const buttons = plansOffered().map((plan) => el('button', {
+    class: `button button-small ${plan.id === 'month' ? 'button-primary' : 'button-secondary'}`,
+    type: 'button',
+    text: describePrice({ plan: plan.id }),
+    onclick: (event) => startSubscription(event.currentTarget, plan.id),
+  }));
 
   return el('div', { class: 'plan-upgrade' }, [
-    el('p', { class: 'plan-upgrade-head', text: price ? `Premium is ${price}.` : 'Premium' }),
+    el('p', { class: 'plan-upgrade-head', text: 'Premium adds' }),
     el('ul', { class: 'plan-upgrade-list' }, premiumAdds().map((what) => el('li', { text: what }))),
     route.available
-      ? el('button', {
-        class: 'button button-primary button-small', type: 'button', text: 'Subscribe',
-        onclick: (event) => startSubscription(event.currentTarget),
-      })
+      ? el('div', { class: 'plan-upgrade-buttons' }, buttons)
       : el('p', {
         class: 'hint', style: 'margin:8px 0 0',
         text: route.why === 'in-app-only'
@@ -2845,7 +2859,12 @@ function upgradeBlock(plan) {
             + 'iPhone and iPad app rather than here.'
           : 'There is no way to subscribe yet.',
       }),
-  ]);
+    // Worked out from the two prices rather than written down, so it cannot
+    // overstate the discount or go stale when one of them moves.
+    route.available && saving
+      ? el('p', { class: 'hint', style: 'margin:8px 0 0', text: `Paying by the year saves ${saving.money}, about ${saving.percent}%.` })
+      : null,
+  ].filter(Boolean));
 }
 
 /**

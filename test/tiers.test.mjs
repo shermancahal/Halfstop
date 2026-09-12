@@ -5,7 +5,7 @@ import {
   FEATURES, TIERS, DEFAULT_TIER, tierFor,
   can, gateReason, planSummary, describePlan,
   daysLeft, featureForLayer, describePrice, purchaseRoute,
-  premiumAdds,
+  premiumAdds, annualSaving, plansOffered,
 } from '../assets/js/lib/tiers.js';
 
 const FREE = { live: false };
@@ -303,16 +303,36 @@ test('tiers: the layers a plan covers are decided by what the layer already is',
 /* ------------------------------------------------------------ the price */
 
 test('tiers: the price is written the way a person writes it', () => {
-  const at = (price, period = 'month') => describePrice({ billing: { price, period } });
-  assert.equal(at(99), '$0.99 a month');
-  assert.equal(at(299), '$2.99 a month');
-  // Whole dollars lose the zeros: "$3 a month" is how somebody says it and
-  // "$3.00 a month" is how a form does.
-  assert.equal(at(300), '$3 a month');
-  assert.equal(at(1999, 'year'), '$19.99 a year');
-  // Nothing rather than "$0 a month" or "$NaN a month".
-  assert.equal(at(0), '');
-  assert.equal(at(undefined), '');
+  const billing = {
+    defaultPlan: 'month',
+    plans: { month: { price: 499, period: 'month' }, year: { price: 4900, period: 'year' } },
+  };
+  assert.equal(describePrice({ billing }), '$4.99 a month', 'the default plan when none is named');
+  assert.equal(describePrice({ plan: 'month', billing }), '$4.99 a month');
+  // Whole dollars lose the zeros: "$49 a year" is how somebody says it and
+  // "$49.00 a year" is how a form does.
+  assert.equal(describePrice({ plan: 'year', billing }), '$49 a year');
+  // Nothing rather than "$0 a month", "$NaN a month" or a throw.
+  assert.equal(describePrice({ plan: 'decade', billing }), '');
+  assert.equal(describePrice({ billing: { plans: {} } }), '');
+});
+
+test('tiers: what the year saves is worked out, not asserted', () => {
+  /*
+   * "Two months free" is the sentence everybody reaches for and at these
+   * prices it is a lie by a few dollars: $49 buys a shade under ten months,
+   * not ten. Computing it means the page cannot overstate the discount, and
+   * cannot go stale when a price moves.
+   */
+  const saving = annualSaving({
+    billing: { plans: { month: { price: 499 }, year: { price: 4900 } } },
+  });
+  assert.equal(saving.money, '$10.88');
+  assert.equal(saving.percent, 18);
+
+  // Nothing to say when the year is not cheaper, rather than "saves $0".
+  assert.equal(annualSaving({ billing: { plans: { month: { price: 499 }, year: { price: 5988 } } } }), null);
+  assert.equal(annualSaving({ billing: { plans: { month: { price: 499 } } } }), null);
 });
 
 test('tiers: how somebody would buy it, and the answers that differ', () => {
@@ -340,6 +360,11 @@ test('tiers: nothing is for sale today', () => {
   assert.equal(purchaseRoute().available, false);
 });
 
+test('tiers: both plans are on offer', () => {
+  const ids = plansOffered().map((plan) => plan.id);
+  assert.deepEqual(ids, ['month', 'year']);
+});
+
 test('tiers: what Premium adds is the difference, not a third copy of the list', () => {
   const adds = premiumAdds();
   // Place search is free now, so it is not something Premium adds.
@@ -358,6 +383,8 @@ test('tiers: the price on the website is the price in the code', async () => {
    */
   const { readFile } = await import('node:fs/promises');
   const page = await readFile(new URL('../index.html', import.meta.url), 'utf8');
-  assert.equal(page.includes(describePrice()), true,
-    `the costs page does not say ${describePrice()}`);
+  for (const plan of plansOffered()) {
+    const said = describePrice({ plan: plan.id });
+    assert.equal(page.includes(said), true, `the costs page does not say ${said}`);
+  }
 });

@@ -170,20 +170,57 @@ export function premiumAdds() {
     .filter(Boolean);
 }
 
+/** Money, the way a person writes it: no trailing zeros on a whole number. */
+function money(cents) {
+  const dollars = cents / 100;
+  return dollars % 1 === 0 ? `$${dollars}` : `$${dollars.toFixed(2)}`;
+}
+
+/** The plans on offer, in the order they should be read. */
+export function plansOffered({ billing = BILLING } = {}) {
+  return Object.entries(billing.plans || {}).map(([id, plan]) => ({ id, ...plan }));
+}
+
 /**
  * The price, written the way a person writes it.
  *
- * Formatted from cents rather than stored as a string, so the number can be
- * compared and totalled elsewhere without parsing money out of prose. Whole
- * dollars lose the trailing zeros, because "$3 a month" is how somebody would
- * say it and "$3.00 a month" is how a form would.
+ * Named by plan rather than by index, so a caller asks for the year and gets
+ * the year even if the order changes.
  */
-export function describePrice({ billing = BILLING } = {}) {
-  const cents = Number(billing.price);
+export function describePrice({ plan = null, billing = BILLING } = {}) {
+  const key = plan || billing.defaultPlan || 'month';
+  const chosen = billing.plans?.[key];
+  const cents = Number(chosen?.price);
   if (!Number.isFinite(cents) || cents <= 0) return '';
-  const dollars = cents / 100;
-  const money = dollars % 1 === 0 ? `$${dollars}` : `$${dollars.toFixed(2)}`;
-  return `${money} a ${billing.period || 'month'}`;
+  return `${money(cents)} a ${chosen.period || key}`;
+}
+
+/**
+ * What paying for the year saves, worked out rather than asserted.
+ *
+ * "Two months free" is the sentence everybody reaches for and it is usually a
+ * lie by a few dollars: at $4.99 and $49 the year costs a shade under ten
+ * months, not ten exactly. Computing it means the page cannot drift from the
+ * prices above it, and cannot overstate the discount by rounding in our own
+ * favour.
+ *
+ * Null when there is nothing to compare, so a caller can leave it out rather
+ * than print "saves $0".
+ */
+export function annualSaving({ billing = BILLING } = {}) {
+  const month = Number(billing.plans?.month?.price);
+  const year = Number(billing.plans?.year?.price);
+  if (!Number.isFinite(month) || !Number.isFinite(year) || month <= 0 || year <= 0) return null;
+
+  const twelve = month * 12;
+  if (year >= twelve) return null;
+
+  const saved = twelve - year;
+  return {
+    cents: saved,
+    money: money(saved),
+    percent: Math.round((saved / twelve) * 100),
+  };
 }
 
 /**

@@ -711,6 +711,9 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
   margin: 0 0 10px; padding-left: 1.1em; display: grid; gap: 4px;
   font-size: .8rem; color: var(--ink-2);
 }
+/* Both prices at once, because that is the question somebody has. Wrapping
+   rather than shrinking, so neither price is ever cut off in a 320px panel. */
+.plan-upgrade-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
 
 /* The trial, under the list it is a trial of, set back from it so it reads as
    a note about the card rather than another item in it. */

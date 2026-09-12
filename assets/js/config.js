@@ -216,15 +216,25 @@ export const BILLING = {
    * always the one they are charged. The costs page and the plan panel both
    * render from this.
    *
-   * A number of cents rather than a string, so it can be compared and totalled
-   * without parsing money out of prose. It is also not the authority on what
-   * anybody is actually charged once this is live: the App Store is, from the
-   * product configured there, and if the two disagree the store wins. This is
-   * what we say it costs.
+   * Cents rather than strings, so the two can be compared and the saving
+   * worked out rather than asserted in prose that goes stale the moment a
+   * price moves.
+   *
+   * This is not the authority on what anybody is actually charged. The payment
+   * provider is, from the price configured there, and if the two disagree the
+   * provider wins. This is what we say it costs, and a test keeps the website
+   * saying the same thing.
+   *
+   * The keys are the only names the browser ever sends. A Stripe price id from
+   * the client would be a client that can name its own price, so the checkout
+   * function maps these to ids held server-side and refuses anything else.
    */
-  price: 499,
+  plans: {
+    month: { price: 499, period: 'month' },
+    year: { price: 4900, period: 'year' },
+  },
+  defaultPlan: 'month',
   currency: 'USD',
-  period: 'month',
 
   /*
    * Where a purchase would happen, when there is one.

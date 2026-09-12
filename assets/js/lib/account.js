@@ -581,13 +581,15 @@ export class Account extends EventTarget {
    * user from the token on this session, because a body saying which account
    * to subscribe is a body somebody else can write.
    */
-  async startCheckout({ returnTo = '' } = {}) {
+  async startCheckout({ plan = 'month', returnTo = '' } = {}) {
     if (!this.user) return { ok: false, reason: 'Sign in first.' };
     const client = await this.getClient();
     if (!client) return { ok: false, reason: 'Accounts are not configured here.' };
 
     const { data, error } = await client.functions.invoke(CHECKOUT_FUNCTION, {
-      body: { returnTo: returnTo || window.location.href.split('#')[0] },
+      // A plan name, never a price. The function holds the ids, so a browser
+      // cannot name what it pays.
+      body: { plan, returnTo: returnTo || window.location.href.split('#')[0] },
     });
     if (error) return { ok: false, reason: error.message };
     if (!data?.ok || !data.url) return { ok: false, reason: data?.error || 'The checkout did not open.' };

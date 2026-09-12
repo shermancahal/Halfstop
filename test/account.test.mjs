@@ -599,8 +599,25 @@ test('account: a checkout that opens hands back somewhere to go', async () => {
   const result = await account.startCheckout({ returnTo: 'https://app.halfstop.app/map.html' });
   assert.deepEqual(result, { ok: true, url: 'https://checkout.stripe.com/c/pay/abc' });
   assert.equal(checkoutClient.saw.name, 'stripe-checkout');
-  // The return address is the only thing sent. No user id, no price, no email.
-  assert.deepEqual(Object.keys(checkoutClient.saw.options.body), ['returnTo']);
+  /*
+   * A plan name and a return address, and nothing else.
+   *
+   * No user id, because the function reads that from the token. And no price
+   * id: a checkout that took one from the browser would let anybody make a one
+   * cent price in any Stripe account and buy a year of Premium with it.
+   */
+  assert.deepEqual(Object.keys(checkoutClient.saw.options.body).sort(), ['plan', 'returnTo']);
+  assert.equal(checkoutClient.saw.options.body.plan, 'month', 'the month unless asked otherwise');
+});
+
+test('account: the year is asked for by name', async () => {
+  const account = new Account(storeOf([]), {
+    client: async () => checkoutClient({ data: { ok: true, url: 'https://checkout.stripe.com/c/pay/y' }, error: null }),
+    configured: () => true,
+  });
+  account.user = { id: 'u1' };
+  await account.startCheckout({ plan: 'year' });
+  assert.equal(checkoutClient.saw.options.body.plan, 'year');
 });
 
 test('account: a refused checkout says why and sends nobody anywhere', async () => {
