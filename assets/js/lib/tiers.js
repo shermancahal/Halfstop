@@ -188,6 +188,25 @@ export function describePlan(plan = null, { now = Date.now(), billing = BILLING 
 }
 
 /**
+ * Which feature a map layer belongs to, or null if it is free.
+ *
+ * Derived from what the layer already says about itself rather than from a
+ * flag added to seventy entries in config.js. The weather group is the weather
+ * group, and a layer carrying `states` is one of the state level maps: both
+ * are properties those layers have for their own reasons, so a new layer joins
+ * the right tier by being what it is rather than by somebody remembering.
+ *
+ * The cost of that is a layer could join a paid tier by accident. It is the
+ * better risk: the other way round, a layer silently escapes one.
+ */
+export function featureForLayer(entry) {
+  if (!entry) return null;
+  if (entry.group === 'Weather') return 'weatherLayers';
+  if (Array.isArray(entry.states) && entry.states.length) return 'stateLayers';
+  return null;
+}
+
+/**
  * Whether to offer a feature.
  *
  * "Offer", not "allow". A true here means draw the button; it does not mean the

@@ -691,6 +691,14 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
    wide enough to read the longer of the two words. */
 .share-role { flex: 0 0 auto; max-width: 9.5rem; }
 .folder-shared-by { color: var(--ink-3); }
+
+/* A layer that is not on this plan: still listed, because hiding it answers
+   "where did the weather go" with silence, and somebody deciding whether to
+   pay has to see what for. Dimmed rather than removed, with the reason in the
+   description where the rest of what the layer is already lives. */
+.layer-row.is-locked .layer-option-name { opacity: .55; }
+.layer-row.is-locked .layer-option { cursor: default; }
+.layer-locked-note { margin: 6px 0 0; font-size: .8rem; color: var(--ink-3); }
 /* The plan's name, and under it what that actually means today. The second
    line is the one that counts down, so it is readable rather than fine print. */
 .plan-line { margin: 2px 0 0; font-size: .8rem; }

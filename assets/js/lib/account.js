@@ -12,6 +12,7 @@
 import { SUPABASE_URL, SUPABASE_KEY } from '../config.js';
 import { mergeFolders, rowToFolder, folderToRow, missingColumn } from './sync.js';
 import { canEdit, markShared, normaliseEmail, readRole } from './shares.js';
+import { can, gateReason } from './tiers.js';
 
 const SUPABASE_VERSION = '2.45.4';
 
@@ -688,6 +689,34 @@ export class Account extends EventTarget {
 
     try {
       const client = await this.getClient();
+
+      /*
+       * Carrying your own folders between devices is the metered part.
+       *
+       * A folder somebody shared with you is not: sharing is not on the
+       * Premium list, and a folder you were invited to read should not vanish
+       * because your own collection has stopped travelling. So the shared ones
+       * are still fetched, and only the account's own folders wait.
+       *
+       * Said out loud rather than done quietly. Folders that stop syncing
+       * without a word look exactly like folders that were lost.
+       *
+       * This is presentation, like everything else in tiers.js. What actually
+       * costs money is the row policy and the bandwidth behind it, and neither
+       * of those reads a plan yet.
+       */
+      if (!can('folderSync')) {
+        const onlyShared = await this.pullShared(client);
+        if (onlyShared !== null) {
+          const held = this.folders.snapshot().filter((folder) => !folder.sharedFrom);
+          this.folders.replaceAll([...held, ...onlyShared]);
+        }
+        this.lastSyncAt = Date.now();
+        this.syncing = false;
+        this.setStatus('signed-in', gateReason('folderSync'));
+        return null;
+      }
+
       const { data, error } = await client.from(TABLE).select('*').eq('user_id', this.user.id);
       if (error) throw new Error(error.message);
 
@@ -930,6 +959,9 @@ export class Account extends EventTarget {
     // Looking at somebody's folder is not editing it, and a push that the
     // policy is certain to refuse is worth not making.
     if (folder?.sharedFrom && !canEdit(folder)) return;
+    // Your own folders travel on the plan that carries them. A folder somebody
+    // shared for editing is not yours and is not that.
+    if (!folder?.sharedFrom && !can('folderSync')) return;
     try {
       const client = await this.getClient();
       const { error } = folder?.sharedFrom

@@ -57,7 +57,7 @@ import {
 } from './lib/sky.js';
 import { activeAlerts, describeMotion, alertsToGeoJSON } from './lib/storms.js';
 import { fetchRoute, routeGeoJSON } from './lib/route.js';
-import { can, gateReason, planSummary } from './lib/tiers.js';
+import { can, gateReason, planSummary, featureForLayer } from './lib/tiers.js';
 import {
   RV_CAVEAT, RV_RANGES, normaliseProfile, isRV, routingFor, profileRows,
   explainFailure, readDimension, showDimension, showWeight, shortTonsToTonnes,
@@ -4882,6 +4882,12 @@ function refreshRegionData() {
 const AUTO_DOWNLOAD_BYTES = 150 * 1024 * 1024;
 
 function saveRegionFrom(bounds, { download = false, name = '' } = {}) {
+  // Every region, however it was drawn, is made here. One check rather than
+  // one per entry point, which is what stops the next entry point missing it.
+  if (!can('offlineDownloads')) {
+    toast(gateReason('offlineDownloads'), { tone: 'error', timeout: 9000 });
+    return null;
+  }
   const problem = regionSizeProblem(bounds);
   if (problem) { toast(problem, { tone: 'error', timeout: 9000 }); return null; }
 
@@ -5603,7 +5609,28 @@ function layerRow({ entry, selected, control, preview = false }) {
     })
     : null;
 
-  const row = el('div', { class: `layer-row${selected ? ' is-selected' : ''}` }, [
+  /*
+   * A layer that is not on this plan is shown and not offered.
+   *
+   * Shown, because hiding it answers "where did the weather go" with silence,
+   * and somebody deciding whether to pay has to be able to see what for.
+   * Not offered, because a switch that does nothing is worse than one that
+   * explains itself. The reason goes in the description, where the rest of
+   * what this layer is already lives.
+   *
+   * None of this does anything while BILLING.live is false: can() is true for
+   * everything, so every row is drawn exactly as it was.
+   */
+  const needs = featureForLayer(entry);
+  const locked = Boolean(needs) && !can(needs);
+  if (locked) {
+    control.disabled = true;
+    if (descriptionNode) {
+      descriptionNode.append(el('p', { class: 'layer-locked-note', text: gateReason(needs) }));
+    }
+  }
+
+  const row = el('div', { class: `layer-row${selected ? ' is-selected' : ''}${locked ? ' is-locked' : ''}` }, [
     el('label', { class: 'layer-option' }, [
       control,
       preview ? basemapThumb(entry) : null,
@@ -11058,10 +11085,23 @@ function photoSection(folder, item) {
     },
   });
 
+  /*
+   * Photographs already on a pin stay readable whatever the plan says.
+   *
+   * Only adding is gated. They are held in this browser and were never
+   * uploaded anywhere, so locking somebody out of their own pictures because a
+   * subscription lapsed would be taking something that was never ours to hold.
+   */
+  const canAddPhotos = can('pinPhotos');
   const actions = el('div', { class: 'picker-row', style: 'margin-top:8px' }, [
     el('button', {
       class: 'button button-secondary button-small', type: 'button', text: 'Add photos',
-      onclick: () => picker.click(),
+      disabled: !canAddPhotos,
+      title: canAddPhotos ? '' : gateReason('pinPhotos'),
+      onclick: () => {
+        if (!canAddPhotos) { toast(gateReason('pinPhotos'), { tone: 'error' }); return; }
+        picker.click();
+      },
     }),
   ]);
 

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  FEATURES, TIERS, DEFAULT_TIER, tierFor, can, gateReason, planSummary, describePlan, daysLeft,
+  FEATURES, TIERS, DEFAULT_TIER, tierFor, can, gateReason, planSummary, describePlan, daysLeft, featureForLayer,
 } from '../assets/js/lib/tiers.js';
 
 const FREE = { live: false };
@@ -226,4 +226,73 @@ test('tiers: the module says out loud that it is not a permission boundary', asy
 test('tiers: the shipped default really is everything-free', async () => {
   const { BILLING } = await import('../assets/js/config.js');
   assert.equal(BILLING.live, false);
+});
+
+/* --------------------------------------------- every paid feature is wired */
+
+/*
+ * The failure this catches, which happened.
+ *
+ * Seven features were listed as Premium on the website and exactly one of them
+ * was gated anywhere in the app: can() appeared three times, all routing.
+ * Switching BILLING.live on would have produced a paid tier where six of seven
+ * items kept working and one showed an error toast, and nothing anywhere would
+ * have said so - not a test, not a type, not a lint.
+ *
+ * So this asks the app rather than trusting it: for every feature the free
+ * tier does not grant, something has to gate it. Either a can() call naming it
+ * or one of its aliases, or a real layer in the catalogue that featureForLayer
+ * assigns to it.
+ *
+ * It does not check that the gate works, only that one exists. Whether it
+ * holds is the server's job, and the server does not read a plan yet.
+ */
+test('tiers: every feature the free tier does not grant is gated somewhere', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const { BASEMAPS, OVERLAYS } = await import('../assets/js/config.js');
+
+  const sources = await Promise.all(['../assets/js/viewer.js', '../assets/js/lib/account.js']
+    .map((file) => readFile(new URL(file, import.meta.url), 'utf8')));
+
+  // Feature keys named in a can() call anywhere in the app, aliases resolved
+  // the way can() itself resolves them.
+  const gated = new Set();
+  for (const source of sources) {
+    for (const [, named] of source.matchAll(/\bcan\('([a-zA-Z]+)'\)/g)) {
+      // can() maps the old names onto the feature that replaced them, so a
+      // call using one still counts as gating the real feature.
+      const key = Object.keys(FEATURES).find((feature) => can(named, {
+        billing: LIVE,
+        tier: { id: 't', name: 'T', grants: [feature], note: '' },
+      }));
+      if (key) gated.add(key);
+    }
+  }
+
+  // And the layers, which are gated by what they are rather than by a call.
+  for (const layer of [...BASEMAPS, ...OVERLAYS]) {
+    const needs = featureForLayer(layer);
+    if (needs) gated.add(needs);
+  }
+
+  for (const key of Object.keys(FEATURES)) {
+    if (TIERS.free.grants.includes(key)) continue;
+    assert.equal(gated.has(key), true,
+      `${key} is sold as Premium and nothing in the app gates it`);
+  }
+});
+
+test('tiers: the layers a plan covers are decided by what the layer already is', async () => {
+  const { OVERLAYS } = await import('../assets/js/config.js');
+  const weather = OVERLAYS.filter((l) => featureForLayer(l) === 'weatherLayers');
+  const state = OVERLAYS.filter((l) => featureForLayer(l) === 'stateLayers');
+
+  // Real counts rather than "more than zero": a mapping that quietly stopped
+  // matching would still pass that, and the whole group would go free.
+  assert.equal(weather.length > 0, true, 'the weather group still maps to weatherLayers');
+  assert.equal(state.length > 0, true, 'layers carrying states still map to stateLayers');
+  assert.equal(weather.every((l) => l.group === 'Weather'), true);
+  assert.equal(state.every((l) => l.states?.length > 0), true);
+  // Nothing is in both, which would make one of them unreachable.
+  assert.equal(weather.some((l) => state.includes(l)), false);
 });
