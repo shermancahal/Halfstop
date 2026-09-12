@@ -222,7 +222,7 @@ export const BILLING = {
    * product configured there, and if the two disagree the store wins. This is
    * what we say it costs.
    */
-  price: 99,
+  price: 499,
   currency: 'USD',
   period: 'month',
 
