@@ -647,7 +647,13 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 .costs-card li { color: var(--ink-2); font-size: .93rem; }
 /* The free card is the one to read first, so it is the one with the accent. */
 .costs-grid .costs-card:first-child { border-color: var(--clay); box-shadow: 0 0 0 1px var(--clay-soft); }
-.costs-why { margin: 0 0 10px; }
+/* Its own space above, rather than borrowing the previous paragraph's margin
+   below. Relying on that made the gap a property of whatever happened to come
+   before: a paragraph with no bottom margin left the heading sitting flush
+   against it, while the next one along looked right, and the two headings in
+   the same section disagreed. Margins collapse, so the larger of this and any
+   preceding margin wins and nothing doubles up. */
+.costs-why { margin: 32px 0 10px; }
 .section-costs p { color: var(--ink-2); }
 .costs-promise {
   border-left: 3px solid var(--clay); padding: 2px 0 2px 16px; margin-top: 26px;
@@ -694,7 +700,7 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 .costs-trial { margin: 14px 0 0; font-size: .9rem; color: var(--ink-2); }
 /* And how to begin, which is a sentence rather than a second button: there is
    already one of those at the foot of the page. */
-.costs-start { margin: 22px 0 0; }
+.costs-start { margin: 22px 0; }
 
 /* Terms, privacy and help at the foot of the settings menu: one row, small,
    and not competing with the controls above them. */
