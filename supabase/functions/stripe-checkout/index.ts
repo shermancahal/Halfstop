@@ -141,8 +141,10 @@ Deno.serve(async (req: Request) => {
     year: env('STRIPE_PRICE_ID_YEAR'),
   };
   const plan = String(body.plan || 'month');
-  const priceId = PRICES[plan];
+  // Checked before it is read, not after. Reading first works today and is
+  // the shape that quietly becomes a bug the moment somebody moves the check.
   if (!Object.hasOwn(PRICES, plan)) return reply(400, { error: 'That is not a plan.' });
+  const priceId = PRICES[plan];
   if (!priceId) return reply(503, { error: `The ${plan} plan is not configured on this project.` });
 
   /*

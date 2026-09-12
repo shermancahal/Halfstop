@@ -19,6 +19,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { verify } from './signature.mjs';
+import { readEvent } from './events.mjs';
 
 function env(name: string): string {
   return (Deno.env.get(name) || '').trim();
@@ -40,22 +41,6 @@ function keyFrom(jsonName: string, legacyName: string): string {
 
 const reply = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
-
-/** Seconds from Stripe, as an ISO string, or null when there is no end. */
-function endsAt(seconds: unknown): string | null {
-  const value = Number(seconds);
-  return Number.isFinite(value) && value > 0 ? new Date(value * 1000).toISOString() : null;
-}
-
-/**
- * Which Stripe statuses mean "this person may use the thing".
- *
- * `past_due` is deliberately included. A card that failed on Tuesday is
- * somebody Stripe is still retrying and still considers a customer, and
- * switching their maps off mid-trip over a retry that usually succeeds is a
- * worse mistake than a few days of unpaid access.
- */
-const ACTIVE = new Set(['active', 'trialing', 'past_due']);
 
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return reply(405, { error: 'Use POST.' });
@@ -89,64 +74,50 @@ Deno.serve(async (req: Request) => {
     return reply(400, { error: 'That was not JSON.' });
   }
 
-  const object = event?.data?.object || {};
-  const type = String(event?.type || '');
-
-  // A checkout that completed has the subscription in hand but not its status,
-  // so the subscription events are the ones that decide. This is only here to
-  // catch the very first one, where the two arrive close together.
-  const userId = String(
-    object?.metadata?.supabase_user_id
-      || object?.subscription_details?.metadata?.supabase_user_id
-      || object?.client_reference_id
-      || '',
-  );
-  if (!userId) {
-    // Answered 200 on purpose: it is a real event about something that is not
-    // ours, and a 4xx would have Stripe retry it for days.
-    console.warn(`[stripe-webhook] ${type} carries no supabase_user_id; ignoring.`);
-    return reply(200, { ok: true, ignored: 'no user' });
+  /*
+   * What this event means is decided in events.mjs, which is pure and tested.
+   *
+   * It was inline here, and reading it carefully was not enough: a completed
+   * checkout granted permanent Premium, because a Checkout Session has no
+   * period end, so the expiry came out null and null means never expires.
+   */
+  const read = readEvent(event);
+  if (read.action === 'ignore') {
+    // 200 rather than a 4xx. It is a real event about something that is not
+    // ours, and a rejection would have Stripe retry it for days.
+    console.log(`[stripe-webhook] ignoring ${event?.type}: ${read.why}`);
+    return reply(200, { ok: true, ignored: read.why });
   }
 
   const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
 
-  if (type === 'customer.subscription.deleted') {
-    // Ended rather than deleted, so the history of what somebody had is not
-    // lost and my_plan() falls through to free on the next read.
+  if (read.action === 'end') {
+    /*
+     * Ended, not deleted, and only ever a row this provider owns.
+     *
+     * The `source` filter is what stops a Stripe cancellation reaching into an
+     * App Store subscription that happens to be on the same account.
+     */
     const { error } = await admin.from('entitlements')
       .update({ expires_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq('user_id', userId)
+      .eq('user_id', read.userId)
       .eq('source', 'stripe');
     if (error) return reply(500, { error: `Could not end it: ${error.message}` });
-    console.log(`[stripe-webhook] ended for ${userId}`);
+    console.log(`[stripe-webhook] ended for ${read.userId}: ${read.why}`);
     return reply(200, { ok: true });
   }
 
-  if (type === 'customer.subscription.created' || type === 'customer.subscription.updated'
-    || type === 'checkout.session.completed') {
-    const status = String(object.status || 'active');
-    const live = type === 'checkout.session.completed' ? true : ACTIVE.has(status);
+  const { error } = await admin.from('entitlements').upsert({
+    user_id: read.userId,
+    tier: 'premium',
+    source: 'stripe',
+    expires_at: read.expiresAt,
+    external_ref: read.externalRef,
+    note: `Stripe ${read.status}`,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'user_id' });
+  if (error) return reply(500, { error: `Could not record it: ${error.message}` });
 
-    const { error } = await admin.from('entitlements').upsert({
-      user_id: userId,
-      tier: 'premium',
-      source: 'stripe',
-      // Ended now rather than nulled, because null means "never expires" and
-      // a cancelled subscription is the opposite of that.
-      expires_at: live
-        ? endsAt(object.current_period_end)
-        : new Date().toISOString(),
-      external_ref: String(object.id || ''),
-      note: `Stripe ${status}`,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id' });
-    if (error) return reply(500, { error: `Could not record it: ${error.message}` });
-
-    console.log(`[stripe-webhook] ${type} ${status} for ${userId}`);
-    return reply(200, { ok: true });
-  }
-
-  // Everything else Stripe sends is fine and none of our business. 200 so it
-  // is not retried.
-  return reply(200, { ok: true, ignored: type });
+  console.log(`[stripe-webhook] ${event?.type} ${read.status} for ${read.userId} until ${read.expiresAt}`);
+  return reply(200, { ok: true });
 });
