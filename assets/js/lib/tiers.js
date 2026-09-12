@@ -155,6 +155,52 @@ export function daysLeft(until, { now = Date.now() } = {}) {
 }
 
 /**
+ * What Premium adds over Free, in the reader's words.
+ *
+ * The difference rather than the whole list, because somebody looking at an
+ * upgrade wants to know what changes. Computed from the two tiers rather than
+ * written out again: place search moved between them once already, and a
+ * hand-kept third copy is the one that would have been missed.
+ */
+export function premiumAdds() {
+  const free = new Set(TIERS.free.grants);
+  return TIERS.premium.grants
+    .filter((key) => !free.has(key))
+    .map((key) => FEATURES[key])
+    .filter(Boolean);
+}
+
+/**
+ * The price, written the way a person writes it.
+ *
+ * Formatted from cents rather than stored as a string, so the number can be
+ * compared and totalled elsewhere without parsing money out of prose. Whole
+ * dollars lose the trailing zeros, because "$3 a month" is how somebody would
+ * say it and "$3.00 a month" is how a form would.
+ */
+export function describePrice({ billing = BILLING } = {}) {
+  const cents = Number(billing.price);
+  if (!Number.isFinite(cents) || cents <= 0) return '';
+  const dollars = cents / 100;
+  const money = dollars % 1 === 0 ? `$${dollars}` : `$${dollars.toFixed(2)}`;
+  return `${money} a ${billing.period || 'month'}`;
+}
+
+/**
+ * How somebody would get Premium, if they could.
+ *
+ * Three answers and they are genuinely different, so the interface should not
+ * have to guess from a boolean: nothing is for sale, it is sold through the
+ * App Store, or this build does not know. Returned as a shape rather than a
+ * sentence so the panel can decide what to draw.
+ */
+export function purchaseRoute({ billing = BILLING } = {}) {
+  if (!billing.live) return { available: false, why: 'not-live' };
+  if (billing.store === 'appstore') return { available: true, where: 'appstore' };
+  return { available: false, why: 'no-store' };
+}
+
+/**
  * What the plan's name does not already say.
  *
  * Empty most of the time, and that is correct. The menu shows the plan as one

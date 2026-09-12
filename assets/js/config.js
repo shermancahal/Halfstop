@@ -207,6 +207,34 @@ export const ROUTING = {
  */
 export const BILLING = {
   live: false,
+
+  /*
+   * What Premium will cost, in one place.
+   *
+   * Here rather than typed into the website and the app separately, because
+   * two copies of a price disagree eventually and the one people read is not
+   * always the one they are charged. The costs page and the plan panel both
+   * render from this.
+   *
+   * A number of cents rather than a string, so it can be compared and totalled
+   * without parsing money out of prose. It is also not the authority on what
+   * anybody is actually charged once this is live: the App Store is, from the
+   * product configured there, and if the two disagree the store wins. This is
+   * what we say it costs.
+   */
+  price: 99,
+  currency: 'USD',
+  period: 'month',
+
+  /*
+   * Where a purchase would happen, when there is one.
+   *
+   * 'none' today, and it is not a placeholder: in-app purchase exists only
+   * inside a shipped native app, and there is not one. The plan panel reads
+   * this to decide whether to offer a way to buy or to say plainly that there
+   * is not one yet. 'appstore' when that changes.
+   */
+  store: 'none',
 };
 
 export const DEFAULT_VIEW = { center: [-84.28, 35.96], zoom: 6.4 };

@@ -57,7 +57,9 @@ import {
 } from './lib/sky.js';
 import { activeAlerts, describeMotion, alertsToGeoJSON } from './lib/storms.js';
 import { fetchRoute, routeGeoJSON } from './lib/route.js';
-import { can, gateReason, planSummary, featureForLayer } from './lib/tiers.js';
+import {
+  can, gateReason, planSummary, featureForLayer, describePrice, purchaseRoute, premiumAdds,
+} from './lib/tiers.js';
 import {
   RV_CAVEAT, RV_RANGES, normaliseProfile, isRV, routingFor, profileRows,
   explainFailure, readDimension, showDimension, showWeight, shortTonsToTonnes,
@@ -2724,6 +2726,7 @@ function wireSettingsMenu() {
       // nobody opens. Only when there is one: the plan is otherwise a single
       // word on purpose, and an empty line is how describePlan says so.
       plan.line ? el('div', { class: 'plan-line hint', text: plan.line }) : null,
+      upgradeBlock(plan),
     ].filter(Boolean)));
 
     /*
@@ -2756,6 +2759,66 @@ function wireSettingsMenu() {
     if (event.key === 'Escape' && !drop.hidden) { setOpen(false); trigger.focus(); }
   });
   drop.addEventListener('click', (event) => event.stopPropagation());
+}
+
+/**
+ * Begin a subscription, which today means saying that you cannot.
+ *
+ * This is the one seam where a purchase plugs in, and it exists now, empty,
+ * for a specific reason: the last time this app grew a button whose handler
+ * had not been written, the handler was simply missing and every press threw
+ * a ReferenceError that no test caught, because the tests covered the module
+ * around it and nothing ever pressed the button.
+ *
+ * So the function is real, it is reachable, and it reports the truth. When
+ * StoreKit arrives it replaces the body and nothing else has to move.
+ */
+async function startSubscription() {
+  const route = purchaseRoute();
+  if (!route.available) {
+    toast('There is nothing to subscribe to yet.', { tone: 'info', timeout: 7000 });
+    return false;
+  }
+  // BILLING.store says 'appstore' and no purchase plugin is bridged in yet.
+  // Reported rather than swallowed: a button that appears to do nothing is
+  // the thing this whole comment exists to prevent.
+  toast('The App Store purchase is not wired into this build yet.', { tone: 'error', timeout: 9000 });
+  return false;
+}
+
+/**
+ * What Premium is and how to get it, for somebody who has not got it.
+ *
+ * Nothing at all while BILLING.live is false, which is today: every account
+ * has everything, so a panel offering to sell it would be describing a
+ * restriction that does not exist.
+ *
+ * When it is live, this says what changes and what it costs, and then tells
+ * the truth about whether it can be bought from here. A subscription lives in
+ * the App Store and the App Store only exists inside a shipped app, so the
+ * browser has nothing to sell and should say so rather than showing a button
+ * that cannot work. That is a state to draw, not a state to hide.
+ */
+function upgradeBlock(plan) {
+  if (!plan.live || plan.tier.id === 'premium') return null;
+
+  const route = purchaseRoute();
+  const price = describePrice();
+
+  return el('div', { class: 'plan-upgrade' }, [
+    el('p', { class: 'plan-upgrade-head', text: price ? `Premium is ${price}.` : 'Premium' }),
+    el('ul', { class: 'plan-upgrade-list' }, premiumAdds().map((what) => el('li', { text: what }))),
+    route.available
+      ? el('button', {
+        class: 'button button-primary button-small', type: 'button', text: 'Subscribe',
+        onclick: () => startSubscription(),
+      })
+      : el('p', {
+        class: 'hint', style: 'margin:8px 0 0',
+        text: 'Subscriptions are handled by the App Store, so this is in the '
+          + 'iPhone and iPad app rather than here.',
+      }),
+  ]);
 }
 
 /**

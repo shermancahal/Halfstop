@@ -703,6 +703,15 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
    line is the one that counts down, so it is readable rather than fine print. */
 .plan-line { margin: 2px 0 0; font-size: .8rem; }
 
+/* What Premium adds, in the menu, for somebody who has not got it. Only ever
+   drawn when billing is live, so it is invisible today. */
+.plan-upgrade { margin: 10px 0 0; }
+.plan-upgrade-head { margin: 0 0 6px; font-size: .85rem; font-weight: 600; }
+.plan-upgrade-list {
+  margin: 0 0 10px; padding-left: 1.1em; display: grid; gap: 4px;
+  font-size: .8rem; color: var(--ink-2);
+}
+
 /* The trial, under the list it is a trial of, set back from it so it reads as
    a note about the card rather than another item in it. */
 .costs-trial { margin: 14px 0 0; font-size: .9rem; color: var(--ink-2); }

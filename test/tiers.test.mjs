@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  FEATURES, TIERS, DEFAULT_TIER, tierFor, can, gateReason, planSummary, describePlan, daysLeft, featureForLayer,
+  FEATURES, TIERS, DEFAULT_TIER, tierFor,
+  can, gateReason, planSummary, describePlan,
+  daysLeft, featureForLayer, describePrice, purchaseRoute,
+  premiumAdds,
 } from '../assets/js/lib/tiers.js';
 
 const FREE = { live: false };
@@ -295,4 +298,58 @@ test('tiers: the layers a plan covers are decided by what the layer already is',
   assert.equal(state.every((l) => l.states?.length > 0), true);
   // Nothing is in both, which would make one of them unreachable.
   assert.equal(weather.some((l) => state.includes(l)), false);
+});
+
+/* ------------------------------------------------------------ the price */
+
+test('tiers: the price is written the way a person writes it', () => {
+  const at = (price, period = 'month') => describePrice({ billing: { price, period } });
+  assert.equal(at(99), '$0.99 a month');
+  assert.equal(at(299), '$2.99 a month');
+  // Whole dollars lose the zeros: "$3 a month" is how somebody says it and
+  // "$3.00 a month" is how a form does.
+  assert.equal(at(300), '$3 a month');
+  assert.equal(at(1999, 'year'), '$19.99 a year');
+  // Nothing rather than "$0 a month" or "$NaN a month".
+  assert.equal(at(0), '');
+  assert.equal(at(undefined), '');
+});
+
+test('tiers: how somebody would buy it, and the three answers that differ', () => {
+  // Not live is not the same as live with nowhere to buy, and the panel draws
+  // them differently: one says nothing at all, the other says where to go.
+  assert.deepEqual(purchaseRoute({ billing: { live: false, store: 'appstore' } }),
+    { available: false, why: 'not-live' });
+  assert.deepEqual(purchaseRoute({ billing: { live: true, store: 'none' } }),
+    { available: false, why: 'no-store' });
+  assert.deepEqual(purchaseRoute({ billing: { live: true, store: 'appstore' } }),
+    { available: true, where: 'appstore' });
+});
+
+test('tiers: nothing is for sale today', () => {
+  // The shipped state, asserted rather than assumed. A commit that turned
+  // billing on as a side effect of something else has to trip over this.
+  assert.equal(purchaseRoute().available, false);
+});
+
+test('tiers: what Premium adds is the difference, not a third copy of the list', () => {
+  const adds = premiumAdds();
+  // Place search is free now, so it is not something Premium adds.
+  assert.equal(adds.includes(FEATURES.placeSearch), false);
+  assert.equal(adds.includes(FEATURES.folderSync), true);
+  assert.equal(adds.length, Object.keys(FEATURES).length - TIERS.free.grants.length);
+});
+
+test('tiers: the price on the website is the price in the code', async () => {
+  /*
+   * The page is static HTML and cannot read BILLING, so the number is typed
+   * in twice. Two copies of a price disagree eventually, and the one people
+   * read is not always the one they are charged. Same reason the tier split
+   * is read off the page rather than restated: a decision kept in two files
+   * needs something that notices when they part company.
+   */
+  const { readFile } = await import('node:fs/promises');
+  const page = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  assert.equal(page.includes(describePrice()), true,
+    `the costs page does not say ${describePrice()}`);
 });
