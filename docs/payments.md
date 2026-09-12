@@ -156,21 +156,31 @@ default they would otherwise have inherited. Raising it is a deliberate edit in
 `stripe-checkout/index.ts` and `stripe-portal/index.ts`, not a dashboard
 setting somebody flips.
 
-### 5. Turn it on
+### 5. Turn it on, for yourself first
 
-In `assets/js/config.js`:
+Not by editing `config.js`. Both values are read from injected globals, so
+turning them on is a line in `assets/js/token.js`, which is gitignored:
 
 ```js
-export const BILLING = {
-  live: true,
-  store: 'stripe',
-  ...
-};
+window.ABMAP_BILLING_LIVE = 'true';
+window.ABMAP_BILLING_STORE = 'stripe';
 ```
 
-`live: true` closes the feature gates. `store: 'stripe'` is what puts the two
-buttons in the plan panel. They are separate on purpose: the gates can be
-proven with billing live and nothing for sale.
+`npm start`, and the plan panel has the two buttons.
+
+**Do not commit a live default while the Stripe keys are test keys.** A
+Subscribe button on the public site backed by a test-mode key is worse than
+useless: anybody can pay with `4242 4242 4242 4242`, have no money leave their
+account, and come away with a real entitlement row. Testing belongs on your own
+machine until the keys are live ones.
+
+When it is time, launching is `ABMAP_BILLING_LIVE` and `ABMAP_BILLING_STORE` as
+repository secrets, written into `token.js` by the deploy the same way the
+Mapbox and Supabase values are. Not a commit that changes what strangers see.
+
+`live` closes the feature gates and `store` is what offers a way to buy. They
+are separate on purpose: the gates can be proven with billing live and nothing
+for sale.
 
 ### 6. Test it before anybody real does
 

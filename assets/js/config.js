@@ -206,7 +206,20 @@ export const ROUTING = {
  * SITE.editors and carries the same warning.
  */
 export const BILLING = {
-  live: false,
+  /*
+   * Off unless the build says otherwise, and the build is where it belongs.
+   *
+   * A committed `true` would put a Subscribe button on the public site the
+   * moment it deployed. While the Stripe keys are test-mode keys that is worse
+   * than useless: anybody could pay with 4242 4242 4242 4242, take no money
+   * out of their account, and come away with a real entitlement row.
+   *
+   * So it reads an injected global like the Mapbox and Supabase values, from
+   * assets/js/token.js, which is gitignored. Testing is then a line in a local
+   * token.js, and launching is a repository secret, and neither is a commit
+   * that changes what strangers see.
+   */
+  live: readGlobal('ABMAP_BILLING_LIVE') === 'true',
 
   /*
    * What Premium will cost, in one place.
@@ -244,7 +257,7 @@ export const BILLING = {
    * this to decide whether to offer a way to buy or to say plainly that there
    * is not one yet. 'appstore' when that changes.
    */
-  store: 'none',
+  store: readGlobal('ABMAP_BILLING_STORE') || 'none',
 };
 
 export const DEFAULT_VIEW = { center: [-84.28, 35.96], zoom: 6.4 };
