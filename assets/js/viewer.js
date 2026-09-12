@@ -12,7 +12,7 @@
 import {
   SITE, BASEMAPS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN, OVERLAYS,
   DEFAULT_VIEW, DEFAULT_UNITS, TRACK_COLORS, STATE_NAMES, STATE_GROUP, PROTOMAPS_ARCHIVE, ROUTING,
-  PROTOMAPS_MAXZOOM,
+  PROTOMAPS_MAXZOOM, BILLING,
 } from './config.js';
 import {
   loadEngine, buildRasterStyle, hasMapboxToken, mapboxToken, overlayParts, overlayIdFromLayer, overlayRows,
@@ -2849,7 +2849,16 @@ async function openBilling(button = null) {
  * that cannot work. That is a state to draw, not a state to hide.
  */
 function upgradeBlock(plan) {
-  if (!plan.live) return null;
+  /*
+   * Whoever runs this can see the purchase panel before billing is live, so a
+   * checkout can be tested with a card that is not a card.
+   *
+   * Presentation only, and worth being clear about: the checkout function
+   * refuses anybody not named as a tester while the Stripe key is a test key.
+   * That is the control. This just means the button is there to press.
+   */
+  const preview = !BILLING.live && mayEdit(state.account?.user);
+  if (!plan.live && !preview) return null;
 
   /*
    * Somebody who already subscribes gets the way out, not another offer.
@@ -2859,7 +2868,7 @@ function upgradeBlock(plan) {
    * money: Stripe's own billing pages, or Apple's, and only Apple can end an
    * App Store subscription however much we might like to.
    */
-  if (!offersUpgrade(plan)) {
+  if (!offersUpgrade({ ...plan, live: true })) {
     if (plan.source === 'stripe') {
       return el('div', { class: 'plan-upgrade' }, [
         el('button', {
@@ -2883,7 +2892,7 @@ function upgradeBlock(plan) {
     return null;
   }
 
-  const route = purchaseRoute();
+  const route = purchaseRoute({ preview });
   const saving = annualSaving();
 
   /*
@@ -2928,6 +2937,15 @@ function upgradeBlock(plan) {
     // overstate the discount or go stale when one of them moves.
     route.available && saving
       ? el('p', { class: 'hint', style: 'margin:8px 0 0', text: `Paying by the year saves ${saving.money}, about ${saving.percent}%.` })
+      : null,
+    // Said plainly, because a preview that looks like the real thing is how
+    // somebody ends up wondering whether they were charged.
+    route.preview
+      ? el('p', {
+        class: 'hint plan-preview', style: 'margin:8px 0 0',
+        text: 'Test mode. Billing is not live: this is here because you run '
+          + 'Halfstop, and no real card is charged.',
+      })
       : null,
   ].filter(Boolean));
 }

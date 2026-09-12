@@ -95,6 +95,33 @@ Deno.serve(async (req: Request) => {
   const user = who?.user;
   if (whoError || !user) return reply(401, { error: 'That session is not valid.' });
 
+
+  /*
+   * While the keys are test keys, only named testers may get this far.
+   *
+   * This is the control, and the hidden button is not. The function is
+   * reachable by anybody holding a session, drawn button or no, and a
+   * test-mode checkout is a real entitlement bought with a card that is not a
+   * card: 4242 4242 4242 4242, no money leaves anybody's account, Premium for
+   * good. The gap between deploying this and going live with real keys is
+   * exactly the window in which that is possible.
+   *
+   * BILLING_TESTERS is a comma separated list of addresses. Empty means nobody,
+   * which is the right default: a test-mode checkout nobody can reach is a
+   * feature that is not finished, and a test-mode checkout everybody can reach
+   * is a way to get Premium for nothing.
+   */
+  if (stripeKey.startsWith('sk_test_')) {
+    const testers = env('BILLING_TESTERS').toLowerCase().split(',')
+      .map((one: string) => one.trim()).filter(Boolean);
+    if (!testers.includes(String(user.email || '').toLowerCase())) {
+      return reply(403, {
+        error: 'Payments are in test mode on this project, so this is limited to named testers.',
+        testMode: true,
+      });
+    }
+  }
+
   /*
    * Somebody who already subscribes is not sold a second one.
    *

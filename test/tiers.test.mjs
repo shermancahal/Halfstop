@@ -415,3 +415,26 @@ test('tiers: a trial is offered the thing that stops it ending', () => {
   assert.equal(offersUpgrade({ live: false, source: 'trial', tier: { id: 'premium' } }), false);
   assert.equal(offersUpgrade(null), false);
 });
+
+test('tiers: a preview offers the web checkout before billing is live', () => {
+  /*
+   * How the people who run this reach a checkout to test one, without a
+   * Subscribe button appearing for everybody else.
+   *
+   * It decides what is drawn and nothing else. The checkout function refuses
+   * anybody not named as a tester while the Stripe key is a test key, because
+   * a hidden button is not a control: that function is reachable by anybody
+   * holding a session whether or not the app ever draws one.
+   */
+  const off = { live: false, store: 'none' };
+  assert.deepEqual(purchaseRoute({ billing: off }), { available: false, why: 'not-live' });
+  assert.deepEqual(purchaseRoute({ billing: off, preview: true }),
+    { available: true, where: 'stripe', preview: true });
+
+  // Once billing is live the preview flag changes nothing: the configured
+  // store decides, and a preview must not quietly override it.
+  assert.deepEqual(purchaseRoute({ billing: { live: true, store: 'appstore' }, preview: true }),
+    { available: false, why: 'in-app-only' });
+  assert.deepEqual(purchaseRoute({ billing: { live: true, store: 'stripe' }, preview: true }),
+    { available: true, where: 'stripe' });
+});

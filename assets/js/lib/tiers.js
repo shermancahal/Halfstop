@@ -248,8 +248,21 @@ export function offersUpgrade(summary) {
  * App Store, or this build does not know. Returned as a shape rather than a
  * sentence so the panel can decide what to draw.
  */
-export function purchaseRoute({ billing = BILLING } = {}) {
-  if (!billing.live) return { available: false, why: 'not-live' };
+export function purchaseRoute({ billing = BILLING, preview = false } = {}) {
+  /*
+   * `preview` is how the people who run this reach a checkout before billing
+   * is live, to test one with a card that is not a card.
+   *
+   * It only decides what is drawn. The real control is in the checkout
+   * function, which refuses anybody not named as a tester while the Stripe key
+   * is a test key - because a hidden button is not a control, and that
+   * function is reachable by anybody with a session whether or not the app
+   * ever draws the button.
+   */
+  if (!billing.live && !preview) return { available: false, why: 'not-live' };
+  // Stripe is the only route a browser can complete, so it is the one a
+  // preview means. There is nothing to test about sending somebody to Apple.
+  if (!billing.live && preview) return { available: true, where: 'stripe', preview: true };
   // Stripe is the one a browser can actually complete. The App Store is the
   // one a browser cannot, so it is reported as a place rather than a button:
   // the panel sends people to the app instead of showing a control that

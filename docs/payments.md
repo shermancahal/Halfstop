@@ -156,6 +156,27 @@ default they would otherwise have inherited. Raising it is a deliberate edit in
 `stripe-checkout/index.ts` and `stripe-portal/index.ts`, not a dashboard
 setting somebody flips.
 
+### 4b. Name yourself as a tester
+
+Supabase → Edge Functions → Secrets:
+
+| Name | Value |
+| --- | --- |
+| `BILLING_TESTERS` | `you@example.com`, comma separated for more than one |
+
+**This is the control that matters while the keys are test keys.** A test-mode
+checkout is a real entitlement bought with a card that is not a card: type
+`4242 4242 4242 4242`, no money leaves anybody's account, Premium for good.
+Both `stripe-checkout` and `stripe-portal` refuse anybody not on this list
+whenever `STRIPE_SECRET_KEY` begins `sk_test_`.
+
+Hiding the button does not do this. The functions are reachable by anybody
+holding a session, drawn button or no. Empty means nobody, which is the right
+default.
+
+The check disappears by itself when the key becomes a live one, because then a
+checkout costs real money and there is nothing to protect against.
+
 ### 5. Turn it on, for yourself first
 
 Not by editing `config.js`. Both values are read from injected globals, so
@@ -167,6 +188,12 @@ window.ABMAP_BILLING_STORE = 'stripe';
 ```
 
 `npm start`, and the plan panel has the two buttons.
+
+**Or test on the deployed site without touching those globals.** Anybody listed
+in `SITE.editors` sees the purchase panel even when billing is off, labelled
+*Test mode*, because whoever runs Halfstop needs to press the button that
+everybody else must not see yet. Signing in as that account on app.halfstop.app
+is enough.
 
 **Do not commit a live default while the Stripe keys are test keys.** A
 Subscribe button on the public site backed by a test-mode key is worse than
