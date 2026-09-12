@@ -174,6 +174,20 @@ to look at once it is running.
    today. The product is Halfstop, so `com.halfstop.app` is the
    obvious answer; if you keep `gps`, keep it on purpose.
 
+   **Do not register it on the developer portal while the account is changing
+   entity type.** Deciding the string costs nothing; registering an App ID for
+   it binds the string to a team. If an Individual-to-Organization change ends
+   up producing a new team rather than converting the existing one, the
+   identifier does not come with you, and an app that has never been released
+   cannot be moved by App Transfer either - that path wants a released version
+   on the store. The failure is not dramatic, it is just permanent: the name
+   you wanted is taken, by you, on an account you no longer use.
+
+   Local builds onto your own phone need no registered identifier at all.
+   Xcode will sign with a personal team against a throwaway id such as
+   `com.halfstop.app.dev`, which leaves the real one untouched until there is
+   a team to register it to.
+
 2. **Fill in `assets/js/token.js` completely.** `npm run dist:app` reads that
    file from disk — it does not see the repository variables the website deploy
    uses — and ships whatever is in it. The build now prints what the bundle
@@ -416,3 +430,84 @@ on the difference between a service existing and a service answering. Native
 code written blind is the same failure with a compiler instead of an HTTP
 request: it looks like progress, and the first honest test is the one that has
 not happened yet.
+
+---
+
+## 10. Charging for it, if the money goes through Apple
+
+Nothing here is built. This section exists so that the next person to open the
+billing question starts from the decision rather than from a blank page, and so
+that nobody builds a web checkout that the App Store would make redundant.
+
+### What choosing Apple actually decides
+
+It decides where the entitlement comes from, and that is the only part the code
+cares about. `assets/js/lib/tiers.js` already has one list, one `can()`, and one
+flag, so the work is never "find every call site". It is: something server-side
+learns that an account has paid, and says so in a claim the client cannot
+write. Apple changes who tells the server, not the shape of the answer.
+
+It also decides that there has to be a native app at all. A web page can take a
+card today with nothing from this section. In-app purchase only exists inside a
+shipped iOS app, which means section 3 onwards is a prerequisite rather than an
+option.
+
+### What it costs
+
+| | |
+| --- | --- |
+| Commission, standard | 30% |
+| Commission, Small Business Program | 15% under $1M/yr across all your apps |
+| Commission, subscriptions after year one | 15% |
+| Apple Developer Program | $99/yr, already in the table above |
+
+The Small Business Program is the realistic rate here and has to be applied for.
+Note that it is assessed across everything you ship, not per app.
+
+Apple's rules on linking out to a web purchase have been through court and have
+moved more than once, most recently in the United States. Treat any specific
+claim about what is permitted today as something to check against the current
+App Store Review Guidelines rather than against this file, including this
+sentence. What is stable enough to plan on: digital content consumed inside the
+app is expected to be sold through in-app purchase, and a subscription bought on
+the web and merely recognised by the app has always been the arrangement with
+the least commission and the most paperwork.
+
+### The order to do it in
+
+1. **Leave `BILLING.live` false and keep shipping.** Every gate is open, every
+   account gets everything, and the matrix is a plan rather than a promise. This
+   is the honest state and costs nothing to hold.
+2. ~~Decide the entitlement claim before writing any purchase code.~~ **Done.**
+   `public.entitlements` holds explicit grants, readable by the account it is
+   about and writable by nothing short of the service role, and
+   `public.my_plan()` answers grant, then trial, then free. The trial is not
+   stored anywhere: thirty days from the day the account was made is already
+   knowable, and a stored copy is a second answer that can disagree with the
+   first. An administrator is one row with no expiry rather than a special case
+   in the app.
+
+   Two things follow from that which matter on launch day. The trial runs from
+   signup, so every account that exists before billing goes live will already
+   be past it: either accept that, or insert grants for the people who were
+   there early. And nothing is gated yet, so the countdown is currently
+   counting down to nothing happening, which is why the interface says "Free,
+   with everything switched on" rather than showing it.
+3. **Ship the native shell** (sections 2 to 6), with no purchases in it.
+4. **Then in-app purchase**, product ids and App Store Server Notifications
+   into a Supabase function that writes an `entitlements` row with
+   `source = 'appstore'` and the expiry Apple reports. Server notifications rather
+   than client receipts: a receipt the app hands you is a string the app can
+   invent, and renewals and cancellations arrive when nobody has the app open.
+5. **Only then turn `BILLING.live` on**, which closes the gates the website
+   already describes.
+
+### The thing to decide before any of it
+
+Whether there is something worth charging for yet. The Premium list on the
+homepage is seven items, and two of them, photographs on a waypoint and offline
+access, are computed or stored on the reader's own device and cost nothing to
+serve. A tier whose headline features are free to provide is one people work
+out, and the credibility of the rest goes with it. Section 9 is the honest
+answer to that: native offline basemaps are a real proposition, and they are
+also the largest piece of work in this document.

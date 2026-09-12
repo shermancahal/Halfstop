@@ -99,3 +99,40 @@ window.ABMAP_PROTOMAPS_MAXZOOM = '';
  * See docs/routing.md.
  */
 window.ABMAP_ROUTING_URL = '';
+
+/**
+ * Billing, which is off unless these say otherwise.
+ *
+ * `LIVE` closes the feature gates — Premium features stop working for accounts
+ * that do not have Premium. `STORE` is what offers a way to buy: 'stripe' in a
+ * browser, 'appstore' once there is a native app, 'none' or empty for neither.
+ * They are separate on purpose, so the gates can be proven with nothing for
+ * sale, and a store can be wired up while everything is still free.
+ *
+ * Not committed defaults, because a `true` in the repository would put a
+ * Subscribe button on the public site the moment it deployed — and while the
+ * Stripe keys are test-mode keys that is worse than useless: anybody could pay
+ * with 4242 4242 4242 4242, have no money leave their account, and come away
+ * with a real entitlement row.
+ */
+window.ABMAP_BILLING_LIVE = '';
+window.ABMAP_BILLING_STORE = '';
+
+/**
+ * Who sees the purchase panel while billing is off, comma separated.
+ *
+ * This is how you test a checkout before anybody else can reach one: put your
+ * own address here, sign in as it, and the plan panel draws the Subscribe
+ * buttons labelled *Test mode*.
+ *
+ * It decides which button is drawn and nothing more. Who may actually pay is
+ * decided by `BILLING_TESTERS` on the Supabase Edge Functions, which refuse
+ * anybody not on their list while the Stripe key is a test key. That split is
+ * deliberate: this file runs on the reader's computer, where they can edit it,
+ * so it cannot be the thing that grants anybody anything.
+ *
+ * Keep it local if you can. The deploy writes this same file from a repository
+ * secret, and the file is served to every visitor — so an address set there is
+ * readable by anybody who views source, while an address set here is not.
+ */
+window.ABMAP_BILLING_TESTERS = '';

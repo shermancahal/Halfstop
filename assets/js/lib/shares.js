@@ -23,14 +23,49 @@ export function looksLikeEmail(value) {
 }
 
 /**
+ * What an invitation allows.
+ *
+ * Two words rather than a permission set, because there are two things people
+ * actually mean: come and look at this, and come and work on this with me.
+ */
+export const ROLES = ['viewer', 'editor'];
+
+/**
+ * The narrower reading of anything unrecognised.
+ *
+ * An invitation written before roles existed has no role at all, and a row
+ * that says something this version has never heard of is not a reason to grant
+ * more than was asked for.
+ */
+export function readRole(value) {
+  return String(value || '').trim().toLowerCase() === 'editor' ? 'editor' : 'viewer';
+}
+
+/**
  * Stamp a folder as somebody else's.
  *
  * The marker is what every other rule reads, so it goes on once, here, rather
  * than being inferred from a user id in five places that could each get it
  * wrong. A folder without it is the reader's own.
  */
-export function markShared(folder, { ownerId = '', ownerName = '' } = {}) {
-  return { ...folder, sharedFrom: { ownerId, ownerName } };
+export function markShared(folder, { ownerId = '', ownerName = '', role = 'viewer' } = {}) {
+  return { ...folder, sharedFrom: { ownerId, ownerName, role: readRole(role) } };
+}
+
+/**
+ * Whether this device may change this folder.
+ *
+ * True for a folder of your own, which is the ordinary case and the reason
+ * this reads the way it does: the question is not "is it shared" but "may I
+ * write", and for everything you own the answer is yes.
+ */
+export function canEdit(folder) {
+  return folder?.sharedFrom ? folder.sharedFrom.role === 'editor' : true;
+}
+
+/** What to call the arrangement, in a sentence about one person. */
+export function describeRole(role) {
+  return readRole(role) === 'editor' ? 'can edit it' : 'can view it';
 }
 
 /** Whether this folder belongs to somebody else. */
@@ -62,10 +97,13 @@ export function splitOwned(folders = []) {
  * covered by a test rather than by somebody remembering to read a deployed
  * function.
  */
-export function invitationLine({ from, folder, what }) {
+export function invitationLine({ from, folder, what, role = 'viewer' }) {
   const who = String(from || 'Somebody').trim();
   const named = String(folder || 'a folder').trim();
-  return `${who} has invited you to view ${named} on Halfstop, an application — ${what}. `
+  const asked = readRole(role) === 'editor'
+    ? `work on ${named} with them`
+    : `view ${named}`;
+  return `${who} has invited you to ${asked} on Halfstop, ${what}. `
     + 'It will require you to create a free account on Halfstop.';
 }
 

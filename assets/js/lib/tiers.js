@@ -23,8 +23,21 @@
  * Because the alternative is discovering later that the decision "is this
  * reader allowed to do this" is spelled eleven different ways in eleven places.
  * One list, one function, one flag. When a tier does launch, the work is
- * turning `BILLING.live` on and writing the server-side half — not finding
- * every call site.
+ * turning `BILLING.live` on and writing the server-side half, not finding every
+ * call site.
+ *
+ * WHERE THE ENTITLEMENT IS EXPECTED TO COME FROM
+ *
+ * An App Store subscription, which means it arrives as a claim this code reads
+ * and cannot write: Apple tells a server, the server sets the claim, the client
+ * is told. It does not arrive as a receipt the app hands up, because a receipt
+ * the app can hand up is a string the app can invent, and renewals and
+ * cancellations happen when nobody has the app open.
+ *
+ * That decision is worth knowing here because it rules something out. Do not
+ * build a web checkout against this module: in-app purchase only exists inside
+ * a shipped native app, so billing cannot go live before that app does.
+ * `docs/mobile-app.md` has the staging and what the commission actually is.
  *
  * `EVERYTHING` is the honest state today: a free tier that includes all of it.
  * The matrix below is a plan, not a promise, and nothing in the app reads it
@@ -87,7 +100,15 @@ export const TIERS = {
   free: {
     id: 'free',
     name: 'Free',
-    grants: [],
+    /*
+     * Place search is metered and free anyway, deliberately.
+     *
+     * It is the first thing anybody does with a map, and a map you cannot
+     * search is a map you have to already know. At this size the bill for it
+     * is small enough to carry, and meeting somebody with a locked search box
+     * in their first minute costs more than the requests do.
+     */
+    grants: ['placeSearch'],
     note: 'Everything is free while Halfstop is being built. '
       + 'If that ever changes, it will change here first and it will say so.',
   },
@@ -95,25 +116,249 @@ export const TIERS = {
     id: 'premium',
     name: 'Premium',
     grants: Object.keys(FEATURES),
-    note: 'The metered parts: searching, syncing, weather, offline downloads, '
-      + 'routing, photographs on a pin and the state maps.',
+    note: 'The metered parts: syncing, weather, offline downloads, routing, '
+      + 'photographs on a pin and the state maps.',
   },
 };
 
 export const DEFAULT_TIER = 'free';
 
-/** The tier a reader is on. One today, and the signature is ready for more. */
+/**
+ * How long a new account gets everything.
+ *
+ * Stated here as well as in the database because the interface counts down
+ * with it. The database is the one that decides; this is the one that can be
+ * wrong without anybody losing access, which is the right way round.
+ */
+export const TRIAL_DAYS = 30;
+
+/**
+ * The tier a reader is on.
+ *
+ * The plan is not computed here and never should be. It is read from the
+ * server by `public.my_plan()`, which knows two things this file cannot: when
+ * the account was created, and whether anybody granted it anything. What
+ * arrives is an answer, not evidence, and it is still only used to decide what
+ * to draw.
+ */
 export function tierFor(account = null, { billing = BILLING } = {}) {
   if (!billing.live) return TIERS[DEFAULT_TIER];
-  /*
-   * Deliberately not reading a claim out of the session yet.
-   *
-   * When this does read one it must come from a signed token the server issued,
-   * not from a field the client can set — and writing the client-side half
-   * first is how a plan field ends up in localStorage and treated as true.
-   */
-  const id = account?.tier;
+  const id = account?.plan?.tier;
   return TIERS[id] || TIERS[DEFAULT_TIER];
+}
+
+/** Whole days left, rounded up, so the last day reads as "1" and not "0". */
+export function daysLeft(until, { now = Date.now() } = {}) {
+  const ends = until ? Date.parse(until) : NaN;
+  if (!Number.isFinite(ends)) return null;
+  return Math.max(0, Math.ceil((ends - now) / 86400000));
+}
+
+/**
+ * What Premium adds over Free, in the reader's words.
+ *
+ * The difference rather than the whole list, because somebody looking at an
+ * upgrade wants to know what changes. Computed from the two tiers rather than
+ * written out again: place search moved between them once already, and a
+ * hand-kept third copy is the one that would have been missed.
+ */
+export function premiumAdds() {
+  const free = new Set(TIERS.free.grants);
+  return TIERS.premium.grants
+    .filter((key) => !free.has(key))
+    .map((key) => FEATURES[key])
+    .filter(Boolean);
+}
+
+/** Money, the way a person writes it: no trailing zeros on a whole number. */
+function money(cents) {
+  const dollars = cents / 100;
+  return dollars % 1 === 0 ? `$${dollars}` : `$${dollars.toFixed(2)}`;
+}
+
+/** The plans on offer, in the order they should be read. */
+export function plansOffered({ billing = BILLING } = {}) {
+  return Object.entries(billing.plans || {}).map(([id, plan]) => ({ id, ...plan }));
+}
+
+/**
+ * The price, written the way a person writes it.
+ *
+ * Named by plan rather than by index, so a caller asks for the year and gets
+ * the year even if the order changes.
+ */
+export function describePrice({ plan = null, billing = BILLING } = {}) {
+  const key = plan || billing.defaultPlan || 'month';
+  const chosen = billing.plans?.[key];
+  const cents = Number(chosen?.price);
+  if (!Number.isFinite(cents) || cents <= 0) return '';
+  return `${money(cents)} a ${chosen.period || key}`;
+}
+
+/**
+ * What paying for the year saves, worked out rather than asserted.
+ *
+ * "Two months free" is the sentence everybody reaches for and it is usually a
+ * lie by a few dollars: at $4.99 and $49 the year costs a shade under ten
+ * months, not ten exactly. Computing it means the page cannot drift from the
+ * prices above it, and cannot overstate the discount by rounding in our own
+ * favour.
+ *
+ * Null when there is nothing to compare, so a caller can leave it out rather
+ * than print "saves $0".
+ */
+export function annualSaving({ billing = BILLING } = {}) {
+  const month = Number(billing.plans?.month?.price);
+  const year = Number(billing.plans?.year?.price);
+  if (!Number.isFinite(month) || !Number.isFinite(year) || month <= 0 || year <= 0) return null;
+
+  const twelve = month * 12;
+  if (year >= twelve) return null;
+
+  const saved = twelve - year;
+  return {
+    cents: saved,
+    money: money(saved),
+    percent: Math.round((saved / twelve) * 100),
+  };
+}
+
+/**
+ * Whether this account may see the purchase panel before billing is live.
+ *
+ * Presentation, and only that: it decides whether a button is drawn. Who may
+ * actually pay is decided by the Edge Function against its own list, because
+ * this one runs on the reader's computer and they can edit it.
+ */
+export function isBillingTester(user, { billing = BILLING } = {}) {
+  const email = String(user?.email || '').trim().toLowerCase();
+  if (!email) return false;
+  return (billing.testers || []).includes(email);
+}
+
+/**
+ * Whether to show somebody how to start paying.
+ *
+ * A trial counts as not paying yet, which is the whole point of this
+ * function existing. A trial reads as premium everywhere else - correctly,
+ * because everything works - and reading it that way here meant nobody could
+ * subscribe during their first thirty days: they would have had to let the
+ * trial lapse, lose it all, and only then be offered the thing that would have
+ * kept it. Backwards, and invisible, because the person it happened to would
+ * simply not see a button.
+ */
+/**
+ * Where an entitlement came from, when the answer is "somebody already has it".
+ *
+ * A list of what counts as settled rather than a list of what does not, with
+ * anything unrecognised falling through to being offered a purchase. That way
+ * round on purpose: a source nobody taught this about means at worst a button
+ * somebody presses and the checkout refuses with "you already subscribe",
+ * which is visible and harmless, while the other way round means a free
+ * account that is silently never shown a way to pay.
+ */
+const SETTLED = new Set(['granted', 'stripe', 'appstore']);
+
+export function offersUpgrade(summary) {
+  if (!summary?.live) return false;
+  /*
+   * Read off the source, never off the tier.
+   *
+   * `tierFor` flattens every account to Free while billing is off - correct
+   * for the panel, because every feature is open to everybody and naming a
+   * tier would describe a restriction that does not exist. But the test-mode
+   * preview forces `live: true` onto a summary built with billing off, so a
+   * check on `tier.id` saw Free for everybody and offered to sell Premium to
+   * an account that already had it, including one already paying by card.
+   *
+   * The source is the one field that says the same thing either way, so it is
+   * the one to ask.
+   */
+  return !SETTLED.has(summary.source);
+}
+
+/**
+ * How somebody would get Premium, if they could.
+ *
+ * Three answers and they are genuinely different, so the interface should not
+ * have to guess from a boolean: nothing is for sale, it is sold through the
+ * App Store, or this build does not know. Returned as a shape rather than a
+ * sentence so the panel can decide what to draw.
+ */
+export function purchaseRoute({ billing = BILLING, preview = false } = {}) {
+  /*
+   * `preview` is how the people who run this reach a checkout before billing
+   * is live, to test one with a card that is not a card.
+   *
+   * It only decides what is drawn. The real control is in the checkout
+   * function, which refuses anybody not named as a tester while the Stripe key
+   * is a test key - because a hidden button is not a control, and that
+   * function is reachable by anybody with a session whether or not the app
+   * ever draws the button.
+   */
+  if (!billing.live && !preview) return { available: false, why: 'not-live' };
+  // Stripe is the only route a browser can complete, so it is the one a
+  // preview means. There is nothing to test about sending somebody to Apple.
+  if (!billing.live && preview) return { available: true, where: 'stripe', preview: true };
+  // Stripe is the one a browser can actually complete. The App Store is the
+  // one a browser cannot, so it is reported as a place rather than a button:
+  // the panel sends people to the app instead of showing a control that
+  // cannot work where they are standing.
+  if (billing.store === 'stripe') return { available: true, where: 'stripe' };
+  if (billing.store === 'appstore') return { available: false, why: 'in-app-only' };
+  return { available: false, why: 'no-store' };
+}
+
+/**
+ * What the plan's name does not already say.
+ *
+ * Empty most of the time, and that is correct. The menu shows the plan as one
+ * word by an earlier decision the smoke test guards: the explaining belongs in
+ * the FAQ rather than somewhere somebody opened to switch to Celsius, and
+ * "Free." written under the word Free is the kind of line that decision exists
+ * to prevent.
+ *
+ * So this carries the one thing a name cannot, which is when it stops. A trial
+ * that does not say when it ends is a trial that ends as a surprise. It counts
+ * rather than naming a date, because "9 days left" is checkable against a
+ * calendar and a date on its own has to be worked out.
+ */
+export function describePlan(plan = null, { now = Date.now(), billing = BILLING } = {}) {
+  // Every account has everything, so a countdown would count down to nothing
+  // happening.
+  if (!billing.live) return '';
+  // The name says Free, and a plan that is not premium has no end to report.
+  if (plan?.tier !== 'premium') return '';
+  // Premium with no end date: the ordinary case for whoever runs the service,
+  // and saying "until forever" about it would be worse than silence.
+  if (!plan.until) return '';
+
+  const left = daysLeft(plan.until, { now });
+  if (left === null) return '';
+
+  const trial = plan.source === 'trial';
+  if (left === 0) return trial ? 'Trial ends today.' : 'Ends today.';
+  const days = `${left} day${left === 1 ? '' : 's'} left`;
+  return trial ? `Trial, ${days}.` : `${days[0].toUpperCase()}${days.slice(1)}.`;
+}
+
+/**
+ * Which feature a map layer belongs to, or null if it is free.
+ *
+ * Derived from what the layer already says about itself rather than from a
+ * flag added to seventy entries in config.js. The weather group is the weather
+ * group, and a layer carrying `states` is one of the state level maps: both
+ * are properties those layers have for their own reasons, so a new layer joins
+ * the right tier by being what it is rather than by somebody remembering.
+ *
+ * The cost of that is a layer could join a paid tier by accident. It is the
+ * better risk: the other way round, a layer silently escapes one.
+ */
+export function featureForLayer(entry) {
+  if (!entry) return null;
+  if (entry.group === 'Weather') return 'weatherLayers';
+  if (Array.isArray(entry.states) && entry.states.length) return 'stateLayers';
+  return null;
 }
 
 /**
@@ -154,10 +399,16 @@ export function gateReason(feature, { tier = null } = {}) {
  */
 export function planSummary(account = null, { billing = BILLING } = {}) {
   const tier = tierFor(account, { billing });
+  const plan = account?.plan || null;
   return {
     tier,
     name: tier.name,
     note: tier.note,
+    /* Where the entitlement came from: 'trial', 'granted', 'appstore', 'none'. */
+    source: plan?.source || 'none',
+    until: plan?.until || null,
+    /* The same thing as a sentence, which is what the menu actually shows. */
+    line: describePlan(plan, { billing }),
     /* Whether any of this is real yet, which the interface should not hide. */
     live: Boolean(billing.live),
     /*

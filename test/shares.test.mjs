@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 
 import {
   normaliseEmail, looksLikeEmail, markShared, isShared, splitOwned,
-  invitationLine, describeShares,
+  invitationLine, describeShares, readRole, canEdit,
 } from '../assets/js/lib/shares.js';
 import { mergeFolders } from '../assets/js/lib/sync.js';
 
@@ -67,6 +67,36 @@ test('shares: the invitation says who, what and what it will cost', () => {
   });
   assert.match(line, /^Sherman Cahal has invited you to view Blue Ridge on Halfstop/);
   assert.match(line, /free account/);
+});
+
+test('shares: an invitation to work on it says so, rather than saying view', () => {
+  const line = invitationLine({
+    from: 'Sherman Cahal',
+    folder: 'Blue Ridge',
+    what: 'a field atlas for photographers',
+    role: 'editor',
+  });
+  assert.match(line, /^Sherman Cahal has invited you to work on Blue Ridge with them on Halfstop/);
+});
+
+test('shares: anything but the word editor grants the narrower of the two', () => {
+  // An invitation written before roles existed carries no role at all, and a
+  // row saying something this version has never heard of is not a reason to
+  // hand over more than was asked for.
+  assert.equal(readRole('editor'), 'editor');
+  assert.equal(readRole('EDITOR'), 'editor', 'the database is not case-sensitive about it');
+  assert.equal(readRole('owner'), 'viewer');
+  assert.equal(readRole(undefined), 'viewer');
+  assert.equal(readRole(null), 'viewer');
+});
+
+test('shares: what this device may write', () => {
+  // The question is not "is it shared" but "may I write", so a folder of your
+  // own answers yes without needing a marker to say so.
+  assert.equal(canEdit({ id: 'mine' }), true);
+  assert.equal(canEdit(markShared({ id: 'a' }, { ownerId: 'o', role: 'editor' })), true);
+  assert.equal(canEdit(markShared({ id: 'a' }, { ownerId: 'o', role: 'viewer' })), false);
+  assert.equal(canEdit(markShared({ id: 'a' }, { ownerId: 'o' })), false, 'silence is not consent');
 });
 
 test('shares: who can see it, counted rather than listed', () => {

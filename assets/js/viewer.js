@@ -12,7 +12,7 @@
 import {
   SITE, BASEMAPS, DEFAULT_BASEMAP, DEFAULT_BASEMAP_WITH_TOKEN, OVERLAYS,
   DEFAULT_VIEW, DEFAULT_UNITS, TRACK_COLORS, STATE_NAMES, STATE_GROUP, PROTOMAPS_ARCHIVE, ROUTING,
-  PROTOMAPS_MAXZOOM,
+  PROTOMAPS_MAXZOOM, BILLING,
 } from './config.js';
 import {
   loadEngine, buildRasterStyle, hasMapboxToken, mapboxToken, overlayParts, overlayIdFromLayer, overlayRows,
@@ -57,7 +57,10 @@ import {
 } from './lib/sky.js';
 import { activeAlerts, describeMotion, alertsToGeoJSON } from './lib/storms.js';
 import { fetchRoute, routeGeoJSON } from './lib/route.js';
-import { can, gateReason, planSummary } from './lib/tiers.js';
+import {
+  can, gateReason, planSummary, featureForLayer, describePrice, purchaseRoute, premiumAdds,
+  plansOffered, annualSaving, offersUpgrade, isBillingTester,
+} from './lib/tiers.js';
 import {
   RV_CAVEAT, RV_RANGES, normaliseProfile, isRV, routingFor, profileRows,
   explainFailure, readDimension, showDimension, showWeight, shortTonsToTonnes,
@@ -78,7 +81,9 @@ import { describeSync } from './lib/sync.js';
 import { registerServiceWorker, applyServiceWorkerUpdate } from './lib/pwa.js';
 import { mayEdit } from './lib/editors.js';
 import { shareableURL, readSharedPin, pinLinkParts } from './lib/share.js';
-import { isShared, looksLikeEmail, describeShares } from './lib/shares.js';
+import {
+  canEdit, isShared, looksLikeEmail, describeShares, describeRole,
+} from './lib/shares.js';
 import {
   OfflineStore, MAX_ZOOM as OFFLINE_MAX_ZOOM, TILE_BUDGET,
   mayCacheTiles, tileURLsFor, downloadTiles, clearTiles, tileKeysFor, downloadArchiveTiles,
@@ -536,11 +541,11 @@ async function main() {
     if (!changed || !state.account?.user) return;
     for (const folderId of [].concat(changed)) {
       const folder = state.folders.get(folderId);
-      // Hiding somebody else's shared folder is a view preference on this
-      // device, not an edit to their data - and the policy would refuse the
-      // write anyway. mergeFolders holds them out of a full sync for the same
-      // reason; this is the other door.
-      if (folder && !isShared(folder)) state.account.pushFolder(folder);
+      // Hiding somebody else's folder is a view preference on this device
+      // rather than an edit to their data, and on a folder shared only to look
+      // at, the policy would refuse the write anyway. A folder shared for
+      // editing is a different thing and travels like your own.
+      if (folder && canEdit(folder)) state.account.pushFolder(folder);
     }
   });
   state.folders.onChange(() => {
@@ -794,7 +799,12 @@ async function main() {
   renderWaypointsTab();
   renderDropTarget();
   renderAccount();
-  state.account.init().catch((error) => console.warn('[account]', error.message));
+  state.account.init()
+    // After init rather than beside it: a return from Stripe has to ask the
+    // server what this account now holds, and there is nobody to ask about
+    // until the session has been restored.
+    .then(() => settleCheckoutReturn())
+    .catch((error) => console.warn('[account]', error.message));
   // Photos whose pin was deleted linger in IndexedDB; clear them once per load
   // rather than at deletion time, where a shared photo could be lost.
   /*
@@ -2713,10 +2723,33 @@ function wireSettingsMenu() {
      * the day a second plan exists this is a line that changed rather than a
      * panel that appeared.
      */
-    const plan = planSummary(state.account?.user || null);
+    const plan = planSummary(state.account || null);
     drop.append(el('div', { class: 'settings-account' }, [
       el('div', { class: 'settings-label', text: 'Plan' }),
       el('div', { class: 'plan-name', text: plan.name }),
+      // A trial that does not say when it ends is a trial that ends as a
+      // surprise, so the count goes where the name is rather than in an email
+      // nobody opens. Only when there is one: the plan is otherwise a single
+      // word on purpose, and an empty line is how describePlan says so.
+      plan.line ? el('div', { class: 'plan-line hint', text: plan.line }) : null,
+      upgradeBlock(plan),
+    ].filter(Boolean)));
+
+    /*
+     * Where the terms and the privacy policy are, from inside the app.
+     *
+     * They have always existed and were only ever reachable from the website.
+     * That is fine for a browser tab, where the reader can get to the site,
+     * and not fine once this is wrapped as an app: the map is then the only
+     * page there is, and App Review expects both to be findable in a build
+     * that asks people to make an account. Here rather than in a footer
+     * because this app has no footer, and this is where the account already
+     * is.
+     */
+    drop.append(el('div', { class: 'settings-account settings-legal' }, [
+      el('a', { href: 'privacy.html', target: '_blank', rel: 'noopener', text: 'Privacy' }),
+      el('a', { href: 'terms.html', target: '_blank', rel: 'noopener', text: 'Terms' }),
+      el('a', { href: 'faq.html', target: '_blank', rel: 'noopener', text: 'Help' }),
     ]));
   };
 
@@ -2732,6 +2765,280 @@ function wireSettingsMenu() {
     if (event.key === 'Escape' && !drop.hidden) { setOpen(false); trigger.focus(); }
   });
   drop.addEventListener('click', (event) => event.stopPropagation());
+}
+
+/**
+ * What happens when Stripe sends somebody back after they have paid.
+ *
+ * Paying and being entitled are not the same instant: the browser comes back
+ * the moment the card clears, and the entitlement is written by a webhook that
+ * arrives separately. Reading the plan once on landing therefore tells
+ * somebody who has just paid that they are on the free tier, which is the
+ * worst thing this app could say to them, so it asks again for a while.
+ *
+ * And it says which of the three things happened - it worked, it has not
+ * landed yet, or you are not signed in - because "nothing appears to have
+ * changed" is what turns a slow webhook into a support email about a missing
+ * charge.
+ */
+async function settleCheckoutReturn() {
+  const params = new URLSearchParams(location.search);
+  if (params.get('subscribed') !== '1') return false;
+
+  /*
+   * Out of the address bar first, before anything can go wrong.
+   *
+   * It is a one-time flag on a return trip, and a URL is a thing people
+   * bookmark and send to each other. Left in place it would congratulate the
+   * next person to open the link on a payment they never made, and would do it
+   * again on every reload for the person who did.
+   */
+  params.delete('subscribed');
+  const query = params.toString();
+  history.replaceState(null, '', `${location.pathname}${query ? `?${query}` : ''}${location.hash}`);
+
+  /*
+   * Signed out on the way back, which happens when the checkout is finished in
+   * a different browser from the one it started in. The payment is real and
+   * this device simply cannot see whose it is, so say that rather than
+   * silently showing a free account.
+   */
+  if (!state.account?.user) {
+    toast('Your payment went through. Sign in to the account you paid with and Premium will be there.',
+      { tone: 'info', timeout: 12000 });
+    return false;
+  }
+
+  toast('Thank you. Finishing off your subscription…', { tone: 'info', timeout: 6000 });
+  /*
+   * Waiting for the source rather than the tier. A trial already reads as
+   * premium, so waiting on the tier would congratulate every new account on a
+   * payment the instant they landed, webhook or no webhook.
+   */
+  const settled = await state.account.waitForPlan({ source: 'stripe' });
+  if (settled.ok) {
+    toast('Premium is active on this account.', { tone: 'ok', timeout: 8000 });
+    return true;
+  }
+
+  /*
+   * The honest ending. A webhook that has not arrived in this many seconds
+   * usually still arrives, and occasionally does not - and a person who has
+   * been charged needs to be told the second thing is possible and what to do
+   * about it, not left refreshing.
+   */
+  toast(`Your payment went through and this account has not caught up yet. It usually lands `
+    + `within a minute — reload then. If it is still not here, write to ${SITE.contactEmail} `
+    + `and it will be sorted out by hand.`, { tone: 'error', timeout: 16000 });
+  return false;
+}
+
+/**
+ * Whether this account reaches a checkout before billing is live.
+ *
+ * One function because two copies of this went wrong immediately: the panel
+ * knew about the preview and the button's handler did not, so a tester was
+ * shown two prices and told "There is nothing to subscribe to yet" when they
+ * pressed one. A drawn control that refuses itself is worse than no control.
+ *
+ * Presentation, and only that. The checkout function refuses anybody not named
+ * on its own list while the Stripe key is a test key, and that is the control -
+ * this runs on the reader's computer, where they can change it.
+ */
+function billingPreview() {
+  const user = state.account?.user;
+  return !BILLING.live && (isBillingTester(user) || mayEdit(user));
+}
+
+/**
+ * Begin a subscription: open a Stripe Checkout and hand the browser over.
+ *
+ * This is the one seam where a purchase plugs in, and it stayed empty for a
+ * while on purpose - the last time this app grew a button whose handler had
+ * not been written, the handler was simply missing and every press threw a
+ * ReferenceError that no test caught, because the tests covered the module
+ * around it and nothing ever pressed the button. An honest refusal was better
+ * than that.
+ *
+ * It is Stripe now, and when StoreKit arrives it becomes a second branch on
+ * `route.where` rather than a rewrite: the panel already asks where a purchase
+ * can be completed instead of assuming, because a browser cannot finish an App
+ * Store one. Nothing about a card is ever typed into this app.
+ */
+async function startSubscription(button = null, plan = 'month') {
+  const route = purchaseRoute({ preview: billingPreview() });
+  if (!route.available) {
+    toast('There is nothing to subscribe to yet.', { tone: 'info', timeout: 7000 });
+    return false;
+  }
+
+  if (route.where !== 'stripe') {
+    // Only reachable if a third route is added and this is not taught about
+    // it. Said out loud rather than falling through to a silent return.
+    toast('This build does not know how to open that checkout.', { tone: 'error', timeout: 9000 });
+    return false;
+  }
+
+  /*
+   * Disabled while the round trip is in flight.
+   *
+   * Creating a checkout is a network call that takes a moment, and a payment
+   * button that looks idle is a payment button somebody presses twice. The
+   * function is idempotent within the hour for the same person, so a second
+   * press cannot make a second subscription - this is so it does not look
+   * broken in the meantime.
+   */
+  const said = button?.textContent || 'Subscribe';
+  if (button) { button.disabled = true; button.textContent = 'Opening…'; }
+  const result = await state.account.startCheckout({ plan });
+  if (button) { button.disabled = false; button.textContent = said; }
+
+  if (!result.ok) {
+    toast(result.reason, { tone: 'error', timeout: 9000 });
+    return false;
+  }
+
+  // Stripe's own page, on Stripe's domain. Nothing about a card is typed into
+  // this app, which is the whole reason for sending people there.
+  window.location.assign(result.url);
+  return true;
+}
+
+/**
+ * Send somebody to Stripe's billing pages, where a subscription ends.
+ *
+ * A separate function from startSubscription rather than a flag on it: they
+ * are opposite actions, and one of them cancels somebody's subscription. The
+ * only thing they have in common is a button that must not look idle while a
+ * round trip is in flight.
+ */
+async function openBilling(button = null) {
+  const said = button?.textContent || 'Manage subscription';
+  if (button) { button.disabled = true; button.textContent = 'Opening…'; }
+  const result = await state.account.openBilling();
+  if (button) { button.disabled = false; button.textContent = said; }
+
+  if (!result.ok) {
+    toast(result.reason, { tone: 'error', timeout: 10000 });
+    return false;
+  }
+  window.location.assign(result.url);
+  return true;
+}
+
+/**
+ * What Premium is and how to get it, for somebody who has not got it.
+ *
+ * Nothing at all while BILLING.live is false, which is today: every account
+ * has everything, so a panel offering to sell it would be describing a
+ * restriction that does not exist.
+ *
+ * When it is live, this says what changes and what it costs, and then tells
+ * the truth about whether it can be bought from here. A subscription lives in
+ * the App Store and the App Store only exists inside a shipped app, so the
+ * browser has nothing to sell and should say so rather than showing a button
+ * that cannot work. That is a state to draw, not a state to hide.
+ */
+function upgradeBlock(plan) {
+  /*
+   * Whoever runs this can see the purchase panel before billing is live, so a
+   * checkout can be tested with a card that is not a card.
+   *
+   * Presentation only, and worth being clear about: the checkout function
+   * refuses anybody not named as a tester while the Stripe key is a test key.
+   * That is the control. This just means the button is there to press.
+   */
+  const preview = billingPreview();
+  if (!plan.live && !preview) return null;
+
+  /*
+   * Somebody who already subscribes gets the way out, not another offer.
+   *
+   * Cancelling has to be as easy as subscribing and it has to be reachable
+   * without writing to anybody. Where it happens depends on who took the
+   * money: Stripe's own billing pages, or Apple's, and only Apple can end an
+   * App Store subscription however much we might like to.
+   */
+  if (!offersUpgrade({ ...plan, live: true })) {
+    if (plan.source === 'stripe') {
+      return el('div', { class: 'plan-upgrade' }, [
+        el('button', {
+          class: 'button button-secondary button-small', type: 'button', text: 'Manage subscription',
+          onclick: (event) => openBilling(event.currentTarget),
+        }),
+        el('p', {
+          class: 'hint', style: 'margin:8px 0 0',
+          text: 'Cancel, switch between monthly and yearly, or change the card. '
+            + 'Cancelling keeps Premium until the period you have paid for runs out.',
+        }),
+      ]);
+    }
+    if (plan.source === 'appstore') {
+      return el('p', {
+        class: 'hint', style: 'margin:10px 0 0',
+        text: 'This subscription is through the App Store. Cancel it in Settings, '
+          + 'your name, Subscriptions. It stays active until the period you have paid for runs out.',
+      });
+    }
+    return null;
+  }
+
+  const route = purchaseRoute({ preview });
+  const saving = annualSaving();
+
+  /*
+   * Somebody on a trial is being asked to keep what they already have, not
+   * sold something new, and the sentence has to say which.
+   */
+  const trialing = plan.source === 'trial';
+  const heading = trialing && plan.line
+    ? `${plan.line.replace(/\.$/, '')}. Keeping it:`
+    : 'Premium adds';
+
+  /*
+   * A button per plan rather than a toggle and one button.
+   *
+   * Two buttons say both prices at once, which is the question somebody
+   * actually has. A toggle hides one of the two numbers behind an interaction
+   * and makes the reader work to compare them, in a menu that is already
+   * small.
+   */
+  const buttons = plansOffered().map((plan) => el('button', {
+    class: `button button-small ${plan.id === 'month' ? 'button-primary' : 'button-secondary'}`,
+    type: 'button',
+    text: describePrice({ plan: plan.id }),
+    onclick: (event) => startSubscription(event.currentTarget, plan.id),
+  }));
+
+  return el('div', { class: 'plan-upgrade' }, [
+    el('p', { class: 'plan-upgrade-head', text: heading }),
+    // The list is what a trial is holding open, so it is worth repeating for
+    // somebody deciding whether to keep it.
+    el('ul', { class: 'plan-upgrade-list' }, premiumAdds().map((what) => el('li', { text: what }))),
+    route.available
+      ? el('div', { class: 'plan-upgrade-buttons' }, buttons)
+      : el('p', {
+        class: 'hint', style: 'margin:8px 0 0',
+        text: route.why === 'in-app-only'
+          ? 'Subscriptions are handled by the App Store, so this is in the '
+            + 'iPhone and iPad app rather than here.'
+          : 'There is no way to subscribe yet.',
+      }),
+    // Worked out from the two prices rather than written down, so it cannot
+    // overstate the discount or go stale when one of them moves.
+    route.available && saving
+      ? el('p', { class: 'hint', style: 'margin:8px 0 0', text: `Paying by the year saves ${saving.money}, about ${saving.percent}%.` })
+      : null,
+    // Said plainly, because a preview that looks like the real thing is how
+    // somebody ends up wondering whether they were charged.
+    route.preview
+      ? el('p', {
+        class: 'hint plan-preview', style: 'margin:8px 0 0',
+        text: 'Test mode. Billing is not live: this is here because you run '
+          + 'Halfstop, and no real card is charged.',
+      })
+      : null,
+  ].filter(Boolean));
 }
 
 /**
@@ -4858,6 +5165,12 @@ function refreshRegionData() {
 const AUTO_DOWNLOAD_BYTES = 150 * 1024 * 1024;
 
 function saveRegionFrom(bounds, { download = false, name = '' } = {}) {
+  // Every region, however it was drawn, is made here. One check rather than
+  // one per entry point, which is what stops the next entry point missing it.
+  if (!can('offlineDownloads')) {
+    toast(gateReason('offlineDownloads'), { tone: 'error', timeout: 9000 });
+    return null;
+  }
   const problem = regionSizeProblem(bounds);
   if (problem) { toast(problem, { tone: 'error', timeout: 9000 }); return null; }
 
@@ -5579,7 +5892,28 @@ function layerRow({ entry, selected, control, preview = false }) {
     })
     : null;
 
-  const row = el('div', { class: `layer-row${selected ? ' is-selected' : ''}` }, [
+  /*
+   * A layer that is not on this plan is shown and not offered.
+   *
+   * Shown, because hiding it answers "where did the weather go" with silence,
+   * and somebody deciding whether to pay has to be able to see what for.
+   * Not offered, because a switch that does nothing is worse than one that
+   * explains itself. The reason goes in the description, where the rest of
+   * what this layer is already lives.
+   *
+   * None of this does anything while BILLING.live is false: can() is true for
+   * everything, so every row is drawn exactly as it was.
+   */
+  const needs = featureForLayer(entry);
+  const locked = Boolean(needs) && !can(needs);
+  if (locked) {
+    control.disabled = true;
+    if (descriptionNode) {
+      descriptionNode.append(el('p', { class: 'layer-locked-note', text: gateReason(needs) }));
+    }
+  }
+
+  const row = el('div', { class: `layer-row${selected ? ' is-selected' : ''}${locked ? ' is-locked' : ''}` }, [
     el('label', { class: 'layer-option' }, [
       control,
       preview ? basemapThumb(entry) : null,
@@ -10753,14 +11087,16 @@ function renderFolder(folder, drawn = new Set()) {
      * between something reversible and something that is not.
      */
     /*
-     * Nothing to edit on a folder that is not yours.
+     * Nothing to edit on a folder that is only yours to look at.
      *
      * The controls behind this button rename, restyle, export and delete, and
-     * three of the four are writes the row-level policy would refuse. Offering
-     * them and letting the database say no is a worse answer than not offering
-     * them: the byline below says whose folder it is instead.
+     * on a read-only folder three of the four are writes the row-level policy
+     * would refuse. Offering them and letting the database say no is a worse
+     * answer than not offering them: the byline below says whose folder it is
+     * instead. A folder shared for editing has the menu, because the point of
+     * accepting that invitation was to use it.
      */
-    isShared(folder) ? null : el('button', {
+    canEdit(folder) ? el('button', {
       class: `icon-button folder-menu-button${chosen.length ? ' is-armed' : ''}`,
       type: 'button',
       title: chosen.length
@@ -10773,7 +11109,7 @@ function renderFolder(folder, drawn = new Set()) {
         chosen.length ? chosen : null,
         event.currentTarget.closest('.folder-head'),
       ),
-    }),
+    }) : null,
   ]);
 
   const trip = tripBar(folder);
@@ -10875,7 +11211,9 @@ function renderFolder(folder, drawn = new Set()) {
   if (isShared(folder)) {
     node.append(el('p', {
       class: 'hint folder-shared-by', style: 'margin:0 0 6px 30px; font-size:.8rem',
-      text: `Shared with you by ${folder.sharedFrom.ownerName}. You can look, not change.`,
+      text: canEdit(folder)
+      ? `Shared with you by ${folder.sharedFrom.ownerName}. You can work on this together.`
+      : `Shared with you by ${folder.sharedFrom.ownerName}. You can look, not change.`,
     }));
   }
   if (trip) node.append(trip);
@@ -11030,10 +11368,23 @@ function photoSection(folder, item) {
     },
   });
 
+  /*
+   * Photographs already on a pin stay readable whatever the plan says.
+   *
+   * Only adding is gated. They are held in this browser and were never
+   * uploaded anywhere, so locking somebody out of their own pictures because a
+   * subscription lapsed would be taking something that was never ours to hold.
+   */
+  const canAddPhotos = can('pinPhotos');
   const actions = el('div', { class: 'picker-row', style: 'margin-top:8px' }, [
     el('button', {
       class: 'button button-secondary button-small', type: 'button', text: 'Add photos',
-      onclick: () => picker.click(),
+      disabled: !canAddPhotos,
+      title: canAddPhotos ? '' : gateReason('pinPhotos'),
+      onclick: () => {
+        if (!canAddPhotos) { toast(gateReason('pinPhotos'), { tone: 'error' }); return; }
+        picker.click();
+      },
     }),
   ]);
 
@@ -11962,6 +12313,18 @@ function renderAccount() {
   const password = el('input', { type: 'password', placeholder: 'Password', autocomplete: 'current-password', 'aria-label': 'Password' });
   const busy = (on) => { for (const node of [email, password, ...buttons]) node.disabled = on; };
 
+  /*
+   * Say the thing that just happened where somebody will see it.
+   *
+   * The sentence itself stays in account.js, beside the branch that chose it -
+   * signing up as an address that already exists and signing up as a new one
+   * are different messages, and repeating either here would be two copies to
+   * keep in step. This only decides that it is said out loud.
+   */
+  const announce = (tone) => {
+    if (account.message) toast(account.message, { tone, timeout: 15000 });
+  };
+
   const run = async (action) => {
     state.accountEmail = email.value.trim();
     if (!state.accountEmail) { toast('Enter your email address first.', { tone: 'error' }); return; }
@@ -11984,12 +12347,24 @@ function renderAccount() {
     }),
     el('button', {
       class: 'button button-secondary button-small', type: 'button', text: 'Create account',
-      onclick: () => run(() => account.signUp(state.accountEmail, password.value)),
+      onclick: () => run(async () => {
+        const result = await account.signUp(state.accountEmail, password.value);
+        // Nothing visible happens on a successful signup: no session, so the
+        // panel redraws identically and the only sign of life was a muted line
+        // appended below three buttons, off the bottom of a phone screen.
+        // Reported as "creating an account does not state anything", which is
+        // what it looked like - and the person then had no reason to go
+        // looking in their spam folder, where the email was.
+        if (!result.confirmed) announce(result.existing ? 'info' : 'ok');
+      }),
     }),
     el('button', {
       class: 'button button-ghost button-small', type: 'button', text: 'Email me a link',
       title: 'Sign in without a password',
-      onclick: () => run(() => account.signInWithLink(state.accountEmail)),
+      onclick: () => run(async () => {
+        await account.signInWithLink(state.accountEmail);
+        announce('ok');
+      }),
     }),
   ];
 
@@ -12017,15 +12392,21 @@ function renderAccount() {
   /*
    * Only the providers the project has actually set up.
    *
-   * `SITE.authProviders` is empty while neither is configured. A button that
-   * starts an OAuth round trip to a provider nobody has registered sends the
-   * reader to an error page carrying Apple's or Google's branding, which reads
-   * as this site being broken rather than unfinished - so it is not drawn, and
-   * neither is the divider that only makes sense above an email form with
-   * something above it.
+   * Asked of the project rather than kept in config, because the two drift and
+   * the drift fails both ways: a provider registered and not listed is a
+   * button nobody sees, and one listed and not registered sends the reader to
+   * an error page carrying Apple's or Google's branding, which reads as this
+   * site being broken rather than unfinished.
+   *
+   * `SITE.authProviders` is the fallback for as long as the project has not
+   * answered, and it is empty - so nothing is drawn, and neither is the
+   * divider that only makes sense above an email form with something above it.
+   * The panel is rebuilt on every account change, so the answer arriving a
+   * moment later draws the buttons without anybody reloading.
    */
   const PROVIDER_LABELS = { apple: 'Continue with Apple', google: 'Continue with Google' };
-  const offered = (SITE.authProviders || []).filter((id) => PROVIDER_LABELS[id]);
+  const offered = (account?.providers || SITE.authProviders || [])
+    .filter((id) => PROVIDER_LABELS[id]);
 
   dom.account.append(
     el('p', {
@@ -12374,8 +12755,21 @@ function folderShareRow(folder) {
 
   const field = el('input', {
     type: 'email', placeholder: 'their@email.address', autocomplete: 'off',
-    'aria-label': `Invite somebody to view ${folder.name}`,
+    'aria-label': `Invite somebody to ${folder.name}`,
   });
+
+  /*
+   * Two words, because there are two things people mean.
+   *
+   * Defaulted to viewing: handing somebody the ability to change a collection
+   * of places should be a thing you chose, not a thing you failed to notice.
+   */
+  const role = el('select', {
+    class: 'share-role', 'aria-label': `What ${folder.name} is shared for`,
+  }, [
+    el('option', { value: 'viewer', text: 'to view' }),
+    el('option', { value: 'editor', text: 'to edit together' }),
+  ]);
   const send = el('button', {
     class: 'button button-secondary button-small', type: 'button', text: 'Invite',
     onclick: async () => {
@@ -12383,12 +12777,13 @@ function folderShareRow(folder) {
       if (!looksLikeEmail(email)) { status.textContent = 'That does not look like an email address.'; return; }
       send.disabled = true;
       status.textContent = 'Sending…';
-      const result = await state.account.invite(folder.id, email, folder.name);
+      const result = await state.account.invite(folder.id, email, folder.name, role.value);
       send.disabled = false;
       if (!result.ok) { status.textContent = result.reason; return; }
       field.value = '';
       status.textContent = result.emailed
-        ? `Invited ${email}. They will need a free account on this address to see it.`
+        ? `Invited ${email}. They will need a free account on this address to ${
+          role.value === 'editor' ? 'work on it' : 'see it'}.`
         : `Recorded for ${email}, but no email was sent — ${result.reason} Tell them yourself and `
           + 'it will be waiting when they sign in.';
       paint();
@@ -12402,6 +12797,7 @@ function folderShareRow(folder) {
       el('p', { class: 'hint', style: 'margin:8px 0 4px', text: describeShares(shares) }),
       ...live.map((share) => el('div', { class: 'share-row' }, [
         el('span', { text: share.invited_email }),
+        el('span', { class: 'share-role-tag', text: describeRole(share.role) }),
         el('button', {
           class: 'button button-ghost button-small', type: 'button', text: 'Withdraw',
           onclick: async () => {
@@ -12418,7 +12814,7 @@ function folderShareRow(folder) {
 
   row.append(
     el('div', { class: 'settings-label', text: 'Share with someone' }),
-    el('div', { class: 'picker-row' }, [field, send]),
+    el('div', { class: 'picker-row' }, [field, role, send]),
     list,
     status,
   );

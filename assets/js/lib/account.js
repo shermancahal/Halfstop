@@ -11,10 +11,28 @@
 
 import { SUPABASE_URL, SUPABASE_KEY } from '../config.js';
 import { mergeFolders, rowToFolder, folderToRow, missingColumn } from './sync.js';
-import { markShared, normaliseEmail } from './shares.js';
+import { canEdit, markShared, normaliseEmail, readRole } from './shares.js';
+import { can, gateReason } from './tiers.js';
 
 const SUPABASE_VERSION = '2.45.4';
-const CDN = `https://cdn.jsdelivr.net/npm/@supabase/supabase-js@${SUPABASE_VERSION}/+esm`;
+
+/*
+ * From this repository, not from a CDN.
+ *
+ * It used to be imported from jsdelivr at runtime, which meant signing in
+ * needed the network in an app that otherwise does not, the service worker
+ * could not cache it because it is cross-origin, and jsdelivr could serve any
+ * code it liked into a page holding somebody's session. Wrapped as a native
+ * app it is also executable code downloaded at runtime that Apple never
+ * reviewed. MapLibre was vendored for the first three reasons; this is the
+ * same fix, run by tools/vendor-supabase.mjs.
+ *
+ * The UMD build rather than the ESM one, because it is the single
+ * self-contained file: the package's ESM entry imports its dependencies by
+ * bare specifier and would need a bundler, which this project deliberately
+ * does not have.
+ */
+const VENDORED = `assets/vendor/supabase-js-${SUPABASE_VERSION}/supabase.js`;
 const TABLE = 'folders';
 
 /** The Edge Function that closes an account; see supabase/functions/. */
@@ -23,8 +41,34 @@ const DELETE_FUNCTION = 'delete-account';
 /** The one that writes an invitation and sends it. */
 const INVITE_FUNCTION = 'invite-to-folder';
 
+/** The one that opens a Stripe Checkout for whoever is signed in. */
+const CHECKOUT_FUNCTION = 'stripe-checkout';
+
+/** And the one that opens Stripe's billing portal, where a subscription ends. */
+const PORTAL_FUNCTION = 'stripe-portal';
+
 /** Invitations, kept beside the folders they are about. */
 const SHARES = 'folder_shares';
+
+/** Injectable so a test of the waiting does not have to wait. */
+const nap = (ms) => new Promise((resume) => { setTimeout(resume, ms); });
+
+/**
+ * Columns added to `folders` after it shipped.
+ *
+ * Named in one place because the handling is identical: a database that has
+ * not run the current schema.sql rejects the whole row over any one of them,
+ * and the push has to go out again without it rather than lose the edit.
+ */
+const LATER_COLUMNS = ['parent_id', 'trip', 'removed_items'];
+
+/**
+ * The "Continue with ..." buttons this app knows how to draw.
+ *
+ * Which of them to actually offer is not decided here and not decided in
+ * config either: it is asked of the project, because the answer lives there.
+ */
+const PROVIDERS = ['apple', 'google'];
 
 /** The support queue. Readable by one address, decided server-side. */
 const TICKETS = 'support_tickets';
@@ -57,6 +101,23 @@ function returnTo() {
 }
 
 /**
+ * The sentence a function actually sent, out from under the wrapper.
+ *
+ * supabase-js turns any non-2xx into a FunctionsHttpError reading "Edge
+ * Function returned a non-2xx status code", and hangs the real response off
+ * `context`. Left as it is, somebody told to cancel their existing
+ * subscription first would instead read a sentence about status codes.
+ */
+async function readFunctionError(error) {
+  try {
+    const body = await error?.context?.json?.();
+    return String(body?.error || '');
+  } catch {
+    return '';
+  }
+}
+
+/**
  * What to call somebody.
  *
  * The name they typed into the profile first; failing that, whatever Apple or
@@ -77,13 +138,43 @@ const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 let clientPromise = null;
 
+/**
+ * Load the library, once, from a script tag.
+ *
+ * A UMD bundle rather than a module, so it arrives as a global instead of an
+ * import. Its own loader lives here rather than being borrowed from engine.js,
+ * which has the same twelve lines: importing that would pull the entire map
+ * engine into admin.html, a page with no map on it.
+ */
+function loadVendored(src) {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${src}"]`);
+    if (existing) {
+      if (existing.dataset.loaded === 'true') resolve();
+      else existing.addEventListener('load', () => resolve(), { once: true });
+      existing.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true });
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    script.addEventListener('load', () => { script.dataset.loaded = 'true'; resolve(); }, { once: true });
+    script.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true });
+    document.head.append(script);
+  });
+}
+
 async function getClient() {
   if (!isConfigured()) return null;
   if (!clientPromise) {
-    clientPromise = import(/* @vite-ignore */ CDN)
-      .then(({ createClient }) => createClient(SUPABASE_URL, SUPABASE_KEY, {
-        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
-      }))
+    clientPromise = loadVendored(VENDORED)
+      .then(() => {
+        const createClient = globalThis.supabase?.createClient;
+        if (!createClient) throw new Error('the library loaded without createClient on it');
+        return createClient(SUPABASE_URL, SUPABASE_KEY, {
+          auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+        });
+      })
       .catch((error) => {
         clientPromise = null;
         throw new Error(`Could not load the accounts library: ${error.message}`);
@@ -117,10 +208,40 @@ export class Account extends EventTarget {
     this.getClient = client;
     this.isConfigured = configured;
     this.user = null;
+    /*
+     * What this account is entitled to, as the server last answered.
+     *
+     * Held rather than computed. The browser cannot know when an account was
+     * created or whether anybody granted it anything, and a version of this
+     * that guessed would be a plan field in localStorage being treated as
+     * true. Null means not asked yet, which is not the same as free.
+     */
+    this.plan = null;
+    /*
+     * Which sign-in providers the project has registered, as it last answered.
+     *
+     * Null means not asked yet, and the panel falls back to SITE.authProviders
+     * for as long as that is true - which is empty, so it offers nothing.
+     * Offering nothing is the honest state: a button that starts an OAuth
+     * round trip to a provider nobody registered sends somebody to an error
+     * page wearing Apple's or Google's branding, which reads as this site
+     * being broken rather than unfinished.
+     */
+    this.providers = null;
     this.status = configured() ? 'signed-out' : 'unavailable';
     this.message = '';
     this.syncing = false;
     this.lastSyncAt = null;
+    /*
+     * Columns this server turns out not to have.
+     *
+     * A set rather than a flag each, because the failure is the same every
+     * time and the handling should be too: Postgres rejects the whole row over
+     * one unknown column, so adding a column to this file once broke every
+     * push for anybody who had not run schema.sql again - a rename, a new pin
+     * and a colour change all stopped travelling, not only the new thing.
+     */
+    this.missingColumns = new Set();
   }
 
   emit() {
@@ -154,8 +275,14 @@ export class Account extends EventTarget {
       return;
     }
 
+    // Asked before anything else needs it, and regardless of whether anybody
+    // is signed in: the buttons it decides are the ones shown to somebody who
+    // is not.
+    this.refreshProviders();
+
     const { data } = await client.auth.getSession();
     this.user = data?.session?.user || null;
+    if (this.user) this.refreshPlan();
 
     /*
      * A link that came back and did not work has to say so.
@@ -184,6 +311,7 @@ export class Account extends EventTarget {
       this.user = session?.user || null;
       if (event === 'SIGNED_IN') {
         this.setStatus('signed-in');
+        this.refreshPlan();
         this.sync();
       } else if (event === 'SIGNED_OUT') {
         this.setStatus('signed-out');
@@ -224,10 +352,20 @@ export class Account extends EventTarget {
       return { confirmed: false, existing: true };
     }
 
-    // With email confirmation on, there is no session yet — say so rather than
-    // leaving the user staring at an unchanged screen.
+    /*
+     * With email confirmation on there is no session yet, so say so rather
+     * than leaving somebody staring at an unchanged screen.
+     *
+     * Spam is named because that is where it went, reported from a real
+     * signup: the confirmation comes from Supabase's shared sender unless the
+     * project is put on its own SMTP, and a shared sender on somebody else's
+     * domain is exactly what a mail filter is built to distrust. Telling
+     * people where to look costs a clause; not telling them costs the account.
+     */
     if (!data.session) {
-      this.setStatus('signed-out', 'Check your email for a confirmation link, then sign in.');
+      this.setStatus('signed-out',
+        'Account created. Check your email for a confirmation link, then sign in. '
+        + 'It often lands in spam or junk, so look there before trying again.');
       return { confirmed: false };
     }
     return { confirmed: true };
@@ -274,7 +412,8 @@ export class Account extends EventTarget {
       options: { emailRedirectTo: returnTo() },
     });
     if (error) throw new Error(error.message);
-    this.setStatus('signed-out', `Sent a sign-in link to ${email}. Open it on this device.`);
+    this.setStatus('signed-out',
+      `Sent a sign-in link to ${email}. Open it on this device, and check spam if it is not there.`);
     return true;
   }
 
@@ -318,6 +457,7 @@ export class Account extends EventTarget {
       console.warn('[account] the sign-out call failed:', error?.message || error);
     }
     this.user = null;
+    this.plan = null;
 
     if (saved) {
       this.folders.replaceAll([]);
@@ -418,18 +558,25 @@ export class Account extends EventTarget {
     try {
       const [{ data: rows, error: rowsError }, { data: invites, error: invitesError }] = await Promise.all([
         client.from(TABLE).select('*').neq('user_id', this.user.id),
-        client.from(SHARES).select('owner_id, client_id, invited_by').neq('owner_id', this.user.id),
+        client.from(SHARES).select('owner_id, client_id, invited_by, role').neq('owner_id', this.user.id),
       ]);
       if (rowsError) throw new Error(rowsError.message);
       if (invitesError) throw new Error(invitesError.message);
 
-      const named = new Map((invites || []).map((row) => [`${row.owner_id}:${row.client_id}`, row.invited_by]));
+      const byFolder = new Map((invites || []).map((row) => [`${row.owner_id}:${row.client_id}`, row]));
       return (rows || [])
         .filter((row) => !row.deleted)
-        .map((row) => markShared(rowToFolder(row), {
-          ownerId: row.user_id,
-          ownerName: named.get(`${row.user_id}:${row.client_id}`) || 'somebody',
-        }));
+        .map((row) => {
+          const invite = byFolder.get(`${row.user_id}:${row.client_id}`);
+          return markShared(rowToFolder(row), {
+            ownerId: row.user_id,
+            ownerName: invite?.invited_by || 'somebody',
+            // Read every sync, never remembered. Withdrawing the right to edit
+            // has to take effect on the next sync, not whenever the device
+            // that had it happens to be reinstalled.
+            role: invite?.role,
+          });
+        });
     } catch (error) {
       console.warn('[account] could not read shared folders:', error?.message || error);
       return null;
@@ -445,17 +592,112 @@ export class Account extends EventTarget {
    * separately from `ok` because an invitation recorded and not delivered is a
    * different thing to tell somebody about than one that failed outright.
    */
-  async invite(clientId, email, folderName = '') {
+  async invite(clientId, email, folderName = '', role = 'viewer') {
     if (!this.user) return { ok: false, reason: 'Sign in first.' };
     const client = await this.getClient();
     if (!client) return { ok: false, reason: 'Accounts are not configured here.' };
 
     const { data, error } = await client.functions.invoke(INVITE_FUNCTION, {
-      body: { clientId, email: normaliseEmail(email), folderName },
+      // Narrowed here as well as in the function. Not because the browser can
+      // be trusted about it - it cannot, which is why the function narrows it
+      // too - but so that a typo asks for less rather than for more.
+      body: { clientId, email: normaliseEmail(email), folderName, role: readRole(role) },
     });
     if (error) return { ok: false, reason: error.message };
     if (!data?.ok) return { ok: false, reason: data?.error || 'The invitation was not accepted.' };
     return { ok: true, emailed: Boolean(data.emailed), reason: data.reason || '' };
+  }
+
+  /**
+   * Ask for a Stripe Checkout, and get back somewhere to send the browser.
+   *
+   * Nothing about who is paying travels in the request. The function reads the
+   * user from the token on this session, because a body saying which account
+   * to subscribe is a body somebody else can write.
+   */
+  async startCheckout({ plan = 'month', returnTo = '' } = {}) {
+    if (!this.user) return { ok: false, reason: 'Sign in first.' };
+    const client = await this.getClient();
+    if (!client) return { ok: false, reason: 'Accounts are not configured here.' };
+
+    const { data, error } = await client.functions.invoke(CHECKOUT_FUNCTION, {
+      // A plan name, never a price. The function holds the ids, so a browser
+      // cannot name what it pays.
+      body: { plan, returnTo: returnTo || window.location.href.split('#')[0] },
+    });
+    /*
+     * A refusal carries its own sentence, and it has to survive.
+     *
+     * supabase-js wraps a non-2xx in a FunctionsHttpError whose message is
+     * "Edge Function returned a non-2xx status code" - which is true and tells
+     * nobody anything. The useful part, "you already subscribe, cancel it
+     * first", is in the body, so the body is read back rather than thrown away
+     * in favour of the wrapper's message.
+     */
+    if (error) {
+      const said = await readFunctionError(error);
+      return { ok: false, reason: said || error.message };
+    }
+    if (!data?.ok || !data.url) return { ok: false, reason: data?.error || 'The checkout did not open.' };
+    return { ok: true, url: data.url };
+  }
+
+  /**
+   * Wait for a checkout to show up as an entitlement.
+   *
+   * Paying and being entitled are not the same instant. Stripe sends the
+   * browser back the moment the card clears and tells this project separately,
+   * over a webhook, which arrives when it arrives - usually within a second,
+   * occasionally several, and on a bad day after a retry. A single read on
+   * landing therefore reports Free to somebody who has just paid, which is the
+   * worst sentence this app could show them.
+   *
+   * So it asks again for a while. Bounded, because a webhook that never comes
+   * is a real outcome and must not become a page that spins forever: after the
+   * last try the caller is told plainly that the payment went through and the
+   * account has not caught up, which is true and is something support can act
+   * on.
+   *
+   * WAIT ON THE SOURCE, NOT THE TIER
+   *
+   * `my_plan()` reports premium for anybody inside their first thirty days,
+   * because a trial is premium - everything works, which is the point of it.
+   * So a wait that ends on `tier === 'premium'` ends on the very first read for
+   * every new account, and the app says "Premium is active" to somebody whose
+   * payment never reached us. It would have been right nearly every time and
+   * wrong in exactly the case this function exists for. Pass the source a
+   * purchase writes and the wait means what it says.
+   */
+  async waitForPlan({ tries = 8, wait = 1500, sleep = nap, wanted = 'premium', source = null } = {}) {
+    let plan = null;
+    const arrived = (seen) => seen?.tier === wanted && (!source || seen.source === source);
+    for (let attempt = 1; attempt <= tries; attempt += 1) {
+      plan = await this.refreshPlan();
+      if (arrived(plan)) return { ok: true, plan, attempts: attempt };
+      if (attempt < tries) await sleep(wait);
+    }
+    return { ok: false, plan, attempts: tries };
+  }
+
+  /**
+   * Open Stripe's billing portal, which is where a subscription is cancelled.
+   *
+   * Cancelling has to be as easy as subscribing and it has to be self-service.
+   * Stripe's own pages handle ending it, switching between monthly and yearly,
+   * changing a card and downloading invoices, so none of that is built here.
+   */
+  async openBilling() {
+    if (!this.user) return { ok: false, reason: 'Sign in first.' };
+    const client = await this.getClient();
+    if (!client) return { ok: false, reason: 'Accounts are not configured here.' };
+
+    const { data, error } = await client.functions.invoke(PORTAL_FUNCTION, { body: {} });
+    if (error) {
+      const said = await readFunctionError(error);
+      return { ok: false, reason: said || error.message };
+    }
+    if (!data?.ok || !data.url) return { ok: false, reason: data?.error || 'The billing page did not open.' };
+    return { ok: true, url: data.url };
   }
 
   /** Who a folder has been shared with, withdrawn invitations included. */
@@ -576,6 +818,34 @@ export class Account extends EventTarget {
 
     try {
       const client = await this.getClient();
+
+      /*
+       * Carrying your own folders between devices is the metered part.
+       *
+       * A folder somebody shared with you is not: sharing is not on the
+       * Premium list, and a folder you were invited to read should not vanish
+       * because your own collection has stopped travelling. So the shared ones
+       * are still fetched, and only the account's own folders wait.
+       *
+       * Said out loud rather than done quietly. Folders that stop syncing
+       * without a word look exactly like folders that were lost.
+       *
+       * This is presentation, like everything else in tiers.js. What actually
+       * costs money is the row policy and the bandwidth behind it, and neither
+       * of those reads a plan yet.
+       */
+      if (!can('folderSync')) {
+        const onlyShared = await this.pullShared(client);
+        if (onlyShared !== null) {
+          const held = this.folders.snapshot().filter((folder) => !folder.sharedFrom);
+          this.folders.replaceAll([...held, ...onlyShared]);
+        }
+        this.lastSyncAt = Date.now();
+        this.syncing = false;
+        this.setStatus('signed-in', gateReason('folderSync'));
+        return null;
+      }
+
       const { data, error } = await client.from(TABLE).select('*').eq('user_id', this.user.id);
       if (error) throw new Error(error.message);
 
@@ -596,34 +866,51 @@ export class Account extends EventTarget {
        */
       const rows = data || [];
       const knowsParents = !rows.length || rows.some((row) => 'parent_id' in row);
-      this.noParentColumn = rows.length > 0 && !knowsParents;
+        this.noteMissingColumns(rows);
 
       const local = this.folders.snapshot();
-      const filedAt = new Map(local.map((folder) => [folder.id, folder.parentId || null]));
+      const held = new Map(local.map((folder) => [folder.id, folder]));
       const remote = rows.map((row) => {
         const folder = rowToFolder(row);
-        if (!knowsParents) folder.parentId = filedAt.get(folder.id) || null;
+        const ours = held.get(folder.id);
+        /*
+         * A column the server does not have comes back as silence, and silence
+         * is not an instruction. Read as an answer, an un-migrated database
+         * flattens the tree, clears the trip dates and forgets every deletion
+         * on every sync - silently, for whichever side happened to be newer.
+         * So each remote row is given back whatever this device already
+         * believes, and nothing travels or is destroyed until the column
+         * exists.
+         */
+        if (!knowsParents) folder.parentId = ours?.parentId || null;
+        if (this.missingColumns.has('trip')) folder.trip = ours?.trip || null;
+        if (this.missingColumns.has('removed_items')) folder.removedItems = ours?.removedItems || [];
         return folder;
       });
-      const result = mergeFolders(local, remote);
 
       /*
        * The server is the authority on what is shared, every sync.
        *
-       * mergeFolders holds shared folders back so a sync cannot offer them
-       * up, which also means it hands them back unchanged. Replacing them
-       * with a fresh read is what makes a withdrawn invitation disappear
-       * rather than linger as a copy nobody can see any more. A read that
-       * failed returns null and keeps what is already there.
+       * Read before the merge rather than after it, because a folder shared
+       * for editing is now merged against its remote copy rather than simply
+       * replaced - and a withdrawn invitation has to disappear rather than
+       * linger as a copy nobody else can see. A read that failed returns null,
+       * which the merge reads as "keep what is in hand" rather than as news
+       * that every invitation was withdrawn.
        */
       const shared = await this.pullShared(client);
-      this.folders.replaceAll(shared === null
-        ? result.merged
-        : [...result.merged.filter((folder) => !folder.sharedFrom), ...shared]);
+      const result = mergeFolders(local, remote, shared);
+
+      this.folders.replaceAll(result.merged);
 
       if (result.toPush.length) {
         const { error: upsertError } = await this.upsertFolders(client, result.toPush);
         if (upsertError) throw new Error(upsertError.message);
+      }
+
+      if (result.toPushShared?.length) {
+        const { error: sharedError } = await this.updateShared(client, result.toPushShared);
+        if (sharedError) throw new Error(sharedError.message);
       }
 
       this.lastSyncAt = Date.now();
@@ -649,22 +936,143 @@ export class Account extends EventTarget {
    * without the column and the session remembers, so the next push is one
    * request rather than two.
    */
+  /**
+   * Ask the project which sign-in providers it actually has.
+   *
+   * A hand-kept list in config had to be edited to match a setting in a
+   * dashboard, and the two drifting apart fails in both directions: a provider
+   * registered and not listed is a button nobody sees, and a provider listed
+   * and not registered is the error page above. The project already publishes
+   * the answer at /auth/v1/settings, so ask it and let turning one on in
+   * Supabase be the whole of turning one on.
+   *
+   * Unauthenticated on purpose: this is the question somebody asks before they
+   * have a session, which is the only time the answer matters.
+   */
+  async refreshProviders() {
+    if (!this.isConfigured()) return null;
+    try {
+      const response = await fetch(`${SUPABASE_URL}/auth/v1/settings`, {
+        headers: { apikey: SUPABASE_KEY },
+      });
+      if (!response.ok) throw new Error(`the project answered ${response.status}`);
+      const settings = await response.json();
+      const external = settings?.external || {};
+      this.providers = PROVIDERS.filter((id) => external[id] === true);
+      this.emit();
+      return this.providers;
+    } catch (error) {
+      // Left null rather than empty: "could not ask" is not "there are none",
+      // and the panel's fallback is already to offer nothing.
+      console.warn('[account] could not read the sign-in providers:', error?.message || error);
+      return null;
+    }
+  }
+
+  /**
+   * Ask the server what this account is entitled to.
+   *
+   * Quiet on failure, and deliberately: this decides what to draw, not what to
+   * allow, so an unanswered question should leave the interface as it was
+   * rather than announce a billing problem to somebody trying to look at a
+   * map. Whatever is actually metered is refused server-side or it is not
+   * refused at all.
+   */
+  async refreshPlan() {
+    if (!this.user) { this.plan = null; return null; }
+    try {
+      const client = await this.getClient();
+      const { data, error } = await client.rpc('my_plan');
+      if (error) throw new Error(error.message);
+      this.plan = data || null;
+      this.emit();
+      return this.plan;
+    } catch (error) {
+      console.warn('[account] could not read the plan:', error?.message || error);
+      return this.plan;
+    }
+  }
+
+  /** Which of the newer columns this server answered with, so a push can re-arm. */
+  noteMissingColumns(rows) {
+    if (!rows.length) return;
+    for (const column of LATER_COLUMNS) {
+      if (rows.some((row) => column in row)) this.missingColumns.delete(column);
+      else this.missingColumns.add(column);
+    }
+  }
+
+  /** What to send, given what this server has turned out not to have. */
+  columnOptions() {
+    return {
+      withParent: !this.missingColumns.has('parent_id'),
+      withTrip: !this.missingColumns.has('trip'),
+      withRemovals: !this.missingColumns.has('removed_items'),
+    };
+  }
+
+  /**
+   * Send rows, dropping any column the server turns out not to have.
+   *
+   * Retried rather than guessed at, and only for the one rejection that means
+   * "this database has not been migrated". Anything else the server refuses is
+   * returned as it came, because a push that quietly strips columns until
+   * something is accepted is a push that loses an edit without saying so.
+   */
+  async sendTolerantly(send) {
+    for (let attempt = 0; attempt <= LATER_COLUMNS.length; attempt += 1) {
+      const result = await send(this.columnOptions());
+      if (!result?.error) return result;
+
+      const named = LATER_COLUMNS.find((column) => !this.missingColumns.has(column)
+        && missingColumn(result.error.message, column));
+      if (!named) return result;
+
+      // Said once per column. Worth knowing that something is not travelling,
+      // not worth saying again on every edit for the rest of the session.
+      this.missingColumns.add(named);
+      console.warn(`[account] folders.${named} is missing; run supabase/schema.sql again so it can sync.`);
+    }
+    return send(this.columnOptions());
+  }
+
   async upsertFolders(client, folders) {
-    const send = (withParent) => client
+    return this.sendTolerantly((options) => client
       .from(TABLE)
-      .upsert(folders.map((folder) => folderToRow(folder, this.user.id, { withParent })),
-        { onConflict: 'user_id,client_id' });
+      .upsert(folders.map((folder) => folderToRow(folder, this.user.id, options)),
+        { onConflict: 'user_id,client_id' }));
+  }
 
-    if (this.noParentColumn) return send(false);
+  /**
+   * Write back a folder somebody else owns and shared for editing.
+   *
+   * An update rather than an upsert, deliberately. Insert on this table is
+   * owner-only, and an upsert is an insert that may turn into an update - so
+   * it asks the policy for a permission a collaborator must not have, and gets
+   * a rejection that reads like a bug rather than like the rule it is. There
+   * is nothing to create here in any case: a collaborator can only change a
+   * folder that already exists.
+   *
+   * One at a time because each row is keyed by a different owner. The first
+   * refusal stops the rest, so a revoked invitation does not spend a request
+   * per folder finding that out.
+   */
+  async updateShared(client, folders) {
+    for (const folder of folders) {
+      const ownerId = folder?.sharedFrom?.ownerId;
+      if (!ownerId || !canEdit(folder)) continue;
 
-    const first = await send(true);
-    if (!first.error || !missingColumn(first.error.message, 'parent_id')) return first;
-
-    // Said once. It is worth knowing that nesting is not travelling, and not
-    // worth saying again on every edit for the rest of the session.
-    this.noParentColumn = true;
-    console.warn('[account] folders.parent_id is missing; run supabase/schema.sql again for nesting to sync.');
-    return send(false);
+      const result = await this.sendTolerantly((options) => {
+        // The key identifies the row; sending it back as a value would be
+        // asking to change it. The trigger would refuse anyway.
+        const { user_id: _owner, client_id: _id, ...row } = folderToRow(folder, ownerId, options);
+        return client.from(TABLE).update(row)
+          .eq('user_id', ownerId)
+          .eq('client_id', folder.id);
+      });
+      if (result?.error) return result;
+    }
+    return { error: null };
   }
 
   /**
@@ -677,9 +1085,17 @@ export class Account extends EventTarget {
    */
   async pushFolder(folder) {
     if (!this.user) return;
+    // Looking at somebody's folder is not editing it, and a push that the
+    // policy is certain to refuse is worth not making.
+    if (folder?.sharedFrom && !canEdit(folder)) return;
+    // Your own folders travel on the plan that carries them. A folder somebody
+    // shared for editing is not yours and is not that.
+    if (!folder?.sharedFrom && !can('folderSync')) return;
     try {
       const client = await this.getClient();
-      const { error } = await this.upsertFolders(client, [folder]);
+      const { error } = folder?.sharedFrom
+        ? await this.updateShared(client, [folder])
+        : await this.upsertFolders(client, [folder]);
       // A network error is left quiet - the next full sync carries it, and
       // interrupting an edit to say the wifi dropped helps nobody. Anything
       // the server actively refused is a different thing and has to be said.

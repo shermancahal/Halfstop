@@ -51,6 +51,25 @@ Each needs enabling and a client ID and secret from the provider's own console.
 Supabase gives the callback URL to register there; it is the project's
 `.../auth/v1/callback`, not this site.
 
+**There is no code change on this side.** The sign-in panel asks the project
+which providers it has, at `/auth/v1/settings`, and draws exactly those. Enable
+Google in the dashboard and the button appears; it does not need a list in
+`config.js` kept in step with a setting in a dashboard. That list still exists
+as `SITE.authProviders` and is now only the fallback for as long as the project
+has not answered, which is empty, so nothing is offered.
+
+That drift is worth avoiding in both directions: a provider registered and not
+listed is a button nobody ever sees, and one listed and not registered sends
+somebody to an error page wearing Apple's or Google's branding, which reads as
+this site being broken rather than unfinished.
+
+**Signing in with Apple is not what lets you charge.** They are separate, and
+it is easy to assume otherwise because both say Apple. Taking subscriptions
+through the App Store needs a shipped native app; see `docs/mobile-app.md`. Sign
+in with Apple becomes *required* by review once the app offers any other
+third-party sign-in, which is the rule at the end of this section, so it is a
+prerequisite for shipping rather than for billing.
+
 ### Google — do this one first
 
 Free, and no domain to verify.
@@ -72,8 +91,17 @@ Free, and no domain to verify.
 
 **Enrolment.** <https://developer.apple.com/programs/enroll/>. Currently 99 USD
 a year. An Apple ID with two-factor authentication is required. Choose
-**Individual** unless the apps must be published under a company name —
+**Individual** unless the apps must be published under a company name.
 Organization enrolment needs a D-U-N-S number and takes considerably longer.
+
+**Halfstop is switching to Organization**, by a support ticket rather than a
+fresh enrolment. Until that resolves, do not create the Services ID or the Sign
+in with Apple key described below. They are registered to a *team*, not to a
+person, and if the change ends up producing a new team rather than converting
+the existing one in place, they do not follow you across. Worth asking in the
+same ticket whether the Team ID and any identifiers already created survive the
+change, because the answer decides whether the steps below can be done now or
+have to wait.
 
 **Then, in Certificates, Identifiers & Profiles:**
 
@@ -273,10 +301,10 @@ two outcomes needs a human, and they should not read the same.
 
 ## Sharing a folder with somebody
 
-Stage one of collaboration: the owner invites an address, and that person can
-**read** the folder. Nobody but the owner can write to it, which is what keeps
-the sync model honest — last-write-wins per folder is safe while a folder has
-exactly one writer, and is not safe the moment it has two.
+The owner invites an address, and the invitation says which of two things it
+allows: **view**, or **edit together**. It defaults to view, because handing
+somebody the ability to change a collection of places should be something you
+chose rather than something you failed to notice.
 
 **The grant is the email address, not a token in a link.** A bearer link is
 forwardable; one "look at this" into a group chat and a folder of somebody's
@@ -289,14 +317,65 @@ What is in `schema.sql`:
 - `folder_shares` — one row per (owner, folder, invited address), `revoked`
   rather than deleted so a withdrawn invitation is distinguishable from one
   that never existed.
-- A **select** policy on `folders` that consults it. A second policy rather
-  than a change to the first: policies are OR'd, so this adds a way to read and
-  leaves insert, update and delete owner-only.
+- A `role` on it, `viewer` or `editor`, defaulted to the narrower and
+  constrained to those two. Narrowed again in the Edge Function, because the
+  request asking for it is written by whatever is on the other end.
+- A **select** policy on `folders` that consults it, and an **update** policy
+  that consults it and also requires the editor role. Separate policies rather
+  than changes to the first: policies are OR'd, so an invitation that does not
+  say editor grants exactly what it granted before any of this existed. Insert
+  and delete stay owner-only, so a collaborator cannot create a folder in
+  somebody else's name or remove theirs.
 
-The reader's copy is marked `sharedFrom` in the browser, and that marker is
-what keeps it out of the push — `mergeFolders` holds it back, and the folder
-row offers no editing controls. Both are belt and braces: the policy would
-refuse the write anyway.
+The reader's copy is marked `sharedFrom` in the browser, carrying the role, and
+that marker is what decides whether an edit is offered and whether a change is
+pushed. Both are presentation: the policy is what refuses.
+
+### What a collaborator cannot do, and why the trigger matters
+
+`folders_set_owner` stamped `user_id` from the session on insert **and** update.
+That was harmless while only an owner could write, because the value it wrote
+back was the one already there. The moment a second account can update, the same
+line hands them the folder: it leaves the owner's account on the collaborator's
+first edit and arrives in theirs, silently, with the owner's copy gone.
+
+So an update now keeps the owner it had, and when the writer is not the owner it
+also keeps the filing, the deleted flag and the created date. A collaborator
+changes what is in a folder, not whether the owner still has it or where they
+keep it. A `WITH CHECK` cannot express that because it cannot see the row as it
+was; the trigger has the old row in hand, so it can.
+
+### Checking that any of the above is true
+
+`supabase/rls-probe.sql`. Run it in the SQL editor with two real accounts filled
+in; it invents a folder and an invitation, pushes the most hostile write a
+collaborator could send, prints what the database allowed, and rolls the whole
+thing back.
+
+It exists because the unit tests cover the merge, which is what the app sends,
+and cannot cover what the database accepts. That second one is the boundary.
+Expect: a viewer's update writes nothing, an editor's writes one row and comes
+back with the owner, the filing and the deleted flag unchanged though the update
+set all three, and a delete writes nothing.
+
+### Two writers, and what that does to the merge
+
+Last-write-wins per folder is safe while a folder has exactly one writer and is
+not safe the moment it has two: you add a pin, somebody renames a different one,
+and whoever saved second takes the folder whole and discards the other's work
+without saying so.
+
+So a folder shared for editing is merged item by item instead. Waypoints carry
+the time they changed, removals leave tombstones, and each side keeps what it
+did. Two rules follow from that and are worth knowing:
+
+- **A waypoint edited after it was deleted comes back.** Deliberate. The edit is
+  the later statement of what somebody wanted, and an unwanted pin is easier to
+  delete again than a lost edit is to retype.
+- **A tombstone is kept for ninety days.** Long enough to outlive a phone in a
+  drawer, and bounded so that a folder worked on for years does not carry a
+  record of every pin ever dropped in it. A device offline for longer than that
+  re-adds what it is still holding.
 
 ### The email
 
@@ -381,6 +460,43 @@ has not verified. Secrets take effect immediately — no redeploy.
 Sign up with an address that has nothing to do with the project team, then
 share a folder with a second one. Resend's own log says whether each message
 was accepted, and the app says `emailed: true` only when the provider took it.
+
+### 6. DMARC, which Resend does not ask for and Outlook does
+
+Resend's checklist ends at DKIM and SPF, and a domain shows **Verified** with
+no DMARC record at all. Verified means the mail is signed; it does not mean
+anybody will put it in an inbox.
+
+Observed, not theorised: a confirmation to an `outlook.com` address was
+accepted by Resend, delivered by SES, and filed as junk. Nothing in the chain
+failed. Outlook and Hotmail weigh a missing DMARC policy heavily, and weigh it
+hardest against a domain with no sending history — `send.halfstop.app` was
+three days old.
+
+One TXT record on the **root** domain, not the subdomain, because DMARC is
+inherited:
+
+| Name | Value |
+| --- | --- |
+| `_dmarc.halfstop.app` | `v=DMARC1; p=none; rua=mailto:support@halfstop.app; adkim=r; aspf=r` |
+
+`p=none` asks nobody to reject anything — it publishes a policy and requests
+reports, which is the whole point at this stage. Relaxed alignment (`adkim=r`,
+`aspf=r`) is what lets mail from `send.halfstop.app` align with the
+organisational domain; strict alignment would fail every message this project
+sends. Tighten to `p=quarantine` later, once the reports show only your own
+senders.
+
+The rest is time. A new sending domain has no reputation and earns one by
+sending mail people do not mark as spam, which nothing in DNS can shortcut.
+Marking the first few as "not junk" in Outlook does more than anything in this
+file.
+
+**What this does not fix**, and is worth knowing before chasing it: the
+confirmation link points at `<project>.supabase.co`, not at halfstop.app, and a
+link on a domain unrelated to the sender is its own small spam signal. Changing
+that needs a custom auth domain on Supabase, which is a paid add-on. Do the
+DMARC record first and see whether it is still a problem.
 
 ---
 

@@ -290,6 +290,42 @@ function fingerprint(feature) {
  * in another. Bad input becomes null rather than a folder that renders as
  * "Invalid Date – Invalid Date" and cannot be repaired from the UI.
  */
+/** Each item's content as one string, for telling an edit from a redraw. */
+function printItems(folder) {
+  return new Map((folder?.items || []).map((item) => [item.id, JSON.stringify(item.feature)]));
+}
+
+/**
+ * How long a tombstone is worth keeping.
+ *
+ * A removal has to outlive every device that might still be holding the item,
+ * or that device re-adds it on its next sync and the deletion undoes itself.
+ * It does not have to outlive them for ever: kept without limit, a folder
+ * worked on for years carries a record of every pin ever dropped in it.
+ * Three months is longer than a phone stays in a drawer and shorter than a
+ * list nobody can read.
+ */
+export const REMOVAL_LIFE = 90 * 24 * 60 * 60 * 1000;
+
+/**
+ * Item tombstones: which items are gone, and when they went.
+ *
+ * Absence cannot say this. A folder that does not contain a pin either never
+ * received it or had it deleted, and a merge that guesses wrong either loses
+ * somebody's work or resurrects what they threw away.
+ */
+export function readRemovals(removals, { now = Date.now() } = {}) {
+  if (!Array.isArray(removals)) return [];
+  const byId = new Map();
+  for (const entry of removals) {
+    const id = entry?.id;
+    const at = Number(entry?.at) || 0;
+    if (!id || now - at > REMOVAL_LIFE) continue;
+    if (!byId.has(id) || byId.get(id) < at) byId.set(id, at);
+  }
+  return [...byId.entries()].map(([id, at]) => ({ id, at }));
+}
+
 export function readTrip(trip) {
   if (!trip || typeof trip !== 'object') return null;
   const from = readDay(trip.from);
@@ -349,6 +385,10 @@ export class FolderStore {
     this.lastError = null;
     this.writing = null;
     this.pending = false;
+    // How each folder's items last looked, so a change can be noticed without
+    // every edit method having to announce which item it touched. Seeded
+    // whenever the collection is replaced wholesale.
+    this.shadow = new Map();
     // Whatever localStorage holds, so the first paint has something even
     // before the vault answers, and so an install from before the vault has
     // its collection to migrate.
@@ -457,10 +497,19 @@ export class FolderStore {
         updatedAt: folder.updatedAt || 0,
         deleted: folder.deleted === true,
         trip: readTrip(folder.trip),
+        removedItems: readRemovals(folder.removedItems),
         items: (Array.isArray(folder.items) ? folder.items : [])
           .filter((item) => item?.feature?.geometry)
-          .map((item) => ({ id: item.id || makeId('i'), feature: item.feature })),
+          .map((item) => ({
+            id: item.id || makeId('i'),
+            feature: item.feature,
+            // A collection written before items were stamped reads as having
+            // changed when its folder did, which is the truest thing that can
+            // be said about it and cannot lose an edit either way.
+            updatedAt: item.updatedAt || folder.updatedAt || 0,
+          })),
       }));
+    this.seedShadow();
   }
 
   /**
@@ -533,11 +582,13 @@ export class FolderStore {
    * @param {string|null} folderId  the folder that changed, stamped as modified
    */
   emit(folderId = null) {
+    const at = Date.now();
     for (const id of [].concat(folderId || [])) {
+      this.trackItems(id, at);
       const folder = this.get(id);
       // Sync compares these, so a change that does not move the clock is a
       // change that will not travel.
-      if (folder) folder.updatedAt = Date.now();
+      if (folder) folder.updatedAt = at;
     }
 
     // Inside a batch, remember what changed and say nothing until it ends.
@@ -584,9 +635,65 @@ export class FolderStore {
     }
   }
 
+  /**
+   * Remember how every folder's items look right now.
+   *
+   * Called whenever the collection is replaced wholesale, so that loading a
+   * collection or taking one back from a sync is not itself mistaken for a
+   * person having edited all of it.
+   */
+  seedShadow() {
+    this.shadow = new Map();
+    for (const folder of this.folders) this.shadow.set(folder.id, printItems(folder));
+  }
+
+  /**
+   * Notice which items a change touched.
+   *
+   * Every edit method ends in emit() and none of them says which item it
+   * changed. Rather than ask sixteen call sites to remember - and every method
+   * written after this one - the folder is compared against how it last
+   * looked. An item whose content moved is stamped with the time; an id that
+   * has gone is buried.
+   *
+   * This is what makes two people working on one folder possible. Without a
+   * time per item there is nothing to compare but the folder's own clock, and
+   * the newer folder wins whole: you add a pin, I rename a different one, and
+   * whichever of us saved last silently discards the other's work.
+   *
+   * The cost is a JSON pass over one folder per change, which is the same
+   * order of work as the write that immediately follows it.
+   */
+  trackItems(folderId, at = Date.now()) {
+    const folder = this.get(folderId);
+    if (!folder) return;
+
+    const before = this.shadow.get(folderId) || new Map();
+    const after = printItems(folder);
+
+    for (const item of folder.items) {
+      if (before.get(item.id) !== after.get(item.id)) item.updatedAt = at;
+    }
+
+    const buried = [...before.keys()].filter((id) => !after.has(id));
+    if (buried.length) {
+      const kept = (folder.removedItems || []).filter((gone) => !buried.includes(gone.id));
+      folder.removedItems = readRemovals([...kept, ...buried.map((id) => ({ id, at }))], { now: at });
+    }
+
+    this.shadow.set(folderId, after);
+  }
+
   /** Plain copy of every folder, for the sync merge. */
   snapshot() {
-    return this.folders.map((folder) => ({ ...folder, items: folder.items.map((item) => ({ ...item })) }));
+    return this.folders.map((folder) => ({
+      ...folder,
+      items: folder.items.map((item) => ({ ...item })),
+      // Copied rather than shared: the merge reads this and the store keeps
+      // writing to it, and one list held by both is how a tombstone added
+      // mid-sync ends up in a snapshot that was taken before it.
+      removedItems: (folder.removedItems || []).map((gone) => ({ ...gone })),
+    }));
   }
 
   /** Replace the whole set, e.g. with the result of a sync merge. */
@@ -605,10 +712,22 @@ export class FolderStore {
       updatedAt: folder.updatedAt || 0,
       deleted: folder.deleted === true,
       trip: readTrip(folder.trip),
+      // Whose folder this is, when it is not the reader's. Left out, it was
+      // rebuilt without the marker on every sync - so a folder somebody shared
+      // came back looking local, was offered up under the reader's own id on
+      // the next sync, and the row policy refused it. The refusal was correct
+      // and the sync reported failure for as long as the reader could see it.
+      sharedFrom: folder.sharedFrom || null,
+      removedItems: readRemovals(folder.removedItems),
       items: (Array.isArray(folder.items) ? folder.items : [])
         .filter((item) => item?.feature?.geometry)
-        .map((item) => ({ id: item.id || makeId('i'), feature: item.feature })),
+        .map((item) => ({
+          id: item.id || makeId('i'),
+          feature: item.feature,
+          updatedAt: item.updatedAt || folder.updatedAt || 0,
+        })),
     })).filter((folder) => !folder.deleted);
+    this.seedShadow();
     this.save();
     for (const listener of this.listeners) listener(this, null);
   }
@@ -637,6 +756,8 @@ export class FolderStore {
       updatedAt: Date.now(),
       deleted: false,
       trip: readTrip(trip),
+      sharedFrom: null,
+      removedItems: [],
       items: [],
     };
     this.folders.push(folder);

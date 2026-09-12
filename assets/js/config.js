@@ -206,7 +206,76 @@ export const ROUTING = {
  * SITE.editors and carries the same warning.
  */
 export const BILLING = {
-  live: false,
+  /*
+   * Off unless the build says otherwise, and the build is where it belongs.
+   *
+   * A committed `true` would put a Subscribe button on the public site the
+   * moment it deployed. While the Stripe keys are test-mode keys that is worse
+   * than useless: anybody could pay with 4242 4242 4242 4242, take no money
+   * out of their account, and come away with a real entitlement row.
+   *
+   * So it reads an injected global like the Mapbox and Supabase values, from
+   * assets/js/token.js, which is gitignored. Testing is then a line in a local
+   * token.js, and launching is a repository secret, and neither is a commit
+   * that changes what strangers see.
+   */
+  live: readGlobal('ABMAP_BILLING_LIVE') === 'true',
+
+  /*
+   * What Premium will cost, in one place.
+   *
+   * Here rather than typed into the website and the app separately, because
+   * two copies of a price disagree eventually and the one people read is not
+   * always the one they are charged. The costs page and the plan panel both
+   * render from this.
+   *
+   * Cents rather than strings, so the two can be compared and the saving
+   * worked out rather than asserted in prose that goes stale the moment a
+   * price moves.
+   *
+   * This is not the authority on what anybody is actually charged. The payment
+   * provider is, from the price configured there, and if the two disagree the
+   * provider wins. This is what we say it costs, and a test keeps the website
+   * saying the same thing.
+   *
+   * The keys are the only names the browser ever sends. A Stripe price id from
+   * the client would be a client that can name its own price, so the checkout
+   * function maps these to ids held server-side and refuses anything else.
+   */
+  plans: {
+    month: { price: 499, period: 'month' },
+    year: { price: 4900, period: 'year' },
+  },
+  defaultPlan: 'month',
+  currency: 'USD',
+
+  /*
+   * Where a purchase would happen, when there is one.
+   *
+   * 'none' today, and it is not a placeholder: in-app purchase exists only
+   * inside a shipped native app, and there is not one. The plan panel reads
+   * this to decide whether to offer a way to buy or to say plainly that there
+   * is not one yet. 'appstore' when that changes.
+   */
+  store: readGlobal('ABMAP_BILLING_STORE') || 'none',
+
+  /*
+   * Who sees the purchase panel before billing is live, so a checkout can be
+   * tested with a card that is not a card.
+   *
+   * Injected rather than committed, because these are real addresses and the
+   * repository is public. Set ABMAP_BILLING_TESTERS in token.js locally, or as
+   * a repository secret for the deployed site.
+   *
+   * There is a second list with the same addresses in it, BILLING_TESTERS on
+   * the Edge Functions, and the duplication is deliberate rather than sloppy.
+   * This one decides which button is drawn; that one decides who may actually
+   * pay. A list that lives in the browser cannot be the second thing, because
+   * the browser is the reader's computer - which is the same warning that sits
+   * at the top of tiers.js.
+   */
+  testers: readGlobal('ABMAP_BILLING_TESTERS')
+    .split(',').map((one) => one.trim().toLowerCase()).filter(Boolean),
 };
 
 export const DEFAULT_VIEW = { center: [-84.28, 35.96], zoom: 6.4 };

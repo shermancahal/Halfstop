@@ -33,6 +33,18 @@ create table if not exists public.folders (
   -- included: their bytes stay on the device, and only ids travel.
   items       jsonb not null default '[]'::jsonb,
 
+  -- {from, to, retired} when this folder is a trip, null when it is not. A
+  -- trip is already a property of a folder in the browser, so it wants a
+  -- column here and not a table of its own.
+  trip        jsonb,
+
+  -- Item tombstones: {id, at} for each waypoint removed, beside the items
+  -- rather than inside them. Co-editing has to tell "the other person deleted
+  -- this" from "this device has not seen it yet", which absence cannot say.
+  -- Inside `items` they would be every reader's problem - the map, GPX, KML,
+  -- export - and here they are nobody's but sync's.
+  removed_items jsonb not null default '[]'::jsonb,
+
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),
 
@@ -44,6 +56,8 @@ create index if not exists folders_user_idx on public.folders (user_id, updated_
 -- Added after the table shipped, so an existing install gets the column by
 -- running this file again rather than by dropping anything.
 alter table public.folders add column if not exists parent_id text;
+alter table public.folders add column if not exists trip jsonb;
+alter table public.folders add column if not exists removed_items jsonb not null default '[]'::jsonb;
 
 -- Row-level security. Without this every signed-in user could read every other
 -- user's folders, since the publishable key is by design public.
@@ -66,8 +80,21 @@ create policy "folders are private to their owner"
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
--- Belt and braces: even if a client sends someone else's user_id, stamp the
--- row with the authenticated user. The policy above would reject it anyway.
+-- Belt and braces on insert: even if a client sends someone else's user_id,
+-- stamp the row with the authenticated user. The policy above would reject it
+-- anyway.
+--
+-- An update never changes hands. This stamped user_id on insert and update
+-- alike, which was harmless while only an owner could write, because the value
+-- it wrote back was the one already there. The moment a collaborator can
+-- update, that same line hands them the folder: it would leave the owner's
+-- account on the collaborator's first edit and arrive in theirs, silently,
+-- with the owner's copy simply gone.
+--
+-- Filing and deletion stay with the owner for the same reason. A collaborator
+-- edits what is in a folder, not whether the owner still has it or where they
+-- keep it. A WITH CHECK cannot express that, because it cannot see the row as
+-- it was; here the old row is in hand, so it can.
 create or replace function public.folders_set_owner()
 returns trigger
 language plpgsql
@@ -75,7 +102,16 @@ security definer
 set search_path = public
 as $$
 begin
-  new.user_id := auth.uid();
+  if tg_op = 'INSERT' then
+    new.user_id := auth.uid();
+  else
+    new.user_id := old.user_id;
+    if auth.uid() is distinct from old.user_id then
+      new.parent_id := old.parent_id;
+      new.deleted := old.deleted;
+      new.created_at := old.created_at;
+    end if;
+  end if;
   new.updated_at := coalesce(new.updated_at, now());
   return new;
 end;
@@ -141,6 +177,11 @@ create table if not exists public.folder_shares (
   folder_name    text not null default '',
   invited_by     text not null default '',
 
+  -- What the invitation allows: 'viewer' to look, 'editor' to work on it too.
+  -- Defaulted to the narrower of the two, so an invitation written by anything
+  -- that has not heard of this column grants what it always granted.
+  role           text not null default 'viewer',
+
   -- Revoked rather than deleted, so "this was shared and then withdrawn" is
   -- distinguishable from "never shared".
   revoked        boolean not null default false,
@@ -152,6 +193,11 @@ create table if not exists public.folder_shares (
 
 create index if not exists folder_shares_invited_idx
   on public.folder_shares (lower(invited_email)) where not revoked;
+
+alter table public.folder_shares add column if not exists role text not null default 'viewer';
+alter table public.folder_shares drop constraint if exists folder_shares_role_check;
+alter table public.folder_shares add constraint folder_shares_role_check
+  check (role in ('viewer', 'editor'));
 
 alter table public.folder_shares enable row level security;
 
@@ -195,6 +241,175 @@ create policy "a shared folder is readable by whoever it names"
         and lower(s.invited_email) = lower((select auth.jwt()) ->> 'email')
     )
   );
+
+-- And a folder shared for editing becomes writable by them, which being able
+-- to read it never implied.
+--
+-- Again a separate policy: an invitation that does not say 'editor' grants
+-- exactly what it granted before this existed. Insert and delete stay with the
+-- owner, so a collaborator can change what is in a folder and cannot create
+-- one in somebody else's name or remove theirs.
+drop policy if exists "a co-edited folder is writable by whoever it names" on public.folders;
+create policy "a co-edited folder is writable by whoever it names"
+  on public.folders
+  for update
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.folder_shares s
+      where s.owner_id = folders.user_id
+        and s.client_id = folders.client_id
+        and not s.revoked
+        and s.role = 'editor'
+        and lower(s.invited_email) = lower((select auth.jwt()) ->> 'email')
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.folder_shares s
+      where s.owner_id = folders.user_id
+        and s.client_id = folders.client_id
+        and not s.revoked
+        and s.role = 'editor'
+        and lower(s.invited_email) = lower((select auth.jwt()) ->> 'email')
+    )
+  );
+
+-- ----------------------------------------------------------- entitlements
+--
+-- What an account is entitled to, decided where the browser cannot reach.
+--
+-- assets/js/lib/tiers.js says at the top that it is not a permission boundary,
+-- and means it: anybody can set their tier in devtools in about four seconds.
+-- This is the other half, and the half that counts.
+
+-- Only explicit grants are stored. The trial is not, because it is already
+-- knowable: an account's thirtieth day is thirty days after the day it was
+-- created, and a stored copy of that is a second answer that can disagree with
+-- the first. Nothing to write on signup, nothing to backfill, nothing to drift.
+create table if not exists public.entitlements (
+  user_id     uuid primary key references auth.users (id) on delete cascade,
+
+  tier        text not null default 'premium',
+
+  -- Where it came from, so a subscription that lapses is distinguishable from
+  -- something given by hand and never meant to end. 'appstore' and 'stripe'
+  -- are the two that can sell: the App Store only inside a shipped app, and
+  -- Stripe for anybody using Halfstop in a browser, who otherwise has no way
+  -- to pay at all.
+  source      text not null default 'granted',
+
+  -- Whose subscription this is, in the provider's own words: a Stripe
+  -- subscription id, or an App Store original transaction id. Kept so a later
+  -- event can be matched to the row it belongs to, and so a row can be audited
+  -- against the provider without guessing. Null for a grant made by hand.
+  external_ref text,
+
+  -- Null means it does not expire. That is the administrator case.
+  expires_at  timestamptz,
+
+  note        text not null default '',
+  updated_at  timestamptz not null default now()
+);
+
+alter table public.entitlements drop constraint if exists entitlements_tier_check;
+alter table public.entitlements add constraint entitlements_tier_check
+  check (tier in ('free', 'premium'));
+alter table public.entitlements drop constraint if exists entitlements_source_check;
+alter table public.entitlements add constraint entitlements_source_check
+  check (source in ('granted', 'appstore', 'stripe', 'comp'));
+alter table public.entitlements add column if not exists external_ref text;
+
+alter table public.entitlements enable row level security;
+
+-- Readable by the person it is about, and writable by nobody.
+--
+-- There is deliberately no insert, update or delete policy. With row-level
+-- security on and no policy for a command, that command is refused for every
+-- signed-in user, so the only thing that can write here is the service role: a
+-- migration, or an Edge Function holding the secret key. That is the entire
+-- point of the table, and it is worth checking rather than assuming - see
+-- rls-probe.sql.
+drop policy if exists "your own entitlement is readable by you" on public.entitlements;
+create policy "your own entitlement is readable by you"
+  on public.entitlements
+  for select
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+-- The one question worth asking, answered for the caller and nobody else.
+--
+-- It takes no argument on purpose. A plan_for(uid) would let any signed-in
+-- account ask about any other, which is not worth handing out to save a
+-- keystroke. Reading auth.users is why it is SECURITY DEFINER, and auth.uid()
+-- is the only row it ever reads.
+--
+-- Precedence is grant, then trial, then free. A grant that has expired falls
+-- back to the trial rather than straight to free, which matters only in the
+-- first month of an account and is the answer somebody would expect if it did.
+create or replace function public.my_plan()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with granted as (
+    select tier, source, expires_at
+    from public.entitlements
+    where user_id = auth.uid()
+      and tier = 'premium'
+      and (expires_at is null or expires_at > now())
+    limit 1
+  ),
+  trial as (
+    -- Thirty days from the day the account was made. One place, one interval.
+    select u.created_at + interval '30 days' as ends
+    from auth.users u
+    where u.id = auth.uid()
+  )
+  select case
+    when exists (select 1 from granted) then jsonb_build_object(
+      'tier', 'premium',
+      'source', (select source from granted),
+      'until', (select expires_at from granted)
+    )
+    when (select ends from trial) > now() then jsonb_build_object(
+      'tier', 'premium',
+      'source', 'trial',
+      'until', (select ends from trial)
+    )
+    else jsonb_build_object('tier', 'free', 'source', 'none', 'until', null)
+  end;
+$$;
+
+-- From PUBLIC, not only from anon.
+--
+-- Postgres grants EXECUTE on a new function to PUBLIC, and anon inherits that,
+-- so revoking from anon alone leaves the PUBLIC grant sitting behind it and the
+-- function stays callable with no session at all. Supabase's linter catches it;
+-- this is the fix it asks for.
+--
+-- The linter also reports that signed-in users can call a SECURITY DEFINER
+-- function, and that one is meant: this is how an account asks what it is
+-- entitled to. It has no arguments and reads auth.uid()'s own row and nothing
+-- else, which is why the answer is safe to give. SECURITY INVOKER is not an
+-- option, because reading auth.users is the whole point and authenticated
+-- cannot.
+revoke execute on function public.my_plan() from public;
+revoke execute on function public.my_plan() from anon;
+grant execute on function public.my_plan() to authenticated;
+
+-- Whoever runs the service, premium with no end date. Edit the address, or add
+-- rows here for anybody else who should have it: this is what "code it into the
+-- database" means, and it is one row rather than a special case in the app.
+insert into public.entitlements (user_id, tier, source, expires_at, note)
+select id, 'premium', 'granted', null, 'Runs the service.'
+from auth.users where lower(email) = 'shermancahal@gmail.com'
+on conflict (user_id) do update
+  set tier = 'premium', source = 'granted', expires_at = null, updated_at = now();
 
 -- ---------------------------------------------------------------- support
 --

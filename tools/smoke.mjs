@@ -2145,9 +2145,9 @@ if (process.env.SMOKE_SHOTS && !external) {
 /*
  * The account, signed in, without a server.
  *
- * supabase-js is fetched from a CDN the moment a project is configured, so a
- * fake of that one module - a session already there, a table with nothing in
- * it - is enough to draw the signed-in card. What is checked is the layout
+ * supabase-js is loaded the moment a project is configured, so a fake of that
+ * one file - a session already there, a table with nothing in it - is enough
+ * to draw the signed-in card. What is checked is the layout
  * that was asked for: the name on a line of its own, the address under it, an
  * edit that opens a form already filled in, the sync line, and two buttons
  * each carrying a mark. It was one row with the address cut off at "sherm..."
@@ -2160,14 +2160,22 @@ if (!external) {
   await signed.route('**/mapbox-gl.js*', (route) => route.fulfill({
     status: 200, contentType: 'application/javascript', body: GL,
   }));
-  // A predicate rather than a glob: the library's URL ends in "@2.45.4/+esm",
-  // and a glob star stops at the slash, so the pattern quietly matched nothing
-  // and the import went to the real network. A module import is also a CORS
-  // fetch, hence the header - without it the browser refuses the fake.
-  await signed.route((url) => url.href.includes('@supabase/supabase-js'), (route) => route.fulfill({
-    status: 200, contentType: 'application/javascript',
-    headers: { 'Access-Control-Allow-Origin': '*' },
-    body: `export function createClient() {
+  /*
+   * The library is vendored, so it arrives as a same-origin classic script
+   * that leaves a global behind - not as a module import from a CDN. The fake
+   * has to be the same shape, or two things go wrong at once: nothing matches
+   * the route, and the real library loads and tries to reach a project this
+   * test deliberately makes unreachable.
+   *
+   * A predicate rather than a glob, for the reason the previous one needed:
+   * a glob star stops at a slash, and a pattern that quietly matches nothing
+   * fails by letting the real thing through rather than by erroring.
+   */
+  await signed.route(
+    (url) => /\/assets\/vendor\/supabase-js-[^/]+\/supabase\.js$/.test(url.pathname),
+    (route) => route.fulfill({
+      status: 200, contentType: 'application/javascript',
+      body: `self.supabase = { createClient() {
       const user = { id: 'u1', email: 'sherman@example.com', user_metadata: { display_name: 'Sherman Cahal' } };
       const table = {
         select() { return { async eq() { return { data: [], error: null }; } }; },
@@ -2184,9 +2192,14 @@ if (!external) {
           },
           async signOut() {},
         },
+        // The plan, asked for on every sign-in. Answered rather than left to
+        // throw, so the console is not full of a warning about something this
+        // test is not about.
+        async rpc() { return { data: { tier: 'free', source: 'none', until: null }, error: null }; },
       };
-    }`,
-  }));
+    } };`,
+    }),
+  );
   await signed.addInitScript(() => {
     window.ABMAP_SUPABASE_URL = 'https://smoke.supabase.co';
     window.ABMAP_SUPABASE_KEY = 'smoke-anon-key';

@@ -291,6 +291,17 @@ test('nothing writes a bucket credential into the client config', async () => {
   const block = deploy.slice(deploy.indexOf('Write the client config'));
   const written = [...block.matchAll(/window\.(ABMAP_[A-Z_]+)\s*=/g)].map((m) => m[1]);
   assert.deepEqual(written.sort(), [
+    /*
+     * Billing, and the one that needs saying out loud: the testers list holds
+     * real email addresses, and this file is served to every visitor, so
+     * setting that secret publishes them. It is here because it decides which
+     * button is drawn and nothing else - who may actually pay is decided by
+     * BILLING_TESTERS on the Edge Functions, which nobody can read - and an
+     * address you would rather not publish belongs in a local token.js.
+     */
+    'ABMAP_BILLING_LIVE',
+    'ABMAP_BILLING_STORE',
+    'ABMAP_BILLING_TESTERS',
     'ABMAP_MAPBOX_TOKEN',
     'ABMAP_PROTOMAPS_ARCHIVE',
     'ABMAP_PROTOMAPS_MAXZOOM',

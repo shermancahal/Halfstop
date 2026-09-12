@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  FEATURES, TIERS, DEFAULT_TIER, tierFor, can, gateReason, planSummary,
+  FEATURES, TIERS, DEFAULT_TIER, tierFor,
+  can, gateReason, planSummary, describePlan,
+  daysLeft, featureForLayer, describePrice, purchaseRoute,
+  premiumAdds, annualSaving, plansOffered, offersUpgrade, isBillingTester,
 } from '../assets/js/lib/tiers.js';
 
 const FREE = { live: false };
@@ -22,16 +25,39 @@ test('tiers: today, every feature is offered to everybody', () => {
   }
 });
 
-test('tiers: the plans are drawn where the website says they are', () => {
+test('tiers: the plans are drawn where the website says they are', async () => {
   /*
-   * Premium grants the metered features and Free grants none of them, which is
-   * the split printed on What it costs rather than a second opinion about it.
-   * The day BILLING.live goes on, this matrix is what closes - and one that
-   * disagreed with the page would take somebody's money for something they
-   * already had.
+   * Read off the page rather than restated here.
+   *
+   * This used to assert that Free granted nothing, which described the split
+   * without checking it: the matrix and the website are two lists of the same
+   * decision, kept in different files, and the comment claiming they agreed
+   * was the only thing holding them together. Moving one feature between
+   * tiers touches both, and forgetting either is silent.
+   *
+   * The day BILLING.live goes on, this matrix is what closes. One that
+   * disagreed with the page would take somebody's money for something the
+   * page told them they already had.
    */
+  const { readFile } = await import('node:fs/promises');
+  const page = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  const card = (heading) => page.split(`<h3>${heading}</h3>`)[1]?.split('</div>')[0] || '';
+  const free = card('Free Tier');
+  const premium = card('Premium Tier');
+  assert.ok(free && premium, 'the costs section still has both cards');
+
+  for (const [key, text] of Object.entries(FEATURES)) {
+    const onFree = free.includes(text);
+    const onPremium = premium.includes(text);
+    assert.equal(onFree || onPremium, true, `the page never mentions ${key}`);
+    assert.equal(onFree && onPremium, false, `the page lists ${key} under both tiers`);
+    assert.equal(TIERS.free.grants.includes(key), onFree,
+      `the matrix and the page disagree about ${key}`);
+  }
+
+  // Premium is still everything: a feature that fell out of it would be one
+  // nobody could buy.
   assert.deepEqual(TIERS.premium.grants.slice().sort(), Object.keys(FEATURES).sort());
-  assert.deepEqual(TIERS.free.grants, []);
 });
 
 test('tiers: the keys the app still asks for reach the feature that replaced them', () => {
@@ -108,11 +134,83 @@ test('tiers: the plan summary says both what you have and whether it is real yet
   assert.equal(summary.includes.length, Object.keys(FEATURES).length);
   assert.match(summary.note, /free while Halfstop is being built/);
 
-  // And once it is real, the plan is what decides.
-  const paying = planSummary({ tier: 'premium' }, { billing: LIVE });
+  // And once it is real, the plan the server answered with is what decides.
+  const paying = planSummary({ plan: { tier: 'premium', source: 'granted' } }, { billing: LIVE });
   assert.equal(paying.name, 'Premium');
   assert.equal(paying.includes.length, Object.keys(FEATURES).length);
-  assert.equal(planSummary(null, { billing: LIVE }).includes.length, 0);
+  // Free is no longer empty: place search is metered and given away anyway.
+  assert.deepEqual(
+    planSummary(null, { billing: LIVE }).includes,
+    [FEATURES.placeSearch],
+  );
+});
+
+/* ------------------------------------------------------- the trial */
+
+const DAY = 86400000;
+const LIVE_NOW = 1789000000000;
+
+test('tiers: a tier set on the account itself is not a plan', () => {
+  // The shape matters. A plan arrives from the server under `plan`; a bare
+  // `tier` is the shape a browser could invent for itself, and reading it
+  // would be this module deciding what it is documented not to decide.
+  assert.equal(tierFor({ tier: 'premium' }, { billing: LIVE }).name, 'Free');
+  assert.equal(tierFor({ plan: { tier: 'premium' } }, { billing: LIVE }).name, 'Premium');
+});
+
+test('tiers: the trial counts down in days a person can check', () => {
+  const trial = (days) => ({
+    tier: 'premium',
+    source: 'trial',
+    until: new Date(LIVE_NOW + days * DAY).toISOString(),
+  });
+
+  const say = (plan) => describePlan(plan, { now: LIVE_NOW, billing: LIVE });
+  assert.equal(say(trial(9)), 'Trial, 9 days left.');
+  assert.equal(say(trial(1)), 'Trial, 1 day left.', 'not "1 days"');
+  // Rounded up, so the last afternoon of a trial does not read as zero.
+  assert.equal(say(trial(0.25)), 'Trial, 1 day left.');
+  assert.equal(say(trial(-1)), 'Trial ends today.');
+});
+
+test('tiers: a paid plan with an end date counts down without the word trial', () => {
+  const ends = new Date(LIVE_NOW + 5 * DAY).toISOString();
+  assert.equal(
+    describePlan({ tier: 'premium', source: 'appstore', until: ends }, { now: LIVE_NOW, billing: LIVE }),
+    '5 days left.',
+  );
+});
+
+test('tiers: the line never repeats what the name above it says', () => {
+  // The plan's name is already on screen. "Free." written under the word Free
+  // is the line the one-word decision exists to prevent.
+  const say = (plan) => describePlan(plan, { now: LIVE_NOW, billing: LIVE });
+  assert.equal(say(null), '');
+  assert.equal(say({ tier: 'free', source: 'none', until: null }), '');
+  assert.equal(say({ tier: 'premium', source: 'granted', until: null }), '');
+});
+
+test('tiers: nothing is said about a trial while there is nothing to lose', () => {
+  /*
+   * Billing is off, so every account has everything and a countdown would be
+   * counting down to nothing happening.
+   *
+   * Empty rather than a reassuring sentence, because the menu shows the plan
+   * as one word and nothing under it by an earlier decision that the smoke
+   * test guards: the explaining belongs in the FAQ rather than somewhere
+   * somebody opened to change their units.
+   */
+  assert.equal(
+    describePlan({ tier: 'premium', source: 'trial', until: new Date(LIVE_NOW).toISOString() }, { billing: FREE }),
+    '',
+  );
+});
+
+test('tiers: a plan nobody has answered with yet is not premium', () => {
+  // Null means the question has not been asked, which must not read as a grant.
+  assert.equal(tierFor({ plan: null }, { billing: LIVE }).name, 'Free');
+  assert.equal(daysLeft(null), null);
+  assert.equal(daysLeft('not a date'), null);
 });
 
 /*
@@ -131,4 +229,292 @@ test('tiers: the module says out loud that it is not a permission boundary', asy
 test('tiers: the shipped default really is everything-free', async () => {
   const { BILLING } = await import('../assets/js/config.js');
   assert.equal(BILLING.live, false);
+});
+
+/* --------------------------------------------- every paid feature is wired */
+
+/*
+ * The failure this catches, which happened.
+ *
+ * Seven features were listed as Premium on the website and exactly one of them
+ * was gated anywhere in the app: can() appeared three times, all routing.
+ * Switching BILLING.live on would have produced a paid tier where six of seven
+ * items kept working and one showed an error toast, and nothing anywhere would
+ * have said so - not a test, not a type, not a lint.
+ *
+ * So this asks the app rather than trusting it: for every feature the free
+ * tier does not grant, something has to gate it. Either a can() call naming it
+ * or one of its aliases, or a real layer in the catalogue that featureForLayer
+ * assigns to it.
+ *
+ * It does not check that the gate works, only that one exists. Whether it
+ * holds is the server's job, and the server does not read a plan yet.
+ */
+test('tiers: every feature the free tier does not grant is gated somewhere', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const { BASEMAPS, OVERLAYS } = await import('../assets/js/config.js');
+
+  const sources = await Promise.all(['../assets/js/viewer.js', '../assets/js/lib/account.js']
+    .map((file) => readFile(new URL(file, import.meta.url), 'utf8')));
+
+  // Feature keys named in a can() call anywhere in the app, aliases resolved
+  // the way can() itself resolves them.
+  const gated = new Set();
+  for (const source of sources) {
+    for (const [, named] of source.matchAll(/\bcan\('([a-zA-Z]+)'\)/g)) {
+      // can() maps the old names onto the feature that replaced them, so a
+      // call using one still counts as gating the real feature.
+      const key = Object.keys(FEATURES).find((feature) => can(named, {
+        billing: LIVE,
+        tier: { id: 't', name: 'T', grants: [feature], note: '' },
+      }));
+      if (key) gated.add(key);
+    }
+  }
+
+  // And the layers, which are gated by what they are rather than by a call.
+  for (const layer of [...BASEMAPS, ...OVERLAYS]) {
+    const needs = featureForLayer(layer);
+    if (needs) gated.add(needs);
+  }
+
+  for (const key of Object.keys(FEATURES)) {
+    if (TIERS.free.grants.includes(key)) continue;
+    assert.equal(gated.has(key), true,
+      `${key} is sold as Premium and nothing in the app gates it`);
+  }
+});
+
+test('tiers: the layers a plan covers are decided by what the layer already is', async () => {
+  const { OVERLAYS } = await import('../assets/js/config.js');
+  const weather = OVERLAYS.filter((l) => featureForLayer(l) === 'weatherLayers');
+  const state = OVERLAYS.filter((l) => featureForLayer(l) === 'stateLayers');
+
+  // Real counts rather than "more than zero": a mapping that quietly stopped
+  // matching would still pass that, and the whole group would go free.
+  assert.equal(weather.length > 0, true, 'the weather group still maps to weatherLayers');
+  assert.equal(state.length > 0, true, 'layers carrying states still map to stateLayers');
+  assert.equal(weather.every((l) => l.group === 'Weather'), true);
+  assert.equal(state.every((l) => l.states?.length > 0), true);
+  // Nothing is in both, which would make one of them unreachable.
+  assert.equal(weather.some((l) => state.includes(l)), false);
+});
+
+/* ------------------------------------------------------------ the price */
+
+test('tiers: the price is written the way a person writes it', () => {
+  const billing = {
+    defaultPlan: 'month',
+    plans: { month: { price: 499, period: 'month' }, year: { price: 4900, period: 'year' } },
+  };
+  assert.equal(describePrice({ billing }), '$4.99 a month', 'the default plan when none is named');
+  assert.equal(describePrice({ plan: 'month', billing }), '$4.99 a month');
+  // Whole dollars lose the zeros: "$49 a year" is how somebody says it and
+  // "$49.00 a year" is how a form does.
+  assert.equal(describePrice({ plan: 'year', billing }), '$49 a year');
+  // Nothing rather than "$0 a month", "$NaN a month" or a throw.
+  assert.equal(describePrice({ plan: 'decade', billing }), '');
+  assert.equal(describePrice({ billing: { plans: {} } }), '');
+});
+
+test('tiers: what the year saves is worked out, not asserted', () => {
+  /*
+   * "Two months free" is the sentence everybody reaches for and at these
+   * prices it is a lie by a few dollars: $49 buys a shade under ten months,
+   * not ten. Computing it means the page cannot overstate the discount, and
+   * cannot go stale when a price moves.
+   */
+  const saving = annualSaving({
+    billing: { plans: { month: { price: 499 }, year: { price: 4900 } } },
+  });
+  assert.equal(saving.money, '$10.88');
+  assert.equal(saving.percent, 18);
+
+  // Nothing to say when the year is not cheaper, rather than "saves $0".
+  assert.equal(annualSaving({ billing: { plans: { month: { price: 499 }, year: { price: 5988 } } } }), null);
+  assert.equal(annualSaving({ billing: { plans: { month: { price: 499 } } } }), null);
+});
+
+test('tiers: how somebody would buy it, and the answers that differ', () => {
+  /*
+   * Four states, not a boolean, because the panel draws each differently and
+   * conflating any two of them shows somebody the wrong thing.
+   *
+   * The one worth keeping straight: a browser cannot complete an App Store
+   * purchase. Reporting that as "buyable" would put a button on a page where
+   * pressing it can only fail, so it is reported as a place to go instead.
+   */
+  assert.deepEqual(purchaseRoute({ billing: { live: false, store: 'stripe' } }),
+    { available: false, why: 'not-live' }, 'nothing is for sale before billing is live');
+  assert.deepEqual(purchaseRoute({ billing: { live: true, store: 'none' } }),
+    { available: false, why: 'no-store' }, 'live with nowhere to buy');
+  assert.deepEqual(purchaseRoute({ billing: { live: true, store: 'appstore' } }),
+    { available: false, why: 'in-app-only' }, 'the App Store cannot be reached from a browser');
+  assert.deepEqual(purchaseRoute({ billing: { live: true, store: 'stripe' } }),
+    { available: true, where: 'stripe' }, 'Stripe is the one a browser can finish');
+});
+
+test('tiers: nothing is for sale today', () => {
+  // The shipped state, asserted rather than assumed. A commit that turned
+  // billing on as a side effect of something else has to trip over this.
+  assert.equal(purchaseRoute().available, false);
+});
+
+test('tiers: both plans are on offer', () => {
+  const ids = plansOffered().map((plan) => plan.id);
+  assert.deepEqual(ids, ['month', 'year']);
+});
+
+test('tiers: what Premium adds is the difference, not a third copy of the list', () => {
+  const adds = premiumAdds();
+  // Place search is free now, so it is not something Premium adds.
+  assert.equal(adds.includes(FEATURES.placeSearch), false);
+  assert.equal(adds.includes(FEATURES.folderSync), true);
+  assert.equal(adds.length, Object.keys(FEATURES).length - TIERS.free.grants.length);
+});
+
+test('tiers: the price on the website is the price in the code', async () => {
+  /*
+   * The page is static HTML and cannot read BILLING, so the number is typed
+   * in twice. Two copies of a price disagree eventually, and the one people
+   * read is not always the one they are charged. Same reason the tier split
+   * is read off the page rather than restated: a decision kept in two files
+   * needs something that notices when they part company.
+   */
+  const { readFile } = await import('node:fs/promises');
+  const page = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  for (const plan of plansOffered()) {
+    const said = describePrice({ plan: plan.id });
+    assert.equal(page.includes(said), true, `the costs page does not say ${said}`);
+  }
+});
+
+test('tiers: a trial is offered the thing that stops it ending', () => {
+  /*
+   * The bug this exists for, which was invisible: a trial reads as premium
+   * everywhere, correctly, because everything works. Reading it that way in
+   * the panel meant nobody could subscribe during their first thirty days -
+   * they would have had to let the trial lapse, lose it all, and only then be
+   * shown the thing that would have kept it. The person it happened to would
+   * simply not have seen a button.
+   */
+  const summary = (source, tier = 'premium') => ({
+    live: true, source, tier: { id: tier },
+  });
+
+  assert.equal(offersUpgrade(summary('trial')), true, 'a trial is not paying yet');
+  assert.equal(offersUpgrade(summary('none', 'free')), true, 'and neither is free');
+
+  // Somebody who is actually paying is not sold it again.
+  assert.equal(offersUpgrade(summary('stripe')), false);
+  assert.equal(offersUpgrade(summary('appstore')), false);
+  // Nor is somebody who was given it.
+  assert.equal(offersUpgrade(summary('granted')), false);
+
+  // And nothing at all is offered while billing is off, whatever the source.
+  assert.equal(offersUpgrade({ live: false, source: 'trial', tier: { id: 'premium' } }), false);
+  assert.equal(offersUpgrade(null), false);
+});
+
+test('tiers: the test-mode panel does not try to sell to somebody who already pays', () => {
+  /*
+   * Reported from a phone: signed in on an account holding a permanent granted
+   * entitlement, the panel drew "$4.99 a month" and "$49 a year".
+   *
+   * The test above missed it by building its summaries by hand with
+   * `tier: { id: 'premium' }` - a shape planSummary never produces while
+   * billing is off, because tierFor flattens everybody to Free then. The
+   * preview forces `live: true` onto exactly such a summary, so the old check
+   * on tier.id saw Free for everybody and offered to sell Premium to an
+   * account that already had it. The server refused with a 409, which is the
+   * safety net working and not an interface anybody should meet.
+   *
+   * So this one goes through the real planSummary, with billing off, the way
+   * the panel does.
+   */
+  const asPanel = (source) => {
+    const account = source === 'none' ? null : { plan: { tier: 'premium', source, until: null } };
+    // Exactly what upgradeBlock does: summarise with billing off, then force
+    // live on for the preview.
+    return offersUpgrade({ ...planSummary(account, { billing: FREE }), live: true });
+  };
+
+  assert.equal(asPanel('granted'), false, 'a granted account is not sold what it was given');
+  assert.equal(asPanel('stripe'), false, 'and an account already paying by card is not sold it twice');
+  assert.equal(asPanel('appstore'), false);
+  // The two that should still see the buttons, because neither is paying.
+  assert.equal(asPanel('trial'), true);
+  assert.equal(asPanel('none'), true);
+});
+
+test('tiers: an entitlement source nobody taught this about still gets a button', () => {
+  /*
+   * Which way an unknown source should fail, decided rather than left to
+   * whichever branch happened to come first. Offering a purchase to somebody
+   * who turns out to be paying already ends at a refusal they can read;
+   * withholding it from somebody who is not ends in a free account that is
+   * never shown a way to pay and never says why.
+   */
+  assert.equal(offersUpgrade({ live: true, source: 'play' }), true);
+  assert.equal(offersUpgrade({ live: true }), true);
+});
+
+test('tiers: a preview offers the web checkout before billing is live', () => {
+  /*
+   * How the people who run this reach a checkout to test one, without a
+   * Subscribe button appearing for everybody else.
+   *
+   * It decides what is drawn and nothing else. The checkout function refuses
+   * anybody not named as a tester while the Stripe key is a test key, because
+   * a hidden button is not a control: that function is reachable by anybody
+   * holding a session whether or not the app ever draws one.
+   */
+  const off = { live: false, store: 'none' };
+  assert.deepEqual(purchaseRoute({ billing: off }), { available: false, why: 'not-live' });
+  assert.deepEqual(purchaseRoute({ billing: off, preview: true }),
+    { available: true, where: 'stripe', preview: true });
+
+  // Once billing is live the preview flag changes nothing: the configured
+  // store decides, and a preview must not quietly override it.
+  assert.deepEqual(purchaseRoute({ billing: { live: true, store: 'appstore' }, preview: true }),
+    { available: false, why: 'in-app-only' });
+  assert.deepEqual(purchaseRoute({ billing: { live: true, store: 'stripe' }, preview: true }),
+    { available: true, where: 'stripe' });
+});
+
+test('tiers: who is shown the test-mode purchase panel', () => {
+  /*
+   * A list of addresses that decides which button is drawn, and nothing else.
+   *
+   * The matching thing that decides who may actually pay is BILLING_TESTERS on
+   * the Edge Functions, and it has to be the one that counts: this list is
+   * shipped to the reader's computer, where they can edit it, so treating it
+   * as permission would mean anybody could hand themselves a test-mode
+   * checkout - which is a real entitlement bought with a card that is not a
+   * card. These tests are about a button appearing.
+   */
+  const billing = { testers: ['first@example.com', 'second@example.com'] };
+  assert.equal(isBillingTester({ email: 'first@example.com' }, { billing }), true);
+  assert.equal(isBillingTester({ email: 'second@example.com' }, { billing }), true);
+  assert.equal(isBillingTester({ email: 'somebody@example.com' }, { billing }), false);
+
+  // Addresses arrive from a sign-in form and from a pasted secret, so neither
+  // case nor stray whitespace decides whether the panel appears.
+  assert.equal(isBillingTester({ email: '  First@Example.com ' }, { billing }), true);
+
+  // No account, no email, no panel - and an empty list means nobody rather
+  // than everybody, which is the difference between a quiet default and a
+  // free subscription for whoever signs in.
+  assert.equal(isBillingTester(null, { billing }), false);
+  assert.equal(isBillingTester({}, { billing }), false);
+  assert.equal(isBillingTester({ email: '' }, { billing }), false);
+  assert.equal(isBillingTester({ email: 'first@example.com' }, { billing: { testers: [] } }), false);
+  assert.equal(isBillingTester({ email: 'first@example.com' }, { billing: {} }), false);
+});
+
+test('tiers: nobody is a tester in the shipped configuration', () => {
+  // The committed default, asserted: the list is injected at build time and
+  // the repository is public, so an address appearing in it here would be
+  // somebody's real address in a public file.
+  assert.equal(isBillingTester({ email: 'anybody@example.com' }), false);
 });
