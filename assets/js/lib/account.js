@@ -44,6 +44,9 @@ const INVITE_FUNCTION = 'invite-to-folder';
 /** The one that opens a Stripe Checkout for whoever is signed in. */
 const CHECKOUT_FUNCTION = 'stripe-checkout';
 
+/** And the one that opens Stripe's billing portal, where a subscription ends. */
+const PORTAL_FUNCTION = 'stripe-portal';
+
 /** Invitations, kept beside the folders they are about. */
 const SHARES = 'folder_shares';
 
@@ -92,6 +95,23 @@ export function isConfigured() {
  */
 function returnTo() {
   return window.location.href.split('#')[0];
+}
+
+/**
+ * The sentence a function actually sent, out from under the wrapper.
+ *
+ * supabase-js turns any non-2xx into a FunctionsHttpError reading "Edge
+ * Function returned a non-2xx status code", and hangs the real response off
+ * `context`. Left as it is, somebody told to cancel their existing
+ * subscription first would instead read a sentence about status codes.
+ */
+async function readFunctionError(error) {
+  try {
+    const body = await error?.context?.json?.();
+    return String(body?.error || '');
+  } catch {
+    return '';
+  }
 }
 
 /**
@@ -591,8 +611,41 @@ export class Account extends EventTarget {
       // cannot name what it pays.
       body: { plan, returnTo: returnTo || window.location.href.split('#')[0] },
     });
-    if (error) return { ok: false, reason: error.message };
+    /*
+     * A refusal carries its own sentence, and it has to survive.
+     *
+     * supabase-js wraps a non-2xx in a FunctionsHttpError whose message is
+     * "Edge Function returned a non-2xx status code" - which is true and tells
+     * nobody anything. The useful part, "you already subscribe, cancel it
+     * first", is in the body, so the body is read back rather than thrown away
+     * in favour of the wrapper's message.
+     */
+    if (error) {
+      const said = await readFunctionError(error);
+      return { ok: false, reason: said || error.message };
+    }
     if (!data?.ok || !data.url) return { ok: false, reason: data?.error || 'The checkout did not open.' };
+    return { ok: true, url: data.url };
+  }
+
+  /**
+   * Open Stripe's billing portal, which is where a subscription is cancelled.
+   *
+   * Cancelling has to be as easy as subscribing and it has to be self-service.
+   * Stripe's own pages handle ending it, switching between monthly and yearly,
+   * changing a card and downloading invoices, so none of that is built here.
+   */
+  async openBilling() {
+    if (!this.user) return { ok: false, reason: 'Sign in first.' };
+    const client = await this.getClient();
+    if (!client) return { ok: false, reason: 'Accounts are not configured here.' };
+
+    const { data, error } = await client.functions.invoke(PORTAL_FUNCTION, { body: {} });
+    if (error) {
+      const said = await readFunctionError(error);
+      return { ok: false, reason: said || error.message };
+    }
+    if (!data?.ok || !data.url) return { ok: false, reason: data?.error || 'The billing page did not open.' };
     return { ok: true, url: data.url };
   }
 

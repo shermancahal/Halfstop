@@ -653,3 +653,88 @@ test('account: signed out, no checkout is even attempted', async () => {
   assert.equal(result.ok, false);
   assert.equal(asked, false, 'nothing is asked of the server without a session to ask with');
 });
+
+/* ------------------------------------------------------ cancelling, and not
+   being sold a second subscription */
+
+const failing = (status, body) => ({
+  functions: {
+    invoke: async () => ({
+      data: null,
+      // The shape supabase-js actually produces: a wrapper whose message says
+      // nothing, with the real response hanging off `context`.
+      error: Object.assign(new Error('Edge Function returned a non-2xx status code'), {
+        context: { status, json: async () => body },
+      }),
+    }),
+  },
+});
+
+test('account: being told to cancel first survives the wrapper', async () => {
+  /*
+   * The failure this prevents. supabase-js turns any non-2xx into "Edge
+   * Function returned a non-2xx status code", which is true and tells nobody
+   * anything. Somebody who already subscribes needs to read why they cannot
+   * buy again, not a sentence about status codes.
+   */
+  const account = new Account(storeOf([]), {
+    client: async () => failing(409, {
+      error: 'You already subscribe. Cancel the current subscription first, from Manage subscription in the account menu, and you can start a new one straight after.',
+      already: 'stripe',
+    }),
+    configured: () => true,
+  });
+  account.user = { id: 'u1' };
+
+  const result = await account.startCheckout();
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /Cancel the current subscription first/);
+  assert.doesNotMatch(result.reason, /non-2xx/);
+});
+
+test('account: an App Store subscriber is sent to Apple, not to Stripe', async () => {
+  const account = new Account(storeOf([]), {
+    client: async () => failing(409, {
+      error: 'This subscription is through the App Store, so it is cancelled there: Settings, your name, Subscriptions on an iPhone or iPad.',
+      where: 'appstore',
+    }),
+    configured: () => true,
+  });
+  account.user = { id: 'u1' };
+
+  const result = await account.openBilling();
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /App Store/);
+});
+
+test('account: the billing page opens where Stripe says', async () => {
+  const account = new Account(storeOf([]), {
+    client: async () => checkoutClient({ data: { ok: true, url: 'https://billing.stripe.com/p/session/xyz' }, error: null }),
+    configured: () => true,
+  });
+  account.user = { id: 'u1' };
+  assert.deepEqual(await account.openBilling(),
+    { ok: true, url: 'https://billing.stripe.com/p/session/xyz' });
+});
+
+test('account: signed out, no billing page is asked for', async () => {
+  let asked = false;
+  const account = new Account(storeOf([]), {
+    client: async () => { asked = true; return checkoutClient({ data: null, error: null }); },
+    configured: () => true,
+  });
+  assert.equal((await account.openBilling()).ok, false);
+  assert.equal(asked, false);
+});
+
+test('account: an error with nothing readable falls back to the wrapper', async () => {
+  // A network failure has no JSON body. It must not end up as an empty toast.
+  const account = new Account(storeOf([]), {
+    client: async () => ({
+      functions: { invoke: async () => ({ data: null, error: new Error('Failed to fetch') }) },
+    }),
+    configured: () => true,
+  });
+  account.user = { id: 'u1' };
+  assert.equal((await account.openBilling()).reason, 'Failed to fetch');
+});

@@ -53,23 +53,48 @@ the secret key is.
 
 ### 2. The keys, in Supabase
 
-Supabase Dashboard → **Edge Functions → Secrets**:
+They all go in the same place: Supabase Dashboard → your project → **Edge
+Functions** → **Secrets** → **Add new secret**. Set once, read by every
+function; they are not per-function.
 
-| Name | Where it comes from |
-| --- | --- |
-| `STRIPE_SECRET_KEY` | Stripe → Developers → API keys. `sk_test_...` first. |
-| `STRIPE_PRICE_ID_MONTH` | the monthly price id from step 1 |
-| `STRIPE_PRICE_ID_YEAR` | the yearly price id from step 1 |
-| `STRIPE_WEBHOOK_SECRET` | step 4, so do that before expecting this to work |
+**`STRIPE_SECRET_KEY`** — Stripe Dashboard → **Developers** → **API keys**.
+There are two on that page. The *publishable* key (`pk_...`) is the one meant
+to be seen and is not what you want. The **secret key** (`sk_...`) is hidden
+behind a **Reveal** button and is shown once; if you have lost it, roll it and
+take the new one. Use the **test mode** key first — there is a toggle at the
+top of the Stripe dashboard, and in test mode the key reads `sk_test_...`. Swap
+it for the live key when you are ready to take real money, and remember the
+price ids and the webhook secret are *different* between test and live.
+
+**`STRIPE_PRICE_ID_MONTH`** and **`STRIPE_PRICE_ID_YEAR`** — from the product
+you made in step 1. Stripe Dashboard → **Product catalogue** → **Halfstop
+Premium**. The two prices are listed on that page; each row has a `price_1...`
+id with a copy button beside it. The monthly one goes in `..._MONTH`, the
+yearly in `..._YEAR`. Getting them the wrong way round charges somebody $49 for
+a month, and nothing in the code can tell, so read them twice.
+
+These two are not secrets — a price id is safe to put in a page. They are held
+here anyway so the browser cannot name its own price.
+
+**`STRIPE_WEBHOOK_SECRET`** — this one does not exist until step 4, so do that
+first and come back. Stripe Dashboard → **Developers** → **Webhooks** → click
+the endpoint you created → **Signing secret** → **Reveal**. It reads
+`whsec_...`. It belongs to that one endpoint: a second endpoint, or the same
+one in live mode rather than test, has a different secret.
 
 Paste carefully. A trailing newline in a dashboard field is invisible there and
 a different string everywhere else; it cost a round of debugging on the support
 webhook, which is why every function here trims what it reads.
 
+> Check the mode. The commonest way this fails silently is a live-mode key with
+> test-mode price ids, or the other way round. Stripe will refuse with "no such
+> price", which is accurate and reads like the price does not exist.
+
 ### 3. Deploy the two functions
 
 ```sh
 supabase functions deploy stripe-checkout
+supabase functions deploy stripe-portal
 supabase functions deploy stripe-webhook --no-verify-jwt
 ```
 
@@ -130,6 +155,36 @@ middle is not firing.
 
 ---
 
+## Cancelling
+
+`stripe-portal` opens Stripe's own billing pages for whoever is signed in,
+which is where a subscription is ended, moved between monthly and yearly, or
+given a new card. None of that is built here, and it should not be: a
+subscription you can only end by writing to somebody is the pattern consumer
+protection law has spent a decade legislating against, and it is unpleasant
+besides.
+
+Which customer the portal opens is read from the verified token on the caller's
+session. A body naming a customer would be a body somebody else can write, and
+the portal can cancel a subscription.
+
+The customer is looked up from the subscription id on the entitlements row
+rather than stored separately: one id instead of two means they cannot
+disagree, at the cost of one request on a page somebody opens rarely.
+
+**An App Store subscription cannot be cancelled from here**, and the function
+says so rather than failing. Only Apple can end one.
+
+The policy people actually read is in `terms.html` under *Cancelling* and in
+the FAQ under *Account*. In short: cancelling stops the next payment rather
+than cutting anybody off, Premium runs to the end of the paid period, and
+nothing of theirs is deleted — folders, waypoints, notes and photographs all
+stay, and export keeps working, because getting your own data out is free.
+Closing the account is a separate, irreversible thing, and cancelling first
+matters or somebody carries on paying for an account that is not there.
+
+---
+
 ## What is not built
 
 **The App Store side.** In-app purchase exists only inside a shipped native
@@ -140,14 +195,17 @@ could not be exercised until there is an app and a product to exercise it with,
 and untested signature verification sitting deployed on a path that grants
 entitlements is the exact thing the Stripe tests exist to avoid.
 
-**One person, two subscriptions.** `entitlements` is one row per account, so
-somebody who subscribes on iOS *and* on the web ends up with the second
-overwriting the first: paying twice, with one of them invisible. The
-cancellation path is already safe — a Stripe cancellation only touches a row
-whose source is `stripe` — but the create path is not. Fixing it needs a
-decision rather than a guess: refuse the second purchase, keep whichever
-expires later, or allow both and show it. Worth settling before both stores are
-live.
+**One person, two subscriptions** — decided, and closed. A checkout is refused
+outright for an account that already has a running subscription, with a 409 and
+a sentence naming where to cancel: the billing portal for a Stripe one, Apple's
+Settings for an App Store one. The alternative was letting the second
+subscription overwrite the first, which means two charges a month with one of
+them invisible, and cancelling the visible one takes away access the invisible
+one is still paying for. Nobody untangles that from the outside.
+
+The refusal is read through the caller's own session rather than with the
+service key, so this function cannot become a way to ask about somebody else's
+account.
 
 **Server-side enforcement.** Everything in `assets/js/lib/tiers.js` decides what
 to *draw*. What actually costs money has to be refused where the bill is — the

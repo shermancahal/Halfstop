@@ -28,3 +28,9 @@ verify_jwt = false
 # their token rather than from the request body.
 [functions.stripe-checkout]
 verify_jwt = true
+
+# And the way out, which opens Stripe's billing portal for whoever is signed
+# in. Which customer it opens is read from their token: a body naming one would
+# be a body somebody else can write, and the portal can cancel a subscription.
+[functions.stripe-portal]
+verify_jwt = true

@@ -80,6 +80,42 @@ Deno.serve(async (req: Request) => {
   const user = who?.user;
   if (whoError || !user) return reply(401, { error: 'That session is not valid.' });
 
+  /*
+   * Somebody who already subscribes is not sold a second one.
+   *
+   * The App Store and Stripe do not know about each other, and the
+   * entitlements row is one per account, so a second purchase would overwrite
+   * the first: two charges a month, only one of them visible, and cancelling
+   * the visible one takes away access that the invisible one is still paying
+   * for. Nobody would ever untangle that from the outside.
+   *
+   * Read through the caller's own session rather than with the service key.
+   * The row policy already lets somebody read their own entitlement and
+   * nobody else's, so using it here means this function cannot accidentally
+   * become a way to ask about another account.
+   */
+  const { data: held } = await asCaller
+    .from('entitlements')
+    .select('source, expires_at')
+    .eq('user_id', user.id)
+    .eq('tier', 'premium')
+    .maybeSingle();
+
+  const stillRunning = held && (!held.expires_at || new Date(held.expires_at) > new Date());
+  if (stillRunning) {
+    const WHERE: Record<string, string> = {
+      stripe: 'You already subscribe. Cancel the current subscription first, '
+        + 'from Manage subscription in the account menu, and you can start a new one straight after.',
+      appstore: 'You already subscribe through the App Store. Cancel it there first '
+        + '(Settings, your name, Subscriptions on an iPhone), and it will stay active until the period you have paid for runs out.',
+    };
+    return reply(409, {
+      error: WHERE[held.source]
+        || 'This account already has Premium, so there is nothing to buy.',
+      already: held.source,
+    });
+  }
+
   let body: Record<string, unknown> = {};
   try {
     body = await req.json();
