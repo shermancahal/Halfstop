@@ -243,6 +243,25 @@ jobs:
           # site and not for a product - see token.example.js. A public URL,
           # so a variable rather than a secret.
           ROUTING_URL: ${{ vars.ROUTING_URL }}
+          # Billing, as deployment configuration rather than a commit.
+          #
+          # LIVE closes the feature gates and STORE offers a way to buy, and
+          # they are separate so the gates can be proven with nothing for sale.
+          # A committed `true` would put a Subscribe button on the public site
+          # the moment it deployed, which while the Stripe keys are test keys
+          # is worse than useless: anybody can pay with 4242 4242 4242 4242,
+          # have no money leave their account, and come away with a real
+          # entitlement row.
+          BILLING_LIVE: ${{ vars.ABMAP_BILLING_LIVE }}
+          BILLING_STORE: ${{ vars.ABMAP_BILLING_STORE }}
+          # Who sees the purchase panel while billing is off. Real addresses,
+          # so a secret rather than a variable - but read this before setting
+          # it: the file written below is served to everybody, so an address
+          # here is readable on the public site. It decides which button is
+          # drawn and nothing more; BILLING_TESTERS on the Edge Functions
+          # decides who may actually pay. An address you would rather not
+          # publish belongs in a local token.js and `npm start` instead.
+          BILLING_TESTERS: ${{ secrets.ABMAP_BILLING_TESTERS }}
         run: |
           {
             printf "window.ABMAP_MAPBOX_TOKEN = '%s';\n" "$MAPBOX_TOKEN"
@@ -251,6 +270,9 @@ jobs:
             printf "window.ABMAP_PROTOMAPS_ARCHIVE = '%s';\n" "$PROTOMAPS_ARCHIVE"
             printf "window.ABMAP_PROTOMAPS_MAXZOOM = '%s';\n" "$PROTOMAPS_MAXZOOM"
             printf "window.ABMAP_ROUTING_URL = '%s';\n" "$ROUTING_URL"
+            printf "window.ABMAP_BILLING_LIVE = '%s';\n" "$BILLING_LIVE"
+            printf "window.ABMAP_BILLING_STORE = '%s';\n" "$BILLING_STORE"
+            printf "window.ABMAP_BILLING_TESTERS = '%s';\n" "$BILLING_TESTERS"
           } > assets/js/token.js
 
           # Every value, every time. Reporting the URL's length but not the
@@ -270,6 +292,15 @@ jobs:
             else
               echo "- **Accounts are off**: SUPABASE_URL is ${#SUPABASE_URL} chars and SUPABASE_KEY is ${#SUPABASE_KEY}."
               echo "  Both are required, and the sign-in control stays hidden until they are set."
+            fi
+            if [ "$BILLING_LIVE" = "true" ]; then
+              echo "- **Billing is live**, selling through \`${BILLING_STORE:-none}\`. The gates are closed and the"
+              echo "  purchase panel is shown to everybody, so the Stripe keys on the Edge Functions had better be live ones."
+            else
+              echo "- Billing is off: every feature is open to everybody and nothing is for sale."
+              if [ -n "$BILLING_TESTERS" ]; then
+                echo "  The purchase panel is drawn for $(echo "$BILLING_TESTERS" | tr ',' '\n' | grep -c .) named tester(s), whose addresses are readable in the published \`token.js\`."
+              fi
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 

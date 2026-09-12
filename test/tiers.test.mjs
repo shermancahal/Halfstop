@@ -5,7 +5,7 @@ import {
   FEATURES, TIERS, DEFAULT_TIER, tierFor,
   can, gateReason, planSummary, describePlan,
   daysLeft, featureForLayer, describePrice, purchaseRoute,
-  premiumAdds, annualSaving, plansOffered, offersUpgrade,
+  premiumAdds, annualSaving, plansOffered, offersUpgrade, isBillingTester,
 } from '../assets/js/lib/tiers.js';
 
 const FREE = { live: false };
@@ -437,4 +437,41 @@ test('tiers: a preview offers the web checkout before billing is live', () => {
     { available: false, why: 'in-app-only' });
   assert.deepEqual(purchaseRoute({ billing: { live: true, store: 'stripe' }, preview: true }),
     { available: true, where: 'stripe' });
+});
+
+test('tiers: who is shown the test-mode purchase panel', () => {
+  /*
+   * A list of addresses that decides which button is drawn, and nothing else.
+   *
+   * The matching thing that decides who may actually pay is BILLING_TESTERS on
+   * the Edge Functions, and it has to be the one that counts: this list is
+   * shipped to the reader's computer, where they can edit it, so treating it
+   * as permission would mean anybody could hand themselves a test-mode
+   * checkout - which is a real entitlement bought with a card that is not a
+   * card. These tests are about a button appearing.
+   */
+  const billing = { testers: ['first@example.com', 'second@example.com'] };
+  assert.equal(isBillingTester({ email: 'first@example.com' }, { billing }), true);
+  assert.equal(isBillingTester({ email: 'second@example.com' }, { billing }), true);
+  assert.equal(isBillingTester({ email: 'somebody@example.com' }, { billing }), false);
+
+  // Addresses arrive from a sign-in form and from a pasted secret, so neither
+  // case nor stray whitespace decides whether the panel appears.
+  assert.equal(isBillingTester({ email: '  First@Example.com ' }, { billing }), true);
+
+  // No account, no email, no panel - and an empty list means nobody rather
+  // than everybody, which is the difference between a quiet default and a
+  // free subscription for whoever signs in.
+  assert.equal(isBillingTester(null, { billing }), false);
+  assert.equal(isBillingTester({}, { billing }), false);
+  assert.equal(isBillingTester({ email: '' }, { billing }), false);
+  assert.equal(isBillingTester({ email: 'first@example.com' }, { billing: { testers: [] } }), false);
+  assert.equal(isBillingTester({ email: 'first@example.com' }, { billing: {} }), false);
+});
+
+test('tiers: nobody is a tester in the shipped configuration', () => {
+  // The committed default, asserted: the list is injected at build time and
+  // the repository is public, so an address appearing in it here would be
+  // somebody's real address in a public file.
+  assert.equal(isBillingTester({ email: 'anybody@example.com' }), false);
 });

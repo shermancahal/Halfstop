@@ -189,11 +189,32 @@ window.ABMAP_BILLING_STORE = 'stripe';
 
 `npm start`, and the plan panel has the two buttons.
 
-**Or test on the deployed site without touching those globals.** Anybody listed
-in `SITE.editors` sees the purchase panel even when billing is off, labelled
-*Test mode*, because whoever runs Halfstop needs to press the button that
-everybody else must not see yet. Signing in as that account on app.halfstop.app
-is enough.
+**Testing with a second account.** A subscription bought by the account that
+also administers the site proves less than it looks like: that account sees
+things nobody else does. To test as an ordinary person, add the other address
+to `ABMAP_BILLING_TESTERS`, which is the list of people shown the purchase
+panel while billing is off:
+
+```js
+window.ABMAP_BILLING_TESTERS = 'you@example.com, other@example.com';
+```
+
+Sign in as that address on `npm start` and the panel appears, labelled *Test
+mode*. The same address must also be on `BILLING_TESTERS` in the Edge Function
+secrets, or pressing the button gets a 403 — and that is the right way round:
+this list draws a button, that list decides who may pay. This file is served to
+the browser, so it can never be the second thing.
+
+Anybody in `SITE.editors` sees the panel too, without being listed, because
+whoever runs Halfstop needs to press the button that everybody else must not
+see yet.
+
+**Prefer to do this locally.** The deploy writes the same global into
+`assets/js/token.js` from a repository secret of the same name, and that file
+is served to every visitor — so an address set there is readable by anybody who
+views source. A test account's address on a public page is a small thing and
+not nothing. Locally it costs no exposure at all, and the Edge Functions,
+Stripe and Supabase are the same ones either way, so the test is just as real.
 
 **Do not commit a live default while the Stripe keys are test keys.** A
 Subscribe button on the public site backed by a test-mode key is worse than
@@ -201,9 +222,19 @@ useless: anybody can pay with `4242 4242 4242 4242`, have no money leave their
 account, and come away with a real entitlement row. Testing belongs on your own
 machine until the keys are live ones.
 
-When it is time, launching is `ABMAP_BILLING_LIVE` and `ABMAP_BILLING_STORE` as
-repository secrets, written into `token.js` by the deploy the same way the
-Mapbox and Supabase values are. Not a commit that changes what strangers see.
+When it is time, launching is two repository **variables** — Settings →
+Secrets and variables → Actions → Variables:
+
+| Name | Value |
+| --- | --- |
+| `ABMAP_BILLING_LIVE` | `true` |
+| `ABMAP_BILLING_STORE` | `stripe` |
+
+The deploy writes them into `token.js` the same way it writes the Mapbox and
+Supabase values, and the run summary says which state it published. Launching
+is then a deploy, not a commit that changes what strangers see. (`ABMAP_BILLING_TESTERS`
+is a *secret* rather than a variable, only because it holds real addresses;
+it still ends up in a file anybody can read.)
 
 `live` closes the feature gates and `store` is what offers a way to buy. They
 are separate on purpose: the gates can be proven with billing live and nothing
@@ -212,15 +243,39 @@ for sale.
 ### 6. Test it before anybody real does
 
 Use the test key and Stripe's test cards — `4242 4242 4242 4242`, any future
-expiry, any CVC. Then check, in this order:
+expiry, any CVC, any postcode. Nothing is charged and no real card should ever
+be typed into a test-mode checkout.
 
-1. The checkout opens on Stripe's own domain.
-2. After paying, the row appears: `select * from public.entitlements where source = 'stripe'`.
-3. `select public.my_plan()` as that user says `premium` with `source: 'stripe'`.
-4. Cancel in the Stripe dashboard and watch `expires_at` move to now.
+The whole run, end to end:
 
-`stripe listen --forward-to <url>` replays events locally if something in the
-middle is not firing.
+1. `npm start`, sign in as the test address.
+2. Account menu → the plan panel shows **$4.99 a month** and **$49 a year**,
+   under *Test mode*.
+3. Press one. The page goes to `checkout.stripe.com` — Stripe's own domain,
+   which is the point: no card details touch this app.
+4. Pay with the test card. Stripe returns you to where you started.
+5. The app says *Finishing off your subscription…* and then *Premium is active
+   on this account.* That second message is the webhook having landed; the app
+   asks up to eight times over about twelve seconds, because the return trip
+   and the webhook are two separate things and the webhook is usually, but not
+   always, the faster of the two.
+6. The plan panel now reads Premium, and the buttons are replaced by **Manage
+   subscription**.
+
+And underneath, in the Supabase SQL editor:
+
+- `select * from public.entitlements where source = 'stripe';` — one row, the
+  right `user_id`, `expires_at` a month or a year out.
+- `select public.my_plan();` as that user says `premium` with `source: 'stripe'`.
+- Press Subscribe again: it should refuse with *You already subscribe*, not
+  sell a second one.
+- Cancel from **Manage subscription** and watch `expires_at` move to the end of
+  the paid period rather than vanishing.
+
+If step 5 ends in *this account has not caught up yet*, the checkout worked and
+the webhook did not: Stripe → Developers → Event destinations shows what it
+tried to deliver and what came back, and `stripe listen --forward-to <url>`
+replays events if something in the middle is not firing.
 
 ---
 

@@ -258,6 +258,24 @@ export const BILLING = {
    * is not one yet. 'appstore' when that changes.
    */
   store: readGlobal('ABMAP_BILLING_STORE') || 'none',
+
+  /*
+   * Who sees the purchase panel before billing is live, so a checkout can be
+   * tested with a card that is not a card.
+   *
+   * Injected rather than committed, because these are real addresses and the
+   * repository is public. Set ABMAP_BILLING_TESTERS in token.js locally, or as
+   * a repository secret for the deployed site.
+   *
+   * There is a second list with the same addresses in it, BILLING_TESTERS on
+   * the Edge Functions, and the duplication is deliberate rather than sloppy.
+   * This one decides which button is drawn; that one decides who may actually
+   * pay. A list that lives in the browser cannot be the second thing, because
+   * the browser is the reader's computer - which is the same warning that sits
+   * at the top of tiers.js.
+   */
+  testers: readGlobal('ABMAP_BILLING_TESTERS')
+    .split(',').map((one) => one.trim().toLowerCase()).filter(Boolean),
 };
 
 export const DEFAULT_VIEW = { center: [-84.28, 35.96], zoom: 6.4 };

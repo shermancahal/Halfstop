@@ -224,6 +224,19 @@ export function annualSaving({ billing = BILLING } = {}) {
 }
 
 /**
+ * Whether this account may see the purchase panel before billing is live.
+ *
+ * Presentation, and only that: it decides whether a button is drawn. Who may
+ * actually pay is decided by the Edge Function against its own list, because
+ * this one runs on the reader's computer and they can edit it.
+ */
+export function isBillingTester(user, { billing = BILLING } = {}) {
+  const email = String(user?.email || '').trim().toLowerCase();
+  if (!email) return false;
+  return (billing.testers || []).includes(email);
+}
+
+/**
  * Whether to show somebody how to start paying.
  *
  * A trial counts as not paying yet, which is the whole point of this

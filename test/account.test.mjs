@@ -738,3 +738,63 @@ test('account: an error with nothing readable falls back to the wrapper', async 
   account.user = { id: 'u1' };
   assert.equal((await account.openBilling()).reason, 'Failed to fetch');
 });
+
+test('a checkout that has not landed yet is waited for, not reported as free', async () => {
+  /*
+   * The gap this exists to cover: Stripe returns the browser the moment the
+   * card clears and tells this project separately, over a webhook. Between the
+   * two, `my_plan()` honestly answers "free" — to somebody who has just paid.
+   *
+   * So the reads are counted rather than the outcome only. One read would have
+   * passed a test written against a fast webhook and failed every real person
+   * whose webhook took two seconds.
+   */
+  const account = new Account(folders);
+  // A plan that could not be read at all, then one that is honestly free,
+  // then the webhook landing. `??` is wrong here: it would treat the
+  // unreadable answer as the last one and end the wait on the first try.
+  const answers = [null, { tier: 'free' }, { tier: 'premium', source: 'stripe' }];
+  let asked = 0;
+  account.refreshPlan = async () => answers[Math.min(asked++, answers.length - 1)];
+
+  const waits = [];
+  const settled = await account.waitForPlan({ wait: 1500, sleep: async (ms) => { waits.push(ms); } });
+
+  assert.equal(settled.ok, true);
+  assert.equal(settled.attempts, 3, 'it should have asked three times, not given up on the first');
+  assert.equal(settled.plan.source, 'stripe');
+  // Waited between the tries and not after the last one, which would be a
+  // second and a half of nothing after the answer had already arrived.
+  assert.deepEqual(waits, [1500, 1500]);
+});
+
+test('a webhook that never comes ends, and says so', async () => {
+  /*
+   * Bounded on purpose. A webhook that does not arrive is a real outcome — a
+   * misconfigured endpoint, a signing secret rotated and not updated — and the
+   * person waiting has been charged. A page that waits forever tells them
+   * nothing; this returns so the caller can say what happened and where to
+   * write.
+   */
+  const account = new Account(folders);
+  let asked = 0;
+  account.refreshPlan = async () => { asked += 1; return { tier: 'free' }; };
+
+  const settled = await account.waitForPlan({ tries: 4, wait: 10, sleep: async () => {} });
+  assert.equal(settled.ok, false);
+  assert.equal(settled.attempts, 4);
+  assert.equal(asked, 4, 'every try is a real read, not one read counted four times');
+  // The last thing seen is handed back rather than nulled, so a caller can
+  // tell "still free" from "could not ask at all".
+  assert.deepEqual(settled.plan, { tier: 'free' });
+});
+
+test('waiting stops on whatever it was told to wait for', async () => {
+  // The tier is a parameter rather than the string 'premium' baked in, so a
+  // second paid tier later does not need this loop rewritten.
+  const account = new Account(folders);
+  account.refreshPlan = async () => ({ tier: 'pro' });
+  const settled = await account.waitForPlan({ wanted: 'pro', tries: 3, sleep: async () => {} });
+  assert.equal(settled.ok, true);
+  assert.equal(settled.attempts, 1);
+});

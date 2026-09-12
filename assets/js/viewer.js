@@ -59,7 +59,7 @@ import { activeAlerts, describeMotion, alertsToGeoJSON } from './lib/storms.js';
 import { fetchRoute, routeGeoJSON } from './lib/route.js';
 import {
   can, gateReason, planSummary, featureForLayer, describePrice, purchaseRoute, premiumAdds,
-  plansOffered, annualSaving, offersUpgrade,
+  plansOffered, annualSaving, offersUpgrade, isBillingTester,
 } from './lib/tiers.js';
 import {
   RV_CAVEAT, RV_RANGES, normaliseProfile, isRV, routingFor, profileRows,
@@ -799,7 +799,12 @@ async function main() {
   renderWaypointsTab();
   renderDropTarget();
   renderAccount();
-  state.account.init().catch((error) => console.warn('[account]', error.message));
+  state.account.init()
+    // After init rather than beside it: a return from Stripe has to ask the
+    // server what this account now holds, and there is nobody to ask about
+    // until the session has been restored.
+    .then(() => settleCheckoutReturn())
+    .catch((error) => console.warn('[account]', error.message));
   // Photos whose pin was deleted linger in IndexedDB; clear them once per load
   // rather than at deletion time, where a shared photo could be lost.
   /*
@@ -2763,19 +2768,100 @@ function wireSettingsMenu() {
 }
 
 /**
- * Begin a subscription, which today means saying that you cannot.
+ * What happens when Stripe sends somebody back after they have paid.
  *
- * This is the one seam where a purchase plugs in, and it exists now, empty,
- * for a specific reason: the last time this app grew a button whose handler
- * had not been written, the handler was simply missing and every press threw
- * a ReferenceError that no test caught, because the tests covered the module
- * around it and nothing ever pressed the button.
+ * Paying and being entitled are not the same instant: the browser comes back
+ * the moment the card clears, and the entitlement is written by a webhook that
+ * arrives separately. Reading the plan once on landing therefore tells
+ * somebody who has just paid that they are on the free tier, which is the
+ * worst thing this app could say to them, so it asks again for a while.
  *
- * So the function is real, it is reachable, and it reports the truth. When
- * StoreKit arrives it replaces the body and nothing else has to move.
+ * And it says which of the three things happened - it worked, it has not
+ * landed yet, or you are not signed in - because "nothing appears to have
+ * changed" is what turns a slow webhook into a support email about a missing
+ * charge.
+ */
+async function settleCheckoutReturn() {
+  const params = new URLSearchParams(location.search);
+  if (params.get('subscribed') !== '1') return false;
+
+  /*
+   * Out of the address bar first, before anything can go wrong.
+   *
+   * It is a one-time flag on a return trip, and a URL is a thing people
+   * bookmark and send to each other. Left in place it would congratulate the
+   * next person to open the link on a payment they never made, and would do it
+   * again on every reload for the person who did.
+   */
+  params.delete('subscribed');
+  const query = params.toString();
+  history.replaceState(null, '', `${location.pathname}${query ? `?${query}` : ''}${location.hash}`);
+
+  /*
+   * Signed out on the way back, which happens when the checkout is finished in
+   * a different browser from the one it started in. The payment is real and
+   * this device simply cannot see whose it is, so say that rather than
+   * silently showing a free account.
+   */
+  if (!state.account?.user) {
+    toast('Your payment went through. Sign in to the account you paid with and Premium will be there.',
+      { tone: 'info', timeout: 12000 });
+    return false;
+  }
+
+  toast('Thank you. Finishing off your subscription…', { tone: 'info', timeout: 6000 });
+  const settled = await state.account.waitForPlan();
+  if (settled.ok) {
+    toast('Premium is active on this account.', { tone: 'ok', timeout: 8000 });
+    return true;
+  }
+
+  /*
+   * The honest ending. A webhook that has not arrived in this many seconds
+   * usually still arrives, and occasionally does not - and a person who has
+   * been charged needs to be told the second thing is possible and what to do
+   * about it, not left refreshing.
+   */
+  toast(`Your payment went through and this account has not caught up yet. It usually lands `
+    + `within a minute — reload then. If it is still not here, write to ${SITE.contactEmail} `
+    + `and it will be sorted out by hand.`, { tone: 'error', timeout: 16000 });
+  return false;
+}
+
+/**
+ * Whether this account reaches a checkout before billing is live.
+ *
+ * One function because two copies of this went wrong immediately: the panel
+ * knew about the preview and the button's handler did not, so a tester was
+ * shown two prices and told "There is nothing to subscribe to yet" when they
+ * pressed one. A drawn control that refuses itself is worse than no control.
+ *
+ * Presentation, and only that. The checkout function refuses anybody not named
+ * on its own list while the Stripe key is a test key, and that is the control -
+ * this runs on the reader's computer, where they can change it.
+ */
+function billingPreview() {
+  const user = state.account?.user;
+  return !BILLING.live && (isBillingTester(user) || mayEdit(user));
+}
+
+/**
+ * Begin a subscription: open a Stripe Checkout and hand the browser over.
+ *
+ * This is the one seam where a purchase plugs in, and it stayed empty for a
+ * while on purpose - the last time this app grew a button whose handler had
+ * not been written, the handler was simply missing and every press threw a
+ * ReferenceError that no test caught, because the tests covered the module
+ * around it and nothing ever pressed the button. An honest refusal was better
+ * than that.
+ *
+ * It is Stripe now, and when StoreKit arrives it becomes a second branch on
+ * `route.where` rather than a rewrite: the panel already asks where a purchase
+ * can be completed instead of assuming, because a browser cannot finish an App
+ * Store one. Nothing about a card is ever typed into this app.
  */
 async function startSubscription(button = null, plan = 'month') {
-  const route = purchaseRoute();
+  const route = purchaseRoute({ preview: billingPreview() });
   if (!route.available) {
     toast('There is nothing to subscribe to yet.', { tone: 'info', timeout: 7000 });
     return false;
@@ -2857,7 +2943,7 @@ function upgradeBlock(plan) {
    * refuses anybody not named as a tester while the Stripe key is a test key.
    * That is the control. This just means the button is there to press.
    */
-  const preview = !BILLING.live && mayEdit(state.account?.user);
+  const preview = billingPreview();
   if (!plan.live && !preview) return null;
 
   /*

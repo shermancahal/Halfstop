@@ -50,6 +50,9 @@ const PORTAL_FUNCTION = 'stripe-portal';
 /** Invitations, kept beside the folders they are about. */
 const SHARES = 'folder_shares';
 
+/** Injectable so a test of the waiting does not have to wait. */
+const nap = (ms) => new Promise((resume) => { setTimeout(resume, ms); });
+
 /**
  * Columns added to `folders` after it shipped.
  *
@@ -626,6 +629,32 @@ export class Account extends EventTarget {
     }
     if (!data?.ok || !data.url) return { ok: false, reason: data?.error || 'The checkout did not open.' };
     return { ok: true, url: data.url };
+  }
+
+  /**
+   * Wait for a checkout to show up as an entitlement.
+   *
+   * Paying and being entitled are not the same instant. Stripe sends the
+   * browser back the moment the card clears and tells this project separately,
+   * over a webhook, which arrives when it arrives - usually within a second,
+   * occasionally several, and on a bad day after a retry. A single read on
+   * landing therefore reports Free to somebody who has just paid, which is the
+   * worst sentence this app could show them.
+   *
+   * So it asks again for a while. Bounded, because a webhook that never comes
+   * is a real outcome and must not become a page that spins forever: after the
+   * last try the caller is told plainly that the payment went through and the
+   * account has not caught up, which is true and is something support can act
+   * on.
+   */
+  async waitForPlan({ tries = 8, wait = 1500, sleep = nap, wanted = 'premium' } = {}) {
+    let plan = null;
+    for (let attempt = 1; attempt <= tries; attempt += 1) {
+      plan = await this.refreshPlan();
+      if (plan?.tier === wanted) return { ok: true, plan, attempts: attempt };
+      if (attempt < tries) await sleep(wait);
+    }
+    return { ok: false, plan, attempts: tries };
   }
 
   /**
