@@ -224,6 +224,23 @@ export function annualSaving({ billing = BILLING } = {}) {
 }
 
 /**
+ * Whether to show somebody how to start paying.
+ *
+ * A trial counts as not paying yet, which is the whole point of this
+ * function existing. A trial reads as premium everywhere else - correctly,
+ * because everything works - and reading it that way here meant nobody could
+ * subscribe during their first thirty days: they would have had to let the
+ * trial lapse, lose it all, and only then be offered the thing that would have
+ * kept it. Backwards, and invisible, because the person it happened to would
+ * simply not see a button.
+ */
+export function offersUpgrade(summary) {
+  if (!summary?.live) return false;
+  if (summary.tier?.id !== 'premium') return true;
+  return summary.source === 'trial';
+}
+
+/**
  * How somebody would get Premium, if they could.
  *
  * Three answers and they are genuinely different, so the interface should not

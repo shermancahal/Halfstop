@@ -5,7 +5,7 @@ import {
   FEATURES, TIERS, DEFAULT_TIER, tierFor,
   can, gateReason, planSummary, describePlan,
   daysLeft, featureForLayer, describePrice, purchaseRoute,
-  premiumAdds, annualSaving, plansOffered,
+  premiumAdds, annualSaving, plansOffered, offersUpgrade,
 } from '../assets/js/lib/tiers.js';
 
 const FREE = { live: false };
@@ -387,4 +387,31 @@ test('tiers: the price on the website is the price in the code', async () => {
     const said = describePrice({ plan: plan.id });
     assert.equal(page.includes(said), true, `the costs page does not say ${said}`);
   }
+});
+
+test('tiers: a trial is offered the thing that stops it ending', () => {
+  /*
+   * The bug this exists for, which was invisible: a trial reads as premium
+   * everywhere, correctly, because everything works. Reading it that way in
+   * the panel meant nobody could subscribe during their first thirty days -
+   * they would have had to let the trial lapse, lose it all, and only then be
+   * shown the thing that would have kept it. The person it happened to would
+   * simply not have seen a button.
+   */
+  const summary = (source, tier = 'premium') => ({
+    live: true, source, tier: { id: tier },
+  });
+
+  assert.equal(offersUpgrade(summary('trial')), true, 'a trial is not paying yet');
+  assert.equal(offersUpgrade(summary('none', 'free')), true, 'and neither is free');
+
+  // Somebody who is actually paying is not sold it again.
+  assert.equal(offersUpgrade(summary('stripe')), false);
+  assert.equal(offersUpgrade(summary('appstore')), false);
+  // Nor is somebody who was given it.
+  assert.equal(offersUpgrade(summary('granted')), false);
+
+  // And nothing at all is offered while billing is off, whatever the source.
+  assert.equal(offersUpgrade({ live: false, source: 'trial', tier: { id: 'premium' } }), false);
+  assert.equal(offersUpgrade(null), false);
 });

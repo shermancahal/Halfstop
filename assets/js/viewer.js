@@ -59,7 +59,7 @@ import { activeAlerts, describeMotion, alertsToGeoJSON } from './lib/storms.js';
 import { fetchRoute, routeGeoJSON } from './lib/route.js';
 import {
   can, gateReason, planSummary, featureForLayer, describePrice, purchaseRoute, premiumAdds,
-  plansOffered, annualSaving,
+  plansOffered, annualSaving, offersUpgrade,
 } from './lib/tiers.js';
 import {
   RV_CAVEAT, RV_RANGES, normaliseProfile, isRV, routingFor, profileRows,
@@ -2859,7 +2859,7 @@ function upgradeBlock(plan) {
    * money: Stripe's own billing pages, or Apple's, and only Apple can end an
    * App Store subscription however much we might like to.
    */
-  if (plan.tier.id === 'premium') {
+  if (!offersUpgrade(plan)) {
     if (plan.source === 'stripe') {
       return el('div', { class: 'plan-upgrade' }, [
         el('button', {
@@ -2887,6 +2887,15 @@ function upgradeBlock(plan) {
   const saving = annualSaving();
 
   /*
+   * Somebody on a trial is being asked to keep what they already have, not
+   * sold something new, and the sentence has to say which.
+   */
+  const trialing = plan.source === 'trial';
+  const heading = trialing && plan.line
+    ? `${plan.line.replace(/\.$/, '')}. Keeping it:`
+    : 'Premium adds';
+
+  /*
    * A button per plan rather than a toggle and one button.
    *
    * Two buttons say both prices at once, which is the question somebody
@@ -2902,7 +2911,9 @@ function upgradeBlock(plan) {
   }));
 
   return el('div', { class: 'plan-upgrade' }, [
-    el('p', { class: 'plan-upgrade-head', text: 'Premium adds' }),
+    el('p', { class: 'plan-upgrade-head', text: heading }),
+    // The list is what a trial is holding open, so it is worth repeating for
+    // somebody deciding whether to keep it.
     el('ul', { class: 'plan-upgrade-list' }, premiumAdds().map((what) => el('li', { text: what }))),
     route.available
       ? el('div', { class: 'plan-upgrade-buttons' }, buttons)
