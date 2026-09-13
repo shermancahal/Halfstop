@@ -105,3 +105,46 @@ export function isInstalled() {
     // iOS Safari predates display-mode and reports it here instead.
     || globalThis.navigator?.standalone === true;
 }
+
+/**
+ * Take up a waiting build and reload onto it, once.
+ *
+ * For the pages that are prose. The map offers a button instead, because
+ * reloading out from under somebody mid-route is worse than a stale build -
+ * but the landing page and the help page have nothing in progress to lose, and
+ * silently serving yesterday's code there is how a deploy comes to look like
+ * it never happened. It did happen: the new worker installed, went to
+ * `waiting`, and stayed there, because a waiting worker waits until every tab
+ * under its scope is gone and nobody was telling it otherwise.
+ *
+ * Guarded by sessionStorage so a worker that installs, hands over and somehow
+ * still reports an update cannot put the tab in a reload loop. Once per tab is
+ * enough: the second load is already on the new build.
+ */
+export async function reloadOntoNewBuild() {
+  const ONCE = 'abmap:took-update';
+  try {
+    if (sessionStorage.getItem(ONCE)) return false;
+  } catch {
+    // Private mode, or storage refused. Without somewhere to record that this
+    // already happened there is no safe way to reload automatically, so the
+    // stale build is the better of the two failures.
+    return false;
+  }
+
+  const tookOver = await applyServiceWorkerUpdate();
+  if (!tookOver) return false;
+
+  /*
+   * Marked only now, on the way out.
+   *
+   * Setting it up front looked safer and was worse: a call that found no
+   * waiting worker would still have spent the one chance this tab gets, so a
+   * real update arriving later in the same session would have been ignored.
+   * The flag exists to stop a loop, and there is no loop to stop until a
+   * reload is actually about to happen.
+   */
+  try { sessionStorage.setItem(ONCE, '1'); } catch { /* nothing to persist to */ }
+  globalThis.location.reload();
+  return true;
+}

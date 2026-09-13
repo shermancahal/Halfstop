@@ -174,45 +174,6 @@ export function createAccountPanel({ container, account, folders = null, toast }
       withIcon(passwordButton, icons.key);
 
       /*
-       * Deleting the account, from inside the app.
-       *
-       * Apple requires this of anything offering sign-in, and the privacy
-       * policy promises it. Two confirmations rather than one: the first says
-       * what goes, the second asks for the word, because this is the only
-       * button here that destroys something and cannot be undone.
-       */
-      const deleteAccount = el('button', {
-        class: 'button button-ghost button-small is-danger', type: 'button', text: 'Delete account',
-        title: 'Remove your folders from the server and close the account',
-        onclick: async () => {
-          const warning = 'Delete your account?\n\n'
-            + 'The account itself is closed, and your folders and pins are removed from '
-            + 'the server. Signing in again will not bring any of it back. What is saved '
-            + 'on this device is left alone.\n\n'
-            + 'This cannot be undone.';
-          if (!window.confirm(warning)) return;
-          if (window.prompt('Type DELETE to confirm.') !== 'DELETE') {
-            toast('Nothing was deleted.', { tone: 'info' });
-            return;
-          }
-          const result = await account.deleteAccount()
-            .catch((error) => ({ ok: false, reason: error.message }));
-          toast(result.ok ? 'Account deleted.' : `Could not delete: ${result.reason}`,
-            { tone: result.ok ? 'ok' : 'error' });
-        },
-      });
-      withIcon(deleteAccount, icons.trash);
-
-      /*
-       * Delete keeps its own row under a rule, wherever the row is.
-       *
-       * Moving it inside Edit profile does not make it less final: it is still
-       * the only control here that destroys something and cannot be undone,
-       * and it is now a short reach from Save. The separation is the safety.
-       */
-      const dangerRow = () => el('div', { class: 'account-actions account-danger' }, [deleteAccount]);
-
-      /*
        * Somebody who followed a reset link is here for one thing.
        *
        * Shown before the profile, the sync line and the buttons, because they
@@ -238,7 +199,22 @@ export function createAccountPanel({ container, account, folders = null, toast }
       if (edit) {
         container.append(who, profileForm());
         if (account.message) container.append(el('p', { class: 'hint', text: account.message }));
-        container.append(passwordButton, dangerRow());
+        container.append(passwordButton);
+        /*
+         * Where closing the account went, said here rather than left as an
+         * absence. Apple wants deletion reachable from inside the app, and
+         * somebody who opens Edit profile looking for it has to be told where
+         * it is - a button that quietly stopped existing is indistinguishable
+         * from one that was never offered.
+         */
+        container.append(el('p', {
+          class: 'hint account-close-note',
+          style: 'margin-top:10px',
+        }, [
+          document.createTextNode('Closing your account is under '),
+          el('a', { href: 'faq.html#close-account', target: '_blank', rel: 'noopener', text: 'Help' }),
+          document.createTextNode('. It cannot be undone, so it is kept out of this menu.'),
+        ]));
         return;
       }
 
@@ -260,7 +236,15 @@ export function createAccountPanel({ container, account, folders = null, toast }
       withIcon(signOut, icons.logout);
 
 
-      container.append(who, editButton);
+      /*
+       * One row: who you are, then the two things you do with the account.
+       *
+       * They were a bare button and then a row, which stacked two controls
+       * down a menu that is mostly one-line rows already. Sync belongs below
+       * with the line that counts folders, because it is about this device
+       * rather than about the account.
+       */
+      container.append(who, el('div', { class: 'account-actions' }, [editButton, signOut]));
 
       /*
        * Syncing, only where there is something to sync.
@@ -287,12 +271,12 @@ export function createAccountPanel({ container, account, folders = null, toast }
           },
         });
         withIcon(syncNow, icons.refresh);
+        // Sign out is in the row above with Edit profile; this row is the
+        // device's business, not the account's.
         container.append(
           el('div', { class: 'account-meta', text: syncLine }),
-          el('div', { class: 'account-actions' }, [syncNow, signOut]),
+          el('div', { class: 'account-actions' }, [syncNow]),
         );
-      } else {
-        container.append(el('div', { class: 'account-actions' }, [signOut]));
       }
 
       if (account.message) container.append(el('p', { class: 'hint', text: account.message }));

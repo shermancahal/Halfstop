@@ -224,6 +224,7 @@ test('pages: a page with the settings menu loads the CSS that styles it', async 
     'assets/js/lib/account-panel.js',
     'assets/js/lib/settings-menu.js',
     'assets/js/lib/page-settings.js',
+    'assets/js/lib/delete-account.js',
     'assets/js/lib/ui.js',
   ];
   const emitted = new Set(['toast', 'toast-stack', 'settings-choice']);

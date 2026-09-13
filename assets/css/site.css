@@ -886,6 +886,11 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 
 /* The way back in, under the three buttons rather than beside them: it is what
    you look for once those have failed, and should not compete until then. */
+/* Where closing the account went. Muted, because it is a signpost rather than
+   an offer - the thing it points at is deliberately one page away. */
+.account-close-note { margin-top: 10px; }
+.account-close-note a { color: inherit; text-decoration: underline; }
+
 .account-forgot { margin-top: 8px; padding-left: 0; padding-right: 0; border-color: transparent; text-decoration: underline; }
 .account-forgot:hover { border-color: transparent; }
 

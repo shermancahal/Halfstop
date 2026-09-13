@@ -16,7 +16,7 @@ import { loadCatalog, facet, filterMaps } from './lib/catalog.js';
 import { el, escapeHTML, applyStoredTheme, createToaster, formatDate } from './lib/ui.js';
 import { mountPageSettings } from './lib/page-settings.js';
 import { formatDistance, formatElevation } from './lib/geo.js';
-import { registerServiceWorker } from './lib/pwa.js';
+import { registerServiceWorker, reloadOntoNewBuild } from './lib/pwa.js';
 
 const dom = {};
 let catalog = { maps: [] };
@@ -245,5 +245,8 @@ main();
 
 // The library page shares the worker's scope, so installing from here works
 // too — and an already-installed app opened on this page keeps its cache warm.
-registerServiceWorker();
+// Take up a new build rather than sitting on the cached one: this page has
+// nothing in progress to lose, and a deploy nobody sees is a deploy that did
+// not happen. The map offers a button instead - see reloadOntoNewBuild.
+registerServiceWorker({ onUpdate: reloadOntoNewBuild });
 

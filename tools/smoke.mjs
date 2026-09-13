@@ -2232,13 +2232,13 @@ if (!external) {
    * the account rather than this session now live one level in, behind Edit
    * profile, and this is the check that the card stayed shallow.
    */
-  check('the card is who you are, one way in, and this session',
-    card.rows, ['account-who', 'button', 'account-meta', 'account-actions']);
+  check('the card is who you are, one row of account, then this session',
+    card.rows, ['account-who', 'account-actions', 'account-meta', 'account-actions']);
   check('the name is the one typed into the profile', card.name, 'Sherman Cahal');
   check('with the address on its own line under it', card.email, 'sherman@example.com');
   check('and the sync line counts folders', /folders? synced/.test(card.sync || ''), true);
-  check('two buttons, each with a mark',
-    card.buttons, [['Sync now', true], ['Sign out', true]]);
+  check('edit and sign out share a line, and sync is its own',
+    card.buttons, [['Edit profile', true], ['Sign out', true], ['Sync now', true]]);
   check('and nothing that ends the account is a tap away',
     await signed.evaluate(() => Boolean(document.querySelector('#account-panel .account-danger'))), false);
   /*
@@ -2266,27 +2266,25 @@ if (!external) {
   })), { name: 'Sherman Cahal', email: 'sherman@example.com' });
 
   /*
-   * Delete is on its own row, below a rule - inside the edit view now.
+   * Nothing in this menu ends the account, at any depth.
    *
-   * Apple requires an app offering sign-in to offer this, so it has to be
-   * reachable, and it is the only control here that destroys something and
-   * cannot be undone. Moving it one level in does not make it less final: it
-   * now sits a short reach from Save, which is the mis-tap to worry about. The
-   * separation is the safety, so it is the thing tested rather than its
-   * presence - and it is tested where the button now lives rather than
-   * deleted along with the row it used to be on.
+   * Delete used to sit a row under Sign out, then a row under Save. Both are
+   * a mis-tap that cannot be undone, in a panel opened to change a theme, so
+   * the button now lives in the help page - see the help-page check below,
+   * which is the half of this pair that proves it is still reachable. Checked
+   * across the whole panel rather than the card, so moving it back one level
+   * in does not quietly pass.
    */
-  const danger = await signed.evaluate(() => {
-    const row = document.querySelector('#account-panel .account-danger');
-    const buttons = [...(row?.querySelectorAll('button') || [])].map((b) => b.textContent.trim());
-    const others = [...document.querySelectorAll('#account-panel .account-actions:not(.account-danger) button')]
-      .map((b) => b.textContent.trim());
-    return { buttons, others, ruled: row ? getComputedStyle(row).borderTopWidth : 'no row' };
-  });
-  check('delete sits apart from the buttons that save', danger.buttons, ['Delete account']);
-  check('and nothing harmless shares its row', danger.others, ['Save', 'Cancel']);
-  check('with a rule between them', danger.ruled !== '0px', true);
-  check('and changing the password is in here too',
+  check('nothing in the settings menu can end the account',
+    await signed.evaluate(() => ({
+      danger: document.querySelectorAll('#settings-panel .account-danger').length,
+      delete: [...document.querySelectorAll('#settings-panel button')]
+        .filter((b) => /delete/i.test(b.textContent)).length,
+    })), { danger: 0, delete: 0 });
+  check('but it says where closing the account went',
+    await signed.evaluate(() => document.querySelector('#account-panel .account-close-note a')?.getAttribute('href')),
+    'faq.html#close-account');
+  check('and changing the password is in here',
     await signed.evaluate(() => Boolean(document.querySelector('#account-panel .account-password'))), true);
   await shot(signed.locator('#settings-panel'), 'settings-edit-profile');
   await signed.fill('#account-panel input[aria-label="Name"]', 'S. Cahal');
@@ -2355,6 +2353,40 @@ if (!external) {
     check(`${page} does not ask again`, seen.asksAgain, false);
     await other.close();
   }
+
+  /*
+   * And closing the account is reachable, which is the other half of taking it
+   * out of the settings menu.
+   *
+   * Apple requires an app offering sign-in to offer deletion from inside the
+   * app. Moving the button satisfies that only for as long as it is actually
+   * there, so this is checked rather than assumed - a help page that quietly
+   * stopped rendering it would look like tidier design and be a rejected
+   * build.
+   *
+   * It names the address too. The wrong account closed is the same outcome as
+   * the right one, and the address is the last chance to notice.
+   */
+  const help = await carried.newPage();
+  await help.goto(new URL('faq.html#close-account', MAP_URL).href, { waitUntil: 'domcontentloaded' });
+  await help.waitForFunction(() => document.querySelector('#delete-account-mount button'), null, { timeout: 8000 })
+    .catch(() => {});
+  const closing = await help.evaluate(() => {
+    const mount = document.querySelector('#delete-account-mount');
+    const button = mount?.querySelector('button');
+    const row = mount?.querySelector('.account-danger');
+    return {
+      label: button?.textContent.trim() || null,
+      inItsOwnRow: Boolean(row),
+      ruled: row ? getComputedStyle(row).borderTopWidth !== '0px' : false,
+      insideTheAnswer: Boolean(mount?.closest('.faq-item')),
+    };
+  });
+  check('the help page can close the account', closing.label, 'Delete sherman@example.com');
+  check('naming the account it would close', /sherman@example\.com/.test(closing.label || ''), true);
+  check('on its own row under a rule', closing.inItsOwnRow && closing.ruled, true);
+  check('inside the answer somebody went looking for', closing.insideTheAnswer, true);
+  await help.close();
   await carried.close();
 }
 
