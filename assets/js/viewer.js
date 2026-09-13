@@ -538,6 +538,19 @@ async function main() {
   state.account.addEventListener('change', () => {
     renderAccount();
     /*
+     * The plan is drawn by the settings menu, not by renderAccount, so it has
+     * to be told too.
+     *
+     * Without this the menu painted whatever the plan was when it opened and
+     * never again. my_plan() answers a moment after load, so opening the gear
+     * in that moment showed Free and went on showing it - to somebody who
+     * subscribes - until the page was reloaded. Reported as the map taking a
+     * long time to load the plan and needing a refresh, which is exactly what
+     * it looked like. Every other page has done this since the gear shipped;
+     * only the map was missing it.
+     */
+    settingsMenu?.paint();
+    /*
      * The basemap list depends on who is signed in, so it has to be rebuilt
      * when that changes - otherwise an editor signs in and the maps gated to
      * them appear only after a reload, which reads as the gate not working.

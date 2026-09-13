@@ -54,6 +54,20 @@ export function wireSettingsMenu({
   };
 
   function paint() {
+    /*
+     * Keep the caret where it was.
+     *
+     * replaceChildren below takes the account panel out of the document and
+     * puts it back, and a node that leaves the document loses focus with it.
+     * So anything arriving while somebody is typing - a plan landing, a sync
+     * finishing - used to move the cursor out of the field mid-word, which on
+     * a password field is invisible and ends as "those two do not match".
+     */
+    const active = document.activeElement;
+    const caret = drop.contains(active) && typeof active.selectionStart === 'number'
+      ? { node: active, start: active.selectionStart, end: active.selectionEnd }
+      : null;
+
     drop.replaceChildren(...rows.map((setting) => el('div', { class: 'settings-row' }, [
       el('div', { class: 'settings-label', text: setting.label }),
       el('div', {
@@ -132,6 +146,13 @@ export function wireSettingsMenu({
       el('a', { href: 'terms.html', target: '_blank', rel: 'noopener', text: 'Terms' }),
       el('a', { href: 'faq.html', target: '_blank', rel: 'noopener', text: 'Help' }),
     ]));
+
+    // Only if that exact field is still on the page: a redraw that replaced it
+    // has nothing to give focus back to, and guessing would be worse.
+    if (caret && drop.contains(caret.node)) {
+      caret.node.focus({ preventScroll: true });
+      try { caret.node.setSelectionRange(caret.start, caret.end); } catch { /* not a text field */ }
+    }
   }
 
   trigger.addEventListener('click', (event) => {

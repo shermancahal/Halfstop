@@ -360,3 +360,48 @@ test('pages: a page with no folder store does not sync one', async () => {
   }
   assert.deepEqual(unguarded, [], 'these build an Account over a stub folder store and let it sync');
 });
+
+/*
+ * The plan is drawn by the settings menu, so the settings menu has to be told.
+ *
+ * viewer.js rebuilt the account card and the layer list when the account
+ * changed, and never repainted the menu - so the plan was whatever it had been
+ * when the gear was opened, for ever. my_plan() answers a moment after load,
+ * so opening the gear in that moment showed Free to somebody who subscribes
+ * and went on showing it until the page was reloaded. Reported as the map
+ * taking a long time to load the plan and needing a refresh.
+ *
+ * Every other page has done this since the gear shipped; only the map was
+ * missing it, which is why this is checked per page rather than in one place.
+ */
+test('pages: the plan catches up on its own, on the map as well as off it', async () => {
+  const missing = [];
+  for (const file of ['assets/js/viewer.js', 'assets/js/lib/page-settings.js']) {
+    const source = await readFile(new URL(`../${file}`, import.meta.url), 'utf8');
+    const onChange = source.match(/addEventListener\('change',[\s\S]{0,1400}?\n {2}\}\);/g) || [];
+    if (!onChange.some((block) => /\bpaint\(\)/.test(block))) missing.push(file);
+  }
+  assert.deepEqual(missing, [],
+    'these listen for account changes without repainting the settings menu, so the plan goes stale');
+});
+
+/*
+ * What is typed into the password form has to outlive a redraw.
+ *
+ * render() rebuilds this panel from scratch, so anything landing while
+ * somebody types - a plan arriving, a sync finishing - replaced both fields
+ * with empty ones. On a field of dots that is invisible, and what it produces
+ * is "those two passwords are not the same" about two passwords that were
+ * typed identically. The profile form has always held its draft outside the
+ * inputs for this reason; the password form did not.
+ */
+test('pages: the password form does not keep its only copy in the DOM', async () => {
+  const source = await readFile(new URL('../assets/js/lib/account-panel.js', import.meta.url), 'utf8');
+  assert.match(source, /let passwordDraft/, 'the password form has no draft outside the inputs');
+
+  const form = source.slice(source.indexOf('function passwordForm'), source.indexOf('function render'));
+  assert.match(form, /value: draft\.first/, 'the field does not start from the draft, so a redraw empties it');
+  assert.match(form, /value: draft\.again/, 'the confirm field does not start from the draft');
+  assert.match(form, /draft\.first = event\.target\.value/, 'typing is not recorded outside the input');
+  assert.match(form, /draft\.again = event\.target\.value/, 'typing in the confirm field is not recorded');
+});

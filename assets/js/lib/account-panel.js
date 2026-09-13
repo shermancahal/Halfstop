@@ -74,6 +74,17 @@ export function createAccountPanel({ container, account, folders = null, toast }
   let edit = null;
   let emailDraft = '';
   let changing = false;
+  /*
+   * What has been typed into the password form so far.
+   *
+   * Held here rather than only in the inputs, for the same reason the profile
+   * draft is: render() rebuilds this panel from scratch, so anything arriving
+   * while somebody is typing - a plan landing, a sync finishing, a status
+   * moving - replaced both fields with empty ones. On a field of dots that is
+   * invisible, and the next thing it produces is "those two do not match"
+   * about two passwords that were typed identically.
+   */
+  let passwordDraft = { first: '', again: '' };
 
   function profileForm() {
     const draft = edit;
@@ -122,20 +133,25 @@ export function createAccountPanel({ container, account, folders = null, toast }
    * back in.
    */
   function passwordForm({ onDone }) {
+    const draft = passwordDraft;
     const first = el('input', {
       type: 'password', placeholder: 'New password', autocomplete: 'new-password',
-      'aria-label': 'New password',
+      'aria-label': 'New password', value: draft.first,
+      oninput: (event) => { draft.first = event.target.value; },
     });
     const again = el('input', {
       type: 'password', placeholder: 'New password again', autocomplete: 'new-password',
-      'aria-label': 'Confirm new password',
+      'aria-label': 'Confirm new password', value: draft.again,
+      oninput: (event) => { draft.again = event.target.value; },
     });
     const save = el('button', {
       class: 'button button-primary button-small', type: 'submit', text: 'Save password',
     });
     const cancel = el('button', {
       class: 'button button-ghost button-small', type: 'button', text: 'Cancel',
-      onclick: () => { changing = false; render(); },
+      // Left on purpose, so a half-typed password is not still sitting in the
+      // form the next time this panel is opened.
+      onclick: () => { changing = false; passwordDraft = { first: '', again: '' }; render(); },
     });
     const busy = (on) => { for (const node of [first, again, save, cancel]) node.disabled = on; };
 
@@ -165,6 +181,7 @@ export function createAccountPanel({ container, account, folders = null, toast }
         try {
           await account.setPassword(first.value);
           changing = false;
+          passwordDraft = { first: '', again: '' };
           toast('Password changed.', { tone: 'ok' });
           onDone?.();
         } catch (error) {
