@@ -205,7 +205,7 @@ export function createAccountPanel({ container, account, folders = null, toast }
        * which means deliberately locking yourself out to fix being locked out.
        */
       const passwordButton = el('button', {
-        class: 'button button-ghost button-small', type: 'button', text: 'Change password',
+        class: 'button button-ghost button-small account-password', type: 'button', text: 'Change password',
         onclick: () => { changing = true; render(); },
       });
       withIcon(passwordButton, icons.key);
@@ -248,7 +248,7 @@ export function createAccountPanel({ container, account, folders = null, toast }
       });
       withIcon(deleteAccount, icons.trash);
 
-      container.append(who, el('div', { class: 'account-actions' }, [editButton, passwordButton]));
+      container.append(who, editButton, passwordButton);
 
       /*
        * Syncing, only where there is something to sync.

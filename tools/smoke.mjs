@@ -2224,8 +2224,8 @@ if (!external) {
   });
   // First, so that when the card is wrong the complaint under it is in the log.
   check('a clean sign-in has nothing to complain about', card.hints, []);
-  check('who, then the edit, then the sync line, then the buttons',
-    card.rows, ['account-who', 'button', 'account-meta', 'account-actions', 'account-actions']);
+  check('who, then the two account edits, then the sync line, then the buttons',
+    card.rows, ['account-who', 'button', 'button', 'account-meta', 'account-actions', 'account-actions']);
   check('the name is the one typed into the profile', card.name, 'Sherman Cahal');
   check('with the address on its own line under it', card.email, 'sherman@example.com');
   check('and the sync line counts folders', /folders? synced/.test(card.sync || ''), true);
