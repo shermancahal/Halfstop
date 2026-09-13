@@ -206,6 +206,57 @@ test('tiers: nothing is said about a trial while there is nothing to lose', () =
   );
 });
 
+/*
+ * The other half of the test above: a trial stays quiet, a purchase does not.
+ *
+ * This is what a test-mode card is for. Paying with 4242 4242 4242 4242 in
+ * Stripe's test mode writes a real entitlement row, and while billing is off
+ * the panel above it used to go on saying Free - which looks exactly like the
+ * webhook never arriving, and sends somebody to read function logs to tell a
+ * working purchase from a broken one.
+ */
+test('tiers: a purchase is named even while billing is off', () => {
+  const held = (source) => tierFor({ plan: { tier: 'premium', source } }, { billing: FREE }).name;
+  assert.equal(held('stripe'), 'Premium');
+  assert.equal(held('appstore'), 'Premium');
+  assert.equal(held('granted'), 'Premium');
+
+  // And the ones that mean "has not bought anything" still read as Free, which
+  // while billing is off is what everybody is.
+  assert.equal(held('trial'), 'Free');
+  assert.equal(held('none'), 'Free');
+  assert.equal(held(undefined), 'Free');
+
+  // The end date comes with it, for the same reason: "30 days left" is how a
+  // test purchase shows it wrote a real period end.
+  assert.equal(
+    describePlan(
+      { tier: 'premium', source: 'stripe', until: new Date(LIVE_NOW + 30 * DAY).toISOString() },
+      { now: LIVE_NOW, billing: FREE },
+    ),
+    '30 days left.',
+  );
+});
+
+/*
+ * Naming the tier must not gate anything, which is the whole risk of the test
+ * above. Everything is open to everybody while billing is off, and a premium
+ * name appearing in the panel has to leave that exactly as it was.
+ */
+test('tiers: naming a purchase does not take anything away from anybody', () => {
+  const paid = planSummary({ plan: { tier: 'premium', source: 'stripe' } }, { billing: FREE });
+  assert.equal(paid.name, 'Premium');
+  assert.equal(paid.live, false);
+  assert.equal(paid.includes.length, Object.keys(FEATURES).length);
+
+  // Free is the tier whose grants are nearly empty, so it is the one that
+  // would have lost something had this been read off the tier.
+  const unpaid = planSummary({ plan: { tier: 'free', source: 'trial' } }, { billing: FREE });
+  assert.equal(unpaid.name, 'Free');
+  assert.equal(unpaid.includes.length, Object.keys(FEATURES).length);
+  assert.equal(can('rvRouting', { billing: FREE }), true);
+});
+
 test('tiers: a plan nobody has answered with yet is not premium', () => {
   // Null means the question has not been asked, which must not read as a grant.
   assert.equal(tierFor({ plan: null }, { billing: LIVE }).name, 'Free');

@@ -133,6 +133,21 @@ export const DEFAULT_TIER = 'free';
 export const TRIAL_DAYS = 30;
 
 /**
+ * Where an entitlement came from, when it came from somewhere real.
+ *
+ * A trial is not one of these, and neither is 'none'. Both mean "has not
+ * bought anything", which while billing is off is what everybody is.
+ *
+ * A list of what counts as settled rather than a list of what does not, with
+ * anything unrecognised falling through to being offered a purchase. That way
+ * round on purpose: a source nobody taught this about means at worst a button
+ * somebody presses and the checkout refuses with "you already subscribe",
+ * which is visible and harmless, while the other way round means a free
+ * account that is silently never shown a way to pay.
+ */
+const SETTLED = new Set(['granted', 'stripe', 'appstore']);
+
+/**
  * The tier a reader is on.
  *
  * The plan is not computed here and never should be. It is read from the
@@ -142,9 +157,25 @@ export const TRIAL_DAYS = 30;
  * to draw.
  */
 export function tierFor(account = null, { billing = BILLING } = {}) {
-  if (!billing.live) return TIERS[DEFAULT_TIER];
-  const id = account?.plan?.tier;
-  return TIERS[id] || TIERS[DEFAULT_TIER];
+  const plan = account?.plan || null;
+  /*
+   * Flattened to Free while billing is off - unless somebody actually holds
+   * something.
+   *
+   * The flattening is right for almost everybody: every feature is open to
+   * everybody, so naming a tier would describe a restriction that does not
+   * exist. But it also hid the one thing a test purchase is for. Paying with
+   * 4242 4242 4242 4242 writes a real entitlement row, and the panel above it
+   * went on saying Free - which looks exactly like the webhook never arriving,
+   * and sends somebody to read function logs to tell the two apart.
+   *
+   * So a settled source is named. This says what somebody has, not what they
+   * may do: `includes` below still reports every feature while billing is off,
+   * because that is still true, and nothing outside this file gates on a tier
+   * anyway - the header of this module says why.
+   */
+  if (!billing.live && !SETTLED.has(plan?.source)) return TIERS[DEFAULT_TIER];
+  return TIERS[plan?.tier] || TIERS[DEFAULT_TIER];
 }
 
 /** Whole days left, rounded up, so the last day reads as "1" and not "0". */
@@ -247,18 +278,6 @@ export function isBillingTester(user, { billing = BILLING } = {}) {
  * kept it. Backwards, and invisible, because the person it happened to would
  * simply not see a button.
  */
-/**
- * Where an entitlement came from, when the answer is "somebody already has it".
- *
- * A list of what counts as settled rather than a list of what does not, with
- * anything unrecognised falling through to being offered a purchase. That way
- * round on purpose: a source nobody taught this about means at worst a button
- * somebody presses and the checkout refuses with "you already subscribe",
- * which is visible and harmless, while the other way round means a free
- * account that is silently never shown a way to pay.
- */
-const SETTLED = new Set(['granted', 'stripe', 'appstore']);
-
 export function offersUpgrade(summary) {
   if (!summary?.live) return false;
   /*
@@ -324,9 +343,15 @@ export function purchaseRoute({ billing = BILLING, preview = false } = {}) {
  * calendar and a date on its own has to be worked out.
  */
 export function describePlan(plan = null, { now = Date.now(), billing = BILLING } = {}) {
-  // Every account has everything, so a countdown would count down to nothing
-  // happening.
-  if (!billing.live) return '';
+  /*
+   * Every account has everything, so a countdown would count down to nothing
+   * happening - unless this is something somebody bought, where the date is
+   * the useful part.
+   *
+   * "30 days left" under Premium is how a test purchase shows it wrote a real
+   * period end rather than the null that once meant Premium for ever.
+   */
+  if (!billing.live && !SETTLED.has(plan?.source)) return '';
   // The name says Free, and a plan that is not premium has no end to report.
   if (plan?.tier !== 'premium') return '';
   // Premium with no end date: the ordinary case for whoever runs the service,
