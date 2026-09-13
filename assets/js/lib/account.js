@@ -202,9 +202,26 @@ export class Account extends EventTarget {
    * Both options default to today's behaviour, so nothing but the tests
    * passes anything.
    */
-  constructor(folders, { client = getClient, configured = isConfigured } = {}) {
+  constructor(folders, { client = getClient, configured = isConfigured, syncs = true } = {}) {
     super();
     this.folders = folders;
+    /*
+     * Whether this account has folders worth syncing.
+     *
+     * The landing page, the help page and the admin queue hold a stub store
+     * with nothing in it - they have no IndexedDB, no photo vault and no
+     * reason to pull one onto a page showing a help article. Before this they
+     * still ran a full folder sync on load, which fetched every row to merge
+     * into nothing and, when the network refused, wrote "Sync failed:
+     * TypeError: Failed to fetch" into a panel on a page that has never
+     * synced anything.
+     *
+     * Not a data hazard, which is worth stating because it looks like one: an
+     * empty local set pulls the remote folders rather than deleting them -
+     * deletions travel as tombstones, not as absences, and a merge from empty
+     * pushes nothing. It is waste and a false alarm, not loss.
+     */
+    this.syncs = syncs;
     this.getClient = client;
     this.isConfigured = configured;
     this.user = null;
@@ -915,7 +932,7 @@ export class Account extends EventTarget {
    * result locally, then pushes anything the server is missing or behind on.
    */
   async sync() {
-    if (!this.user || this.syncing) return null;
+    if (!this.user || this.syncing || !this.syncs) return null;
     this.syncing = true;
     this.setStatus('syncing');
 

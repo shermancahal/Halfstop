@@ -309,3 +309,54 @@ test('pages: a page bringing its own account starts it itself', async () => {
   }
   assert.deepEqual(unstarted, [], 'these pass their own Account to the settings menu and never start it');
 });
+
+/*
+ * The help page sends people to a button, so the button has to be there.
+ *
+ * "Manage subscription in the account menu" was true on the map and nowhere
+ * else, because only viewer.js passed a planExtra to the settings menu. So
+ * somebody who opened the gear on the help page - having been told to by the
+ * help page - found a plan name and nothing under it. Reported as exactly
+ * that.
+ *
+ * Checked at the source rather than in a browser because the browser check
+ * needs a subscription to exist; this one holds whether or not anybody has
+ * one, and it is the half that would go quiet if the wiring were dropped.
+ */
+test('pages: the help page points at a button every page actually has', async () => {
+  const faq = await readFile(new URL('../faq.html', import.meta.url), 'utf8');
+  if (!/Manage subscription/.test(faq)) return;   // nothing claimed, nothing to keep true
+
+  const shared = await readFile(new URL('../assets/js/lib/page-settings.js', import.meta.url), 'utf8');
+  assert.match(
+    shared,
+    /planExtra:\s*\(plan\)\s*=>\s*managePlanBlock/,
+    'faq.html sends people to Manage subscription, but the settings menu off the '
+    + 'map is built without a plan block, so there is no such button there',
+  );
+
+  // And the block itself still answers for a Stripe subscription.
+  const block = await readFile(new URL('../assets/js/lib/manage-plan.js', import.meta.url), 'utf8');
+  assert.match(block, /source === 'stripe'/, 'the manage block no longer recognises a Stripe subscription');
+  assert.match(block, /Manage subscription/, 'the manage block no longer draws the button the help page names');
+});
+
+test('pages: a page with no folder store does not sync one', async () => {
+  /*
+   * These hold a stub folder store with nothing in it. Left to sync, they
+   * fetched every folder row on load to merge into nothing, and on a refused
+   * network wrote "Sync failed: TypeError: Failed to fetch" into a panel on a
+   * page that has never synced anything.
+   *
+   * Not a data hazard - an empty local set pulls the remote folders rather
+   * than deleting them, because deletions travel as tombstones and a merge
+   * from empty pushes nothing - but waste, and a false alarm in front of
+   * somebody who has twenty-seven folders on the map page.
+   */
+  const unguarded = [];
+  for (const file of ['assets/js/lib/page-settings.js', 'assets/js/admin.js']) {
+    const source = await readFile(new URL(`../${file}`, import.meta.url), 'utf8');
+    if (!/new Account\([^)]*\{[^}]*syncs:\s*false/.test(source)) unguarded.push(file);
+  }
+  assert.deepEqual(unguarded, [], 'these build an Account over a stub folder store and let it sync');
+});

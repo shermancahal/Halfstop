@@ -43,7 +43,9 @@ const toast = createToaster(document.body);
  * email. Account only ever asks it for a snapshot and hands back a merge.
  */
 const noFolders = { list: () => [], snapshot: () => [], replaceAll() {}, toGeoJSON: () => ({ features: [] }) };
-const account = new Account(noFolders);
+// Same stub, same reason: the queue has no folder store, so a sync here
+// fetches every row to merge into nothing.
+const account = new Account(noFolders, { syncs: false });
 // The same account the queue gates on, so signing out here does both.
 mountPageSettings({ toast, account });
 

@@ -81,6 +81,7 @@ import { kpNow, auroraChance, describeKp } from './lib/aurora.js';
 import { lunarEclipses, describeEclipse, shadowGeometry } from './lib/eclipse.js';
 import { describeSync } from './lib/sync.js';
 import { registerServiceWorker, applyServiceWorkerUpdate } from './lib/pwa.js';
+import { managePlanBlock } from './lib/manage-plan.js';
 import { mayEdit } from './lib/editors.js';
 import { shareableURL, readSharedPin, pinLinkParts } from './lib/share.js';
 import {
@@ -2835,28 +2836,6 @@ async function startSubscription(button = null, plan = 'month') {
 }
 
 /**
- * Send somebody to Stripe's billing pages, where a subscription ends.
- *
- * A separate function from startSubscription rather than a flag on it: they
- * are opposite actions, and one of them cancels somebody's subscription. The
- * only thing they have in common is a button that must not look idle while a
- * round trip is in flight.
- */
-async function openBilling(button = null) {
-  const said = button?.textContent || 'Manage subscription';
-  if (button) { button.disabled = true; button.textContent = 'Opening…'; }
-  const result = await state.account.openBilling();
-  if (button) { button.disabled = false; button.textContent = said; }
-
-  if (!result.ok) {
-    toast(result.reason, { tone: 'error', timeout: 10000 });
-    return false;
-  }
-  window.location.assign(result.url);
-  return true;
-}
-
-/**
  * What Premium is and how to get it, for somebody who has not got it.
  *
  * Nothing at all while BILLING.live is false, which is today: every account
@@ -2878,40 +2857,21 @@ function upgradeBlock(plan) {
    * refuses anybody not named as a tester while the Stripe key is a test key.
    * That is the control. This just means the button is there to press.
    */
-  const preview = billingPreview();
-  if (!plan.live && !preview) return null;
-
   /*
-   * Somebody who already subscribes gets the way out, not another offer.
+   * Somebody who already subscribes gets the way out, not another offer - and
+   * gets it before any gate, because the gates below are about whether we are
+   * selling. Cancelling has to be as easy as subscribing and must not depend
+   * on a build flag.
    *
-   * Cancelling has to be as easy as subscribing and it has to be reachable
-   * without writing to anybody. Where it happens depends on who took the
-   * money: Stripe's own billing pages, or Apple's, and only Apple can end an
-   * App Store subscription however much we might like to.
+   * Shared with every other page now: the help page has always said "Manage
+   * subscription in the account menu", which was true here and nowhere else.
    */
   if (!offersUpgrade({ ...plan, live: true })) {
-    if (plan.source === 'stripe') {
-      return el('div', { class: 'plan-upgrade' }, [
-        el('button', {
-          class: 'button button-secondary button-small', type: 'button', text: 'Manage subscription',
-          onclick: (event) => openBilling(event.currentTarget),
-        }),
-        el('p', {
-          class: 'hint', style: 'margin:8px 0 0',
-          text: 'Cancel, switch between monthly and yearly, or change the card. '
-            + 'Cancelling keeps Premium until the period you have paid for runs out.',
-        }),
-      ]);
-    }
-    if (plan.source === 'appstore') {
-      return el('p', {
-        class: 'hint', style: 'margin:10px 0 0',
-        text: 'This subscription is through the App Store. Cancel it in Settings, '
-          + 'your name, Subscriptions. It stays active until the period you have paid for runs out.',
-      });
-    }
-    return null;
+    return managePlanBlock(plan, { account: state.account, toast });
   }
+
+  const preview = billingPreview();
+  if (!plan.live && !preview) return null;
 
   const route = purchaseRoute({ preview });
   const saving = annualSaving();

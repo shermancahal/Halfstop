@@ -16,8 +16,14 @@
  *
  * Subscribing, because a checkout is begun and returned to on the map, and the
  * return path — reading the plan again until the webhook lands — lives there.
- * The plan is named here and nothing more, which is what it says on the map
- * too while billing is off.
+ *
+ * Cancelling is here, though, and the distinction is not a fine one. Managing
+ * an existing subscription is a single redirect to Stripe's own pages and
+ * back, with nothing to poll for on return: Account.init() re-reads the plan
+ * on load, on every page. And the help page has always said "Manage
+ * subscription in the account menu", which was true on the map and nowhere
+ * else - so somebody sent to the account menu by the help page opened it on
+ * the help page and found no button.
  */
 
 import { readTheme, setTheme } from './ui.js';
@@ -25,6 +31,7 @@ import { icons } from './icons.js';
 import { Account } from './account.js';
 import { createAccountPanel } from './account-panel.js';
 import { wireSettingsMenu } from './settings-menu.js';
+import { managePlanBlock } from './manage-plan.js';
 
 /**
  * The theme row, in the same shape and the same words as the map's.
@@ -75,7 +82,7 @@ export function mountPageSettings({ toast, account = null, rows = [] } = {}) {
    * distinguishes - see the init() call at the bottom.
    */
   const ours = !account;
-  const who = account || new Account(NO_FOLDERS);
+  const who = account || new Account(NO_FOLDERS, { syncs: false });
 
   const panel = createAccountPanel({
     container: document.createElement('div'),
@@ -92,6 +99,9 @@ export function mountPageSettings({ toast, account = null, rows = [] } = {}) {
     rows: [...rows, THEME_ROW],
     accountPanel: panel,
     account: () => who,
+    // The way out of a subscription, and only that: no checkout off the map,
+    // for the reason in this file's header.
+    planExtra: (plan) => managePlanBlock(plan, { account: who, toast }),
   });
 
   /*
