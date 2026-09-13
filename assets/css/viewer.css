@@ -166,7 +166,6 @@ html, body { height: 100%; overflow: hidden; }
 .feature-name { font-size: .86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .feature-meta { font-size: .75rem; color: var(--ink-3); flex: none; }
 
-.hint { font-size: .81rem; color: var(--ink-3); margin: 0; }
 
 /* ---------- map surface ---------- */
 
@@ -187,15 +186,11 @@ html, body { height: 100%; overflow: hidden; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; } }
 
-.toast-stack { position: absolute; bottom: calc(34px + var(--safe-bottom)); left: 50%; transform: translateX(-50%); z-index: 40; display: grid; gap: 8px; width: min(430px, calc(100% - 32px)); }
-.toast {
-  background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--clay);
-  border-radius: var(--radius); box-shadow: var(--shadow-lg);
-  padding: 10px 14px; font-size: .86rem; display: flex; gap: 10px; align-items: flex-start;
-}
-.toast.is-error { border-left-color: #c0392b; }
-.toast.is-ok { border-left-color: var(--pine); }
-.toast button { margin-left: auto; }
+/* The stack itself is in site.css now, since every page says things out loud.
+   The map keeps the positioning it has always had: #toasts sits inside the
+   positioned map shell, so it hangs from that rather than from the viewport,
+   and stays put when the shell is what moved. */
+.toast-stack { position: absolute; z-index: 40; }
 
 /*
  * Round, and its own size, so it is not read as part of the search bar.
@@ -1868,12 +1863,6 @@ html, body { height: 100%; overflow: hidden; }
   font-variant-numeric: tabular-nums; text-align: center;
 }
 
-/* Repeat count on a toast that is still firing */
-.toast-count {
-  flex: none; padding: 1px 6px; border-radius: 999px;
-  font-size: .7rem; font-weight: 700; font-variant-numeric: tabular-nums;
-  background: rgba(0, 0, 0, .1); color: inherit;
-}
 
 /* ==========================================================================
    "Where should these waypoints go?" — asked after an import, over the map

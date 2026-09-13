@@ -206,8 +206,37 @@ test('pages: a page with the settings menu loads the CSS that styles it', async 
     styles.set(file, await readFile(new URL(`../${file}`, import.meta.url), 'utf8'));
   }
 
-  // The classes that make the panel a panel rather than a run of bare elements.
-  const NEEDED = ['.settings-drop', '.account-drop', '.settings-choice', '.settings-label'];
+  /*
+   * Read out of the modules rather than written down here.
+   *
+   * The first version of this test carried a hand-written list of four
+   * classes, and passed while .hint and .toast were still map-only - so the
+   * sign-in explanation rendered near-invisible and every error message landed
+   * unstyled at the foot of the document, which is how a failed sign-in came
+   * to look like a button that does nothing. A list somebody has to remember
+   * to extend is a list that documents the bugs already found.
+   *
+   * So the shared modules are asked what they draw. Static class attributes
+   * only; the two interpolated ones are named below, since a regex cannot
+   * evaluate a template literal.
+   */
+  const SHARED = [
+    'assets/js/lib/account-panel.js',
+    'assets/js/lib/settings-menu.js',
+    'assets/js/lib/page-settings.js',
+    'assets/js/lib/ui.js',
+  ];
+  const emitted = new Set(['toast', 'toast-stack', 'settings-choice']);
+  for (const file of SHARED) {
+    const source = await readFile(new URL(`../${file}`, import.meta.url), 'utf8');
+    for (const match of source.matchAll(/class: '([^']+)'/g)) {
+      for (const name of match[1].split(/\s+/)) {
+        if (name && !name.startsWith('is-')) emitted.add(name);
+      }
+    }
+  }
+  const NEEDED = [...emitted].map((name) => `.${name}`).sort();
+  assert.ok(NEEDED.length > 15, `expected to find the panel's classes, found ${NEEDED.length}`);
   const unstyled = [];
 
   for (const page of PAGES) {
@@ -218,10 +247,64 @@ test('pages: a page with the settings menu loads the CSS that styles it', async 
       .map((match) => match[1]);
     const css = sheets.map((href) => styles.get(href) || '').join('\n');
 
+    /*
+     * A rule of its own, not merely the characters somewhere in the file.
+     *
+     * An earlier version of this asked whether the stylesheet contained the
+     * string ".hint", and `#account-panel .hint { overflow-wrap: anywhere }`
+     * answered yes - so the check passed while the rule that gives .hint its
+     * colour and size was still map-only. Requiring the class at the head of a
+     * selector is what tells "styled here" from "mentioned here".
+     */
     for (const rule of NEEDED) {
-      if (!css.includes(rule)) unstyled.push(`${page} draws the settings menu but no stylesheet it loads defines ${rule}`);
+      const standalone = new RegExp(`(?:^|[,{}])\\s*\\${rule}(?![\\w-])`, 'm');
+      if (!standalone.test(css)) unstyled.push(`${page} draws the settings menu but no stylesheet it loads defines ${rule}`);
     }
   }
 
   assert.deepEqual(unstyled, [], 'the panel would render unstyled on these pages');
+});
+
+/*
+ * The panel that could take a password and do nothing with it.
+ *
+ * mountPageSettings built an Account and never called init(), and init() is
+ * where every moving part is: the existing session is read there, the plan is
+ * fetched there, the provider buttons are decided there, and
+ * onAuthStateChange - the thing that tells the panel a sign-in worked - is
+ * subscribed there.
+ *
+ * So index, faq, terms and privacy shipped a form that handed credentials to
+ * Supabase, got a session back, and redrew nothing. It was reported as "can't
+ * sign in - no error message displayed", and there was no error: the sign-in
+ * succeeded, server-side, at the minute of the screenshot. The panel simply
+ * never heard.
+ *
+ * Structural rather than behavioural because there is no DOM in this suite,
+ * and the failure was structural: a call that was not there.
+ */
+test('pages: an account the settings menu builds is one it starts', async () => {
+  const source = await readFile(new URL('../assets/js/lib/page-settings.js', import.meta.url), 'utf8');
+  assert.match(
+    source,
+    /\bwho\.init\(\)/,
+    'mountPageSettings builds an Account but never calls init(), so the panel '
+    + 'cannot hear a sign-in, read a session, or fetch a plan',
+  );
+});
+
+test('pages: a page bringing its own account starts it itself', async () => {
+  /*
+   * The other half of the rule above. mountPageSettings deliberately does not
+   * init an account it was handed - admin.js owns that one, and a second
+   * subscription would redraw twice per sign-in - so the page that hands one
+   * over has to start it.
+   */
+  const unstarted = [];
+  for (const file of ['assets/js/admin.js', 'assets/js/home.js', 'assets/js/faq.js', 'assets/js/viewer.js']) {
+    const source = await readFile(new URL(`../${file}`, import.meta.url), 'utf8');
+    const handsOne = /mountPageSettings\(\{[^}]*\baccount\b/.test(source);
+    if (handsOne && !/\.init\(\)/.test(source)) unstarted.push(file);
+  }
+  assert.deepEqual(unstarted, [], 'these pass their own Account to the settings menu and never start it');
 });

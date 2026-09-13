@@ -19,8 +19,10 @@ const folders = { list: () => [], replaceAll() {}, toGeoJSON: () => ({ features:
 
 function fakeClient({ session = null, signOutError = null, functionError = null } = {}) {
   const calls = [];
+  const fired = { handler: null };
   return {
     calls,
+    fired,
     // Signing in starts a folder sync, so the fake needs the data surface too
     // - otherwise "signed in cleanly" fails on a missing method rather than on
     // anything the test is about.
@@ -40,9 +42,18 @@ function fakeClient({ session = null, signOutError = null, functionError = null 
     },
     auth: {
       async getSession() { return { data: { session } }; },
-      onAuthStateChange() { return { data: { subscription: { unsubscribe() {} } } }; },
+      onAuthStateChange(handler) {
+        // Kept so a test can fire an event the way Supabase would. Harmless to
+        // the tests that ignore it: nothing runs unless they reach for it.
+        fired.handler = handler;
+        return { data: { subscription: { unsubscribe() {} } } };
+      },
       async signUp(options) { calls.push(['signUp', options]); return { data: { session: null }, error: null }; },
       async signInWithOtp(options) { calls.push(['signInWithOtp', options]); return { error: null }; },
+      async resetPasswordForEmail(email, options) {
+        calls.push(['resetPasswordForEmail', email, options]);
+        return { error: null };
+      },
       async signInWithOAuth(options) { calls.push(['signInWithOAuth', options]); return { error: null }; },
       async updateUser(attributes, options) {
         calls.push(['updateUser', attributes, options]);
@@ -880,4 +891,134 @@ test('account: being told an address already exists is not told to check the inb
   const account = new Account(folders, { client: async () => client, configured: () => true });
   await account.signUp('taken@example.com', 'hunter2');
   assert.doesNotMatch(account.message, /spam|junk|check your email/i);
+});
+
+/* ------------------------------------------------- forgetting the password */
+
+/*
+ * There was no way back in at all.
+ *
+ * "Email me a link" signs you in without one, and was the only thing resembling
+ * an answer - but it is labelled as a convenience, so the person who has
+ * actually forgotten theirs has no reason to read it as being for them, and
+ * taking it leaves them signed in with a password they still do not know and
+ * nowhere to set one. Reported as the plain question: what if someone forgot
+ * their password too?
+ */
+test('account: a reset link is sent, and told where to come back to', async () => {
+  const client = fakeClient();
+  const account = new Account(folders, { client: async () => client, configured: () => true });
+  withHash('');
+
+  await account.resetPassword('  A@Example.com  ');
+
+  const [name, email, options] = client.calls.at(-1);
+  assert.equal(name, 'resetPasswordForEmail');
+  // Trimmed and lowercased, like every other address this file handles.
+  assert.equal(email, 'a@example.com');
+  assert.equal(options.redirectTo, 'https://app.halfstop.app/?m=x',
+    'the reset link would land on the project Site URL rather than back here');
+});
+
+test('account: the reset says the same thing whether or not the address exists', async () => {
+  /*
+   * Deliberate. A different answer for a registered address turns this form
+   * into a way to ask whether somebody has an account here, so the wording is
+   * conditional and the test pins it that way - otherwise somebody later reads
+   * the vagueness as sloppiness and "fixes" it into a disclosure.
+   */
+  const client = fakeClient();
+  const account = new Account(folders, { client: async () => client, configured: () => true });
+  withHash('');
+
+  await account.resetPassword('nobody@example.com');
+  assert.match(account.message, /^If nobody@example\.com has an account/);
+});
+
+test('account: a reset needs an address before it needs anything else', async () => {
+  const client = fakeClient();
+  const account = new Account(folders, { client: async () => client, configured: () => true });
+  withHash('');
+
+  await assert.rejects(() => account.resetPassword('   '), /Enter your email address/);
+  assert.equal(client.calls.length, 0, 'it asked the server about an empty address');
+});
+
+test('account: a new password has to be long enough to be one', async () => {
+  const client = fakeClient();
+  const account = new Account(folders, { client: async () => client, configured: () => true });
+  withHash('');
+
+  await assert.rejects(() => account.setPassword('short'), /at least 8/);
+  assert.equal(client.calls.length, 0, 'it sent a password the server would only reject');
+
+  await account.setPassword('long enough to count');
+  const [name, attributes] = client.calls.at(-1);
+  assert.equal(name, 'updateUser');
+  assert.equal(attributes.password, 'long enough to count');
+});
+
+test('account: setting the password ends the recovery, and says so', async () => {
+  const client = fakeClient();
+  const account = new Account(folders, { client: async () => client, configured: () => true });
+  withHash('');
+
+  account.recovering = true;
+  await account.setPassword('long enough to count');
+
+  assert.equal(account.recovering, false, 'the panel would keep asking for a new password');
+  assert.equal(account.status, 'signed-in');
+  assert.match(account.message, /Password changed/);
+});
+
+test('account: arriving on a reset link asks for a password, not a welcome', async () => {
+  /*
+   * Supabase exchanges a recovery link for an ordinary session and fires
+   * PASSWORD_RECOVERY. Without the flag the panel would simply show somebody
+   * signed in and never ask for the new password - which leaves them exactly
+   * where they started the next time the session lapses, having used the one
+   * link they were sent.
+   */
+  const client = fakeClient();
+  const account = new Account(folders, { client: async () => client, configured: () => true });
+  withHash('');
+  await account.init();
+
+  client.fired.handler('PASSWORD_RECOVERY', { user: { id: 'u1', email: 'a@example.com' } });
+
+  assert.equal(account.recovering, true);
+  assert.equal(account.status, 'signed-in');
+  assert.match(account.message, /Choose a new password/);
+});
+
+test('account: the sign-in that comes with a reset link does not cancel it', async () => {
+  /*
+   * The recovery exchange emits SIGNED_IN as well, and the order is not
+   * promised. If SIGNED_IN is allowed to overwrite the state, the new-password
+   * form disappears before it is seen and the panel says nothing at all about
+   * why this person is here.
+   */
+  const client = fakeClient();
+  const account = new Account(folders, { client: async () => client, configured: () => true });
+  withHash('');
+  await account.init();
+
+  client.fired.handler('PASSWORD_RECOVERY', { user: { id: 'u1' } });
+  client.fired.handler('SIGNED_IN', { user: { id: 'u1' } });
+
+  assert.equal(account.recovering, true, 'the new-password form vanished before it could be used');
+  assert.match(account.message, /Choose a new password/);
+});
+
+test('account: signing out clears a half-finished reset', async () => {
+  const client = fakeClient();
+  const account = new Account(folders, { client: async () => client, configured: () => true });
+  withHash('');
+  await account.init();
+
+  client.fired.handler('PASSWORD_RECOVERY', { user: { id: 'u1' } });
+  client.fired.handler('SIGNED_OUT', null);
+
+  assert.equal(account.recovering, false, 'an abandoned reset would follow the account around');
+  assert.equal(account.status, 'signed-out');
 });

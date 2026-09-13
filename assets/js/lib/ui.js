@@ -93,7 +93,7 @@ export function initTheme(button) {
 const ICON_SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
 const ICON_MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>';
 
-/** Transient message stack anchored over the map. */
+/** Transient message stack, anchored over the map or fixed to the screen. */
 /**
  * Toasts, with repeats collapsed.
  *
@@ -105,6 +105,29 @@ const ICON_MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
  */
 export function createToaster(container) {
   const live = new Map();   // message -> { node, count, badge, timer }
+
+  /*
+   * Toasts need a stack to sit in, and only the map ever had one.
+   *
+   * map.html carries <div class="toast-stack" id="toasts"> and hands it
+   * straight here. Every other page handed document.body, so each toast was
+   * appended to the end of the document - no position, no z-index, nothing
+   * holding it on screen - and a failed sign-in on the landing page put its
+   * error a full page-scroll below the fold. It was reported as no error
+   * message at all, which is what it looked like.
+   *
+   * So a container that is not already a stack gets one made inside it. Found
+   * first rather than always created, because two toasters on one page (admin
+   * builds its own beside the panel's) would otherwise each get a stack and
+   * the second would sit on top of the first.
+   */
+  const stack = container?.classList?.contains('toast-stack')
+    ? container
+    : (container?.querySelector?.('.toast-stack') || (() => {
+      const made = el('div', { class: 'toast-stack' });
+      container?.append(made);
+      return made;
+    })());
 
   return function toast(message, { tone = 'info', timeout = 6000 } = {}) {
     const existing = live.get(message);
@@ -138,7 +161,7 @@ export function createToaster(container) {
       }),
     ]);
 
-    container.append(entry.node);
+    stack.append(entry.node);
     live.set(message, entry);
     if (timeout) entry.timer = setTimeout(dismiss, timeout);
     return entry.node;

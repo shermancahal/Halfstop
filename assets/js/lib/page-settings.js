@@ -66,6 +66,15 @@ const NO_FOLDERS = {
  * @returns {{account: object, panel: object, menu: object|null}}
  */
 export function mountPageSettings({ toast, account = null, rows = [] } = {}) {
+  /*
+   * Whether this function owns the account's lifecycle.
+   *
+   * admin.js builds its own and calls init() itself; a second call there would
+   * subscribe to onAuthStateChange twice and redraw twice per sign-in. A page
+   * that passes nothing has nobody else to do it, which is the bug this
+   * distinguishes - see the init() call at the bottom.
+   */
+  const ours = !account;
   const who = account || new Account(NO_FOLDERS);
 
   const panel = createAccountPanel({
@@ -96,8 +105,39 @@ export function mountPageSettings({ toast, account = null, rows = [] } = {}) {
   who.addEventListener('change', () => {
     panel.render();
     if (menu) menu.paint();
+
+    /*
+     * A password reset link lands on a closed gear.
+     *
+     * Supabase signs the link's holder in with a recovery session and fires
+     * PASSWORD_RECOVERY, and without this the page looks exactly as it did
+     * before they clicked - which is how somebody concludes the link is broken
+     * and asks for another one. Opening it puts the new-password form in front
+     * of them, which is the only reason they are here.
+     */
+    if (who.recovering && menu) menu.setOpen(true);
   });
   panel.render();
+
+  /*
+   * Nothing above works until this runs.
+   *
+   * init() is where the existing session is read, where the plan is fetched,
+   * where the provider buttons are decided, and where onAuthStateChange is
+   * subscribed. Without it the panel can still hand credentials to Supabase -
+   * and did, successfully - but never hears that it worked, so a correct
+   * password redraws nothing and reads as a dead button.
+   *
+   * Attached after the change listener above on purpose, so the first status
+   * it sets is one somebody is already listening for.
+   */
+  if (ours) {
+    who.init().catch((error) => {
+      // Reported rather than swallowed: an account service that will not start
+      // is the difference between "sign in" and "sign in, but it cannot work".
+      toast?.(error?.message || 'The account service did not start.', { tone: 'error' });
+    });
+  }
 
   return { account: who, panel, menu };
 }

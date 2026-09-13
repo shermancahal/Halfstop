@@ -40,6 +40,7 @@ export function createAccountPanel({ container, account, folders = null, toast }
    */
   let edit = null;
   let emailDraft = '';
+  let changing = false;
 
   function profileForm() {
     const draft = edit;
@@ -79,6 +80,56 @@ export function createAccountPanel({ container, account, folders = null, toast }
     }, [name, email, el('div', { class: 'account-actions' }, [save, cancel])]);
   }
 
+  /*
+   * Choosing a password: after a reset link, or deliberately while signed in.
+   *
+   * Typed twice, because this is the one field in the app whose value is
+   * hidden as it is typed and cannot be checked afterwards - the cost of a
+   * typo here is being locked out by the very thing that was meant to let you
+   * back in.
+   */
+  function passwordForm({ onDone }) {
+    const first = el('input', {
+      type: 'password', placeholder: 'New password', autocomplete: 'new-password',
+      'aria-label': 'New password',
+    });
+    const again = el('input', {
+      type: 'password', placeholder: 'New password again', autocomplete: 'new-password',
+      'aria-label': 'Confirm new password',
+    });
+    const save = el('button', {
+      class: 'button button-primary button-small', type: 'submit', text: 'Save password',
+    });
+    const cancel = el('button', {
+      class: 'button button-ghost button-small', type: 'button', text: 'Cancel',
+      onclick: () => { changing = false; render(); },
+    });
+    const busy = (on) => { for (const node of [first, again, save, cancel]) node.disabled = on; };
+
+    return el('form', {
+      class: 'account-form',
+      onsubmit: async (event) => {
+        event.preventDefault();
+        if (first.value !== again.value) {
+          toast('Those two passwords are not the same.', { tone: 'error' });
+          return;
+        }
+        busy(true);
+        try {
+          await account.setPassword(first.value);
+          changing = false;
+          toast('Password changed.', { tone: 'ok' });
+          onDone?.();
+        } catch (error) {
+          toast(error.message, { tone: 'error', timeout: 10000 });
+        } finally {
+          busy(false);
+        }
+        render();
+      },
+    }, [first, again, el('div', { class: 'account-actions' }, [save, cancel])]);
+  }
+
   function render() {
     if (!container) return;
     container.replaceChildren();
@@ -107,6 +158,29 @@ export function createAccountPanel({ container, account, folders = null, toast }
         name && user.email ? el('div', { class: 'account-email', text: user.email }) : null,
       ]);
 
+      /*
+       * Somebody who followed a reset link is here for one thing.
+       *
+       * Shown before the profile, the sync line and the buttons, because they
+       * arrived holding a link and every other control is a distraction from
+       * the reason they clicked it. No Cancel out of this one either - the
+       * account is reachable again either way, but leaving without setting a
+       * password means the next visit starts at the same dead end.
+       */
+      if (account.recovering) {
+        container.append(
+          who,
+          el('p', { class: 'hint', style: 'margin-bottom:9px', text: 'Choose a new password for this account.' }),
+          passwordForm({ onDone: () => toast('You are signed in.', { tone: 'ok' }) }),
+        );
+        return;
+      }
+
+      if (changing) {
+        container.append(who, passwordForm({}));
+        return;
+      }
+
       if (edit) {
         container.append(who, profileForm());
         if (account.message) container.append(el('p', { class: 'hint', text: account.message }));
@@ -121,6 +195,20 @@ export function createAccountPanel({ container, account, folders = null, toast }
         },
       });
       withIcon(editButton, icons.pencil);
+
+      /*
+       * Changing it on purpose, which the reset flow also needs to exist.
+       *
+       * Somebody who signed in with an emailed link has no password at all, or
+       * has one they have forgotten and just worked around. Without this the
+       * only route to a known password is to sign out and ask for a reset -
+       * which means deliberately locking yourself out to fix being locked out.
+       */
+      const passwordButton = el('button', {
+        class: 'button button-ghost button-small', type: 'button', text: 'Change password',
+        onclick: () => { changing = true; render(); },
+      });
+      withIcon(passwordButton, icons.key);
 
       const signOut = el('button', {
         class: 'button button-ghost button-small', type: 'button', text: 'Sign out',
@@ -160,7 +248,7 @@ export function createAccountPanel({ container, account, folders = null, toast }
       });
       withIcon(deleteAccount, icons.trash);
 
-      container.append(who, editButton);
+      container.append(who, el('div', { class: 'account-actions' }, [editButton, passwordButton]));
 
       /*
        * Syncing, only where there is something to sync.
@@ -208,7 +296,9 @@ export function createAccountPanel({ container, account, folders = null, toast }
       oninput: (event) => { emailDraft = event.target.value; },
     });
     const password = el('input', { type: 'password', placeholder: 'Password', autocomplete: 'current-password', 'aria-label': 'Password' });
-    const busy = (on) => { for (const node of [email, password, ...buttons]) node.disabled = on; };
+    // `forgot` is declared below; busy only ever runs from a click, long after.
+    // It belongs in here - without it a double tap sends two reset emails.
+    const busy = (on) => { for (const node of [email, password, ...buttons, forgot]) node.disabled = on; };
 
     /*
      * Say the thing that just happened where somebody will see it.
@@ -266,6 +356,27 @@ export function createAccountPanel({ container, account, folders = null, toast }
     ];
 
     /*
+     * The way back in, said in the words somebody would actually search for.
+     *
+     * "Email me a link" already signs you in without a password and is sitting
+     * right there, but it is labelled as a shortcut, so the person who has
+     * forgotten theirs has no reason to read it as the answer - and taking it
+     * leaves them signed in with a password they still do not know.
+     *
+     * Its own line under the buttons rather than a fourth button beside them:
+     * this is the thing you look for when the three above have failed, and it
+     * should not compete with them until then.
+     */
+    const forgot = el('button', {
+      class: 'button button-ghost button-small account-forgot', type: 'button',
+      text: 'Forgot your password?',
+      onclick: () => run(async () => {
+        await account.resetPassword(emailDraft);
+        announce('ok');
+      }),
+    });
+
+    /*
      * Apple and Google first, and above the form rather than under it.
      *
      * Not decoration: the emailed link is the part that has broken repeatedly,
@@ -316,6 +427,7 @@ export function createAccountPanel({ container, account, folders = null, toast }
       email,
       password,
       el('div', { class: 'account-actions' }, buttons),
+      forgot,
     );
     if (account.message) container.append(el('p', { class: 'hint', style: 'margin-top:9px', text: account.message }));
   }

@@ -50,6 +50,9 @@ export const icons = {
   galaxy: svg('<path d="M4 19C7 13 12 8 20 5"/><path d="M6.5 5.5h.01"/><path d="M10 8.5h.01"/><path d="M16.5 15h.01"/><path d="M19.5 11h.01"/>'),
   crosshair: svg('<circle cx="12" cy="12" r="8"/><path d="M12 2v3"/><path d="M12 19v3"/><path d="M2 12h3"/><path d="M19 12h3"/><circle cx="12" cy="12" r="1.6"/>'),
   pencil: svg('<path d="M12.5 20H21"/><path d="M16.4 3.6a2.1 2.1 0 0 1 3 3L7.5 18.5 3.5 20l1.5-4Z"/>'),
+  /* A key, for the password. Distinct from the pencil beside it: both buttons
+     edit the account, and two pencils would say they do the same thing. */
+  key: svg('<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.8 12.2 8.7-8.7"/><path d="m17 6 2.5 2.5"/><path d="M14.5 8.5 17 11"/>'),
   note: svg('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z"/><path d="M14 2v6h6"/><path d="M8.5 13.5h7"/><path d="M8.5 17h4.5"/>'),
   image: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="m4 18 5-5 4 4 2.5-2.5L20 18"/>'),
   ruler: svg('<path d="M3.5 14.5 14.5 3.5a1.5 1.5 0 0 1 2.1 0l3.9 3.9a1.5 1.5 0 0 1 0 2.1L9.5 20.5a1.5 1.5 0 0 1-2.1 0l-3.9-3.9a1.5 1.5 0 0 1 0-2.1Z"/><path d="m7 11 2 2"/><path d="m10 8 2 2"/><path d="m13 5 2 2"/>'),

@@ -229,6 +229,15 @@ export class Account extends EventTarget {
      */
     this.providers = null;
     this.status = configured() ? 'signed-out' : 'unavailable';
+    /*
+     * Whether this session came from a password reset link.
+     *
+     * A recovery link produces an ordinary signed-in session, so without this
+     * the panel cannot tell somebody who arrived to choose a new password from
+     * somebody who simply signed in. Cleared by setPassword and by signing
+     * out, so a half-finished reset does not follow the account around.
+     */
+    this.recovering = false;
     this.message = '';
     this.syncing = false;
     this.lastSyncAt = null;
@@ -309,11 +318,30 @@ export class Account extends EventTarget {
 
     client.auth.onAuthStateChange((event, session) => {
       this.user = session?.user || null;
+      /*
+       * A recovery link signs somebody in, which is not what they came for.
+       *
+       * Supabase exchanges the link for an ordinary session and fires this
+       * event, so without the flag the panel would simply show them signed in
+       * and never ask for the new password - leaving them right back here the
+       * next time the session lapses. The flag is what makes the panel put the
+       * form up, and setPassword() is what clears it.
+       *
+       * Checked before SIGNED_IN because the recovery exchange emits both, and
+       * whichever arrives second must not undo the first.
+       */
+      if (event === 'PASSWORD_RECOVERY') {
+        this.recovering = true;
+        this.setStatus('signed-in', 'Choose a new password.');
+        return;
+      }
       if (event === 'SIGNED_IN') {
+        if (this.recovering) return;
         this.setStatus('signed-in');
         this.refreshPlan();
         this.sync();
       } else if (event === 'SIGNED_OUT') {
+        this.recovering = false;
         this.setStatus('signed-out');
       }
     });
@@ -375,6 +403,57 @@ export class Account extends EventTarget {
     const client = await this.getClient();
     const { error } = await client.auth.signInWithPassword({ email, password });
     if (error) throw new Error(error.message);
+    return true;
+  }
+
+  /**
+   * The way back in for somebody who does not know their password.
+   *
+   * There was no way back in at all. "Email me a link" is one - it signs you
+   * in without a password - but it is labelled as a convenience and reads as
+   * one, so the person who has actually forgotten theirs has no reason to
+   * think it is for them. And even taking it, they arrive signed in with a
+   * password they still do not know and no screen anywhere that sets one.
+   *
+   * So this sends Supabase's recovery mail, and `setPassword` below finishes
+   * the job when they come back.
+   */
+  async resetPassword(email) {
+    const address = String(email || '').trim().toLowerCase();
+    if (!address) throw new Error('Enter your email address first.');
+    const client = await this.getClient();
+    const { error } = await client.auth.resetPasswordForEmail(address, { redirectTo: returnTo() });
+    if (error) throw new Error(error.message);
+    /*
+     * Said the same way whether or not the address has an account.
+     *
+     * Supabase answers this call identically either way, on purpose: a
+     * different answer for a registered address turns the form into a way to
+     * ask whether somebody has an account here. Worth saying out loud so the
+     * vagueness is not mistaken for carelessness and 'fixed' later.
+     */
+    this.setStatus('signed-out',
+      `If ${address} has an account, a reset link is on its way. Open it on this device, `
+      + 'and check spam if it is not there.');
+    return true;
+  }
+
+  /**
+   * Set the password, both for a reset and for somebody already signed in.
+   *
+   * One method rather than two because Supabase makes no distinction: a
+   * recovery link produces an ordinary session with a flag on it, and the call
+   * that sets the password is the same call either way.
+   */
+  async setPassword(password) {
+    const next = String(password || '');
+    if (next.length < 8) throw new Error('Use at least 8 characters.');
+    const client = await this.getClient();
+    const { data, error } = await client.auth.updateUser({ password: next });
+    if (error) throw new Error(error.message);
+    if (data?.user) this.user = data.user;
+    this.recovering = false;
+    this.setStatus('signed-in', 'Password changed. You are signed in.');
     return true;
   }
 

@@ -818,6 +818,19 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
   background: var(--surface); border: 1px solid var(--line-strong);
   border-radius: var(--radius-md, 8px); box-shadow: var(--shadow-lg, 0 10px 30px rgba(0, 0, 0, .18));
   text-align: left;
+  /*
+   * The panel says what colour its text is, rather than inheriting it.
+   *
+   * This hangs inside .site-header, which sets color: var(--chrome-ink) so the
+   * brand and the icons read against the dark bar. Every element in here that
+   * did not name its own colour inherited that instead - near-white ink on the
+   * panel's white surface. It was reported as invisible sign-in text in light
+   * mode, and it was: #f2ece3 on #fff.
+   *
+   * Set on the panel rather than patched onto the one element that showed it,
+   * because the next thing added to this panel would have inherited it too.
+   */
+  color: var(--ink);
 }
 .account-drop[hidden] { display: none; }
 
@@ -856,7 +869,55 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 .settings-account { margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--line); }
 .settings-account #account-panel { margin-top: -2px; }
 /* Account errors quote a URL, and a URL does not break at spaces. */
+/*
+ * The muted line, on every page rather than only the map.
+ *
+ * This lived in viewer.css, which only map.html loads, so the sign-in
+ * explanation and every account message rendered with no colour and no size
+ * off the map. Same failure as the settings panel had: shared markup, shared
+ * JavaScript, a stylesheet only one page loads.
+ */
+.hint { font-size: .81rem; color: var(--ink-3); margin: 0; }
 #account-panel .hint { overflow-wrap: anywhere; }
+
+/* The way back in, under the three buttons rather than beside them: it is what
+   you look for once those have failed, and should not compete until then. */
+.account-forgot { margin-top: 8px; padding-left: 0; padding-right: 0; border-color: transparent; text-decoration: underline; }
+.account-forgot:hover { border-color: transparent; }
+
+/* --------------------------------------------------------------- toasts
+ * What the app says out loud, wherever it says it.
+ *
+ * Also viewer.css-only until now, and worse than invisible: createToaster
+ * appends a node whether or not anything styles it, so a failed sign-in on the
+ * landing page appended a bare line of text to the very bottom of a long
+ * document, below the fold, with no background and no position. The error was
+ * always produced. Nobody could ever see it.
+ *
+ * Fixed rather than absolute, because off the map there is no positioned shell
+ * to hang from and an absolute stack would sit at the foot of the document
+ * instead of the foot of the screen. viewer.css puts the map back to absolute,
+ * inside the shell it has always used.
+ */
+.toast-stack {
+  position: fixed; bottom: calc(34px + var(--safe-bottom, 0px)); left: 50%;
+  transform: translateX(-50%); z-index: 70;
+  display: grid; gap: 8px; width: min(430px, calc(100% - 32px));
+}
+.toast {
+  background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--clay);
+  border-radius: var(--radius-md, 8px); box-shadow: var(--shadow-lg, 0 10px 30px rgba(0, 0, 0, .18));
+  padding: 10px 14px; font-size: .86rem; display: flex; gap: 10px; align-items: flex-start;
+  color: var(--ink);
+}
+.toast.is-error { border-left-color: #c0392b; }
+.toast.is-ok { border-left-color: var(--pine); }
+.toast button { margin-left: auto; }
+.toast-count {
+  flex: none; padding: 1px 6px; border-radius: 999px;
+  font-size: .7rem; font-weight: 700; font-variant-numeric: tabular-nums;
+  background: rgba(0, 0, 0, .1); color: inherit;
+}
 /* One plan, named. The sentence about it is in the FAQ, not the menu. */
 .plan-name { font-size: .9rem; font-weight: 600; color: var(--ink); }
 
