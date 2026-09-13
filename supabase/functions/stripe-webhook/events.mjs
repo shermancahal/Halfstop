@@ -82,6 +82,33 @@ export function readEvent(event, { now = Date.now() } = {}) {
 
   const status = String(object.status || '');
   if (!ACTIVE.has(status)) {
+    /*
+     * A subscription only just created, not active yet, has nothing to end.
+     *
+     * Stripe sends `created` with status `incomplete` the moment a checkout
+     * begins and `updated` with `active` when the card confirms, and the two
+     * arrive within the same millisecond, on separate function instances, in
+     * whichever order they happen to land. Reading the first as a
+     * cancellation means a paid subscription whose events arrive the wrong way
+     * round expires itself: the grant writes, the end overwrites it, and
+     * somebody who has just paid is on Free.
+     *
+     * Not hypothetical. It happened on the first real test checkout, and only
+     * the order saved it - the end ran first, against a row that did not exist
+     * yet, and matched nothing. The other order was equally likely.
+     *
+     * Ending belongs to a subscription that stopped: `deleted`, or an
+     * `updated` that left the active set. A creation that never confirms
+     * simply never grants, which needs no event of its own.
+     */
+    if (type === 'customer.subscription.created') {
+      return {
+        action: 'ignore',
+        status,
+        why: `a subscription created as ${status || 'status-less'} has nothing to end`,
+      };
+    }
+
     // Ended now rather than nulled: null means never expires, which is the
     // opposite of what an unpaid or cancelled subscription means.
     return {

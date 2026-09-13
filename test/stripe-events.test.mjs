@@ -88,6 +88,38 @@ test('stripe: statuses that are not paid-up end it too', () => {
   }
 });
 
+test('stripe: a subscription created before the card confirms is not an ending', () => {
+  /*
+   * Stripe sends created/incomplete and updated/active in the same
+   * millisecond, on separate instances, in either order. Reading the creation
+   * as a cancellation lets a subscription somebody has just paid for expire
+   * itself whenever the two land the wrong way round - which is a coin toss.
+   */
+  const read = readEvent({
+    ...subscription({ status: 'incomplete' }),
+    type: 'customer.subscription.created',
+  }, { now: NOW });
+  assert.equal(read.action, 'ignore');
+});
+
+test('stripe: a creation that is already active still grants', () => {
+  const read = readEvent({
+    ...subscription(),
+    type: 'customer.subscription.created',
+  }, { now: NOW });
+  assert.equal(read.action, 'grant');
+  assert.equal(read.userId, 'u1');
+});
+
+test('stripe: an update that leaves the active set still ends it', () => {
+  // The narrowing above is for creations only. A live subscription going
+  // unpaid must still end, or a cancellation never takes effect.
+  for (const status of ['canceled', 'unpaid', 'incomplete_expired', 'paused']) {
+    const read = readEvent(subscription({ status }), { now: NOW });
+    assert.equal(read.action, 'end', `${status} should still end it`);
+  }
+});
+
 test('stripe: a card being retried does not switch the maps off', () => {
   // past_due is somebody Stripe is still retrying and still treats as a
   // customer. Cutting them off mid-trip over a retry that usually succeeds is
