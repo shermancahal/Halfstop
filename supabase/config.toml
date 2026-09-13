@@ -18,6 +18,13 @@ verify_jwt = true
 [functions.invite-to-folder]
 verify_jwt = true
 
+# Tells the account holder their password just changed. The address it writes
+# to is read from the verified token and never from the body - a function
+# holding a mail key that sends wherever the request says is an open relay
+# wearing this domain - so the gateway check is what makes it safe to have.
+[functions.password-changed]
+verify_jwt = true
+
 # Stripe has no session either, so the webhook authorises its own caller with
 # the signature on the request. Everything protecting it is in
 # stripe-webhook/signature.mjs, which is plain JavaScript and unit tested.

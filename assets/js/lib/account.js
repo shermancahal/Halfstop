@@ -454,6 +454,30 @@ export class Account extends EventTarget {
     if (data?.user) this.user = data.user;
     this.recovering = false;
     this.setStatus('signed-in', 'Password changed. You are signed in.');
+
+    /*
+     * Tell the address that the password changed - and never let that failing
+     * look like the change failing.
+     *
+     * The change has already happened by this line. Whoever is holding this
+     * session knows; the person who needs telling is the account holder who
+     * did not do it, and they are not at this screen. Supabase sends the reset
+     * link and then nothing, so the notice is ours to send.
+     *
+     * Deliberately not awaited into the result and deliberately swallowed: a
+     * mail provider having a bad minute must not put an error in front of
+     * somebody whose password is already changed, because the obvious response
+     * to that error is to try again with a password that is now the old one.
+     */
+    client.functions.invoke('password-changed', { body: {} })
+      .then(({ data: sent, error: sendError }) => {
+        const reason = sendError?.message || (sent && sent.sent === false ? sent.reason : '');
+        if (reason) console.warn('[account] password changed, notice not sent:', reason);
+      })
+      .catch((sendError) => {
+        console.warn('[account] password changed, notice not sent:', sendError?.message || sendError);
+      });
+
     return true;
   }
 

@@ -953,9 +953,63 @@ test('account: a new password has to be long enough to be one', async () => {
   assert.equal(client.calls.length, 0, 'it sent a password the server would only reject');
 
   await account.setPassword('long enough to count');
-  const [name, attributes] = client.calls.at(-1);
-  assert.equal(name, 'updateUser');
-  assert.equal(attributes.password, 'long enough to count');
+  // Found by name rather than taken from the end: setting a password also
+  // fires the notice email, so the last call is no longer the update.
+  const update = client.calls.find(([name]) => name === 'updateUser');
+  assert.ok(update, 'the password was never sent to the server');
+  assert.equal(update[1].password, 'long enough to count');
+});
+
+/* ------------------------------------- telling the address it changed */
+
+/*
+ * Supabase sends the reset link and then nothing.
+ *
+ * The change itself is silent, so the one person who most needs to know it
+ * happened - the account holder who did not do it - finds out when they can no
+ * longer sign in. Whoever is holding the session already knows; they are not
+ * who this is for.
+ */
+test('account: changing the password tells the address it changed', async () => {
+  const client = fakeClient();
+  const account = new Account(folders, { client: async () => client, configured: () => true });
+  withHash('');
+
+  await account.setPassword('long enough to count');
+  // The notice is fired without being awaited, so that a slow mail provider
+  // cannot hold up the panel. One turn is enough for it to have been asked for.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const notice = client.calls.find(([name, fn]) => name === 'invoke' && fn === 'password-changed');
+  assert.ok(notice, 'nothing told the account holder their password changed');
+
+  /*
+   * And it carries no address.
+   *
+   * The function reads the address off the verified token. A body naming one
+   * is a body somebody else can write, and a function holding a mail key that
+   * sends wherever the request says is an open relay wearing this domain. This
+   * is the client half of keeping that true.
+   */
+  const body = notice[2]?.body || {};
+  assert.deepEqual(Object.keys(body), [], 'the notice named an address it should not have');
+});
+
+test('account: a notice that cannot be sent does not undo the password', async () => {
+  /*
+   * The password has already changed by the time the notice is attempted. An
+   * error surfaced here would report failure for something that succeeded -
+   * and the obvious response to that error is to try again with a password
+   * that is now the old one.
+   */
+  const client = fakeClient({ functionError: 'Resend is having a bad minute' });
+  const account = new Account(folders, { client: async () => client, configured: () => true });
+  withHash('');
+
+  await assert.doesNotReject(() => account.setPassword('long enough to count'));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(account.status, 'signed-in');
+  assert.match(account.message, /Password changed/);
 });
 
 test('account: setting the password ends the recovery, and says so', async () => {
