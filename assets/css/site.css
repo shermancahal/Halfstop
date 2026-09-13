@@ -762,3 +762,104 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 .ticket-body { margin: 0 0 10px; font-size: .92rem; color: var(--ink-2); white-space: pre-wrap; }
 .ticket-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .ticket-actions input { flex: 1 1 220px; min-width: 0; }
+
+/* ==========================================================================
+   The settings menu, and the account inside it
+   --------------------------------------------------------------------------
+   Here rather than in viewer.css because the gear is on every page now, and
+   viewer.css is loaded by the map alone. It lived there while the map was the
+   only page with a header control, and the first thing that happened when the
+   menu was added elsewhere was a sign-in form rendering with no panel around
+   it, spilling down the landing page over the headline.
+
+   The map still overrides some of this — a .button-with-icon inside a popup is
+   smaller — and can, because viewer.css loads after this file.
+   ========================================================================== */
+/* A mark and a word. Used wherever three buttons have to share a row that is
+   narrower than three words — which on a phone is most rows. */
+.button-with-icon,
+.editor-folder-actions .button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  min-width: 0; white-space: nowrap;
+}
+.editor-folder-actions { flex-wrap: wrap; }
+.editor-folder-actions .button { min-height: 36px; padding: 6px 8px; }
+.button-with-icon svg,
+.editor-folder-actions .button svg { width: 14px; height: 14px; flex: none; }
+.button-with-icon span,
+.editor-folder-actions .button span {
+  overflow: hidden; text-overflow: ellipsis;
+}
+.button.is-danger { color: var(--rust, #a33); }
+.button.is-danger:hover { border-color: var(--rust, #a33); background: var(--rust-soft, rgba(170, 51, 51, .08)); }
+#account-panel input {
+  width: 100%; font: inherit; font-size: .88rem; color: var(--ink); margin-bottom: 7px;
+  background: var(--surface); border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm); padding: 8px 9px;
+}
+.account-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+/*
+ * One thing per line. Nothing here is nowrap: an address that does not fit
+ * wraps rather than ending in "sherm...", because a menu has the height a
+ * header never did.
+ */
+.account-who { min-width: 0; }
+.account-name { font-size: .92rem; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.account-email { font-size: .8rem; color: var(--ink-2); overflow-wrap: anywhere; }
+.account-edit { margin: 6px 0 8px; padding-left: 0; }
+.account-meta { font-size: .76rem; color: var(--ink-3); margin-bottom: 8px; }
+.account-actions .button-with-icon { gap: 5px; }
+.account-actions .button-with-icon svg { width: 14px; height: 14px; }
+.account-form { margin-top: 8px; }
+
+.account-drop {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 60;
+  width: min(300px, calc(100vw - 24px)); padding: 13px 14px;
+  background: var(--surface); border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md, 8px); box-shadow: var(--shadow-lg, 0 10px 30px rgba(0, 0, 0, .18));
+  text-align: left;
+}
+.account-drop[hidden] { display: none; }
+
+/* Units and display. One button, because distance and temperature are two
+   different questions and a single mi/ft toggle only ever answered one. */
+.settings-menu { position: relative; }
+/*
+ * Capped and scrollable, because this menu now carries the sign-in form as
+ * well as three rows of choices - about 630px of it on a signed-out phone,
+ * which is taller than a short landscape window.
+ */
+.settings-drop {
+  width: min(268px, calc(100vw - 24px)); padding: 12px 13px;
+  max-height: min(78vh, 640px); overflow-y: auto; overscroll-behavior: contain;
+}
+.settings-row + .settings-row { margin-top: 13px; }
+.settings-label {
+  font-size: .7rem; font-weight: 650; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--ink-3); margin-bottom: 6px;
+}
+/* Sized to the row, not to two: the theme offers three. */
+.settings-choices { display: grid; grid-template-columns: repeat(var(--choices, 2), minmax(0, 1fr)); gap: 6px; }
+.settings-choice {
+  font: inherit; font-size: .8rem; padding: 7px 6px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--ink-2);
+  min-height: 36px;
+}
+.settings-choice:hover { border-color: var(--line-strong); color: var(--ink); }
+/* The theme row is three marks; the word is on the tooltip. */
+.settings-choice svg { width: 18px; height: 18px; display: block; margin: 0 auto; stroke-width: 1.9; }
+.settings-choice.is-on {
+  border-color: transparent; background: var(--clay-soft); color: var(--clay-2); font-weight: 600;
+}
+/* The account, under the same button as the other preferences. */
+.settings-account { margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--line); }
+.settings-account #account-panel { margin-top: -2px; }
+/* Account errors quote a URL, and a URL does not break at spaces. */
+#account-panel .hint { overflow-wrap: anywhere; }
+/* One plan, named. The sentence about it is in the FAQ, not the menu. */
+.plan-name { font-size: .9rem; font-weight: 600; color: var(--ink); }
+
+/* The one control in the account panel that destroys something, set apart from
+   the two that do not. */
+.account-danger { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }

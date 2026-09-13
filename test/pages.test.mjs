@@ -187,3 +187,41 @@ test('pages: no preload carries a cache-busting query the import will not', asyn
     }
   }
 });
+
+/*
+ * A page that draws the settings menu has to load the CSS that styles it.
+ *
+ * The menu's markup and its JavaScript were shared across every page before
+ * its stylesheet was: the rules lived in viewer.css, which the map alone
+ * loads, so the panel opened on the landing page as an unstyled column of
+ * inputs spilling down over the headline. Nothing threw, the DOM was correct,
+ * and every test passed.
+ *
+ * Checked by class rather than by filename, because the point is that the
+ * rules arrive, not which file carries them.
+ */
+test('pages: a page with the settings menu loads the CSS that styles it', async () => {
+  const styles = new Map();
+  for (const file of ['assets/css/site.css', 'assets/css/viewer.css']) {
+    styles.set(file, await readFile(new URL(`../${file}`, import.meta.url), 'utf8'));
+  }
+
+  // The classes that make the panel a panel rather than a run of bare elements.
+  const NEEDED = ['.settings-drop', '.account-drop', '.settings-choice', '.settings-label'];
+  const unstyled = [];
+
+  for (const page of PAGES) {
+    const html = await readFile(new URL(`../${page}`, import.meta.url), 'utf8');
+    if (!html.includes('id="settings-panel"')) continue;
+
+    const sheets = [...html.matchAll(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"/g)]
+      .map((match) => match[1]);
+    const css = sheets.map((href) => styles.get(href) || '').join('\n');
+
+    for (const rule of NEEDED) {
+      if (!css.includes(rule)) unstyled.push(`${page} draws the settings menu but no stylesheet it loads defines ${rule}`);
+    }
+  }
+
+  assert.deepEqual(unstyled, [], 'the panel would render unstyled on these pages');
+});
