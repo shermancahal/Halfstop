@@ -2270,6 +2270,65 @@ if (!external) {
 }
 
 /*
+ * Signed in on the map, signed out everywhere else.
+ *
+ * Reported exactly that way, twice. The session was never the problem: it is
+ * in localStorage under supabase-js's own key, on one origin, readable by
+ * every page here. What was missing was anybody reading it - mountPageSettings
+ * built an Account and never called init(), and init() is where getSession()
+ * runs, so the landing page and the help page opened signed out however many
+ * times you had signed in on the map.
+ *
+ * Checked through real storage and the real library rather than a stubbed
+ * client, because the stub is what hid it: a fake that answers getSession()
+ * proves the panel can draw a signed-in card, not that anything asked.
+ * Everything outbound is refused here, so a pass means the session was read
+ * off the device.
+ */
+{
+  const REF = 'smoke';
+  const far = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30;
+  const stored = {
+    access_token: `header.${Buffer.from(JSON.stringify({ sub: 'u-1', exp: far })).toString('base64url')}.sig`,
+    refresh_token: 'r-1', expires_at: far, expires_in: 60 * 60 * 24 * 30, token_type: 'bearer',
+    user: {
+      id: 'u-1', aud: 'authenticated', role: 'authenticated', email: 'sherman@example.com',
+      user_metadata: { display_name: 'Sherman Cahal' }, app_metadata: {},
+      created_at: new Date().toISOString(),
+    },
+  };
+
+  const carried = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await carried.route(`**://${REF}.supabase.co/**`, (route) => route.abort());
+  await carried.addInitScript(([url, key, storageKey, session]) => {
+    window.ABMAP_SUPABASE_URL = url;
+    window.ABMAP_SUPABASE_KEY = key;
+    localStorage.setItem(storageKey, session);
+  }, [`https://${REF}.supabase.co`, 'smoke-anon-key', `sb-${REF}-auth-token`, JSON.stringify(stored)]);
+
+  console.log('\nA session signed in on one page is a session on the next');
+  for (const page of ['index.html', 'faq.html']) {
+    const other = await carried.newPage();
+    await other.goto(new URL(page, MAP_URL).href, { waitUntil: 'domcontentloaded' });
+    await other.waitForFunction(() => document.querySelector('#account-panel .account-name'), null, { timeout: 8000 })
+      .catch(() => {});
+    await other.click('#settings-trigger');
+    await other.waitForTimeout(400);
+    const seen = await other.evaluate(() => {
+      const panel = document.querySelector('#account-panel');
+      return {
+        name: panel?.querySelector('.account-name')?.textContent.trim() || null,
+        asksAgain: Boolean(panel?.querySelector('input[type="password"]')),
+      };
+    });
+    check(`${page} knows who is signed in`, seen.name, 'Sherman Cahal');
+    check(`${page} does not ask again`, seen.asksAgain, false);
+    await other.close();
+  }
+  await carried.close();
+}
+
+/*
  * The Milky Way band on the map, and the control that moves it.
  *
  * The maths for this has been in sky.js and under test for a while; what was
