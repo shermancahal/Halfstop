@@ -2224,32 +2224,38 @@ if (!external) {
   });
   // First, so that when the card is wrong the complaint under it is in the log.
   check('a clean sign-in has nothing to complain about', card.hints, []);
-  check('who, then the two account edits, then the sync line, then the buttons',
-    card.rows, ['account-who', 'button', 'button', 'account-meta', 'account-actions', 'account-actions']);
+  /*
+   * Who you are, one way in, and what this session is doing. Nothing else.
+   *
+   * The card carried six controls - edit, change password, sync, sign out,
+   * delete - in a menu people open to change a theme. The two that are about
+   * the account rather than this session now live one level in, behind Edit
+   * profile, and this is the check that the card stayed shallow.
+   */
+  check('the card is who you are, one way in, and this session',
+    card.rows, ['account-who', 'button', 'account-meta', 'account-actions']);
   check('the name is the one typed into the profile', card.name, 'Sherman Cahal');
   check('with the address on its own line under it', card.email, 'sherman@example.com');
   check('and the sync line counts folders', /folders? synced/.test(card.sync || ''), true);
-  check('three buttons, each with a mark',
-    card.buttons, [['Sync now', true], ['Sign out', true], ['Delete account', true]]);
+  check('two buttons, each with a mark',
+    card.buttons, [['Sync now', true], ['Sign out', true]]);
+  check('and nothing that ends the account is a tap away',
+    await signed.evaluate(() => Boolean(document.querySelector('#account-panel .account-danger'))), false);
   /*
-   * Delete is on its own row, below a rule.
+   * The plan is a word. Not a word and a sentence under it.
    *
-   * Apple requires an app offering sign-in to offer this, so it has to be here
-   * - and it is the only control on this card that destroys something and
-   * cannot be undone. Beside Sign out, one row of three, it is a mis-tap. The
-   * separation is the safety, so it is the thing tested rather than its
-   * presence.
+   * There used to be a countdown here, on the grounds that a trial ending
+   * unannounced is a surprise. That sentence still exists - it opens the
+   * upgrade panel, where the thing that stops the clock is directly under it,
+   * which is the place it does some work. In a menu opened to change units it
+   * was only length.
    */
-  const danger = await signed.evaluate(() => {
-    const row = document.querySelector('#account-panel .account-danger');
-    const buttons = [...(row?.querySelectorAll('button') || [])].map((b) => b.textContent.trim());
-    const others = [...document.querySelectorAll('#account-panel .account-actions:not(.account-danger) button')]
-      .map((b) => b.textContent.trim());
-    return { buttons, others, ruled: row ? getComputedStyle(row).borderTopWidth : 'no row' };
-  });
-  check('delete sits apart from the buttons that undo', danger.buttons, ['Delete account']);
-  check('and nothing harmless shares its row', danger.others, ['Sync now', 'Sign out']);
-  check('with a rule between them', danger.ruled !== '0px', true);
+  const planRow = await signed.evaluate(() => ({
+    word: document.querySelector('#settings-panel .plan-name')?.textContent.trim(),
+    extraLines: document.querySelectorAll('#settings-panel .plan-line').length,
+  }));
+  check('the plan is one of three words', ['Free', 'Trial', 'Premium'].includes(planRow.word), true);
+  check('with nothing underneath it', planRow.extraLines, 0);
   await shot(signed.locator('#settings-panel'), 'settings-signed-in');
 
   await signed.locator('#account-panel .account-edit').click();
@@ -2258,6 +2264,30 @@ if (!external) {
     name: document.querySelector('#account-panel input[aria-label="Name"]')?.value,
     email: document.querySelector('#account-panel input[aria-label="Email"]')?.value,
   })), { name: 'Sherman Cahal', email: 'sherman@example.com' });
+
+  /*
+   * Delete is on its own row, below a rule - inside the edit view now.
+   *
+   * Apple requires an app offering sign-in to offer this, so it has to be
+   * reachable, and it is the only control here that destroys something and
+   * cannot be undone. Moving it one level in does not make it less final: it
+   * now sits a short reach from Save, which is the mis-tap to worry about. The
+   * separation is the safety, so it is the thing tested rather than its
+   * presence - and it is tested where the button now lives rather than
+   * deleted along with the row it used to be on.
+   */
+  const danger = await signed.evaluate(() => {
+    const row = document.querySelector('#account-panel .account-danger');
+    const buttons = [...(row?.querySelectorAll('button') || [])].map((b) => b.textContent.trim());
+    const others = [...document.querySelectorAll('#account-panel .account-actions:not(.account-danger) button')]
+      .map((b) => b.textContent.trim());
+    return { buttons, others, ruled: row ? getComputedStyle(row).borderTopWidth : 'no row' };
+  });
+  check('delete sits apart from the buttons that save', danger.buttons, ['Delete account']);
+  check('and nothing harmless shares its row', danger.others, ['Save', 'Cancel']);
+  check('with a rule between them', danger.ruled !== '0px', true);
+  check('and changing the password is in here too',
+    await signed.evaluate(() => Boolean(document.querySelector('#account-panel .account-password'))), true);
   await shot(signed.locator('#settings-panel'), 'settings-edit-profile');
   await signed.fill('#account-panel input[aria-label="Name"]', 'S. Cahal');
   await signed.locator('#account-panel .account-form button[type="submit"]').click();

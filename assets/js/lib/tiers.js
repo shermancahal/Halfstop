@@ -427,7 +427,19 @@ export function planSummary(account = null, { billing = BILLING } = {}) {
   const plan = account?.plan || null;
   return {
     tier,
-    name: tier.name,
+    /*
+     * One word: Free, Trial, or Premium.
+     *
+     * The panel says what somebody is on and stops. It used to say the tier,
+     * which called a trial "Premium" - true, since a trial grants everything,
+     * and useless as a label: it made the one state with a clock on it
+     * indistinguishable from the one without.
+     *
+     * Read off the source rather than the tier for that reason. The tier
+     * answers what you may do; this answers what you are on, and they are the
+     * same word in two cases out of three.
+     */
+    name: plan?.source === 'trial' ? 'Trial' : tier.name,
     note: tier.note,
     /* Where the entitlement came from: 'trial', 'granted', 'appstore', 'none'. */
     source: plan?.source || 'none',

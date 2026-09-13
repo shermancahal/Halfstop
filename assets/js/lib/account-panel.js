@@ -159,64 +159,19 @@ export function createAccountPanel({ container, account, folders = null, toast }
       ]);
 
       /*
-       * Somebody who followed a reset link is here for one thing.
+       * The two that live inside Edit profile.
        *
-       * Shown before the profile, the sync line and the buttons, because they
-       * arrived holding a link and every other control is a distraction from
-       * the reason they clicked it. No Cancel out of this one either - the
-       * account is reachable again either way, but leaving without setting a
-       * password means the next visit starts at the same dead end.
-       */
-      if (account.recovering) {
-        container.append(
-          who,
-          el('p', { class: 'hint', style: 'margin-bottom:9px', text: 'Choose a new password for this account.' }),
-          passwordForm({ onDone: () => toast('You are signed in.', { tone: 'ok' }) }),
-        );
-        return;
-      }
-
-      if (changing) {
-        container.append(who, passwordForm({}));
-        return;
-      }
-
-      if (edit) {
-        container.append(who, profileForm());
-        if (account.message) container.append(el('p', { class: 'hint', text: account.message }));
-        return;
-      }
-
-      const editButton = el('button', {
-        class: 'button button-ghost button-small account-edit', type: 'button', text: 'Edit profile',
-        onclick: () => {
-          edit = { name, email: user.email || '' };
-          render();
-        },
-      });
-      withIcon(editButton, icons.pencil);
-
-      /*
-       * Changing it on purpose, which the reset flow also needs to exist.
-       *
-       * Somebody who signed in with an emailed link has no password at all, or
-       * has one they have forgotten and just worked around. Without this the
-       * only route to a known password is to sign out and ask for a reset -
-       * which means deliberately locking yourself out to fix being locked out.
+       * Built here rather than further down because the edit view needs them
+       * and the main card no longer does. The card was six controls deep -
+       * edit, change password, sync, sign out, delete - for something opened
+       * to change a theme, so the two that are about the account rather than
+       * about this session moved one level in.
        */
       const passwordButton = el('button', {
         class: 'button button-ghost button-small account-password', type: 'button', text: 'Change password',
         onclick: () => { changing = true; render(); },
       });
       withIcon(passwordButton, icons.key);
-
-      const signOut = el('button', {
-        class: 'button button-ghost button-small', type: 'button', text: 'Sign out',
-        // signOut swallows a failed server call and clears the device either
-        // way, so the only thing left to catch is the unexpected.
-        onclick: () => account.signOut().catch((error) => toast(error.message, { tone: 'error' })),
-      });
-      withIcon(signOut, icons.logout);
 
       /*
        * Deleting the account, from inside the app.
@@ -248,7 +203,64 @@ export function createAccountPanel({ container, account, folders = null, toast }
       });
       withIcon(deleteAccount, icons.trash);
 
-      container.append(who, editButton, passwordButton);
+      /*
+       * Delete keeps its own row under a rule, wherever the row is.
+       *
+       * Moving it inside Edit profile does not make it less final: it is still
+       * the only control here that destroys something and cannot be undone,
+       * and it is now a short reach from Save. The separation is the safety.
+       */
+      const dangerRow = () => el('div', { class: 'account-actions account-danger' }, [deleteAccount]);
+
+      /*
+       * Somebody who followed a reset link is here for one thing.
+       *
+       * Shown before the profile, the sync line and the buttons, because they
+       * arrived holding a link and every other control is a distraction from
+       * the reason they clicked it. No Cancel out of this one either - the
+       * account is reachable again either way, but leaving without setting a
+       * password means the next visit starts at the same dead end.
+       */
+      if (account.recovering) {
+        container.append(
+          who,
+          el('p', { class: 'hint', style: 'margin-bottom:9px', text: 'Choose a new password for this account.' }),
+          passwordForm({ onDone: () => toast('You are signed in.', { tone: 'ok' }) }),
+        );
+        return;
+      }
+
+      if (changing) {
+        container.append(who, passwordForm({}));
+        return;
+      }
+
+      if (edit) {
+        container.append(who, profileForm());
+        if (account.message) container.append(el('p', { class: 'hint', text: account.message }));
+        container.append(passwordButton, dangerRow());
+        return;
+      }
+
+      const editButton = el('button', {
+        class: 'button button-ghost button-small account-edit', type: 'button', text: 'Edit profile',
+        onclick: () => {
+          edit = { name, email: user.email || '' };
+          render();
+        },
+      });
+      withIcon(editButton, icons.pencil);
+
+      const signOut = el('button', {
+        class: 'button button-ghost button-small', type: 'button', text: 'Sign out',
+        // signOut swallows a failed server call and clears the device either
+        // way, so the only thing left to catch is the unexpected.
+        onclick: () => account.signOut().catch((error) => toast(error.message, { tone: 'error' })),
+      });
+      withIcon(signOut, icons.logout);
+
+
+      container.append(who, editButton);
 
       /*
        * Syncing, only where there is something to sync.
@@ -282,8 +294,6 @@ export function createAccountPanel({ container, account, folders = null, toast }
       } else {
         container.append(el('div', { class: 'account-actions' }, [signOut]));
       }
-
-      container.append(el('div', { class: 'account-actions account-danger' }, [deleteAccount]));
 
       if (account.message) container.append(el('p', { class: 'hint', text: account.message }));
       return;

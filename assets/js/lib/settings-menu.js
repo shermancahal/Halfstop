@@ -108,12 +108,12 @@ export function wireSettingsMenu({
       const plan = planSummary(who);
       drop.append(el('div', { class: 'settings-account' }, [
         el('div', { class: 'settings-label', text: 'Plan' }),
+        // One word, and nothing under it. The countdown used to live here on
+        // the grounds that a trial ending unannounced is a surprise - but this
+        // is a menu somebody opened to change their units, and the place that
+        // sentence actually does some work is the upgrade panel, where it is
+        // still said, beside the thing that stops the clock.
         el('div', { class: 'plan-name', text: plan.name }),
-        // A trial that does not say when it ends is a trial that ends as a
-        // surprise, so the count goes where the name is rather than in an email
-        // nobody opens. Only when there is one: the plan is otherwise a single
-        // word on purpose, and an empty line is how describePlan says so.
-        plan.line ? el('div', { class: 'plan-line hint', text: plan.line }) : null,
         planExtra ? planExtra(plan) : null,
       ].filter(Boolean)));
     }

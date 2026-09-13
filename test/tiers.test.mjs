@@ -251,10 +251,57 @@ test('tiers: naming a purchase does not take anything away from anybody', () => 
 
   // Free is the tier whose grants are nearly empty, so it is the one that
   // would have lost something had this been read off the tier.
-  const unpaid = planSummary({ plan: { tier: 'free', source: 'trial' } }, { billing: FREE });
+  const unpaid = planSummary({ plan: { tier: 'free', source: 'none' } }, { billing: FREE });
   assert.equal(unpaid.name, 'Free');
   assert.equal(unpaid.includes.length, Object.keys(FEATURES).length);
   assert.equal(can('rvRouting', { billing: FREE }), true);
+});
+
+/*
+ * Three words, and a trial is one of them.
+ *
+ * The label used to read off the tier, which called a trial Premium - true,
+ * because a trial grants everything, and useless as a label: the one state
+ * with a clock on it read identically to the one without.
+ */
+test('tiers: the plan is named in one word, and the trial is named as one', () => {
+  const named = (source, tier = 'premium', billing = FREE) =>
+    planSummary({ plan: { tier, source } }, { billing }).name;
+
+  assert.equal(named('none', 'free'), 'Free');
+  assert.equal(named('trial'), 'Trial');
+  assert.equal(named('stripe'), 'Premium');
+  assert.equal(named('granted'), 'Premium');
+  assert.equal(named('appstore'), 'Premium');
+
+  // The same three words once billing is live: the label is about what
+  // somebody is on, which does not change when the gates start meaning
+  // something.
+  assert.equal(named('none', 'free', LIVE), 'Free');
+  assert.equal(named('trial', 'premium', LIVE), 'Trial');
+  assert.equal(named('stripe', 'premium', LIVE), 'Premium');
+
+  // And nothing else ever appears there.
+  for (const source of ['none', 'trial', 'stripe', 'granted', 'appstore', 'nonsense']) {
+    assert.ok(['Free', 'Trial', 'Premium'].includes(named(source)), `${source} produced another word`);
+  }
+});
+
+test('tiers: naming the trial does not take the countdown off the upgrade panel', () => {
+  /*
+   * The gear shows the word and stops, but the map's upgrade block still opens
+   * with "Trial, 21 days left. Keeping it:" - which is the one place the
+   * number does any work, because the thing that stops the clock is under it.
+   * So describePlan must keep answering even though the menu no longer asks.
+   */
+  const until = new Date(LIVE_NOW + 21 * DAY).toISOString();
+  const summary = planSummary(
+    { plan: { tier: 'premium', source: 'trial', until } },
+    { billing: LIVE },
+  );
+  assert.equal(summary.name, 'Trial');
+  assert.equal(describePlan({ tier: 'premium', source: 'trial', until }, { now: LIVE_NOW, billing: LIVE }),
+    'Trial, 21 days left.');
 });
 
 test('tiers: a plan nobody has answered with yet is not premium', () => {
