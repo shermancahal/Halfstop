@@ -53,14 +53,17 @@ export function managePlanBlock(summary, { account, toast }) {
         window.location.assign(result.url);
       },
     });
-    return el('div', { class: 'plan-upgrade' }, [
-      button,
-      el('p', {
-        class: 'hint', style: 'margin:8px 0 0',
-        text: 'Cancel, switch between monthly and yearly, or change the card. '
-          + 'Cancelling keeps Premium until the period you have paid for runs out.',
-      }),
-    ]);
+    /*
+     * The button and nothing else.
+     *
+     * It used to carry a paragraph explaining that Stripe's pages are where
+     * you cancel, switch between monthly and yearly, or change the card - four
+     * lines of prose under a button, in a menu somebody opened to change their
+     * units. The button says where it goes and Stripe's own page says the
+     * rest; the help page carries the long version, under "Cancelling a
+     * subscription", which is where somebody reading about it has gone.
+     */
+    return el('div', { class: 'plan-upgrade' }, [button]);
   }
 
   /*
@@ -69,10 +72,16 @@ export function managePlanBlock(summary, { account, toast }) {
    * answer is that the way out is somewhere this app cannot reach.
    */
   if (summary?.source === 'appstore') {
+    /*
+     * Kept, and trimmed to one line. This branch has no button to carry the
+     * answer - there is nothing this app can open, because only Apple can end
+     * an App Store subscription - so removing the sentence would leave
+     * somebody looking at a plan with no way out at all. Where to go is the
+     * part that cannot be inferred; the rest is in the help page.
+     */
     return el('p', {
       class: 'hint', style: 'margin:10px 0 0',
-      text: 'This subscription is through the App Store. Cancel it in Settings, '
-        + 'your name, Subscriptions. It stays active until the period you have paid for runs out.',
+      text: 'Bought through the App Store. Cancel it in Settings, your name, Subscriptions.',
     });
   }
 
