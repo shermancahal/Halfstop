@@ -2294,6 +2294,64 @@ if (!external) {
     await signed.evaluate(() => document.querySelector('#account-panel .account-name')?.textContent.trim()), 'S. Cahal');
   check('saying so',
     await signed.evaluate(() => document.querySelector('#account-panel .hint')?.textContent.trim()), 'Saved.');
+
+  /*
+   * A password you can look at, and a complaint that does not shut the door.
+   *
+   * Reported together: somebody typed the same password twice, was told the
+   * two did not match, and had no way to see which one was wrong - which is
+   * the whole problem with a field of dots, and worse on a phone where
+   * autofill may have put a suggested password in one of the two.
+   *
+   * The second half was found while testing the first: pressing × on the
+   * complaint closed the settings panel, because the toast hangs off the body
+   * and counted as a click outside the menu. Dismissing an error about the
+   * thing you are doing must not put away the thing you are doing it in.
+   */
+  console.log('\nA password can be looked at, and the complaint stays out of the way');
+  await signed.locator('#account-panel .account-edit').click();
+  await signed.waitForTimeout(200);
+  await signed.locator('#account-panel .account-password').click();
+  await signed.waitForTimeout(200);
+
+  const first = '#account-panel input[aria-label="New password"]';
+  const again = '#account-panel input[aria-label="Confirm new password"]';
+  check('both new-password fields carry an eye',
+    await signed.locator('#account-panel .password-field .reveal').count(), 2);
+
+  await signed.fill(first, 'a-long-enough-password');
+  await signed.locator('#account-panel .password-field').first().locator('.reveal').click();
+  await signed.waitForTimeout(150);
+  check('pressing it shows that field, and only that one',
+    await signed.evaluate(([a, b]) => [
+      document.querySelector(a)?.type, document.querySelector(b)?.type,
+    ], [first, again]), ['text', 'password']);
+  await signed.locator('#account-panel .password-field').first().locator('.reveal').click();
+  await signed.waitForTimeout(150);
+  check('and pressing it again hides it',
+    await signed.evaluate((a) => document.querySelector(a)?.type, first), 'password');
+
+  /*
+   * The space is named, because it cannot be seen. "They are not the same" is
+   * true and useless to somebody certain they typed the same thing, and on a
+   * phone they often did - give or take one press of the space bar.
+   */
+  await signed.fill(again, 'a-long-enough-password ');
+  await signed.locator('#account-panel .account-form button[type="submit"]').click();
+  await signed.waitForTimeout(400);
+  check('a difference of one space is named as one',
+    await signed.evaluate(() => [...document.querySelectorAll('.toast')]
+      .map((t) => t.textContent.replace(/\s+/g, ' ').trim())
+      .some((t) => /differ only by a space/.test(t))), true);
+
+  const dismiss = signed.locator('.toast').filter({ hasText: 'differ only by a space' }).locator('button');
+  await dismiss.click();
+  await signed.waitForTimeout(250);
+  check('and dismissing it leaves the panel open to fix it',
+    await signed.locator('#settings-panel').isVisible(), true);
+  check('with what was typed still in the field',
+    await signed.evaluate((a) => document.querySelector(a)?.value, first), 'a-long-enough-password');
+
   await signed.close();
 }
 

@@ -129,6 +129,21 @@ export function createToaster(container) {
       return made;
     })());
 
+  /*
+   * A toast is the app talking, not somewhere else on the page.
+   *
+   * Found while testing the password form: type two passwords that do not
+   * match, get told so, press the × on the message - and the settings panel
+   * shuts, because the stack hangs off the body and so counts as a click
+   * outside the menu. Dismissing an error about the thing you are doing should
+   * not put away the thing you are doing it in.
+   *
+   * Stopped here rather than guarded in the menu, which cannot work: the
+   * dismiss handler removes the toast before the click reaches the document,
+   * so by then the target has no ancestors to recognise it by.
+   */
+  stack.addEventListener('click', (event) => event.stopPropagation());
+
   return function toast(message, { tone = 'info', timeout = 6000 } = {}) {
     const existing = live.get(message);
     if (existing) {

@@ -31,6 +31,39 @@ import { SITE } from '../config.js';
  * neutral statement - it reads as "your folders are gone" to somebody who has
  * twenty seven of them on the map page.
  */
+/**
+ * A password field you can look at.
+ *
+ * Reported after somebody typed the same password twice, was told the two did
+ * not match, and had no way to see which one was wrong - which is the whole
+ * problem with a field that hides what it holds. On a phone with autofill in
+ * play it is not even certain both fields got what the person typed: iOS
+ * offers a strong password on a `new-password` field and will happily put it
+ * in one of the two.
+ *
+ * The input is returned inside a wrapper, so callers keep a reference to the
+ * input itself for value, focus and disabling, and append the wrapper.
+ */
+function revealable(input) {
+  const toggle = el('button', {
+    class: 'reveal', type: 'button',
+    'aria-label': 'Show password', 'aria-pressed': 'false', title: 'Show password',
+    html: icons.eye,
+  });
+  toggle.addEventListener('click', () => {
+    const hidden = input.type === 'password';
+    input.type = hidden ? 'text' : 'password';
+    toggle.innerHTML = hidden ? icons.eyeOff : icons.eye;
+    const label = hidden ? 'Hide password' : 'Show password';
+    toggle.setAttribute('aria-label', label);
+    toggle.setAttribute('title', label);
+    toggle.setAttribute('aria-pressed', String(hidden));
+    // Back to the field, so the next keystroke goes where it was going.
+    input.focus();
+  });
+  return el('div', { class: 'password-field' }, [input, toggle]);
+}
+
 export function createAccountPanel({ container, account, folders = null, toast }) {
   /*
    * The half-finished edit and the half-typed address live here rather than in
@@ -111,7 +144,21 @@ export function createAccountPanel({ container, account, folders = null, toast }
       onsubmit: async (event) => {
         event.preventDefault();
         if (first.value !== again.value) {
-          toast('Those two passwords are not the same.', { tone: 'error' });
+          /*
+           * Name the likely cause rather than the symptom.
+           *
+           * "They are not the same" is true and useless to somebody who is
+           * certain they typed the same thing - and on a phone they often did:
+           * a trailing space from the space bar, or autofill putting a
+           * suggested password in one field and not the other. If the only
+           * difference is space at the ends, say so, because that is invisible
+           * in a field of dots.
+           */
+          const onlySpace = first.value.trim() === again.value.trim();
+          toast(onlySpace
+            ? 'Those differ only by a space at one end. Press the eye to see them.'
+            : 'Those two passwords are not the same. Press the eye to see them.',
+          { tone: 'error', timeout: 10000 });
           return;
         }
         busy(true);
@@ -127,7 +174,7 @@ export function createAccountPanel({ container, account, folders = null, toast }
         }
         render();
       },
-    }, [first, again, el('div', { class: 'account-actions' }, [save, cancel])]);
+    }, [revealable(first), revealable(again), el('div', { class: 'account-actions' }, [save, cancel])]);
   }
 
   function render() {
@@ -290,6 +337,7 @@ export function createAccountPanel({ container, account, folders = null, toast }
       oninput: (event) => { emailDraft = event.target.value; },
     });
     const password = el('input', { type: 'password', placeholder: 'Password', autocomplete: 'current-password', 'aria-label': 'Password' });
+    const passwordRow = revealable(password);
     // `forgot` is declared below; busy only ever runs from a click, long after.
     // It belongs in here - without it a double tap sends two reset emails.
     const busy = (on) => { for (const node of [email, password, ...buttons, forgot]) node.disabled = on; };
@@ -419,7 +467,7 @@ export function createAccountPanel({ container, account, folders = null, toast }
     }
     container.append(
       email,
-      password,
+      passwordRow,
       el('div', { class: 'account-actions' }, buttons),
       forgot,
     );

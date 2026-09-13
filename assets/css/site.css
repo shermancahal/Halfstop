@@ -797,6 +797,26 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
   background: var(--surface); border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm); padding: 8px 9px;
 }
+/* --------------------------------------------- looking at a password
+ * A field of dots cannot be checked, which is fine until something says the
+ * two you typed do not match - and then it is the only thing you need to do.
+ * The button sits inside the field rather than beside it so the row stays one
+ * line at 390px, and the input is given room so the text never runs under it.
+ */
+.password-field { position: relative; }
+.password-field input { padding-right: 38px; }
+.reveal {
+  position: absolute; top: 8px; right: 6px;
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0;
+  background: none; border: 0; border-radius: var(--radius-sm);
+  color: var(--ink-3); cursor: pointer;
+}
+.reveal:hover { color: var(--ink); background: var(--paper-2); }
+.reveal svg { width: 17px; height: 17px; }
+/* The focus ring is how somebody on a keyboard knows it is reachable at all. */
+.reveal:focus-visible { outline: 2px solid var(--clay); outline-offset: 1px; }
+
 .account-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 /*
  * One thing per line. Nothing here is nowrap: an address that does not fit
