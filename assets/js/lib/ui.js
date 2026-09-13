@@ -197,3 +197,17 @@ export function formatDate(value) {
   if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
+
+/**
+ * Give a button written in the HTML the same icon-and-label shape as one built
+ * in JS, without moving it into JS to get it.
+ *
+ * Here rather than in viewer.js because the settings menu it was written for
+ * is on every page now, and a second copy is the one that would have drifted.
+ */
+export function withIcon(button, icon) {
+  if (!button || button.querySelector('svg')) return;
+  const label = button.textContent.trim();
+  button.classList.add('button-with-icon');
+  button.innerHTML = `${icon}<span>${escapeHTML(label)}</span>`;
+}

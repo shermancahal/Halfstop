@@ -6,10 +6,16 @@
  * other change does.
  */
 
-import { initTheme } from './lib/ui.js';
+import { applyStoredTheme, createToaster } from './lib/ui.js';
+import { mountPageSettings } from './lib/page-settings.js';
 import { SITE } from './config.js';
 
-initTheme(document.getElementById('theme-toggle'));
+/*
+ * The theme before anything else, so the page does not flash the wrong one
+ * while the settings menu is being built.
+ */
+applyStoredTheme();
+mountPageSettings({ toast: createToaster(document.body) });
 for (const node of document.querySelectorAll('#brand-name')) node.textContent = SITE.name;
 // The parent line and the "A project of ..." note go when there is no parent
 // to name; the markup's fallback would otherwise keep showing the old one.

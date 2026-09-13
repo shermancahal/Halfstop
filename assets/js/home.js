@@ -13,7 +13,8 @@
 
 import { SITE } from './config.js';
 import { loadCatalog, facet, filterMaps } from './lib/catalog.js';
-import { el, escapeHTML, initTheme, formatDate } from './lib/ui.js';
+import { el, escapeHTML, applyStoredTheme, createToaster, formatDate } from './lib/ui.js';
+import { mountPageSettings } from './lib/page-settings.js';
 import { formatDistance, formatElevation } from './lib/geo.js';
 import { registerServiceWorker } from './lib/pwa.js';
 
@@ -202,7 +203,8 @@ function render() {
 async function main() {
   cacheDom();
   applyBranding();
-  initTheme(document.getElementById('theme-toggle'));
+  applyStoredTheme();
+  mountPageSettings({ toast: createToaster(document.body) });
 
   /*
    * The catalogue is optional markup now.

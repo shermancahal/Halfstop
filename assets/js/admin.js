@@ -12,12 +12,13 @@
  */
 
 import { SITE } from './config.js';
-import { el, initTheme, formatDate, createToaster } from './lib/ui.js';
+import { el, applyStoredTheme, formatDate, createToaster } from './lib/ui.js';
+import { mountPageSettings } from './lib/page-settings.js';
 import { Account, isConfigured } from './lib/account.js';
 import { mayEdit } from './lib/editors.js';
 import { STATUS_LABELS, nextStatuses, queueOrder, countWaiting } from './lib/support.js';
 
-initTheme(document.getElementById('theme-toggle'));
+applyStoredTheme();
 // The same two lines every other page runs: the name from the config, and the
 // parent line removed when there is no parent to name.
 for (const node of document.querySelectorAll('#brand-name')) node.textContent = SITE.name;
@@ -43,6 +44,8 @@ const toast = createToaster(document.body);
  */
 const noFolders = { list: () => [], snapshot: () => [], replaceAll() {}, toGeoJSON: () => ({ features: [] }) };
 const account = new Account(noFolders);
+// The same account the queue gates on, so signing out here does both.
+mountPageSettings({ toast, account });
 
 function show(node, hidden) { node.hidden = hidden; }
 

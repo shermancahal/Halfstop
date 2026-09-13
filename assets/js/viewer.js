@@ -25,7 +25,7 @@ import {
   boundsAreValid, cumulativeDistances, formatDistance, formatDuration, formatElevation,
   formatTemperature, geojsonBounds, mergeBounds, padBounds,
 } from './lib/geo.js';
-import { el, escapeHTML, createToaster, downloadText, saveBlob, applyStoredTheme, readTheme, setTheme, formatDate } from './lib/ui.js';
+import { el, escapeHTML, createToaster, downloadText, saveBlob, applyStoredTheme, readTheme, setTheme, formatDate, withIcon } from './lib/ui.js';
 import { fogOutlook, nightHours, fogName, fogNote, fogBand } from './lib/fog.js';
 import { icons } from './lib/icons.js';
 import {
@@ -47,6 +47,8 @@ import { PMTilesArchive } from './lib/pmtiles.js';
 import { openTileStore } from './lib/pmtiles-store.js';
 import { previewFor, swatchSVG, tileURL } from './lib/preview.js';
 import { Account, isConfigured as accountsAvailable, displayName } from './lib/account.js';
+import { createAccountPanel } from './lib/account-panel.js';
+import { wireSettingsMenu as wireSharedSettingsMenu } from './lib/settings-menu.js';
 import {
   formatDD, formatDMS, formatDDM, toUTM, distanceBearing, compassPoint, reverseGeocode, searchPlaces,
 } from './lib/place.js';
@@ -524,6 +526,14 @@ async function main() {
     refreshRegionData();
   });
   state.account = new Account(state.folders);
+  accountPanel = createAccountPanel({
+    container: dom.account,
+    account: state.account,
+    // The map is the page that has folders, so it is the page that offers to
+    // sync them.
+    folders: state.folders,
+    toast,
+  });
   state.account.addEventListener('change', () => {
     renderAccount();
     /*
@@ -2662,109 +2672,29 @@ const SETTINGS = [
   },
 ];
 
+/*
+ * The sign-in panel and the gear, both built by shared modules now.
+ *
+ * Held here because renderAccount() and the menu's paint both reach for them,
+ * and because they are created at different moments: the panel when the
+ * account exists, the menu when the header is wired.
+ */
+let accountPanel = null;
+let settingsMenu = null;
+
 function wireSettingsMenu() {
-  const trigger = document.getElementById('settings-trigger');
-  const drop = document.getElementById('settings-panel');
-  const menu = document.getElementById('settings-menu');
-  if (!trigger || !drop) return;
-
-  const setOpen = (open) => {
-    drop.hidden = !open;
-    trigger.setAttribute('aria-expanded', String(open));
-    if (open) paint();
-  };
-
-  const paint = () => {
-    drop.replaceChildren(...SETTINGS.map((setting) => el('div', { class: 'settings-row' }, [
-      el('div', { class: 'settings-label', text: setting.label }),
-      el('div', {
-        class: 'settings-choices',
-        style: `--choices:${setting.options.length}`,
-      }, setting.options.map((option) => el('button', {
-        class: `settings-choice${setting.read() === option.value ? ' is-on' : ''}`,
-        type: 'button',
-        title: option.title, 'aria-label': option.title,
-        'aria-pressed': String(setting.read() === option.value),
-        ...(option.icon ? { html: option.icon } : { text: option.label }),
-        onclick: () => {
-          if (setting.read() === option.value) return;
-          setting.write(option.value);
-          paint();
-        },
-      }))),
-    ])));
-
-    /*
-     * The account, under the same button.
-     *
-     * Signing in is a preference about this device, not a place to go, and it
-     * had a whole header control of its own showing a truncated email beside
-     * five icons. Moved rather than rebuilt: this is the same #account-panel
-     * element renderAccount() has always written into, so nothing about what
-     * it says or does changes - only where it is. It has to be re-appended on
-     * every paint because replaceChildren above has just taken it out.
-     */
-    if (dom.account) {
-      dom.account.hidden = false;
-      drop.append(el('div', { class: 'settings-account' }, [
-        el('div', { class: 'settings-label', text: 'Account' }),
-        dom.account,
-      ]));
-    }
-
-    /*
-     * The plan, named and nothing more, where the account is.
-     *
-     * One word: "free" is only reassuring if somebody says it, and a reader
-     * who has been asked to sign in has reasonably wondered what it is going
-     * to cost. The sentence that used to follow it belongs in the FAQ, not in
-     * a menu somebody opens to switch to Celsius. It also gives the tier
-     * machinery a home in the interface before there is anything to sell, so
-     * the day a second plan exists this is a line that changed rather than a
-     * panel that appeared.
-     */
-    const plan = planSummary(state.account || null);
-    drop.append(el('div', { class: 'settings-account' }, [
-      el('div', { class: 'settings-label', text: 'Plan' }),
-      el('div', { class: 'plan-name', text: plan.name }),
-      // A trial that does not say when it ends is a trial that ends as a
-      // surprise, so the count goes where the name is rather than in an email
-      // nobody opens. Only when there is one: the plan is otherwise a single
-      // word on purpose, and an empty line is how describePlan says so.
-      plan.line ? el('div', { class: 'plan-line hint', text: plan.line }) : null,
-      upgradeBlock(plan),
-    ].filter(Boolean)));
-
-    /*
-     * Where the terms and the privacy policy are, from inside the app.
-     *
-     * They have always existed and were only ever reachable from the website.
-     * That is fine for a browser tab, where the reader can get to the site,
-     * and not fine once this is wrapped as an app: the map is then the only
-     * page there is, and App Review expects both to be findable in a build
-     * that asks people to make an account. Here rather than in a footer
-     * because this app has no footer, and this is where the account already
-     * is.
-     */
-    drop.append(el('div', { class: 'settings-account settings-legal' }, [
-      el('a', { href: 'privacy.html', target: '_blank', rel: 'noopener', text: 'Privacy' }),
-      el('a', { href: 'terms.html', target: '_blank', rel: 'noopener', text: 'Terms' }),
-      el('a', { href: 'faq.html', target: '_blank', rel: 'noopener', text: 'Help' }),
-    ]));
-  };
-
-  trigger.addEventListener('click', (event) => {
-    event.stopPropagation();
-    setOpen(drop.hidden);
+  /*
+   * The rows are the map's own: units and a temperature scale mean nothing on
+   * the help page, so they are passed from here rather than lived in the shared
+   * module. `upgradeBlock` goes the same way - a checkout is begun and returned
+   * to on this page, and this is the only page that knows how to finish one.
+   */
+  settingsMenu = wireSharedSettingsMenu({
+    rows: SETTINGS,
+    accountPanel: () => accountPanel,
+    account: () => state.account || null,
+    planExtra: (plan) => upgradeBlock(plan),
   });
-  document.addEventListener('click', (event) => {
-    if (drop.hidden) return;
-    if (!menu?.contains(event.target)) setOpen(false);
-  });
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && !drop.hidden) { setOpen(false); trigger.focus(); }
-  });
-  drop.addEventListener('click', (event) => event.stopPropagation());
 }
 
 /**
@@ -9868,17 +9798,6 @@ function wireFolders() {
   withIcon(dom.importIntoFolder, icons.upload);
 }
 
-/**
- * Give a button written in the HTML the same icon-and-label shape as one built
- * in JS, without moving it into JS to get it.
- */
-function withIcon(button, icon) {
-  if (!button || button.querySelector('svg')) return;
-  const label = button.textContent.trim();
-  button.classList.add('button-with-icon');
-  button.innerHTML = `${icon}<span>${escapeHTML(label)}</span>`;
-}
-
 /*
  * A trip whose last day has passed stands itself down, once.
  *
@@ -12152,281 +12071,16 @@ function waypointPager(page, pages, total, from, shown) {
  * emits 'change' whenever a background sync lands and renderAccount rebuilds
  * everything - which would otherwise wipe a half-typed address mid-word.
  */
-function profileForm(account) {
-  const draft = state.accountEdit;
-  const name = el('input', {
-    type: 'text', placeholder: 'Your name', autocomplete: 'name', 'aria-label': 'Name',
-    value: draft.name, maxlength: 80,
-    oninput: (event) => { draft.name = event.target.value; },
-  });
-  const email = el('input', {
-    type: 'email', placeholder: 'you@example.com', autocomplete: 'email', 'aria-label': 'Email',
-    value: draft.email,
-    oninput: (event) => { draft.email = event.target.value; },
-  });
-  const busy = (on) => { for (const node of [name, email, save, cancel]) node.disabled = on; };
-  const save = el('button', {
-    class: 'button button-primary button-small', type: 'submit', text: 'Save',
-  });
-  const cancel = el('button', {
-    class: 'button button-ghost button-small', type: 'button', text: 'Cancel',
-    onclick: () => { state.accountEdit = null; renderAccount(); },
-  });
-  return el('form', {
-    class: 'account-form',
-    onsubmit: async (event) => {
-      event.preventDefault();
-      busy(true);
-      try {
-        await account.updateProfile({ name: draft.name, email: draft.email });
-        state.accountEdit = null;
-      } catch (error) {
-        toast(error.message, { tone: 'error', timeout: 10000 });
-      } finally {
-        busy(false);
-      }
-      renderAccount();
-    },
-  }, [name, email, el('div', { class: 'account-actions' }, [save, cancel])]);
-}
-
 /**
- * Sign-in panel and sync status.
+ * The sign-in panel, drawn by the shared module and re-rendered on demand.
  *
- * Rendered entirely from account state so there is one source of truth for
- * what is on screen. When Supabase is not configured the section explains that
- * folders are device-only rather than showing a sign-in form that cannot work.
+ * Kept as a function of this name because eight call sites already say it, and
+ * because "re-draw the account" is the thing those call sites mean - not "call
+ * into a panel object", which is an implementation detail of where the code
+ * now lives.
  */
 function renderAccount() {
-  if (!dom.account) return;
-  const account = state.account;
-  dom.account.replaceChildren();
-
-  if (!accountsAvailable()) {
-    dom.account.append(el('p', {
-      class: 'hint',
-      text: 'Accounts are not set up for this deployment, so folders stay in this browser.',
-    }));
-    return;
-  }
-
-  if (account.user) {
-    state.accountEmail = '';
-    const { user } = account;
-    const name = displayName(user);
-    const totals = state.folders.totals();
-    const syncLine = account.status === 'syncing'
-      ? 'Syncing…'
-      : `${totals.folders} folder${totals.folders === 1 ? '' : 's'} synced`
-        + (account.lastSyncAt
-          ? ` · ${new Date(account.lastSyncAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
-          : '');
-
-    /*
-     * One thing per line: who, then what can be changed, then the sync, then
-     * the two buttons. It was a single row with the address cut off at
-     * "sherm…" beside two buttons, which is the layout of a header - and this
-     * is no longer in one.
-     */
-    const who = el('div', { class: 'account-who' }, [
-      el('div', { class: 'account-name', text: name || user.email || 'Signed in' }),
-      name && user.email ? el('div', { class: 'account-email', text: user.email }) : null,
-    ]);
-
-    if (state.accountEdit) {
-      dom.account.append(who, profileForm(account));
-    } else {
-      const edit = el('button', {
-        class: 'button button-ghost button-small account-edit', type: 'button', text: 'Edit profile',
-        onclick: () => {
-          state.accountEdit = { name, email: user.email || '' };
-          renderAccount();
-        },
-      });
-      withIcon(edit, icons.pencil);
-      const syncNow = el('button', {
-        class: 'button button-secondary button-small', type: 'button',
-        text: account.status === 'syncing' ? 'Syncing…' : 'Sync now',
-        disabled: account.status === 'syncing',
-        onclick: async () => {
-          const result = await account.sync();
-          if (result) toast(describeSync(result), { tone: 'ok' });
-        },
-      });
-      withIcon(syncNow, icons.refresh);
-      const signOut = el('button', {
-        class: 'button button-ghost button-small', type: 'button', text: 'Sign out',
-        // signOut swallows a failed server call and clears the device either
-        // way, so the only thing left to catch is the unexpected.
-        onclick: () => account.signOut().catch((error) => toast(error.message, { tone: 'error' })),
-      });
-      withIcon(signOut, icons.logout);
-
-      /*
-       * Deleting the account, from inside the app.
-       *
-       * Apple requires this of anything offering sign-in, and the privacy
-       * policy promises it. Two confirmations rather than one: the first says
-       * what goes, the second asks for the word, because this is the only
-       * button here that destroys something and cannot be undone.
-       */
-      const deleteAccount = el('button', {
-        class: 'button button-ghost button-small is-danger', type: 'button', text: 'Delete account',
-        title: 'Remove your folders from the server and close the account',
-        onclick: async () => {
-          const warning = 'Delete your account?\n\n'
-            + 'The account itself is closed, and your folders and pins are removed from '
-            + 'the server. Signing in again will not bring any of it back. What is saved '
-            + 'on this device is left alone.\n\n'
-            + 'This cannot be undone.';
-          if (!window.confirm(warning)) return;
-          if (window.prompt('Type DELETE to confirm.') !== 'DELETE') {
-            toast('Nothing was deleted.', { tone: 'info' });
-            return;
-          }
-          const result = await account.deleteAccount()
-            .catch((error) => ({ ok: false, reason: error.message }));
-          toast(result.ok ? 'Account deleted.' : `Could not delete: ${result.reason}`,
-            { tone: result.ok ? 'ok' : 'error' });
-        },
-      });
-      withIcon(deleteAccount, icons.trash);
-
-      dom.account.append(
-        who,
-        edit,
-        el('div', { class: 'account-meta', text: syncLine }),
-        el('div', { class: 'account-actions' }, [syncNow, signOut]),
-        el('div', { class: 'account-actions account-danger' }, [deleteAccount]),
-      );
-    }
-    if (account.message) dom.account.append(el('p', { class: 'hint', text: account.message }));
-    return;
-  }
-
-  /* signed out */
-  const email = el('input', {
-    type: 'email', placeholder: 'you@example.com', autocomplete: 'email', 'aria-label': 'Email',
-    value: state.accountEmail,
-    oninput: (event) => { state.accountEmail = event.target.value; },
-  });
-  const password = el('input', { type: 'password', placeholder: 'Password', autocomplete: 'current-password', 'aria-label': 'Password' });
-  const busy = (on) => { for (const node of [email, password, ...buttons]) node.disabled = on; };
-
-  /*
-   * Say the thing that just happened where somebody will see it.
-   *
-   * The sentence itself stays in account.js, beside the branch that chose it -
-   * signing up as an address that already exists and signing up as a new one
-   * are different messages, and repeating either here would be two copies to
-   * keep in step. This only decides that it is said out loud.
-   */
-  const announce = (tone) => {
-    if (account.message) toast(account.message, { tone, timeout: 15000 });
-  };
-
-  const run = async (action) => {
-    state.accountEmail = email.value.trim();
-    if (!state.accountEmail) { toast('Enter your email address first.', { tone: 'error' }); return; }
-    busy(true);
-    try {
-      await action();
-    } catch (error) {
-      toast(error.message, { tone: 'error', timeout: 10000 });
-    } finally {
-      // No re-render here: the account emits 'change' when the status actually
-      // moves, and rebuilding on every attempt would wipe the form mid-typing.
-      busy(false);
-    }
-  };
-
-  const buttons = [
-    el('button', {
-      class: 'button button-primary button-small', type: 'button', text: 'Sign in',
-      onclick: () => run(() => account.signIn(state.accountEmail, password.value)),
-    }),
-    el('button', {
-      class: 'button button-secondary button-small', type: 'button', text: 'Create account',
-      onclick: () => run(async () => {
-        const result = await account.signUp(state.accountEmail, password.value);
-        // Nothing visible happens on a successful signup: no session, so the
-        // panel redraws identically and the only sign of life was a muted line
-        // appended below three buttons, off the bottom of a phone screen.
-        // Reported as "creating an account does not state anything", which is
-        // what it looked like - and the person then had no reason to go
-        // looking in their spam folder, where the email was.
-        if (!result.confirmed) announce(result.existing ? 'info' : 'ok');
-      }),
-    }),
-    el('button', {
-      class: 'button button-ghost button-small', type: 'button', text: 'Email me a link',
-      title: 'Sign in without a password',
-      onclick: () => run(async () => {
-        await account.signInWithLink(state.accountEmail);
-        announce('ok');
-      }),
-    }),
-  ];
-
-  /*
-   * Apple and Google first, and above the form rather than under it.
-   *
-   * Not decoration: the emailed link is the part that has broken repeatedly,
-   * and a provider round trip has no link to lose. Putting them first offers
-   * the route most likely to work before the one that needs an inbox.
-   *
-   * `run` is not used here - it insists on an email address, and the whole
-   * point of these is that you do not type one.
-   */
-  const provider = (id, label) => el('button', {
-    class: 'button button-secondary button-small', type: 'button', text: label,
-    onclick: async () => {
-      try {
-        await account.signInWithProvider(id);
-      } catch (error) {
-        toast(error.message, { tone: 'error', timeout: 10000 });
-      }
-    },
-  });
-
-  /*
-   * Only the providers the project has actually set up.
-   *
-   * Asked of the project rather than kept in config, because the two drift and
-   * the drift fails both ways: a provider registered and not listed is a
-   * button nobody sees, and one listed and not registered sends the reader to
-   * an error page carrying Apple's or Google's branding, which reads as this
-   * site being broken rather than unfinished.
-   *
-   * `SITE.authProviders` is the fallback for as long as the project has not
-   * answered, and it is empty - so nothing is drawn, and neither is the
-   * divider that only makes sense above an email form with something above it.
-   * The panel is rebuilt on every account change, so the answer arriving a
-   * moment later draws the buttons without anybody reloading.
-   */
-  const PROVIDER_LABELS = { apple: 'Continue with Apple', google: 'Continue with Google' };
-  const offered = (account?.providers || SITE.authProviders || [])
-    .filter((id) => PROVIDER_LABELS[id]);
-
-  dom.account.append(
-    el('p', {
-      class: 'hint', style: 'margin-bottom:10px',
-      text: 'Sign in to keep your folders and pins on every device you use. '
-        + 'Photographs stay on the device they were added to.',
-    }),
-  );
-  if (offered.length) {
-    dom.account.append(
-      el('div', { class: 'account-actions' }, offered.map((id) => provider(id, PROVIDER_LABELS[id]))),
-      el('p', { class: 'hint account-or', text: 'or with an email address' }),
-    );
-  }
-  dom.account.append(
-    email,
-    password,
-    el('div', { class: 'account-actions' }, buttons),
-  );
-  if (account.message) dom.account.append(el('p', { class: 'hint', style: 'margin-top:9px', text: account.message }));
+  accountPanel?.render();
 }
 
 /* ---------------- pin styling ---------------- */
