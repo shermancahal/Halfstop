@@ -1536,7 +1536,14 @@ await page.waitForFunction(() => /sky quality/.test(document.querySelector('.cor
   .catch(() => {});
 const heroText = await page.locator('.core-hero').innerText();
 check('the headline scores the night', /\d+%\s*\n?\s*sky quality/.test(heroText), true);
-check('and shows the cloud it used', /% cloud/.test(heroText), true);
+/*
+ * The cloud it scored with is still on the card - under the draw button now,
+ * as a named row, rather than running along under the verdict as the third
+ * number in a dot-separated line.
+ */
+const ingredients = await page.locator('.core-ingredients').innerText();
+check('and shows the cloud it used', /Cloud/.test(ingredients), true);
+check('with how long it is dark and how much moon', /Dark for/.test(ingredients) && /Moon/.test(ingredients), true);
 
 await page.locator('.core-guide-summary').click();
 await page.waitForTimeout(300);
@@ -2516,9 +2523,12 @@ await page.locator('.sky-tab', { hasText: /Aurora/ }).first().click();
 await page.waitForTimeout(900);
 const aurora = await page.evaluate(() => ({
   text: [...document.querySelectorAll('.core-row')].map((node) => node.textContent.trim()).join(' | '),
-  note: [...document.querySelectorAll('.legend-note')].map((node) => node.textContent).join(' '),
+  // Built like the Milky Way card: the chance is the headline, the verdict sits
+  // beside it, and Kp - which is about the planet, not this spot - is a row.
+  hero: document.querySelector('.core-hero')?.textContent || '',
 }));
-check('the chance at this point is reported', /12%/.test(aurora.text), true);
+check('the chance at this point is reported', /12%/.test(aurora.hero), true);
+check('and it is the headline, not a row', /chance in the next 30 min/.test(aurora.hero), true);
 check('alongside the planetary K index', /5/.test(aurora.text), true);
 
 /*
@@ -2549,18 +2559,20 @@ check('with the hour it peaks at', /\d+% at \d/.test(fog.when || ''), true);
 check('the reasoning is on the card, not in a footnote',
   /dewpoint depression/i.test(fog.rows), true);
 /*
- * The line that keeps this honest. Every number here is modelled, and a card
- * that presented it as a published forecast would be the one real problem with
- * shipping this feature.
+ * The line that keeps this honest. The numbers are this app's arithmetic, and a
+ * card that presented them as a published forecast would be the one real
+ * problem with shipping this feature. It was a row of its own until it was
+ * asked for as prose; the claim still has to be on the card somewhere, so it
+ * is checked on the note rather than dropped with the row.
  */
-check('and it says the number is modelled, not published',
-  /modelled here from the forecast ingredients/.test(fog.rows), true);
+check('and it says where the numbers come from',
+  /Calculated from the weather forecast/.test(fog.hint), true);
 check('the strip covers the hours ahead', fog.blocks > 12, true);
 check('and marks only the foggy ones', fog.likely > 0 && fog.likely < fog.blocks, true);
-check('the card says which service it did the arithmetic on',
-  /gridded forecast/.test(fog.hint), true);
+check('and names the ground that fogs regardless',
+  /Hollows, lake shores and snowfields/.test(fog.hint), true);
 await shot(page.locator('.sky-panel'), 'fog-panel');
-check('and Kp is translated into what it means here', /storm/.test(aurora.note), true);
+check('and Kp is translated into what it means here', /storm/i.test(aurora.hero), true);
 
 console.log('\nThe Milky Way band is drawn, and the night can be scrubbed');
 await showTab('waypoints');

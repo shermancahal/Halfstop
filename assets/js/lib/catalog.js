@@ -13,10 +13,10 @@ export async function loadCatalog(url = DEFAULT_URL) {
   try {
     response = await fetch(url, { cache: 'no-cache' });
   } catch (error) {
-    throw new Error(`Could not reach the map catalogue (${error.message}).`);
+    throw new Error(`Could not reach the map catalog (${error.message}).`);
   }
   if (response.status === 404) return { generated: null, maps: [] };
-  if (!response.ok) throw new Error(`Catalogue request failed with HTTP ${response.status}.`);
+  if (!response.ok) throw new Error(`Catalog request failed with HTTP ${response.status}.`);
 
   const data = await response.json();
   const maps = Array.isArray(data.maps) ? data.maps : [];

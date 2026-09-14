@@ -115,9 +115,27 @@ const clamp = (value) => Math.max(0, Math.min(100, Math.round(value)));
  *            freezing: boolean, depressionC: number|null, why: string,
  *            forecast: boolean}}
  */
+/*
+ * How the numbers inside `why` are written.
+ *
+ * This module works in Celsius, km/h and metres because the feed does, and it
+ * said so in every sentence it built - which is wrong in front of somebody who
+ * set the app to Fahrenheit and miles, and was: the fog card printed "0.4 C of
+ * dewpoint depression" directly under a reading in Fahrenheit.
+ *
+ * Passed in rather than read from a setting, because this file has no business
+ * knowing there is a setting. The default keeps it metric, which is what the
+ * tests and every other caller already expect.
+ */
+const METRIC = {
+  depression: (c) => `${c.toFixed(1)}°C`,
+  speed: (kmh) => `${Math.round(kmh)} km/h`,
+  distance: (m) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`),
+};
+
 export function fogHour({
   temperatureC, dewpointC, windKmh, skyPercent, night, visibilityM = null,
-}) {
+}, { write = METRIC } = {}) {
   const known = [temperatureC, dewpointC, windKmh, skyPercent]
     .every((value) => Number.isFinite(value));
   if (!known) {
@@ -147,7 +165,7 @@ export function fogHour({
      * millimetre of grass and you get dew and a clear view over it.
      */
     if (windKmh < FOG.calmKmh) chance -= 12;
-    why = `clear sky, light wind and ${depressionC.toFixed(1)}°C of dewpoint depression overnight`;
+    why = `clear sky, light wind and ${write.depression(depressionC)} of dewpoint depression overnight`;
   } else if (windKmh >= advectionMin && windKmh <= advectionMax && base >= 40) {
     kind = 'advection';
     /*
@@ -157,13 +175,13 @@ export function fogHour({
      * list being suggestive rather than the ingredient list being met.
      */
     chance = base - 12;
-    why = `moist air (${depressionC.toFixed(1)}°C depression) moving at ${Math.round(windKmh)} km/h`;
+    why = `moist air (${write.depression(depressionC)} depression) moving at ${write.speed(windKmh)}`;
   } else if (base >= 40) {
     why = windKmh > advectionMax
       ? 'the air is nearly saturated but too windy to fog — low cloud and drizzle instead'
       : 'the air is nearly saturated, but the sky or the hour is against fog forming';
   } else {
-    why = `${depressionC.toFixed(1)}°C of dewpoint depression — too dry`;
+    why = `${write.depression(depressionC)} of dewpoint depression — too dry`;
   }
 
   /*
@@ -181,13 +199,13 @@ export function fogHour({
       if (kind === 'none') kind = night ? 'radiation' : 'advection';
       return {
         chance: clamp(chance), kind, freezing, depressionC, forecast: true,
-        why: `visibility forecast at ${Math.round(visibilityM)} m`,
+        why: `visibility forecast at ${write.distance(visibilityM)}`,
       };
     }
     if (visibilityM >= FOG.visibilityClearM) {
       return {
         chance: Math.min(clamp(chance), 10), kind: 'none', freezing, depressionC, forecast: true,
-        why: `visibility forecast at ${(visibilityM / 1000).toFixed(1)} km — clear`,
+        why: `visibility forecast at ${write.distance(visibilityM)} — clear`,
       };
     }
   }
@@ -251,12 +269,12 @@ export function fogBand(chance) {
  * @param {Date} [options.now] hours before this are dropped as already past
  * @param {number} [options.horizonHours] how far ahead to look
  */
-export function fogOutlook(hours, { now = new Date(), horizonHours = 36 } = {}) {
+export function fogOutlook(hours, { now = new Date(), horizonHours = 36, write = METRIC } = {}) {
   const limit = now.valueOf() + horizonHours * 3600000;
   const rows = (hours || [])
     .filter((hour) => hour.at instanceof Date && Number.isFinite(hour.at.valueOf()))
     .filter((hour) => hour.at.valueOf() >= now.valueOf() - 3600000 && hour.at.valueOf() <= limit)
-    .map((hour) => ({ ...hour, ...fogHour(hour) }))
+    .map((hour) => ({ ...hour, ...fogHour(hour, { write }) }))
     .sort((a, b) => a.at - b.at);
 
   if (!rows.length) return { ok: false, reason: 'no forecast hours in range', rows: [] };

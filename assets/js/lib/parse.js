@@ -354,7 +354,7 @@ export async function parseMapFile(input, filename = '') {
     else if (looksLikeGPX(text)) document = parseGPX(text);
     else if (looksLikeKML(text)) document = parseKML(text);
     else if (text.trim().startsWith('{')) document = fromGeoJSON(text);
-    else throw new Error(`Unrecognised map file "${filename || 'upload'}". Supported: ${SUPPORTED_EXTENSIONS.join(', ')}`);
+    else throw new Error(`Unrecognized map file "${filename || 'upload'}". Supported: ${SUPPORTED_EXTENSIONS.join(', ')}`);
   }
 
   document.stats = summarize(document.geojson);

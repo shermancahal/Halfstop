@@ -395,7 +395,7 @@ export function styleFor(basemap, overlays = []) {
   const fallback = basemap?.custom && !MAPBOX_TOKEN
     ? 'Byways Topo renders from vector tiles, and neither source is configured'
       + ' — no Protomaps archive and no Mapbox token.'
-      + ' Showing CyclOSM raster instead — different colours, and no route shields.'
+      + ' Showing CyclOSM raster instead — different colors, and no route shields.'
     : '';
 
   return { style: buildRasterStyle(basemap, overlays), vector: false, fallback };

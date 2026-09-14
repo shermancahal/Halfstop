@@ -23,7 +23,7 @@ import { loadCatalog, findMap } from './lib/catalog.js';
 import { parseMapFile, linePositions, findLinkSpans } from './lib/parse.js';
 import {
   boundsAreValid, cumulativeDistances, formatDistance, formatDuration, formatElevation,
-  formatTemperature, geojsonBounds, mergeBounds, padBounds,
+  formatTemperature, formatTemperatureDelta, geojsonBounds, mergeBounds, padBounds,
 } from './lib/geo.js';
 import { el, escapeHTML, createToaster, downloadText, saveBlob, applyStoredTheme, readTheme, setTheme, formatDate, withIcon } from './lib/ui.js';
 import { fogOutlook, nightHours, fogName, fogNote, fogBand } from './lib/fog.js';
@@ -181,6 +181,31 @@ function readCoordFormats() {
 function rememberCoordFormats(open) {
   try {
     globalThis.localStorage?.setItem(COORD_FORMATS_KEY, open ? 'open' : '');
+  } catch {
+    // Storage refused; the preference lasts for this session only.
+  }
+}
+
+/*
+ * The same remembering, for who manages the land.
+ *
+ * Its own key rather than sharing the coordinates one: somebody who always
+ * wants UTM does not necessarily always want the managing agency, and one
+ * preference standing for two is the kind of tidiness that annoys people.
+ */
+const LAND_DETAIL_KEY = 'ab-maps-land-detail';
+
+function readLandDetail() {
+  try {
+    return globalThis.localStorage?.getItem(LAND_DETAIL_KEY) === 'open';
+  } catch {
+    return false;
+  }
+}
+
+function rememberLandDetail(open) {
+  try {
+    globalThis.localStorage?.setItem(LAND_DETAIL_KEY, open ? 'open' : '');
   } catch {
     // Storage refused; the preference lasts for this session only.
   }
@@ -713,7 +738,7 @@ async function main() {
       // the crosshair far more precisely than you can tap a spot.
       group.append(el('button', {
         class: 'map-tool', type: 'button',
-        title: 'Drop a pin at the centre of the map',
+        title: 'Drop a pin at the center of the map',
         'aria-label': 'Drop a pin at the centre of the map',
         html: icons.pin,
         onclick: () => {
@@ -3731,6 +3756,34 @@ function milkyWayPanel(body, position, date) {
     off: 'Hide the Milky Way',
   }));
 
+  /*
+   * What the verdict above was worked out from, in named rows.
+   *
+   * Filled twice, like the hero: the two astronomical ones are known instantly
+   * and offline, and cloud arrives with the forecast or does not arrive.
+   */
+  const ingredients = el('div', { class: 'core-rows core-ingredients' });
+  const fillIngredients = (cover) => {
+    const scored = nightQuality(night, cover);
+    const moonLine = night.moonless && night.moonless.minutes < night.window.minutes
+      ? `up part of it · ${Math.round(night.moon.fraction * 100)}% lit`
+      : `${Math.round(night.moon.fraction * 100)}% lit`;
+    const shown = [
+      ['Dark for', formatSpan(night.window.minutes)],
+      ['Moon', moonLine],
+      ['Cloud', scored.cloudCover === null ? 'not forecast yet' : `${scored.cloudCover}%`],
+    ];
+    ingredients.replaceChildren(...shown.map(([label, value]) => el('div', { class: 'core-row' }, [
+      el('span', { class: 'core-row-label', text: label }),
+      el('span', { class: 'core-row-value', text: value }),
+    ])));
+  };
+  fillIngredients(null);
+  cloudReady.then((cover) => {
+    if (ingredients.isConnected) fillIngredients(cover);
+  });
+  body.append(ingredients);
+
   const moonPercent = Math.round(night.moon.fraction * 100);
   const transitDiffers = night.windowPeak
     && Math.abs(night.windowPeak.altitude - night.transitAltitude) > 0.6;
@@ -3772,7 +3825,7 @@ function milkyWayPanel(body, position, date) {
     class: 'source-note',
     text: 'Percentages are how much of the bright core region — Scorpius and Sagittarius through'
       + ' to Aquila — is above the horizon. That depends on the angle the band makes with the'
-      + ' horizon, not just how high its centre is.',
+      + ' horizon, not just how high its center is.',
   }));
 
   nights.append(bestNightsList(date, lat, lon, null));
@@ -3795,19 +3848,21 @@ function renderCoreHero(hero, night, cover) {
   hero.className = `core-hero is-${band}`;
 
   const when = quality.best || night.moonless || night.window;
-  const detail = [
-    `${formatSpan(night.window.minutes)} dark`,
-    night.moonless && night.moonless.minutes < night.window.minutes
-      ? `moon up part of it (${Math.round(night.moon.fraction * 100)}%)`
-      : `moon ${Math.round(night.moon.fraction * 100)}%`,
-    quality.cloudCover === null ? 'cloud unknown' : `${quality.cloudCover}% cloud`,
-  ].filter(Boolean).join(' · ');
 
+  /*
+   * The verdict and the window, and nothing else.
+   *
+   * The three ingredients behind the verdict - how long it is dark, how much
+   * moon is up, how much cloud - used to run under it as one dot-separated
+   * line. Three numbers in a row read as a readout to be parsed rather than an
+   * answer, on the one card whose whole job is to say whether tonight is worth
+   * it. They are below now, as named rows, under the button that draws the
+   * band.
+   */
   hero.replaceChildren(
     el('div', { class: 'core-headline' }, [
       el('div', { class: 'core-verdict', text: quality.verdict }),
       el('div', { class: 'core-window', text: `${clockTime(when.from)} – ${clockTime(when.to)}` }),
-      el('div', { class: 'core-window-note', text: detail }),
     ]),
     percent === null
       ? el('div', { class: 'core-peak' }, [
@@ -3922,13 +3977,7 @@ function bestNightsList(date, lat, lon, cover) {
       }),
     ]));
   }
-  wrap.append(el('p', {
-    class: 'source-note',
-    text: 'Every window above is already moonless — the moon percentage is that night\u2019s'
-      + ' phase, which sets how much glow is left either side of it. Cloud is shown for the'
-      + ' nights the forecast reaches, about a week out; blank means nobody knows yet.',
-  }));
-  return wrap;
+    return wrap;
 }
 
 /* ---------------- putting a sky on the map ---------------- */
@@ -4321,9 +4370,14 @@ function fogPanel(body, position, date) {
 
   body.append(el('p', {
     class: 'hint', style: 'margin:10px 0 0',
-    text: 'Worked out from the gridded forecast — temperature, dewpoint, wind and sky cover — '
-      + 'not read off a fog product, because there is not one. A hollow, a lake shore or a '
-      + 'snowfield will fog when this says it will not.',
+    /*
+     * Shorter, and the limitation said as a fact about fog rather than as an
+     * apology for the model. Ground that fogs on its own - a hollow, a lake
+     * shore, a snowfield - does so whatever a forecast grid says, and a reader
+     * standing next to one needs that as information, not as a disclaimer.
+     */
+    text: 'Calculated from the weather forecast: temperature, dewpoint, wind and sky cover. '
+      + 'Hollows, lake shores and snowfields, among others, can fog regardless.',
   }));
 
   fogIngredients(position).then(
@@ -4338,7 +4392,26 @@ function fogPanel(body, position, date) {
         return;
       }
 
-      const outlook = fogOutlook(nightHours(result.hours, lat, lon, sunTimes), { now: date });
+      /*
+       * In the reader's units, not the feed's.
+       *
+       * fog.js works in Celsius, km/h and metres because that is what the grid
+       * publishes; what it says out loud is this page's business. Without
+       * this, the card printed a Celsius depression under a Fahrenheit
+       * temperature and a wind in km/h under distances in miles.
+       */
+      const outlook = fogOutlook(nightHours(result.hours, lat, lon, sunTimes), {
+        now: date,
+        write: {
+          depression: (c) => formatTemperatureDelta(c, 'C', state.temperature),
+          // Metric is the named case everywhere else in this file, and anything
+          // else falls to imperial; matching that keeps one convention.
+          speed: (kmh) => (state.units === 'metric'
+            ? `${Math.round(kmh)} km/h`
+            : `${Math.round(kmh * 0.621371)} mph`),
+          distance: (m) => formatDistance(m, state.units),
+        },
+      });
       renderFog(hero, detail, outlook);
     },
     () => {
@@ -4377,17 +4450,16 @@ function renderFog(hero, detail, outlook) {
       ? `${clockTime(outlook.from)} – ${clockTime(outlook.to)} · ${outlook.hours} hours`
       : `around ${clockTime(peak.at)}`],
     ['Why', capitalise(peak.why)],
-    Number.isFinite(peak.depressionC)
-      ? ['Dewpoint depression', `${peak.depressionC.toFixed(1)}°C at the peak`]
-      : null,
     /*
-     * Named rather than implied. An hour scored from a published visibility and
-     * an hour scored from this model are different kinds of claim, and the card
-     * would be overstating itself if it presented them identically.
+     * A difference, so it converts as a difference - 2 C of depression is 3.6 F,
+     * not 35.6. It was printed as Celsius whatever the temperature setting said,
+     * which is how somebody reading Fahrenheit everywhere else got one Celsius
+     * number in the middle of it.
      */
-    ['Evidence', outlook.forecast
-      ? 'a forecast visibility, published for this grid'
-      : 'modelled here from the forecast ingredients'],
+    Number.isFinite(peak.depressionC)
+      ? ['Dewpoint depression',
+        `${formatTemperatureDelta(peak.depressionC, 'C', state.temperature)} at the peak`]
+      : null,
   ].filter(Boolean);
 
   const note = fogNote(peak);
@@ -4434,51 +4506,63 @@ function fogStrip(rows) {
 }
 
 function auroraPanel(body, position) {
-  const chance = el('span', { class: 'core-row-value', text: '…' });
+  /*
+   * Built like the Milky Way card, because it answers the same question.
+   *
+   * Both are "is tonight worth going out for", and both have one number that
+   * decides it. This used to be two label-and-value rows and a sentence, which
+   * reads as a readout to be interpreted; the band card reads as an answer. So
+   * the chance here is the headline, the verdict sits beside it, and the Kp
+   * index - which is about the planet rather than about this spot - is a row
+   * underneath.
+   */
+  const hero = el('div', { class: 'core-hero' });
   const kpValue = el('span', { class: 'core-row-value', text: '…' });
-  const verdict = el('p', { class: 'legend-note', style: 'margin:8px 0 0' });
-
+  body.append(hero);
   body.append(el('div', { class: 'core-rows' }, [
-    el('div', { class: 'core-row' }, [
-      el('span', { class: 'core-row-label', text: 'Chance here, next 30 min' }),
-      chance,
-    ]),
     el('div', { class: 'core-row' }, [
       el('span', { class: 'core-row-label', text: 'Planetary K index' }),
       kpValue,
     ]),
   ]));
-  body.append(verdict);
 
   /*
-   * Said plainly, because the numbers alone mislead at this latitude.
-   *
-   * Kp 5 is a storm and reads as exciting; from Tennessee it still means
-   * nothing you can see. The percentage is the one that answers the question
-   * asked, and it is the one given first.
+   * The percentage first, and the Kp under it, because the numbers alone
+   * mislead at this latitude: Kp 5 is a storm and reads as exciting, and from
+   * Tennessee it still means nothing anybody can see. The chance for this point
+   * is the one that answers the question actually asked.
    */
+  const paint = ({ kp, here, reachable }) => {
+    const percent = here ? Math.round(here.chance) : null;
+    const band = !reachable ? 'unknown'
+      : percent === null ? 'unknown'
+        : percent >= 50 ? 'good' : percent >= 15 ? 'fair' : 'poor';
+    hero.className = `core-hero is-${band}`;
+
+    const verdict = !reachable
+      ? 'No answer from the Space Weather Prediction Center just now.'
+      : kp ? capitalise(describeKp(kp.kp)) : 'Nothing reported right now.';
+
+    hero.replaceChildren(
+      el('div', { class: 'core-headline' }, [
+        el('div', { class: 'core-verdict', text: verdict }),
+      ]),
+      el('div', { class: 'core-peak' }, [
+        el('div', { class: 'core-peak-value', text: percent === null ? '—' : `${percent}%` }),
+        el('div', { class: 'core-peak-note', text: 'chance in the next 30 min' }),
+      ]),
+    );
+    kpValue.textContent = kp ? String(kp.kp) : '—';
+  };
+
+  paint({ kp: null, here: null, reachable: true });
+
   Promise.all([kpNow(), auroraChance(position)]).then(([kp, here]) => {
     if (!body.isConnected) return;
-
-    if (!kp && !here) {
-      // Offline, or NOAA is having an afternoon. Saying "quiet" would be a
-      // claim; saying nothing is the truth.
-      chance.textContent = 'not available';
-      kpValue.textContent = '—';
-      verdict.textContent = 'No answer from the Space Weather Prediction Center just now.';
-      return;
-    }
-
-    chance.textContent = here ? `${Math.round(here.chance)}%` : 'no data for this point';
-    kpValue.textContent = kp ? String(kp.kp) : '—';
-    verdict.textContent = kp ? describeKp(kp.kp) : '';
+    // Offline, or NOAA is having an afternoon. Saying "quiet" would be a claim;
+    // saying nothing is the truth.
+    paint({ kp, here, reachable: Boolean(kp || here) });
   });
-
-  body.append(el('p', {
-    class: 'hint', style: 'margin:10px 0 0',
-    text: 'OVATION models where the aurora is, not whether you will see it — '
-      + 'cloud, the moon and your northern horizon all still apply.',
-  }));
 }
 
 /**
@@ -4568,7 +4652,7 @@ function directionName(entry, when) {
  */
 function lineKeyBlock() {
   const rows = [
-    ['band', 'The Milky Way band', 'The wide violet curve, labelled on the map — the band itself, not a bearing to it.'],
+    ['band', 'The Milky Way band', 'The wide violet curve, labeled on the map — the band itself, not a bearing to it.'],
     ['track', 'The hour ring', 'Dashed, around the pin: every bearing the core passes through tonight, with the hours on it.'],
     ['spoke', 'Milky Way core', 'The solid violet line — which way to face right now, or at whatever time the slider is on.'],
   ];
@@ -7614,12 +7698,15 @@ function showIdentifyResults(position, groups, { pending = false } = {}) {
     if (going.length) {
       rows.push({
         tight: true,
+        // Each service's own mark rather than four identical compasses. This
+        // card has room for the words, so it keeps them; the details panel,
+        // which does not, uses the same marks alone.
         items: going.map((one) => el('a', {
-          class: 'button button-ghost button-small button-with-icon',
+          class: `button button-ghost button-small button-with-icon nav-${one.id}`,
           href: one.url,
           target: '_blank',
           rel: 'noopener noreferrer',
-          html: `${icons.compass}<span>${escapeHTML(one.label)}</span>`,
+          html: `${NAV_MARKS[one.id] || icons.compass}<span>${escapeHTML(one.label)}</span>`,
         })),
       });
     }
@@ -8427,7 +8514,7 @@ async function loadFromCatalog(slug, { fit = true } = {}) {
 
   const record = findMap(state.catalog, slug);
   if (!record) {
-    toast(`No map named “${slug}” in the catalogue.`, { tone: 'error' });
+    toast(`No map named “${slug}” in the catalog.`, { tone: 'error' });
     return null;
   }
 
@@ -9015,7 +9102,7 @@ function renderPinDetails(folder, item) {
     props.description ? linkedText(props.description, 'pin-description') : null,
     el('div', { class: 'picker-row', style: 'margin-top:11px' }, [
       labelledButton(icons.target, 'Zoom to', {
-        title: 'Centre the map on this waypoint',
+        title: 'Center the map on this waypoint',
         onclick: () => focusFolderItem(item, folder.id),
       }),
       labelledButton(icons.pencil, 'Edit', {
@@ -9068,10 +9155,7 @@ function renderPinDetails(folder, item) {
   /* where it is */
   dom.details.append(locationSection([lon, lat], { recorded: recordedHeight }));
 
-  const heading = directionsRow([lon, lat]);
-  if (heading) dom.details.append(el('div', { class: 'panel-section' }, [heading]));
-
-  /* where you are relative to it */
+  /* where you are relative to it, and how to drive to it */
   const relative = el('div', { class: 'panel-section' }, [
     sectionTitle('From here', icons.compass),
   ]);
@@ -9079,6 +9163,16 @@ function renderPinDetails(folder, item) {
     el('p', { class: 'hint', style: 'margin:0', text: 'Waiting for your location…' }),
   ]);
   relative.append(relativeBody);
+  /*
+   * Directions live in here rather than in a section of their own.
+   *
+   * "From here" is already the heading for the relationship between where you
+   * are and where the pin is, and driving to it is the last thing that
+   * relationship has to say. A DIRECTIONS heading of its own, above three
+   * words, was a section title for a single row.
+   */
+  const heading = directionsRow([lon, lat]);
+  if (heading) relative.append(heading);
   dom.details.append(relative);
 
   if (navigator.geolocation) {
@@ -9094,7 +9188,7 @@ function renderPinDetails(folder, item) {
       () => {
         relativeBody.replaceChildren(el('p', {
           class: 'hint', style: 'margin:0',
-          text: 'Location unavailable — allow location access, and note this needs https.',
+          text: 'Location is unavailable. You must allow location access.',
         }));
       },
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 },
@@ -9109,12 +9203,16 @@ function renderPinDetails(folder, item) {
   dom.details.append(weatherSection([lon, lat]));
   dom.details.append(notesSection(folder, item));
 
-  /* place — network, so appended when it arrives */
-  const placeSection = el('div', { class: 'panel-section' }, [
-    sectionTitle('Nearest place', icons.pin),
-  ]);
-  const placeBody = el('p', { class: 'hint', style: 'margin:0', text: 'Looking up…' });
-  placeSection.append(placeBody);
+  /*
+   * Place — network, so appended when it arrives, and collapsible like the
+   * other sections that are worth having and not worth reading every time.
+   * A street address is confirmation of somewhere you already chose on a map.
+   */
+  let placeBody = null;
+  const placeSection = collapsibleSection('place', 'Nearest place', (body) => {
+    placeBody = el('p', { class: 'hint', style: 'margin:0', text: 'Looking up…' });
+    body.append(placeBody);
+  }, { icon: icons.pin });
   dom.details.append(placeSection);
 
   reverseGeocode([lon, lat]).then((place) => {
@@ -9195,12 +9293,36 @@ async function landManagerRows(position) {
     ]));
   }
 
-  if (result.agency) rows.push(detailRow('Agency', result.agency, { copy: result.agency }));
-  if (result.unit) rows.push(detailRow('Unit', result.unit, { copy: result.unit }));
-  if (result.access) rows.push(detailRow('Access', result.access));
-  if (!rows.length) return null;
+  /*
+   * Who exactly, folded away behind the badge that answers the question.
+   *
+   * The badge above says the thing somebody came for - public or private, and
+   * whose. The acronym, the unit name and which service answered are the
+   * follow-up, and as four open rows they were longer than everything above
+   * them put together. Same disclosure the coordinate formats use, for the
+   * same reason: a detail worth keeping and not worth reading every time.
+   */
+  const detail = [];
+  if (result.agency) detail.push(detailRow('Agency', result.agency, { copy: result.agency }));
+  if (result.unit) detail.push(detailRow('Unit', result.unit, { copy: result.unit }));
+  if (result.access) detail.push(detailRow('Access', result.access));
+  if (!rows.length && !detail.length) return null;
 
-  rows.push(el('p', { class: 'source-note', text: `Source: ${result.source}` }));
+  if (detail.length) {
+    rows.push(el('details', {
+      class: 'coord-more land-more',
+      open: readLandDetail(),
+      ontoggle: (event) => rememberLandDetail(event.target.open),
+    }, [
+      el('summary', { class: 'coord-more-summary', text: 'Who manages it' }),
+      el('div', { class: 'coord-more-body' }, [
+        ...detail,
+        el('p', { class: 'source-note', text: `Source: ${result.source}` }),
+      ]),
+    ]));
+  } else {
+    rows.push(el('p', { class: 'source-note', text: `Source: ${result.source}` }));
+  }
   return rows;
 }
 
@@ -9453,7 +9575,7 @@ function notesSection(folder, item) {
     if (!current.length) {
       list.append(el('p', {
         class: 'hint', style: 'margin:0 0 9px',
-        text: 'Nothing recorded yet. Notes are dated and kept, so you can see how a place changes.',
+        text: 'Notes are dated and synced.',
       }));
       return;
     }
@@ -9474,7 +9596,7 @@ function notesSection(folder, item) {
 
   const field = el('textarea', {
     class: 'style-desc', rows: '2', 'aria-label': 'New field note',
-    placeholder: 'Gate locked · creek up · good camp on the left…',
+    placeholder: '',
   });
   const add = () => {
     const text = field.value.trim();
@@ -9877,18 +9999,31 @@ let tripRoute = null;
  * whatever the reader's phone considers the right place, and none of that
  * works through a click handler.
  */
+const NAV_MARKS = {
+  apple: icons.navApple,
+  google: icons.navGoogle,
+  waze: icons.navWaze,
+  mapquest: icons.navMapquest,
+};
+
 function directionsRow(position, { title = 'Directions' } = {}) {
   const options = directionsFor(position);
   if (!options.length) return null;
-  return el('div', { class: 'directions-row' }, [
-    el('span', { class: 'directions-label', text: title }),
-    ...options.map((one) => el('a', {
-      class: 'button button-ghost button-small',
+  return el('div', { class: 'directions-block' }, [
+    // The word on its own line, the apps under it. They were one row, and a
+    // fourth service turned that row into a wrap nobody had designed.
+    el('div', { class: 'directions-label', text: title }),
+    el('div', { class: 'directions-apps' }, options.map((one) => el('a', {
+      class: `nav-app nav-${one.id}`,
       href: one.url,
       target: '_blank',
       rel: 'noopener noreferrer',
-      text: one.label,
-    })),
+      // The name is the accessible name and the long-press label, because the
+      // button itself no longer carries one.
+      title: one.label,
+      'aria-label': one.label,
+      html: NAV_MARKS[one.id] || '',
+    }))),
   ]);
 }
 
@@ -12185,8 +12320,8 @@ function openStyleEditor(folder, itemIds, anchor) {
   };
   colorRow.append(el('button', {
     class: 'swatch is-inherit', type: 'button', dataset: { color: '' },
-    title: 'Clear the colour - the ring goes back to ink',
-    'aria-label': 'No colour',
+    title: 'Clear the color - the ring goes back to ink',
+    'aria-label': 'No color',
     style: `--swatch:${folder.color}`,
     onclick: () => { chosenColor = null; colorTouched = true; paintSwatches(); },
   }));
@@ -12276,7 +12411,7 @@ function openStyleEditor(folder, itemIds, anchor) {
         if (!Object.keys(patch).length) {
           state.openEditor = null;
           editor.remove();
-          toast('Pick a colour or an icon first.', { tone: 'info' });
+          toast('Pick a color or an icon first.', { tone: 'info' });
           return;
         }
         const changed = state.folders.styleItems(folder.id, patch, itemIds);

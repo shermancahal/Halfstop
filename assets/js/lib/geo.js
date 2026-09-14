@@ -232,6 +232,25 @@ export function formatTemperature(value, unit = 'F', want = 'F', { withScale = t
   return `${Math.round(converted)}\u00b0${withScale ? String(want).toUpperCase() : ''}`;
 }
 
+/**
+ * A temperature *difference*, in the reader's scale.
+ *
+ * Not the same conversion as a temperature. A dewpoint depression of 2 °C is
+ * 3.6 °F, not 35.6 - the offset belongs to the scale's zero point and an
+ * interval has no zero point to move. Running a difference through
+ * convertTemperature is the bug this exists to stop, and it is a quiet one:
+ * the number stays plausible and is wrong by thirty-two.
+ */
+export function formatTemperatureDelta(value, unit = 'C', want = 'F', { withScale = true } = {}) {
+  if (!Number.isFinite(value)) return '—';
+  const from = String(unit).toUpperCase().replace('\u00b0', '').trim() || 'C';
+  const to = String(want).toUpperCase().trim();
+  const scaled = from === to ? value
+    : to === 'C' ? value * (5 / 9)
+      : value * (9 / 5);
+  return `${scaled.toFixed(1)}\u00b0${withScale ? to : ''}`;
+}
+
 export function formatDuration(seconds) {
   if (!Number.isFinite(seconds) || seconds <= 0) return '—';
   const total = Math.round(seconds);

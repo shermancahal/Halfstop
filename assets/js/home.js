@@ -226,7 +226,7 @@ async function main() {
     catalog = await loadCatalog();
   } catch (error) {
     dom.message.append(el('div', { class: 'empty-state' }, [
-      el('h3', { text: 'The catalogue could not be loaded' }),
+      el('h3', { text: 'The catalog could not be loaded' }),
       el('p', { text: error.message }),
     ]));
     return;

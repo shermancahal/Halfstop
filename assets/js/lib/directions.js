@@ -6,16 +6,17 @@
  * the interesting question here was never "how do I get there". So the drive is
  * planned and drawn here and then handed over, which is what GaiaGPS does too.
  *
- * The three do not agree about what a link may carry, and the differences are
- * not cosmetic:
+ * They do not agree about what a link may carry, and the differences are not
+ * cosmetic:
  *
  *   - Google takes a whole trip - origin, destination and intermediate
  *     waypoints - as a route to look at and then start.
  *   - Apple Maps takes one destination. Its URL scheme has no multi-stop form.
  *   - Waze takes one destination, and answers a link carrying several with an
  *     error rather than ignoring the extras.
+ *   - MapQuest takes one destination, in the path rather than a query string.
  *
- * So a stop can go to any of the three, and only Google is offered the trip.
+ * So a stop can go to any of them, and only Google is offered the trip.
  * Everything here builds a string; opening it is the caller's business.
  */
 
@@ -43,6 +44,17 @@ export function googleMapsURL(position) {
 /** One destination, in Waze. */
 export function wazeURL(position) {
   return `https://waze.com/ul?ll=${encodeURIComponent(latLon(position))}&navigate=yes`;
+}
+
+/**
+ * One destination, in MapQuest.
+ *
+ * Their web app reads a coordinate out of the path rather than a query string,
+ * which is why this one does not look like the other three. Like Apple's and
+ * Waze's it carries a single destination; the trip still goes to Google.
+ */
+export function mapquestURL(position) {
+  return `https://www.mapquest.com/directions/to/near-${encodeURIComponent(latLon(position))}`;
 }
 
 /**
@@ -89,9 +101,9 @@ export function googleTripURL(stops) {
 }
 
 /**
- * The three, for one stop, in the order somebody is likely to want them.
+ * All of them, for one stop, in the order somebody is likely to want them.
  *
- * All three are offered rather than sniffed for, because there is no reliable
+ * Every one is offered rather than sniffed for, because there is no reliable
  * way to ask a browser whether an app is installed - and a link to an app
  * somebody does not have simply opens that service's website, which is a far
  * better outcome than a button this guessed wrong about and hid.
@@ -102,5 +114,6 @@ export function directionsFor(position) {
     { id: 'apple', label: 'Apple Maps', url: appleMapsURL(position) },
     { id: 'google', label: 'Google Maps', url: googleMapsURL(position) },
     { id: 'waze', label: 'Waze', url: wazeURL(position) },
+    { id: 'mapquest', label: 'MapQuest', url: mapquestURL(position) },
   ];
 }

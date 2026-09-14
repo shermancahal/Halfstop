@@ -754,7 +754,7 @@ export const OVERLAYS = [
     id: 'sky-brightness',
     group: 'Conditions',
     name: 'Sky brightness (Bortle)',
-    description: 'Modelled night-sky brightness, on the Bortle scale.',
+    description: 'Modeled night-sky brightness, on the Bortle scale.',
     legend: [
       { color: '#000000', label: 'Bortle 1–2 · truly dark' },
       { color: '#303e8c', label: 'Bortle 3 · rural' },
@@ -763,7 +763,7 @@ export const OVERLAYS = [
       { color: '#c8752e', label: 'Bortle 6–7 · bright suburban' },
       { color: '#c03a2b', label: 'Bortle 8–9 · city' },
     ],
-    legendNote: 'Colours follow the atlas own scale. Modelled sky brightness, '
+    legendNote: 'Colors follow the atlas own scale. Modeled sky brightness, '
       + 'not a measurement — a ridge between you and a town is not in it.',
     tiles: ['https://djlorenz.github.io/astronomy/image_tiles/tiles2022/tile_{z}_{x}_{y}.png'],
     tileSize: 256,
@@ -1276,7 +1276,7 @@ export const OVERLAYS = [
     name: 'Wildfire',
     description: 'Current large-fire perimeters from NIFC. Zoom in to a region to load them.',
     legendNote: 'The mapped edge of a fire as last flown or walked, which can be hours old '
-      + 'and is never a closure map. Check the responsible agency before travelling.',
+      + 'and is never a closure map. Check the responsible agency before traveling.',
     /*
      * Queried rather than tiled, because NIFC publishes this as a feature
      * service and nothing else. The previous URL asked that service for
@@ -1634,7 +1634,7 @@ export const OVERLAYS = [
     id: 'snow-depth',
     group: 'Weather',
     name: 'Snow on the ground',
-    description: 'Modelled snow depth from the National Snow Analyses.',
+    description: 'Modeled snow depth from the National Snow Analyses.',
     legendNote: 'NOHRSC models this at 1 km from gauges, satellite and radar.',
     // Empty out of season, which is the layer working rather than failing.
     // tools/check-layers.mjs reads this so a summer run does not report a
@@ -1958,7 +1958,7 @@ export const OVERLAYS = [
    * publishes.
    */
     id: 'vt-camping',
-    legendNote: 'Drawn by the agency, so the colours are theirs. Tap a feature to see what it is.',
+    legendNote: 'Drawn by the agency, so the colors are theirs. Tap a feature to see what it is.',
     at: [-72.8, 44.2],
     states: ['VT'],
     name: 'Primitive camping areas',
@@ -1974,7 +1974,7 @@ export const OVERLAYS = [
   },
   {
     id: 'vt-trails',
-    legendNote: 'Drawn by the agency, so the colours are theirs. Tap a feature to see what it is.',
+    legendNote: 'Drawn by the agency, so the colors are theirs. Tap a feature to see what it is.',
     at: [-72.8, 44.2],
     states: ['VT'],
     name: 'Trails',
@@ -1990,7 +1990,7 @@ export const OVERLAYS = [
   },
   {
     id: 'vt-recreation',
-    legendNote: 'Drawn by the agency, so the colours are theirs. Tap a feature to see what it is.',
+    legendNote: 'Drawn by the agency, so the colors are theirs. Tap a feature to see what it is.',
     at: [-72.7, 44.4],
     states: ['VT'],
     name: 'Recreation sites',
@@ -2212,7 +2212,7 @@ export const OVERLAYS = [
   },
   {
     id: 'pa-parks',
-    legendNote: 'Drawn by the agency, so the colours are theirs. Tap a feature to see what it is.',
+    legendNote: 'Drawn by the agency, so the colors are theirs. Tap a feature to see what it is.',
     at: [-77.8, 41.2],
     states: ['PA'],
     name: 'State parks & amenities',
@@ -2228,7 +2228,7 @@ export const OVERLAYS = [
   },
   {
     id: 'vt-routes',
-    legendNote: 'Drawn by the agency, so the colours are theirs. Tap a feature to see what it is.',
+    legendNote: 'Drawn by the agency, so the colors are theirs. Tap a feature to see what it is.',
     at: [-72.8, 44.2],
     states: ['VT'],
     name: 'ANR travel routes',
@@ -2367,7 +2367,7 @@ export const OVERLAYS = [
   },
   {
     id: 'ia-recreation',
-    legendNote: 'Drawn by the agency, so the colours are theirs. Tap a feature to see what it is.',
+    legendNote: 'Drawn by the agency, so the colors are theirs. Tap a feature to see what it is.',
     at: [-93.6, 42.0],
     states: ['IA'],
     name: 'Recreation lands',
@@ -2437,7 +2437,7 @@ export const OVERLAYS = [
   },
   {
     id: 'hi-trails',
-    legendNote: 'Drawn by the agency, so the colours are theirs. Tap a feature to see what it is.',
+    legendNote: 'Drawn by the agency, so the colors are theirs. Tap a feature to see what it is.',
     at: [-155.5, 19.6],
     states: ['HI'],
     name: 'Na Ala Hele trails',

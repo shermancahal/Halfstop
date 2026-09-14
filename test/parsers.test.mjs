@@ -239,7 +239,7 @@ test('parse: accepts plain GeoJSON and assigns feature kinds', async () => {
 });
 
 test('parse: rejects content it cannot recognise', async () => {
-  await assert.rejects(() => parseMapFile('not a map at all', 'x.txt'), /Unrecognised map file/);
+  await assert.rejects(() => parseMapFile('not a map at all', 'x.txt'), /Unrecognized map file/);
 });
 
 test('summarize: per-feature measurements are written back onto properties', () => {
