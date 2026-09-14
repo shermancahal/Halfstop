@@ -103,8 +103,10 @@ export function googleTripURL(stops) {
 export function directionsFor(position) {
   if (!position || !Number.isFinite(position[0]) || !Number.isFinite(position[1])) return [];
   return [
-    { id: 'apple', label: 'Apple Maps', url: appleMapsURL(position) },
-    { id: 'google', label: 'Google Maps', url: googleMapsURL(position) },
-    { id: 'waze', label: 'Waze', url: wazeURL(position) },
+    // `short` is for a row that has to fit three buttons across a phone; the
+    // full label is what a title or a screen reader should say.
+    { id: 'apple', label: 'Apple Maps', short: 'Apple', url: appleMapsURL(position) },
+    { id: 'google', label: 'Google Maps', short: 'Google', url: googleMapsURL(position) },
+    { id: 'waze', label: 'Waze', short: 'Waze', url: wazeURL(position) },
   ];
 }

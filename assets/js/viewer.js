@@ -7698,15 +7698,15 @@ function showIdentifyResults(position, groups, { pending = false } = {}) {
     if (going.length) {
       rows.push({
         tight: true,
-        // Each service's own mark rather than four identical compasses. This
-        // card has room for the words, so it keeps them; the details panel,
-        // which does not, uses the same marks alone.
+        // The same icon on each, matching the details panel: they all do the
+        // same thing, so an icon that varies would imply a difference that is
+        // not there. This card has room for the full names.
         items: going.map((one) => el('a', {
-          class: `button button-ghost button-small button-with-icon nav-${one.id}`,
+          class: 'button button-ghost button-small button-with-icon',
           href: one.url,
           target: '_blank',
           rel: 'noopener noreferrer',
-          html: `${NAV_MARKS[one.id] || icons.compass}<span>${escapeHTML(one.label)}</span>`,
+          html: `${icons.route}<span>${escapeHTML(one.label)}</span>`,
         })),
       });
     }
@@ -9468,12 +9468,16 @@ async function fillStormRows(host, position) {
     const motion = alert.motion ? describeMotion(alert.motion) : '';
     host.append(el('div', { class: `storm-card is-${alert.severity.toLowerCase()}` }, [
       el('div', { class: 'storm-event', text: alert.event }),
+      // Nothing at all when there is no vector. "No storm motion published for
+      // this one" is a sentence about an absence, on a card whose job is to
+      // say what is happening - and most alerts are advisories that never
+      // carry one, so it was the usual case explaining itself.
       motion
         ? el('div', { class: 'storm-motion' }, [
           el('span', { class: 'storm-arrow', html: arrowGlyph(alert.motion.headingDegrees) }),
           el('span', { text: `Moving ${motion}` }),
         ])
-        : el('div', { class: 'storm-motion is-quiet', text: 'No storm motion published for this one.' }),
+        : null,
       el('div', { class: 'storm-area', text: alert.areaDescription }),
       alert.expires
         ? el('div', { class: 'storm-expires', text: `Until ${clockTime(new Date(alert.expires))}` })
@@ -9501,11 +9505,16 @@ async function fillStormRows(host, position) {
     host.append(stormButton);
   }
 
-  host.append(el('p', {
-    class: 'source-note',
-    text: 'Storm motion is the National Weather Service\u2019s own vector, from consecutive radar'
-      + ' scans. Only warned storms carry one — ordinary rain on the radar has no published track.',
-  }));
+  // And the note explaining storm motion only when one is actually shown.
+  // Explaining something that is not on the card is how a heat advisory came
+  // to carry two sentences about radar vectors.
+  if (result.alerts.some((alert) => alert.motion)) {
+    host.append(el('p', {
+      class: 'source-note',
+      text: 'Storm motion is the National Weather Service\u2019s own vector, from consecutive radar'
+        + ' scans. Only warned storms carry one — ordinary rain on the radar has no published track.',
+    }));
+  }
 }
 
 /**
@@ -9574,7 +9583,9 @@ function notesSection(folder, item) {
     list.replaceChildren();
     if (!current.length) {
       list.append(el('p', {
-        class: 'hint', style: 'margin:0 0 9px',
+        // No bottom margin of its own: .note-list already leaves a gap under
+        // itself, and the two together put 19px between this line and the box.
+        class: 'hint', style: 'margin:0',
         text: 'Notes are dated and synced.',
       }));
       return;
@@ -9999,11 +10010,6 @@ let tripRoute = null;
  * whatever the reader's phone considers the right place, and none of that
  * works through a click handler.
  */
-const NAV_MARKS = {
-  apple: icons.navApple,
-  google: icons.navGoogle,
-  waze: icons.navWaze,
-};
 
 function directionsRow(position, { title = 'Directions' } = {}) {
   const options = directionsFor(position);
@@ -10012,16 +10018,25 @@ function directionsRow(position, { title = 'Directions' } = {}) {
     // The word on its own line, the apps under it. They were one row, and a
     // fourth service turned that row into a wrap nobody had designed.
     el('div', { class: 'directions-label', text: title }),
+    /*
+     * Words again, and the ordinary button colours.
+     *
+     * Marks alone were three silhouettes somebody had to learn; the service's
+     * name is the thing being chosen. Every one carries the same icon - the
+     * one on New trip - because they all do the same thing, and an icon that
+     * varies implies a difference that is not there.
+     *
+     * Short names so the three fit on one line at phone width: the block is
+     * headed Directions and the buttons sit under it, so "Maps" on the end of
+     * two of them was saying it twice.
+     */
     el('div', { class: 'directions-apps' }, options.map((one) => el('a', {
-      class: `nav-app nav-${one.id}`,
+      class: 'button button-ghost button-small button-with-icon',
       href: one.url,
       target: '_blank',
       rel: 'noopener noreferrer',
-      // The name is the accessible name and the long-press label, because the
-      // button itself no longer carries one.
-      title: one.label,
-      'aria-label': one.label,
-      html: NAV_MARKS[one.id] || '',
+      title: `Directions in ${one.label}`,
+      html: `${icons.route}<span>${escapeHTML(one.short || one.label)}</span>`,
     }))),
   ]);
 }

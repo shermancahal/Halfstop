@@ -1023,37 +1023,13 @@ html, body { height: 100%; overflow: hidden; }
   font-size: .7rem; font-weight: 600; letter-spacing: .07em; text-transform: uppercase;
   color: var(--ink-3); margin-bottom: 7px;
 }
-.directions-apps { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Three ordinary buttons, side by side. nowrap because the point of the short
+   labels is that they fit on one line; if a future service makes that untrue
+   it should be obvious here rather than silently wrapping. */
+.directions-apps { display: flex; flex-wrap: nowrap; gap: 6px; }
+.directions-apps .button { text-decoration: none; flex: 0 1 auto; min-width: 0; }
 .identify-card .directions-block { margin-top: 11px; }
 
-/*
- * One tappable square per app, carrying a mark and no words.
- *
- * 40px because this is a link somebody presses with a thumb in a car park, and
- * the smallest thing worth putting under a thumb is about that. The colour is
- * on the mark rather than the box: four saturated tiles in a row is a toolbar
- * from 2009, and the tint only has to be enough to tell them apart.
- */
-.nav-app {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 40px; height: 40px; flex: none;
-  border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
-  background: var(--surface); text-decoration: none;
-  transition: border-color .12s ease, background .12s ease;
-}
-.nav-app svg { width: 20px; height: 20px; }
-.nav-app:hover { background: var(--paper-2); }
-/* The brand each mark stands for. Suggestive colours, not their assets - the
-   shapes are what tell the four apart, so this still works in greyscale. */
-.nav-apple { color: #0a84ff; }
-.nav-google { color: #ea4335; }
-.nav-waze { color: #00b7e0; }
-.nav-app:hover { border-color: currentColor; }
-/* On the identify card the mark sits beside its name, so only the mark takes
-   the brand colour - the word stays the card's ink like every other label. */
-.button-with-icon.nav-apple span,
-.button-with-icon.nav-google span,
-.button-with-icon.nav-waze span { color: var(--ink); }
 .trip-measured { margin: 8px 0 0; font-size: .86rem; font-weight: 550; color: var(--ink); }
 /* Green, and matching the dashed line on the map, because the note and the
    geometry are the same statement made twice. */

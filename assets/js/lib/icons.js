@@ -52,26 +52,6 @@ export const icons = {
   pencil: svg('<path d="M12.5 20H21"/><path d="M16.4 3.6a2.1 2.1 0 0 1 3 3L7.5 18.5 3.5 20l1.5-4Z"/>'),
   /* A key, for the password. Distinct from the pencil beside it: both buttons
      edit the account, and two pencils would say they do the same thing. */
-/*
- * The navigation apps, as marks rather than logos.
- *
- * Deliberately not their trademarks: Apple's, Google's and Waze's logos
- * are theirs, and shipping copies of them inside somebody else's app is
- * not ours to do. These are four plainly different silhouettes - an arrow, a
- * pin, a speech bubble - in a colour each service is associated
- * with, which is enough to tell them apart at a glance.
- *
- * The shapes carry the difference and the colour only reinforces it, because
- * the buttons have no words on them: four blobs distinguished by hue alone
- * would be four identical buttons to a reader who cannot separate red from
- * green.
- */
-  /* A navigation cursor, for Apple Maps. */
-  navApple: svg('<path d="M3.5 11 20.5 4l-7 17-2.6-6.9Z"/>'),
-  /* A dropped pin, for Google Maps. */
-  navGoogle: svg('<path d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11Z"/><circle cx="12" cy="10" r="2.6"/>'),
-  /* A speech bubble, for Waze, which is a road full of people talking. */
-  navWaze: svg('<path d="M20 13.5A6.5 6.5 0 0 0 13.5 7h-3A6.5 6.5 0 0 0 4 13.5v0A6.5 6.5 0 0 0 10.5 20H17l3 2.5V13.5Z"/><path d="M9.5 13h.01"/><path d="M14.5 13h.01"/>'),
 
   key: svg('<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.8 12.2 8.7-8.7"/><path d="m17 6 2.5 2.5"/><path d="M14.5 8.5 17 11"/>'),
   note: svg('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z"/><path d="M14 2v6h6"/><path d="M8.5 13.5h7"/><path d="M8.5 17h4.5"/>'),
