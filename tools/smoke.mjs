@@ -2245,7 +2245,7 @@ if (!external) {
   check('with the address on its own line under it', card.email, 'sherman@example.com');
   check('and the sync line counts folders', /folders? synced/.test(card.sync || ''), true);
   check('edit and sign out share a line, and sync is its own',
-    card.buttons, [['Edit profile', true], ['Sign out', true], ['Sync now', true]]);
+    card.buttons, [['Edit', true], ['Sign out', true], ['Sync now', true]]);
   check('and nothing that ends the account is a tap away',
     await signed.evaluate(() => Boolean(document.querySelector('#account-panel .account-danger'))), false);
   /*

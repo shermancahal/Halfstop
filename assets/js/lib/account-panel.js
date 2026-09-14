@@ -283,7 +283,13 @@ export function createAccountPanel({ container, account, folders = null, toast }
       }
 
       const editButton = el('button', {
-        class: 'button button-ghost button-small account-edit', type: 'button', text: 'Edit profile',
+        /*
+         * "Edit", not "Edit profile". Measured: bordered, with its icon, and
+         * beside Sign out, the longer label clips to "Edit pro…" at the
+         * panel's width - and a truncated button is worse than a shorter word.
+         * Under the account's own name there is nothing else it could edit.
+         */
+        class: 'button button-secondary button-small account-edit', type: 'button', text: 'Edit',
         onclick: () => {
           edit = { name, email: user.email || '' };
           render();
@@ -292,7 +298,7 @@ export function createAccountPanel({ container, account, folders = null, toast }
       withIcon(editButton, icons.pencil);
 
       const signOut = el('button', {
-        class: 'button button-ghost button-small', type: 'button', text: 'Sign out',
+        class: 'button button-secondary button-small', type: 'button', text: 'Sign out',
         // signOut swallows a failed server call and clears the device either
         // way, so the only thing left to catch is the unexpected.
         onclick: () => account.signOut().catch((error) => toast(error.message, { tone: 'error' })),
@@ -308,7 +314,7 @@ export function createAccountPanel({ container, account, folders = null, toast }
        * with the line that counts folders, because it is about this device
        * rather than about the account.
        */
-      container.append(who, el('div', { class: 'account-actions' }, [editButton, signOut]));
+      container.append(who, el('div', { class: 'account-actions account-who-actions' }, [editButton, signOut]));
 
       /*
        * Syncing, only where there is something to sync.

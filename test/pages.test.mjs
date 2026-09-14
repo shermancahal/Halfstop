@@ -236,7 +236,18 @@ test('pages: a page with the settings menu loads the CSS that styles it', async 
       }
     }
   }
-  const NEEDED = [...emitted].map((name) => `.${name}`).sort();
+  /*
+   * Classes that exist to be selected, not to be styled.
+   *
+   * .account-edit is how the smoke run finds the Edit profile button; the
+   * button itself is an ordinary bordered button and needs no rule of its own.
+   * Demanding one would mean inventing CSS to satisfy a test, which is the
+   * wrong direction - but the exception is listed here rather than inferred,
+   * so a class that quietly stops being styled still fails.
+   */
+  const HOOKS_ONLY = new Set(['account-edit']);
+  const NEEDED = [...emitted].filter((name) => !HOOKS_ONLY.has(name))
+    .map((name) => `.${name}`).sort();
   assert.ok(NEEDED.length > 15, `expected to find the panel's classes, found ${NEEDED.length}`);
   const unstyled = [];
 
