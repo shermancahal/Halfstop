@@ -218,15 +218,19 @@ comes first: fixing delivery only means the wrong link arrives reliably.
 can check a new password against the HaveIBeenPwned.org Pwned Passwords API and
 refuse one that appears in it.
 
-**It needs the Pro plan, and this project is on the free one.** So it cannot be
-switched on today; it is a 25 USD a month decision rather than a toggle. Worth
-knowing before going to look for it, because the security advisor reports it
-either way — the linter reads the setting, not the plan, so this is a finding
-that cannot be cleared from where this project sits.
+**It needs the Pro plan, and this organisation is now on it.** So it is a
+toggle again rather than a decision. It was not always: this section spent most
+of its life saying the project was on the free plan and that switching this on
+cost 25 USD a month, which is what Supabase Pro costs and what Halfstop, LLC
+now pays.
 
-What it would buy is the failure a password field actually has. Not a weak
-password invented on the spot, but a real one reused from somewhere that has
-already leaked, replayed against this site by something automated.
+What it buys is the failure a password field actually has. Not a weak password
+invented on the spot, but a real one reused from somewhere that has already
+leaked, replayed against this site by something automated.
+
+Until the toggle is actually on, the security advisor keeps reporting it — the
+linter reads the setting, not the plan, so upgrading changed nothing it can
+see.
 
 **The two settings beside it are free, and are worth setting now.** On the same
 page: a minimum password length, where the default of 6 is low and 8 is the
