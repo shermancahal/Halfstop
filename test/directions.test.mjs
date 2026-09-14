@@ -87,21 +87,13 @@ test('directions: a stop with no usable position offers nothing', () => {
   assert.deepEqual(directionsFor(null), []);
   assert.deepEqual(directionsFor([]), []);
   assert.deepEqual(directionsFor([NaN, 36.7]), []);
-  assert.equal(directionsFor(BEN_HUR).length, 4);
-  assert.deepEqual(directionsFor(BEN_HUR).map((one) => one.id),
-    ['apple', 'google', 'waze', 'mapquest']);
-});
+  assert.equal(directionsFor(BEN_HUR).length, 3);
+  assert.deepEqual(directionsFor(BEN_HUR).map((one) => one.id), ['apple', 'google', 'waze']);
 
-test('directions: MapQuest takes its destination in the path, not a query', () => {
   /*
-   * The odd one out, so it is worth pinning. The other three read a coordinate
-   * out of a query string; MapQuest reads it out of the path, and a link built
-   * to the wrong shape opens their homepage rather than failing, which is the
-   * kind of wrong nobody notices.
+   * MapQuest is deliberately absent. Its directions URL resolves a search
+   * term, so a bare coordinate lands on their homepage rather than the place -
+   * it fails by opening something plausible, which nobody notices.
    */
-  const url = directionsFor(BEN_HUR).find((one) => one.id === 'mapquest').url;
-  assert.match(url, /^https:\/\/www\.mapquest\.com\/directions\/to\/near-/);
-  // lat,lon - the order every navigation URL wants and this codebase does not
-  // store, which is the one conversion that file exists to get right.
-  assert.match(url, /near-36\.\d+%2C-8[0-9]\.\d+$/);
+  assert.ok(!directionsFor(BEN_HUR).some((one) => /mapquest/i.test(one.url)));
 });

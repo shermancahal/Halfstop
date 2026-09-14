@@ -14,7 +14,10 @@
  *   - Apple Maps takes one destination. Its URL scheme has no multi-stop form.
  *   - Waze takes one destination, and answers a link carrying several with an
  *     error rather than ignoring the extras.
- *   - MapQuest takes one destination, in the path rather than a query string.
+ *
+ * MapQuest was here and is not: its directions URL resolves a search term, so a
+ * bare latitude and longitude lands on their homepage rather than on the place.
+ * It fails by opening something plausible, which is the worst way to fail.
  *
  * So a stop can go to any of them, and only Google is offered the trip.
  * Everything here builds a string; opening it is the caller's business.
@@ -44,17 +47,6 @@ export function googleMapsURL(position) {
 /** One destination, in Waze. */
 export function wazeURL(position) {
   return `https://waze.com/ul?ll=${encodeURIComponent(latLon(position))}&navigate=yes`;
-}
-
-/**
- * One destination, in MapQuest.
- *
- * Their web app reads a coordinate out of the path rather than a query string,
- * which is why this one does not look like the other three. Like Apple's and
- * Waze's it carries a single destination; the trip still goes to Google.
- */
-export function mapquestURL(position) {
-  return `https://www.mapquest.com/directions/to/near-${encodeURIComponent(latLon(position))}`;
 }
 
 /**
@@ -114,6 +106,5 @@ export function directionsFor(position) {
     { id: 'apple', label: 'Apple Maps', url: appleMapsURL(position) },
     { id: 'google', label: 'Google Maps', url: googleMapsURL(position) },
     { id: 'waze', label: 'Waze', url: wazeURL(position) },
-    { id: 'mapquest', label: 'MapQuest', url: mapquestURL(position) },
   ];
 }

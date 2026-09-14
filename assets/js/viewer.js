@@ -10003,7 +10003,6 @@ const NAV_MARKS = {
   apple: icons.navApple,
   google: icons.navGoogle,
   waze: icons.navWaze,
-  mapquest: icons.navMapquest,
 };
 
 function directionsRow(position, { title = 'Directions' } = {}) {

@@ -1048,14 +1048,12 @@ html, body { height: 100%; overflow: hidden; }
 .nav-apple { color: #0a84ff; }
 .nav-google { color: #ea4335; }
 .nav-waze { color: #00b7e0; }
-.nav-mapquest { color: #f5a02a; }
 .nav-app:hover { border-color: currentColor; }
 /* On the identify card the mark sits beside its name, so only the mark takes
    the brand colour - the word stays the card's ink like every other label. */
 .button-with-icon.nav-apple span,
 .button-with-icon.nav-google span,
-.button-with-icon.nav-waze span,
-.button-with-icon.nav-mapquest span { color: var(--ink); }
+.button-with-icon.nav-waze span { color: var(--ink); }
 .trip-measured { margin: 8px 0 0; font-size: .86rem; font-weight: 550; color: var(--ink); }
 /* Green, and matching the dashed line on the map, because the note and the
    geometry are the same statement made twice. */
