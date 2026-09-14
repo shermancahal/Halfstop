@@ -355,9 +355,12 @@ export function createAccountPanel({ container, account, folders = null, toast }
     });
     const password = el('input', { type: 'password', placeholder: 'Password', autocomplete: 'current-password', 'aria-label': 'Password' });
     const passwordRow = revealable(password);
-    // `forgot` is declared below; busy only ever runs from a click, long after.
-    // It belongs in here - without it a double tap sends two reset emails.
-    const busy = (on) => { for (const node of [email, password, ...buttons, forgot]) node.disabled = on; };
+    // `buttons` and `alternatives` are declared below; busy only ever runs from
+    // a click, long after. Every control that starts a request belongs in here -
+    // without it a double tap sends two emails.
+    const busy = (on) => {
+      for (const node of [email, password, ...buttons, ...alternatives]) node.disabled = on;
+    };
 
     /*
      * Say the thing that just happened where somebody will see it.
@@ -404,8 +407,20 @@ export function createAccountPanel({ container, account, folders = null, toast }
           if (!result.confirmed) announce(result.existing ? 'info' : 'ok');
         }),
       }),
+    ];
+
+    /*
+     * The two ways in that do not need a password, as buttons rather than text.
+     *
+     * Both were ghost - borderless, so they read as captions under the two real
+     * buttons rather than as things to press, and the one somebody needs when
+     * they are locked out read as the least pressable of the four. They are the
+     * same kind of thing as Create account: a way in. So they look like it, on
+     * their own row.
+     */
+    const alternatives = [
       el('button', {
-        class: 'button button-ghost button-small', type: 'button', text: 'Email me a link',
+        class: 'button button-secondary button-small', type: 'button', text: 'Email me a link',
         title: 'Sign in without a password',
         onclick: () => run(async () => {
           await account.signInWithLink(emailDraft);
@@ -427,13 +442,14 @@ export function createAccountPanel({ container, account, folders = null, toast }
      * should not compete with them until then.
      */
     const forgot = el('button', {
-      class: 'button button-ghost button-small account-forgot', type: 'button',
-      text: 'Forgot your password?',
+      class: 'button button-secondary button-small', type: 'button',
+      text: 'Forgot password?',
       onclick: () => run(async () => {
         await account.resetPassword(emailDraft);
         announce('ok');
       }),
     });
+    alternatives.push(forgot);
 
     /*
      * Apple and Google first, and above the form rather than under it.
@@ -472,8 +488,13 @@ export function createAccountPanel({ container, account, folders = null, toast }
     container.append(
       el('p', {
         class: 'hint', style: 'margin-bottom:10px',
-        text: 'Sign in to keep your folders and pins on every device you use. '
-          + 'Photographs stay on the device they were added to.',
+        /*
+         * One line. The photographs caveat is true and belongs in the help
+         * page, under "What syncing carries", where it already is - a panel
+         * somebody opened to sign in is not where to explain what does not
+         * travel.
+         */
+        text: 'Sign in to sync folders and pins.',
       }),
     );
     if (offered.length) {
@@ -485,8 +506,8 @@ export function createAccountPanel({ container, account, folders = null, toast }
     container.append(
       email,
       passwordRow,
-      el('div', { class: 'account-actions' }, buttons),
-      forgot,
+      el('div', { class: 'account-actions account-signin' }, buttons),
+      el('div', { class: 'account-actions account-alternatives' }, alternatives),
     );
     if (account.message) container.append(el('p', { class: 'hint', style: 'margin-top:9px', text: account.message }));
   }
