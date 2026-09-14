@@ -255,6 +255,13 @@ export class Account extends EventTarget {
      * out, so a half-finished reset does not follow the account around.
      */
     this.recovering = false;
+    /*
+     * Whether this page was opened by an email link that did not work.
+     *
+     * Read once by the page that mounts the panel, to put the reason in front
+     * of somebody rather than leaving it inside a closed menu.
+     */
+    this.linkFailed = false;
     this.message = '';
     this.syncing = false;
     this.lastSyncAt = null;
@@ -319,16 +326,30 @@ export class Account extends EventTarget {
      * the link at all. That silence is most of why a broken confirmation
      * looks like a broken app.
      */
+    /*
+     * A link that came back and did not work has to say so where it is seen.
+     *
+     * The message alone was not enough: it renders inside the account panel,
+     * and the panel is shut when the page loads. Somebody followed a reset
+     * link, got a page that looked exactly like an ordinary visit, and only
+     * found the explanation by opening the gear for unrelated reasons.
+     *
+     * The flag is what the page acts on - it opens the menu and says it out
+     * loud. Same shape as `recovering`, for the same reason.
+     */
     if (!this.user && /[#&]error=/.test(arriving)) {
       const params = new URLSearchParams(arriving.replace(/^#/, ''));
       const detail = params.get('error_description') || params.get('error') || '';
+      this.linkFailed = true;
       this.setStatus('signed-out', `That link did not work: ${detail.replace(/\+/g, ' ')}`);
       return;
     }
     if (!this.user && /[#&]access_token=/.test(arriving)) {
+      this.linkFailed = true;
       this.setStatus('signed-out',
-        'That sign-in link arrived but could not be used. It may have already been opened, '
-        + 'or this address may not be allowed by the account service.');
+        'That sign-in link arrived but could not be used. Email links work once, so '
+        + 'this one may already have been opened - by another browser, or by a tap that '
+        + 'opened it twice. Ask for a fresh one.');
       return;
     }
     this.setStatus(this.user ? 'signed-in' : 'signed-out');

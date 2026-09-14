@@ -122,6 +122,19 @@ export function isInstalled() {
  * enough: the second load is already on the new build.
  */
 export async function reloadOntoNewBuild() {
+  /*
+   * Never while an auth link is being consumed.
+   *
+   * Supabase hands the session back in the fragment and its own script reads
+   * it out on load. Reloading the page in the middle of that is a good way to
+   * turn a working link into "that link did not work", and a recovery link is
+   * single use - there is no second attempt to spend. A new build can wait the
+   * few seconds this takes.
+   */
+  if (/[#&](access_token|error|error_description)=|type=recovery/.test(globalThis.location?.hash || '')) {
+    return false;
+  }
+
   const ONCE = 'abmap:took-update';
   try {
     if (sessionStorage.getItem(ONCE)) return false;

@@ -126,6 +126,21 @@ export function mountPageSettings({ toast, account = null, rows = [] } = {}) {
      * of them, which is the only reason they are here.
      */
     if (who.recovering && menu) menu.setOpen(true);
+
+    /*
+     * And a link that did not work, which is the same problem pointing the
+     * other way: the explanation lives in the panel and the panel is shut.
+     *
+     * Said out loud once as well as opened, because somebody who followed a
+     * link from their inbox is looking at the page, not at a menu they have
+     * not opened yet. Cleared immediately so a later redraw does not repeat
+     * it.
+     */
+    if (who.linkFailed) {
+      who.linkFailed = false;
+      if (menu) menu.setOpen(true);
+      if (who.message) toast(who.message, { tone: 'error', timeout: 20000 });
+    }
   });
   panel.render();
 

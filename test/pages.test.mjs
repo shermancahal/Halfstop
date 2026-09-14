@@ -405,3 +405,40 @@ test('pages: the password form does not keep its only copy in the DOM', async ()
   assert.match(form, /draft\.first = event\.target\.value/, 'typing is not recorded outside the input');
   assert.match(form, /draft\.again = event\.target\.value/, 'typing in the confirm field is not recorded');
 });
+
+/*
+ * A link from an inbox that did not work has to say so where it is seen.
+ *
+ * The message renders inside the account panel, and the panel is shut when a
+ * page loads - so somebody who followed a reset link got a page that looked
+ * like an ordinary visit, and found the explanation only by opening the gear
+ * for unrelated reasons. Reported as exactly that.
+ */
+test('pages: a failed email link is put in front of somebody', async () => {
+  const account = await readFile(new URL('../assets/js/lib/account.js', import.meta.url), 'utf8');
+  assert.match(account, /this\.linkFailed = true/,
+    'nothing records that the page was opened by a link that failed');
+
+  const page = await readFile(new URL('../assets/js/lib/page-settings.js', import.meta.url), 'utf8');
+  assert.match(page, /who\.linkFailed/, 'the page never reads the flag');
+  assert.match(page, /menu\.setOpen\(true\)[\s\S]{0,200}toast\(who\.message/,
+    'it should both open the menu and say it out loud');
+});
+
+/*
+ * And the update reload must not interrupt one.
+ *
+ * Supabase hands the session back in the fragment and reads it out on load.
+ * Reloading the page mid-exchange turns a working link into a failed one, and
+ * a recovery link is single use - there is no second attempt to spend.
+ */
+test('pages: taking a new build waits while an auth link is being read', async () => {
+  const pwa = await readFile(new URL('../assets/js/lib/pwa.js', import.meta.url), 'utf8');
+  const fn = pwa.slice(pwa.indexOf('export async function reloadOntoNewBuild'));
+  assert.match(fn, /access_token|type=recovery/,
+    'reloadOntoNewBuild does not check for an auth fragment before reloading');
+  assert.ok(
+    fn.indexOf('access_token') < fn.indexOf('applyServiceWorkerUpdate'),
+    'the check has to come before the hand-over, or the reload has already happened',
+  );
+});
