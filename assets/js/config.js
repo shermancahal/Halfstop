@@ -1134,9 +1134,9 @@ export const OVERLAYS = [
      * The first draft of this legend read "0 ft — authorisation needed",
      * which implied the other four values do not need one. They do.
      */
-    legendNote: 'Authorisation is required anywhere this grid appears. The ceiling is how '
+    legendNote: 'Authorization is required anywhere this grid appears. The ceiling is how '
       + 'high LAANC grants it instantly; 0 means the request goes to further coordination '
-      + 'or FAA DroneZone instead. Not a flight authorisation — check before you fly.',
+      + 'or FAA DroneZone instead. Not a flight authorization — check before you fly.',
     group: 'Airspace',
     name: 'Drone ceilings',
     description: 'How high LAANC instantly approves a drone flight, in feet above ground. Source: FAA',
@@ -1218,7 +1218,7 @@ export const OVERLAYS = [
        * invites a call that cannot do what the caller wants.
        */
       links: [
-        { label: 'Request authorisation', href: 'https://faadronezone-access.faa.gov/' },
+        { label: 'Request authorization', href: 'https://faadronezone-access.faa.gov/' },
         { label: 'Instant approval (LAANC)', href: 'https://www.faa.gov/uas/programs_partnerships/data_exchange' },
         { label: 'B4UFLY', href: 'https://www.faa.gov/uas/getting_started/b4ufly' },
       ],
@@ -1914,7 +1914,7 @@ export const OVERLAYS = [
     id: 'id-routes',
     states: ['ID'],
     name: 'Recreation routes',
-    description: 'Motorised and non-motorised routes, with seasons of use. Source: Idaho Parks and Recreation',
+    description: 'Motorized and non-motorized routes, with seasons of use. Source: Idaho Parks and Recreation',
     query: {
       url: 'https://services1.arcgis.com/CNPdEkvnGl65jCX8/arcgis/rest/services/Idaho_Recreation_Trails/FeatureServer/128/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
