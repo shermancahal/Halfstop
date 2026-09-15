@@ -164,6 +164,76 @@ function loadVendored(src) {
   });
 }
 
+/**
+ * Where a signed-in session is kept, named by us rather than by the hostname.
+ *
+ * supabase-js derives the localStorage entry from the first label of the API
+ * URL: `sb-<project-ref>-auth-token` today, `sb-auth-auth-token` the moment
+ * SUPABASE_URL becomes a custom domain like auth.halfstop.app. A session is
+ * only ever found under the name in force, so moving the project onto its own
+ * domain would sign out every signed-in person on every device at once, with
+ * no error and nothing in any log to explain it.
+ *
+ * Pin the name and the hostname is free to move. adoptSession() below carries
+ * a session already stored under the derived name onto this one, so landing
+ * this signs nobody out either.
+ */
+export const SESSION_KEY = 'sb-halfstop-auth-token';
+
+/** The name supabase-js would derive for a URL, by its own rule. */
+export function derivedSessionKey(url) {
+  try {
+    return `sb-${new URL(url).hostname.split('.')[0]}-auth-token`;
+  } catch {
+    return '';
+  }
+}
+
+/** localStorage, or null where reading it throws - private modes do that. */
+function sessionStore() {
+  try {
+    return globalThis.localStorage || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Carry an existing session onto the pinned name, before any client reads it.
+ *
+ * The old entry is left in place deliberately. It costs one stale copy of a
+ * refresh token, which signOut() clears and the server revokes anyway, and it
+ * buys the one thing worth having here: rolling this deployment back puts
+ * everybody exactly where they were instead of signing them all out, which is
+ * the failure the pinned name exists to prevent.
+ */
+export function adoptSession(url = SUPABASE_URL, store = sessionStore()) {
+  const from = derivedSessionKey(url);
+  if (!store || !from || from === SESSION_KEY) return false;
+  try {
+    if (store.getItem(SESSION_KEY)) return false;
+    const held = store.getItem(from);
+    if (!held) return false;
+    store.setItem(SESSION_KEY, held);
+    return true;
+  } catch {
+    // Storage full or blocked. supabase-js will sign them in again; it is not
+    // worth failing the whole client over.
+    return false;
+  }
+}
+
+/** Drop the entry adoptSession() copied from, once the session is over. */
+function forgetAdoptedSession(url = SUPABASE_URL, store = sessionStore()) {
+  const from = derivedSessionKey(url);
+  if (!store || !from || from === SESSION_KEY) return;
+  try {
+    store.removeItem(from);
+  } catch {
+    /* Nothing to do about it, and nothing depends on it. */
+  }
+}
+
 async function getClient() {
   if (!isConfigured()) return null;
   if (!clientPromise) {
@@ -171,8 +241,14 @@ async function getClient() {
       .then(() => {
         const createClient = globalThis.supabase?.createClient;
         if (!createClient) throw new Error('the library loaded without createClient on it');
+        adoptSession();
         return createClient(SUPABASE_URL, SUPABASE_KEY, {
-          auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+          auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true,
+            storageKey: SESSION_KEY,
+          },
         });
       })
       .catch((error) => {
@@ -597,6 +673,9 @@ export class Account extends EventTarget {
     } catch (error) {
       console.warn('[account] the sign-out call failed:', error?.message || error);
     }
+    // The library clears its own entry; this clears the one adoptSession()
+    // copied from, so signing out leaves nothing behind under either name.
+    forgetAdoptedSession();
     this.user = null;
     this.plan = null;
 
