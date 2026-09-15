@@ -201,17 +201,48 @@ rejected.
 
 There are two implementations and the app wants the **native** one.
 
+### Where each piece lives
+
+| What | Where |
+| --- | --- |
+| Team ID | top right of the Apple Developer Console |
+| App ID | [Identifiers → App IDs](https://developer.apple.com/account/resources/identifiers/list/bundleId) |
+| Services ID (web only) | [Identifiers → Services IDs](https://developer.apple.com/account/resources/identifiers/list/serviceId) |
+| Signing key (.p8, web only) | [Keys](https://developer.apple.com/account/resources/authkeys/list) |
+| Email sources | [Services](https://developer.apple.com/account/resources/services/list) |
+| The provider itself | [Supabase → Authentication → Providers → Apple](https://supabase.com/dashboard/project/gqemcvuushtfbbbxypvf/auth/providers) |
+
+### Enabling it lights up a button on the website too
+
+Worth knowing before you tick anything. `refreshProviders()` asks
+`/auth/v1/settings` which providers the project has, and `account-panel.js`
+draws a button for every one that answers `true`:
+
+```js
+this.providers = PROVIDERS.filter((id) => external[id] === true);
+```
+
+So enabling Apple for the *app* will most likely make **Continue with Apple**
+appear on the *website*, where there is no OAuth secret behind it yet. Check
+the sign-in panel on app.halfstop.app immediately after enabling. If the button
+is there, either finish the web configuration below or leave the provider off
+until you are ready to do both.
+
 ### In the app — native **(Mac + code)**
 
 Supabase's own guidance: use native Sign in with Apple on Apple platforms
-rather than the OAuth flow. It also avoids the maintenance trap below.
+rather than the OAuth flow. It also avoids the maintenance trap below, and
+their docs are explicit that *"if you're building a native app only, you do not
+need to configure the OAuth settings"* - no Services ID, no key, no secret.
 
 1. **(console)** Apple Developer → Identifiers → your **App ID**
    (`com.halfstop.app`) → tick **Sign in with Apple** in Capabilities. Leave
    the server-to-server notification endpoint blank; Supabase does not support
    it.
 2. **(console)** Supabase → Authentication → Providers → **Apple** → enable it
-   and list `com.halfstop.app` under authorized client IDs.
+   and put `com.halfstop.app` in the **Client IDs** field. That field is the
+   whole native configuration; every App ID that will use this project goes in
+   it, comma separated.
 3. **(code)** Add the Capacitor community Sign in with Apple plugin - check it
    is still maintained before depending on it - and hand the identity token
    straight to Supabase:
