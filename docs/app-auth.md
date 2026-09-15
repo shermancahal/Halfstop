@@ -10,6 +10,27 @@ needs Xcode in front of you.
 
 ---
 
+## The values this project uses
+
+| | |
+| --- | --- |
+| Bundle ID / App ID | `com.halfstop.app` |
+| URL scheme | `com.halfstop.app://account` |
+| Apple Team ID | `PTVA266FXM` |
+| Auth callback | `https://auth.halfstop.app/auth/v1/callback` |
+
+The callback is worth reading twice: it is the **custom domain**, not
+`gqemcvuushtfbbbxypvf.supabase.co`. Activating the domain changed what Supabase
+Auth advertises to every provider, so this is the URL to register with Apple,
+and it is the one Google needs too - see the note at the end of section 2.
+
+None of the four is a secret. The Team ID appears in any app-site-association
+file, which is served publicly by design. **The `.p8` signing key is a secret**
+and never goes in this repository - it is the one file that can mint client
+secrets for your Apple account.
+
+---
+
 ## Why any of this is needed
 
 Inside the Capacitor shell the web view is not this website. On iOS it loads
@@ -258,14 +279,35 @@ need to configure the OAuth settings"* - no Services ID, no key, no secret.
 
 Separate from the above and only needed for the site.
 
-1. **Services ID** (e.g. `com.halfstop.app.web`) in Identifiers.
-2. Configure it → **Website URLs**. The domain is *the one the Supabase project
-   is hosted on*, which is now `auth.halfstop.app`, and the return URL is
-   `https://auth.halfstop.app/auth/v1/callback`.
-3. **Key** in the Keys section → tick Sign in with Apple → download the `.p8`.
-   **It downloads once.** Note the Key ID, and the Team ID from the top right.
-4. Team ID + Key ID + `.p8` generate the client secret; paste it and the
-   Services ID into Supabase → Providers → Apple.
+1. **Services ID** - Identifiers → the filter menu at the top right → Services
+   IDs → **+**. Name it `com.halfstop.app.web`; it must be a different
+   identifier from the App ID, not the same one.
+2. Open it → tick **Sign in with Apple** → **Configure**:
+   - **Primary App ID:** `com.halfstop.app`
+   - **Domains and Subdomains:** `auth.halfstop.app`
+   - **Return URLs:** `https://auth.halfstop.app/auth/v1/callback`
+3. **Key** - Keys → **+** → tick Sign in with Apple → configure it against the
+   primary App ID → **Download**. The `.p8` downloads **once and cannot be
+   retrieved again**; losing it means revoking and starting over. Note the Key
+   ID on that page.
+4. Team ID (`PTVA266FXM`) + Key ID + `.p8` generate the client secret - Supabase
+   has a generator on the Apple provider page. Paste the secret and the Services
+   ID into Supabase → Providers → Apple, in the OAuth fields **below** the
+   Client IDs field the native side already uses. Both halves coexist: Client
+   IDs serves the app, the secret serves the website.
+
+### Google needs the same URL, and nobody has checked
+
+Activating the custom domain changed the callback Supabase advertises for
+**every** provider, not just Apple. If the OAuth client in Google Cloud Console
+still lists only `https://gqemcvuushtfbbbxypvf.supabase.co/auth/v1/callback`,
+then Continue with Google is broken on the live site right now and will fail
+with `redirect_uri_mismatch`.
+
+Nothing has surfaced it because the auth log shows no provider sign-in attempts
+since the domain went live - so it would stay quiet until a real person tried.
+Add `https://auth.halfstop.app/auth/v1/callback` to the client's authorized
+redirect URIs **alongside** the old one, rather than replacing it.
 
 ### The thing that will break in six months
 
