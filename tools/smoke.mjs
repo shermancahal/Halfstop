@@ -2456,6 +2456,103 @@ if (!external) {
 }
 
 /*
+ * A reset link lands on the map, and the map has to ask for the password.
+ *
+ * Reported as "it did nothing but bring up the map while logged in", and the
+ * auth log agreed with every word: a 303, a login, a session. The link was
+ * perfect. What was missing was on this side - index.html forwards any address
+ * carrying an auth fragment straight to map.html, deliberately, so that shared
+ * links and returning sessions are not dropped on a landing page; and the map
+ * was the one page that never acted on PASSWORD_RECOVERY. The panel could draw
+ * the form, the gear stayed shut, and somebody who had just followed a link
+ * from their inbox was shown a map.
+ *
+ * The real library rather than a fake of it, because what is under test is the
+ * handoff: supabase-js reading the fragment, deciding it is a recovery rather
+ * than a sign-in, and this page doing something about it. A stub that fires the
+ * event on demand would prove only that the stub works.
+ */
+if (!external) {
+  console.log('\nA reset link that lands on the map asks for the new password');
+
+  const far = Math.floor(Date.now() / 1000) + 60 * 60;
+  const recovering = { id: 'u-1', aud: 'authenticated', role: 'authenticated',
+    email: 'sherman@example.com', user_metadata: { display_name: 'Sherman Cahal' },
+    app_metadata: {}, created_at: new Date().toISOString() };
+  // An expiry the library can read: it decodes the token to decide whether the
+  // session is still good, and a string it cannot parse is a session it drops.
+  const access = `h.${Buffer.from(JSON.stringify({ sub: 'u-1', exp: far })).toString('base64url')}.s`;
+  const RECOVERY = `#access_token=${access}&refresh_token=r-1&expires_in=3600`
+    + '&token_type=bearer&type=recovery';
+  const REFUSED = '#error=access_denied&error_code=otp_expired'
+    + '&error_description=Email+link+is+invalid+or+has+expired';
+
+  const followLink = async (href) => {
+    const inbox = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
+    await inbox.route('**/mapbox-gl.js*', (route) => route.fulfill({
+      status: 200, contentType: 'application/javascript', body: GL,
+    }));
+    await inbox.route('**://*.supabase.co/**', (route) => {
+      const url = route.request().url();
+      if (/\/auth\/v1\/user/.test(url)) return route.fulfill({ json: recovering });
+      if (/\/auth\/v1\/settings/.test(url)) {
+        return route.fulfill({ json: { external: {}, disable_signup: false } });
+      }
+      if (/\/rest\/v1\/rpc\/my_plan/.test(url)) {
+        return route.fulfill({ json: { tier: 'free', source: 'none', until: null } });
+      }
+      return route.fulfill({ json: [] });
+    });
+    await inbox.addInitScript(() => {
+      window.ABMAP_SUPABASE_URL = 'https://smoke.supabase.co';
+      window.ABMAP_SUPABASE_KEY = 'smoke-anon-key';
+    });
+    const tab = await inbox.newPage();
+    await tab.goto(href, { waitUntil: 'domcontentloaded' });
+    await tab.waitForFunction(
+      () => document.getElementById('settings-panel')?.hidden === false,
+      null, { timeout: 8000 },
+    ).catch(() => {});
+    const seen = await tab.evaluate(() => {
+      const drop = document.getElementById('settings-panel');
+      return {
+        page: location.pathname.split('/').pop(),
+        open: Boolean(drop) && !drop.hidden,
+        asks: Boolean(drop?.querySelector('input[type="password"]')),
+        said: [...(drop?.querySelectorAll('.hint') || [])]
+          .map((node) => node.textContent.trim()).find((text) => /password/i.test(text)) || null,
+        toast: document.querySelector('.toast')?.textContent.trim() || null,
+      };
+    });
+    await inbox.close();
+    return seen;
+  };
+
+  // The forward itself, because the whole failure rests on it: the link comes
+  // back to the site root and the person ends up on the map.
+  const forwarded = await followLink(new URL('index.html', MAP_URL).href + RECOVERY);
+  check('the homepage sends a recovery link on to the map', forwarded.page, 'map.html');
+  check('and the gear is open when it gets there', forwarded.open, true);
+  check('with a password field in it', forwarded.asks, true);
+  check('saying what it wants', forwarded.said, 'Choose a new password for this account.');
+
+  // And the same link opened on the map directly, which is what a second tap
+  // from the inbox does once the address bar has been rewritten.
+  const direct = await followLink(MAP_URL + RECOVERY);
+  check('the map alone does the same', direct.open && direct.asks, true);
+
+  /*
+   * A link that did not work is the other half, and it fails the other way:
+   * supabase-js clears the stored session when the fragment carries an error,
+   * so a second tap on a one-time link signs you out. Silence there reads as
+   * the app signing people out at random.
+   */
+  const refused = await followLink(MAP_URL + REFUSED);
+  check('a refused link opens the gear too', refused.open, true);
+  check('and says so out loud', /did not work/.test(refused.toast || ''), true);
+}
+
+/*
  * The Milky Way band on the map, and the control that moves it.
  *
  * The maths for this has been in sky.js and under test for a while; what was

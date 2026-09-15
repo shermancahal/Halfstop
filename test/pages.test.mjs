@@ -389,7 +389,7 @@ test('pages: the plan catches up on its own, on the map as well as off it', asyn
   const missing = [];
   for (const file of ['assets/js/viewer.js', 'assets/js/lib/page-settings.js']) {
     const source = await readFile(new URL(`../${file}`, import.meta.url), 'utf8');
-    const onChange = source.match(/addEventListener\('change',[\s\S]{0,1400}?\n {2}\}\);/g) || [];
+    const onChange = source.match(/addEventListener\('change',[\s\S]{0,3200}?\n {2}\}\);/g) || [];
     if (!onChange.some((block) => /\bpaint\(\)/.test(block))) missing.push(file);
   }
   assert.deepEqual(missing, [],
@@ -434,6 +434,57 @@ test('pages: a failed email link is put in front of somebody', async () => {
   assert.match(page, /who\.linkFailed/, 'the page never reads the flag');
   assert.match(page, /menu\.setOpen\(true\)[\s\S]{0,200}toast\(who\.message/,
     'it should both open the menu and say it out loud');
+});
+
+/*
+ * And the map is where those links actually arrive.
+ *
+ * index.html forwards any address carrying an auth fragment straight on to
+ * map.html - deliberately, so that a shared link or a returning session is not
+ * dropped on a landing page - which makes the map the one page a reset link
+ * from an inbox is certain to reach. It was also the one page that did nothing
+ * with it: the session was created, the panel was ready to draw the form, and
+ * the gear stayed shut. Reported as "it did nothing but bring up the map while
+ * logged in", and the auth log showed a 303 and a login, so the link was never
+ * the problem.
+ */
+test('pages: a reset link that lands on the map is acted on', async () => {
+  const home = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(home, /access_token=[\s\S]{0,200}location\.replace\('map\.html'/,
+    'the homepage no longer forwards an auth fragment, so this guard is about the wrong page');
+
+  const viewer = await readFile(new URL('../assets/js/viewer.js', import.meta.url), 'utf8');
+  const onChange = viewer.match(/state\.account\.addEventListener\('change',[\s\S]*?\n {2}\}\);/);
+  assert.ok(onChange, 'the map stopped listening for account changes');
+
+  assert.match(onChange[0], /recovering[\s\S]{0,80}setOpen\(true\)/,
+    'the map never opens the gear on a recovery, so the password form stays hidden');
+  assert.match(onChange[0], /linkFailed[\s\S]{0,300}toast\(/,
+    'the map never says a link failed, which is how a sign-out looks random');
+});
+
+/*
+ * The event that flag depends on is announced on a timer, and can be missed.
+ *
+ * supabase-js reads the fragment while the client is being built, saves the
+ * session, then schedules PASSWORD_RECOVERY for the next tick. getSession()
+ * waits for all of it, so a subscriber registered after that call is in place
+ * only after the announcement has gone out to nobody. Observed in a browser
+ * against the real library: a recovery link delivered INITIAL_SESSION and
+ * nothing else, on every page, and the reset route silently did nothing.
+ */
+test('account: the auth listener is in place before the session is asked for', async () => {
+  const source = await readFile(new URL('../assets/js/lib/account.js', import.meta.url), 'utf8');
+  const init = source.slice(source.indexOf('async init()'), source.indexOf('async signUp'));
+
+  const listening = init.indexOf('onAuthStateChange');
+  const asking = init.indexOf('auth.getSession()');
+  assert.ok(listening > 0 && asking > 0, 'init() no longer does both of these');
+  assert.ok(listening < asking,
+    'getSession() is awaited first, so PASSWORD_RECOVERY is announced before anything is listening');
+
+  assert.match(init, /if \(!this\.recovering\) this\.setStatus/,
+    'the status set after getSession() would overwrite what a recovery already said');
 });
 
 /*

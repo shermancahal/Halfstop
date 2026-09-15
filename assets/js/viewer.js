@@ -581,6 +581,36 @@ async function main() {
      * them appear only after a reload, which reads as the gate not working.
      */
     renderLayersTab();
+
+    /*
+     * Every emailed link lands here, and this is where nothing was listening.
+     *
+     * The homepage forwards any address carrying an auth fragment straight to
+     * map.html - see the redirect at the top of index.html - so a reset link
+     * asked for on the landing page is followed, exchanged for a recovery
+     * session, and finishes on the map. Supabase fires PASSWORD_RECOVERY, the
+     * panel is ready to draw the new-password form, and the gear is shut: the
+     * map simply appears with somebody signed in and no sign of why they came.
+     * Reported exactly that way, and the auth log agreed - a 303 and a login,
+     * a link that worked perfectly, and a page that said nothing about it.
+     *
+     * The other pages have done this since the reset route shipped. Only the
+     * map, which is where the links actually arrive, did not.
+     */
+    if (state.account.recovering) settingsMenu?.setOpen(true);
+
+    /*
+     * And the same for a link that did not work, which is the other half.
+     *
+     * Opened once and the message said out loud, because the explanation
+     * renders inside a panel somebody has no reason to open. Cleared
+     * immediately so a later redraw does not repeat it.
+     */
+    if (state.account.linkFailed) {
+      state.account.linkFailed = false;
+      settingsMenu?.setOpen(true);
+      if (state.account.message) toast(state.account.message, { tone: 'error' });
+    }
   });
 
   state.folders.onChange((_store, changed) => {

@@ -384,6 +384,52 @@ export class Account extends EventTarget {
       return;
     }
 
+    /*
+     * Listening before asking, which is not a style choice.
+     *
+     * supabase-js reads the fragment while the client is being built, and
+     * announces the result on a timer: it saves the session, then schedules
+     * PASSWORD_RECOVERY for the next tick. getSession() waits for all of that
+     * to finish - so a subscriber registered after it is registered after the
+     * announcement has already gone out to nobody, and the event is simply
+     * gone. Nothing errors. The person is signed in, holding a reset link,
+     * and no page in this app ever hears that they came to set a password.
+     *
+     * Registering here instead puts the subscriber in place while the library
+     * is still fetching the user, which is a network round trip and therefore
+     * ahead of any timer. Confirmed in a browser against the real library:
+     * before this, a recovery link delivered INITIAL_SESSION and nothing else.
+     */
+    client.auth.onAuthStateChange((event, session) => {
+      this.user = session?.user || null;
+      /*
+       * A recovery link signs somebody in, which is not what they came for.
+       *
+       * Supabase exchanges the link for an ordinary session and fires this
+       * event, so without the flag the panel would simply show them signed in
+       * and never ask for the new password - leaving them right back here the
+       * next time the session lapses. The flag is what makes the panel put the
+       * form up, and setPassword() is what clears it.
+       *
+       * Checked before SIGNED_IN because the recovery exchange emits both, and
+       * whichever arrives second must not undo the first.
+       */
+      if (event === 'PASSWORD_RECOVERY') {
+        this.recovering = true;
+        this.setStatus('signed-in', 'Choose a new password.');
+        return;
+      }
+      if (event === 'SIGNED_IN') {
+        if (this.recovering) return;
+        this.setStatus('signed-in');
+        this.refreshPlan();
+        this.sync();
+      } else if (event === 'SIGNED_OUT') {
+        this.recovering = false;
+        this.setStatus('signed-out');
+      }
+    });
+
     // Asked before anything else needs it, and regardless of whether anybody
     // is signed in: the buttons it decides are the ones shown to somebody who
     // is not.
@@ -428,37 +474,9 @@ export class Account extends EventTarget {
         + 'opened it twice. Ask for a fresh one.');
       return;
     }
-    this.setStatus(this.user ? 'signed-in' : 'signed-out');
-
-    client.auth.onAuthStateChange((event, session) => {
-      this.user = session?.user || null;
-      /*
-       * A recovery link signs somebody in, which is not what they came for.
-       *
-       * Supabase exchanges the link for an ordinary session and fires this
-       * event, so without the flag the panel would simply show them signed in
-       * and never ask for the new password - leaving them right back here the
-       * next time the session lapses. The flag is what makes the panel put the
-       * form up, and setPassword() is what clears it.
-       *
-       * Checked before SIGNED_IN because the recovery exchange emits both, and
-       * whichever arrives second must not undo the first.
-       */
-      if (event === 'PASSWORD_RECOVERY') {
-        this.recovering = true;
-        this.setStatus('signed-in', 'Choose a new password.');
-        return;
-      }
-      if (event === 'SIGNED_IN') {
-        if (this.recovering) return;
-        this.setStatus('signed-in');
-        this.refreshPlan();
-        this.sync();
-      } else if (event === 'SIGNED_OUT') {
-        this.recovering = false;
-        this.setStatus('signed-out');
-      }
-    });
+    // Not over the top of a recovery, which has already said the one thing
+    // that matters and would otherwise be replaced by a plain "signed in".
+    if (!this.recovering) this.setStatus(this.user ? 'signed-in' : 'signed-out');
 
     if (this.user) this.sync();
   }
