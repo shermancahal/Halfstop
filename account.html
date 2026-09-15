@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Your account — Halfstop</title>
+<meta name="description" content="Sign in, change your password, and see which plan this account is on.">
+<meta property="og:title" content="Halfstop">
+<meta property="og:description" content="Field maps, tracks and waypoints from the road — viewable in the browser, downloadable as GPX, KML or GeoJSON.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#1f2846" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1f2846" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="assets/img/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="assets/img/icon-192.png" sizes="192x192" type="image/png">
+<link rel="manifest" href="manifest.webmanifest">
+<!-- iOS ignores the manifest for "Add to Home Screen"; these three are what it
+     reads instead. apple-touch-icon must be a PNG with no transparency: Safari
+     composites anything transparent onto black. -->
+<link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Halfstop">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="./">
+      <img class="brand-mark" src="assets/img/brand-128.png" alt="" width="44" height="44">
+      <span class="brand-text">
+        <span class="brand-name" id="brand-name">Halfstop</span>
+        <span class="brand-parent" id="brand-parent" hidden></span>
+      </span>
+    </a>
+    <nav class="nav nav-icons">
+      <a href="./" title="Home" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 10.5 9-7 9 7"/><path d="M5.5 9.4V20a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V9.4"/><path d="M9.5 21v-6h5v6"/></svg></a>
+      <a href="map.html" title="Map" aria-label="Map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 3-6 3v15l6-3 6 3 6-3V3l-6 3Z"/><path d="M9 3v15"/><path d="M15 6v15"/></svg></a>
+      <a href="faq.html" title="Help" aria-label="Help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.9.7c0 1.7-2.5 2.5-2.5 2.5"/><path d="M12 17h.01"/></svg></a>
+    </nav>
+    <div class="settings-menu" id="settings-menu">
+      <button class="icon-button" id="settings-trigger" type="button"
+              title="Settings" aria-label="Settings"
+              aria-haspopup="dialog" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1v.2a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-2.8-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3.5 15a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.1-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 10.3 4.4a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7h.2a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.6 1.2Z"/></svg>
+      </button>
+      <div class="account-drop settings-drop" id="settings-panel" role="dialog" aria-label="Settings" hidden></div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <section class="hero hero-compact">
+    <div class="wrap">
+      <div class="hero-inner">
+        <span class="eyebrow">Account</span>
+        <h1>Your account</h1>
+        <p class="lede">Signing in keeps your folders and pins on every device you use. Everything else about the account is here.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap legal-wrap">
+    <!--
+      Filled by assets/js/account.js. Empty in the markup rather than a skeleton
+      of one, because what belongs here depends entirely on whether anybody is
+      signed in - and a form for somebody who already is would flash past on
+      every load.
+    -->
+    <div id="account-page"></div>
+
+    <p class="hint">
+      Folders and pins are edited on the <a href="map.html">map</a>.
+      Questions about any of this are answered in <a href="faq.html#account">Help</a>.
+    </p>
+  </div>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <ul class="footer-links">
+      <li><a href="./">Home</a></li>
+      <li><a href="map.html">Map</a></li>
+      <li><a href="terms.html">Terms</a></li>
+      <li><a href="privacy.html">Privacy</a></li>
+    </ul>
+  </div>
+</footer>
+
+<script src="assets/js/token.js"></script>
+<!--
+  build.js sets ABMAP_BUILD, and registerServiceWorker treats its absence as
+  "this page was never built" and UNREGISTERS the worker, tearing down offline
+  support for the whole site.
+-->
+<script src="assets/js/build.js"></script>
+<script type="module" src="assets/js/account.js"></script>
+</body>
+</html>

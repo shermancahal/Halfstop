@@ -2224,7 +2224,7 @@ if (!external) {
       name: panel.querySelector('.account-name')?.textContent.trim(),
       email: panel.querySelector('.account-email')?.textContent.trim(),
       sync: panel.querySelector('.account-meta')?.textContent.trim(),
-      buttons: [...panel.querySelectorAll('.account-actions button')]
+      buttons: [...panel.querySelectorAll('.account-actions button, .account-actions a.button')]
         .map((button) => [button.textContent.trim(), Boolean(button.querySelector('svg'))]),
       hints: [...panel.querySelectorAll('.hint')].map((node) => node.textContent.trim()),
     };
@@ -2244,8 +2244,6 @@ if (!external) {
   check('the name is the one typed into the profile', card.name, 'Sherman Cahal');
   check('with the address on its own line under it', card.email, 'sherman@example.com');
   check('and the sync line counts folders', /folders? synced/.test(card.sync || ''), true);
-  check('edit and sign out share a line, and sync is its own',
-    card.buttons, [['Edit', true], ['Sign out', true], ['Sync now', true]]);
   check('and nothing that ends the account is a tap away',
     await signed.evaluate(() => Boolean(document.querySelector('#account-panel .account-danger'))), false);
   /*
@@ -2265,42 +2263,79 @@ if (!external) {
   check('with nothing underneath it', planRow.extraLines, 0);
   await shot(signed.locator('#settings-panel'), 'settings-signed-in');
 
-  await signed.locator('#account-panel .account-edit').click();
-  await signed.waitForTimeout(200);
-  check('editing opens a form already filled in', await signed.evaluate(() => ({
-    name: document.querySelector('#account-panel input[aria-label="Name"]')?.value,
-    email: document.querySelector('#account-panel input[aria-label="Email"]')?.value,
-  })), { name: 'Sherman Cahal', email: 'sherman@example.com' });
-
   /*
-   * Nothing in this menu ends the account, at any depth.
+   * The way into the account is a way out of the menu.
    *
-   * Delete used to sit a row under Sign out, then a row under Save. Both are
-   * a mis-tap that cannot be undone, in a panel opened to change a theme, so
-   * the button now lives in the help page - see the help-page check below,
-   * which is the half of this pair that proves it is still reachable. Checked
-   * across the whole panel rather than the card, so moving it back one level
-   * in does not quietly pass.
+   * It was a button that unfolded a profile editor inside a dropdown built for
+   * three settings rows, and the label had to be cut to "Edit" because the
+   * real one clipped. The forms are on account.html now; what is left in the
+   * gear is who you are and the two things worth doing from a menu.
    */
-  check('nothing in the settings menu can end the account',
+  check('edit and sign out share a line, and sync is its own',
+    card.buttons, [['Account', true], ['Sign out', true], ['Sync now', true]]);
+  check('and the account row leads to the page, not to a form in here',
+    await signed.evaluate(() => document.querySelector('#account-panel .account-edit')?.getAttribute('href')),
+    'account.html');
+  check('nothing in the menu asks for a password any more',
+    await signed.evaluate(() => document.querySelectorAll('#settings-panel input[type="password"]').length), 0);
+  /*
+   * Delete used to sit a row under Sign out, then a row under Save. Both are
+   * a mis-tap that cannot be undone in a panel opened to change a theme, so
+   * the button lives on the help page - see the help-page check below, which
+   * is the half of the pair that proves it is still reachable. Checked across
+   * the whole panel rather than the card, so moving it back one level in does
+   * not quietly pass.
+   */
+  check('and nothing in it can end the account, at any depth',
     await signed.evaluate(() => ({
       danger: document.querySelectorAll('#settings-panel .account-danger').length,
       delete: [...document.querySelectorAll('#settings-panel button')]
         .filter((b) => /delete/i.test(b.textContent)).length,
     })), { danger: 0, delete: 0 });
-  check('but it says where closing the account went',
-    await signed.evaluate(() => document.querySelector('#account-panel .account-close-note a')?.getAttribute('href')),
-    'faq.html#close-account');
+
+  /*
+   * And the page those went to.
+   *
+   * Same fake client and the same panel module - what changed is the room it
+   * has. Checked here rather than left to the unit tests because the failure
+   * this replaces was a layout one: a form that fits in a file and clips on a
+   * phone is a form that passes every test and is still wrong.
+   */
+  console.log('\nThe account page has room for what the menu did not');
+  await signed.goto(new URL('account.html', MAP_URL).href, { waitUntil: 'domcontentloaded' });
+  await signed.waitForFunction(() => document.querySelector('#account-page .account-name'), null, { timeout: 8000 })
+    .catch(() => {});
+
+  check('the gear and the page are not both claiming the same id',
+    await signed.evaluate(() => document.querySelectorAll('#account-panel').length), 1);
+  check('it opens on the account rather than on a sign-in form',
+    await signed.evaluate(() => [...document.querySelectorAll('#account-page h2')].map((n) => n.textContent.trim())),
+    ['You', 'Plan', 'Closing your account']);
+  check('the label is the whole word here', await signed.evaluate(
+    () => document.querySelector('#account-page .account-edit')?.textContent.trim()), 'Edit profile');
+  check('and closing the account is a signpost, not a button',
+    await signed.evaluate(() => ({
+      danger: document.querySelectorAll('#account-page .account-danger').length,
+      href: document.querySelector('#account-page a[href*="close-account"]')?.getAttribute('href'),
+    })), { danger: 0, href: 'faq.html#close-account' });
+
+  await signed.locator('#account-page .account-edit').click();
+  await signed.waitForTimeout(200);
+  check('editing opens a form already filled in', await signed.evaluate(() => ({
+    name: document.querySelector('#account-page input[aria-label="Name"]')?.value,
+    email: document.querySelector('#account-page input[aria-label="Email"]')?.value,
+  })), { name: 'Sherman Cahal', email: 'sherman@example.com' });
   check('and changing the password is in here',
-    await signed.evaluate(() => Boolean(document.querySelector('#account-panel .account-password'))), true);
-  await shot(signed.locator('#settings-panel'), 'settings-edit-profile');
-  await signed.fill('#account-panel input[aria-label="Name"]', 'S. Cahal');
-  await signed.locator('#account-panel .account-form button[type="submit"]').click();
+    await signed.evaluate(() => Boolean(document.querySelector('#account-page .account-password'))), true);
+  await shot(signed.locator('#account-page'), 'account-page-edit');
+
+  await signed.fill('#account-page input[aria-label="Name"]', 'S. Cahal');
+  await signed.locator('#account-page .account-form button[type="submit"]').click();
   await signed.waitForTimeout(400);
   check('and saving puts the new name on the card',
-    await signed.evaluate(() => document.querySelector('#account-panel .account-name')?.textContent.trim()), 'S. Cahal');
+    await signed.evaluate(() => document.querySelector('#account-page .account-name')?.textContent.trim()), 'S. Cahal');
   check('saying so',
-    await signed.evaluate(() => document.querySelector('#account-panel .hint')?.textContent.trim()), 'Saved.');
+    await signed.evaluate(() => document.querySelector('#account-page .hint')?.textContent.trim()), 'Saved.');
 
   /*
    * A password you can look at, and a complaint that does not shut the door.
@@ -2309,31 +2344,26 @@ if (!external) {
    * two did not match, and had no way to see which one was wrong - which is
    * the whole problem with a field of dots, and worse on a phone where
    * autofill may have put a suggested password in one of the two.
-   *
-   * The second half was found while testing the first: pressing × on the
-   * complaint closed the settings panel, because the toast hangs off the body
-   * and counted as a click outside the menu. Dismissing an error about the
-   * thing you are doing must not put away the thing you are doing it in.
    */
   console.log('\nA password can be looked at, and the complaint stays out of the way');
-  await signed.locator('#account-panel .account-edit').click();
+  await signed.locator('#account-page .account-edit').click();
   await signed.waitForTimeout(200);
-  await signed.locator('#account-panel .account-password').click();
+  await signed.locator('#account-page .account-password').click();
   await signed.waitForTimeout(200);
 
-  const first = '#account-panel input[aria-label="New password"]';
-  const again = '#account-panel input[aria-label="Confirm new password"]';
+  const first = '#account-page input[aria-label="New password"]';
+  const again = '#account-page input[aria-label="Confirm new password"]';
   check('both new-password fields carry an eye',
-    await signed.locator('#account-panel .password-field .reveal').count(), 2);
+    await signed.locator('#account-page .password-field .reveal').count(), 2);
 
   await signed.fill(first, 'a-long-enough-password');
-  await signed.locator('#account-panel .password-field').first().locator('.reveal').click();
+  await signed.locator('#account-page .password-field').first().locator('.reveal').click();
   await signed.waitForTimeout(150);
   check('pressing it shows that field, and only that one',
     await signed.evaluate(([a, b]) => [
       document.querySelector(a)?.type, document.querySelector(b)?.type,
     ], [first, again]), ['text', 'password']);
-  await signed.locator('#account-panel .password-field').first().locator('.reveal').click();
+  await signed.locator('#account-page .password-field').first().locator('.reveal').click();
   await signed.waitForTimeout(150);
   check('and pressing it again hides it',
     await signed.evaluate((a) => document.querySelector(a)?.type, first), 'password');
@@ -2344,7 +2374,7 @@ if (!external) {
    * phone they often did - give or take one press of the space bar.
    */
   await signed.fill(again, 'a-long-enough-password ');
-  await signed.locator('#account-panel .account-form button[type="submit"]').click();
+  await signed.locator('#account-page .account-form button[type="submit"]').click();
   await signed.waitForTimeout(400);
   check('a difference of one space is named as one',
     await signed.evaluate(() => [...document.querySelectorAll('.toast')]
@@ -2354,9 +2384,14 @@ if (!external) {
   const dismiss = signed.locator('.toast').filter({ hasText: 'differ only by a space' }).locator('button');
   await dismiss.click();
   await signed.waitForTimeout(250);
-  check('and dismissing it leaves the panel open to fix it',
-    await signed.locator('#settings-panel').isVisible(), true);
-  check('with what was typed still in the field',
+  /*
+   * Dismissing an error about the thing you are doing must not put away the
+   * thing you are doing it in. Found in the gear, where the toast hangs off
+   * the body and its click counted as a click outside the menu; the guard is
+   * in createToaster and the sign-in form still depends on it, which
+   * test/pages.test.mjs holds. What it has to leave alone here is the work.
+   */
+  check('and dismissing it leaves the form as it was',
     await signed.evaluate((a) => document.querySelector(a)?.value, first), 'a-long-enough-password');
 
   await signed.close();
@@ -2515,12 +2550,19 @@ if (!external) {
     ).catch(() => {});
     const seen = await tab.evaluate(() => {
       const drop = document.getElementById('settings-panel');
+      // The account page has no gear to open: the panel is the page, which is
+      // the whole reason a reset link is sent there now.
+      const own = document.getElementById('account-page');
+      const where = own || drop;
       return {
         page: location.pathname.split('/').pop(),
-        open: Boolean(drop) && !drop.hidden,
-        asks: Boolean(drop?.querySelector('input[type="password"]')),
-        said: [...(drop?.querySelectorAll('.hint') || [])]
+        open: Boolean(own) || (Boolean(drop) && !drop.hidden),
+        asks: Boolean(where?.querySelector('input[type="password"]')),
+        said: [...(where?.querySelectorAll('h2, .hint') || [])]
           .map((node) => node.textContent.trim()).find((text) => /password/i.test(text)) || null,
+        alone: own ? [...own.querySelectorAll('h2')].map((n) => n.textContent.trim()) : null,
+        gearOpen: Boolean(drop) && !drop.hidden,
+        forms: document.querySelectorAll('input[aria-label="New password"]').length,
         toast: document.querySelector('.toast')?.textContent.trim() || null,
       };
     });
@@ -2540,6 +2582,27 @@ if (!external) {
   // from the inbox does once the address bar has been rewritten.
   const direct = await followLink(MAP_URL + RECOVERY);
   check('the map alone does the same', direct.open && direct.asks, true);
+
+  /*
+   * Where new links actually go.
+   *
+   * account.html is what resetPasswordForEmail names now, for the reason in
+   * lib/account-page.js: a link opened days later on another device has no
+   * business coming back to "the page you were on". The two checks above stay
+   * because the links already sitting in inboxes point at the old address and
+   * will keep arriving for weeks.
+   */
+  const ACCOUNT_URL = new URL('account.html', MAP_URL).href;
+  const sent = await followLink(ACCOUNT_URL + RECOVERY);
+  check('a reset link on the account page asks straight away', sent.asks, true);
+  check('and asks for nothing else at all', sent.alone, ['Choose a new password']);
+  /*
+   * Once, not twice. Every other page opens the gear on a recovery because the
+   * form only exists inside it; this page renders the form itself, and doing
+   * both put a second password form in a dropdown over the top of the first.
+   */
+  check('the gear stays shut over it', sent.gearOpen, false);
+  check('and there is one password form, not two', sent.forms, 1);
 
   /*
    * A link that did not work is the other half, and it fails the other way:

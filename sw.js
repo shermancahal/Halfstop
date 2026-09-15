@@ -63,7 +63,7 @@ const CACHE = `abmap-${BUILD}`;
 const TILES = 'abmap-tiles-v1';
 
 /** The pages the app has, so an offline navigation to any of them can be answered. */
-const PAGES = ['index.html', 'map.html', 'faq.html'];
+const PAGES = ['index.html', 'map.html', 'account.html', 'faq.html'];
 
 const scoped = (file) => new URL(file, self.registration.scope).href;
 

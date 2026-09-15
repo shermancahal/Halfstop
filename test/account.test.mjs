@@ -71,7 +71,16 @@ const withHash = (hash) => {
   globalThis.window = { location: { href: `https://app.halfstop.app/?m=x${hash}`, hash } };
 };
 
-test('account: every emailed link is told where to come back to', async () => {
+test('account: every emailed link comes back to the account page', async () => {
+  /*
+   * The page, not the page somebody happened to be on.
+   *
+   * These links are opened minutes or days later, often on another device and
+   * always in whatever browser the mail app picks, so "where you were" is a
+   * destination nobody chose. A reset asked for on the homepage came back to
+   * the homepage, which forwards auth fragments to the map - and a link that
+   * had worked perfectly looked broken.
+   */
   const client = fakeClient();
   const account = new Account(folders, { client: async () => client, configured: () => true });
   withHash('');
@@ -79,10 +88,10 @@ test('account: every emailed link is told where to come back to', async () => {
   await account.signUp('a@example.com', 'secret');
   await account.signInWithLink('a@example.com');
 
-  const back = 'https://app.halfstop.app/?m=x';
+  const back = 'https://app.halfstop.app/account.html';
   for (const [name, options] of client.calls) {
     assert.equal(options?.options?.emailRedirectTo, back,
-      `${name} did not say where the link should return to`);
+      `${name} did not send the link to the account page`);
   }
   assert.equal(client.calls.length, 2);
 });
@@ -94,7 +103,20 @@ test('account: the return address drops the fragment it arrived in', async () =>
   withHash('#access_token=stale');
 
   await account.signUp('a@example.com', 'secret');
-  assert.equal(client.calls[0][1].options.emailRedirectTo, 'https://app.halfstop.app/?m=x');
+  assert.equal(client.calls[0][1].options.emailRedirectTo, 'https://app.halfstop.app/account.html');
+});
+
+test('account: the page is resolved against the deployment, not assumed at the root', async () => {
+  /*
+   * GitHub Pages serves this under a subpath, so a leading slash would send
+   * every emailed link to the top of github.io.
+   */
+  const client = fakeClient();
+  const account = new Account(folders, { client: async () => client, configured: () => true });
+  globalThis.window = { location: { href: 'https://sherman.github.io/Halfstop/map.html', hash: '' } };
+
+  await account.resetPassword('a@example.com');
+  assert.equal(client.calls[0][2].redirectTo, 'https://sherman.github.io/Halfstop/account.html');
 });
 
 test('account: a link that came back refused says why', async () => {
@@ -370,7 +392,7 @@ test('account: editing the profile sends only what changed', async () => {
   const [name, attributes, options] = client.calls.at(-1);
   assert.equal(name, 'updateUser');
   assert.deepEqual(attributes, { data: { display_name: 'S. Cahal' } }, 'the address was not resent');
-  assert.equal(options.emailRedirectTo, 'https://app.halfstop.app/?m=x',
+  assert.equal(options.emailRedirectTo, 'https://app.halfstop.app/account.html',
     'the confirmation link is told where to come back to, like every other emailed link');
   assert.equal(account.message, 'Saved.');
 });
@@ -916,8 +938,8 @@ test('account: a reset link is sent, and told where to come back to', async () =
   assert.equal(name, 'resetPasswordForEmail');
   // Trimmed and lowercased, like every other address this file handles.
   assert.equal(email, 'a@example.com');
-  assert.equal(options.redirectTo, 'https://app.halfstop.app/?m=x',
-    'the reset link would land on the project Site URL rather than back here');
+  assert.equal(options.redirectTo, 'https://app.halfstop.app/account.html',
+    'the reset link would land on the project Site URL rather than on the page built for it');
 });
 
 test('account: the reset says the same thing whether or not the address exists', async () => {

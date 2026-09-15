@@ -101,6 +101,30 @@ function returnTo() {
 }
 
 /**
+ * Where a link sent by email should come back to.
+ *
+ * Not returnTo(). A round trip through Google finishes seconds later in the
+ * same tab, so coming back to the page somebody left is right. A link sent to
+ * an inbox is a different thing entirely: it is opened minutes or days later,
+ * often on another device and always in whatever browser the mail app decides,
+ * and "the page you were on when you pressed the button" is then a destination
+ * nobody chose and nothing prepared.
+ *
+ * It cost a day to learn that. A reset asked for on the homepage came back to
+ * the homepage, which forwards auth fragments on to the map, which is a page
+ * with a map on it and no reason to show a password form - so a link that had
+ * worked perfectly looked broken. The account page exists to be the end of
+ * that journey: one address, built for it.
+ *
+ * Same caveat as above and it bites harder here: this address must be in
+ * Authentication -> URL Configuration, or Supabase silently substitutes the
+ * Site URL and every one of these links goes somewhere else.
+ */
+function emailReturn() {
+  return new URL('account.html', window.location.href).href;
+}
+
+/**
  * The sentence a function actually sent, out from under the wrapper.
  *
  * supabase-js turns any non-2xx into a FunctionsHttpError reading "Edge
@@ -486,7 +510,7 @@ export class Account extends EventTarget {
     const { data, error } = await client.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: returnTo() },
+      options: { emailRedirectTo: emailReturn() },
     });
     if (error) throw new Error(error.message);
 
@@ -554,7 +578,7 @@ export class Account extends EventTarget {
     const address = String(email || '').trim().toLowerCase();
     if (!address) throw new Error('Enter your email address first.');
     const client = await this.getClient();
-    const { error } = await client.auth.resetPasswordForEmail(address, { redirectTo: returnTo() });
+    const { error } = await client.auth.resetPasswordForEmail(address, { redirectTo: emailReturn() });
     if (error) throw new Error(error.message);
     /*
      * Said the same way whether or not the address has an account.
@@ -644,7 +668,7 @@ export class Account extends EventTarget {
     const client = await this.getClient();
     const { error } = await client.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: returnTo() },
+      options: { emailRedirectTo: emailReturn() },
     });
     if (error) throw new Error(error.message);
     this.setStatus('signed-out',
@@ -1032,7 +1056,7 @@ export class Account extends EventTarget {
     }
 
     const client = await this.getClient();
-    const { data, error } = await client.auth.updateUser(attributes, { emailRedirectTo: returnTo() });
+    const { data, error } = await client.auth.updateUser(attributes, { emailRedirectTo: emailReturn() });
     if (error) throw new Error(error.message);
     if (data?.user) this.user = data.user;
 

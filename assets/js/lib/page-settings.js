@@ -58,7 +58,7 @@ export const THEME_ROW = {
  * Account only ever asks for a snapshot and hands back a merge, and a page
  * without folders has neither to give.
  */
-const NO_FOLDERS = {
+export const NO_FOLDERS = {
   list: () => [],
   snapshot: () => [],
   replaceAll() {},
@@ -70,9 +70,14 @@ const NO_FOLDERS = {
  * @param {Function} options.toast     how this page says things out loud
  * @param {object}   [options.account] an existing Account, if the page has one
  * @param {Array}    [options.rows]    extra rows above the theme
+ * @param {boolean}  [options.handlesInboxLinks] whether this gear is the thing
+ *   that puts a reset link in front of somebody. False on account.html, which
+ *   renders the panel in the document and does it better.
  * @returns {{account: object, panel: object, menu: object|null}}
  */
-export function mountPageSettings({ toast, account = null, rows = [] } = {}) {
+export function mountPageSettings({
+  toast, account = null, rows = [], handlesInboxLinks = true,
+} = {}) {
   /*
    * Whether this function owns the account's lifecycle.
    *
@@ -90,6 +95,11 @@ export function mountPageSettings({ toast, account = null, rows = [] } = {}) {
     // No folder store on this page, so no sync line and no Sync now button.
     folders: null,
     toast,
+    // The gear is for settings. Everything longer than a line is on the page.
+    compact: true,
+    // And on the one page that renders its own, this copy does not: see the
+    // note on handlesInboxLinks above.
+    showsRecovery: handlesInboxLinks,
   });
   panel.element.id = 'account-panel';
   panel.element.setAttribute('role', 'group');
@@ -119,13 +129,18 @@ export function mountPageSettings({ toast, account = null, rows = [] } = {}) {
     /*
      * A password reset link lands on a closed gear.
      *
+     * Except on account.html, which is where those links are sent now: the
+     * panel is already open on that page, in the document, and opening the
+     * gear as well put a second password form in a dropdown over the top of
+     * the first one.
+     *
      * Supabase signs the link's holder in with a recovery session and fires
      * PASSWORD_RECOVERY, and without this the page looks exactly as it did
      * before they clicked - which is how somebody concludes the link is broken
      * and asks for another one. Opening it puts the new-password form in front
      * of them, which is the only reason they are here.
      */
-    if (who.recovering && menu) menu.setOpen(true);
+    if (who.recovering && menu && handlesInboxLinks) menu.setOpen(true);
 
     /*
      * And a link that did not work, which is the same problem pointing the
@@ -136,7 +151,7 @@ export function mountPageSettings({ toast, account = null, rows = [] } = {}) {
      * not opened yet. Cleared immediately so a later redraw does not repeat
      * it.
      */
-    if (who.linkFailed) {
+    if (who.linkFailed && handlesInboxLinks) {
       who.linkFailed = false;
       if (menu) menu.setOpen(true);
       if (who.message) toast(who.message, { tone: 'error', timeout: 20000 });

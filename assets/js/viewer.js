@@ -559,6 +559,8 @@ async function main() {
     // sync them.
     folders: state.folders,
     toast,
+    // Same gear, same rule: the profile and the password are on account.html.
+    compact: true,
   });
   state.account.addEventListener('change', () => {
     renderAccount();

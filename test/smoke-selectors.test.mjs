@@ -32,7 +32,7 @@ import path from 'node:path';
  */
 
 const ROOTS = ['assets/js', 'assets/css'];
-const PAGES = ['index.html', 'map.html', 'faq.html'];
+const PAGES = ['index.html', 'map.html', 'account.html', 'faq.html'];
 
 /*
  * Classes nobody in this repository writes.

@@ -33,6 +33,29 @@ const closing = document.getElementById('delete-account-mount');
 if (closing) mountDeleteAccount({ container: closing, account, toast });
 
 /*
+ * An answer somebody was sent to has to be open when they get there.
+ *
+ * Every answer here is a closed <details>, and a link to one of them - from
+ * the account page, from the settings panel, from an email - scrolled to a
+ * shut summary. The content is in the DOM either way, which is why nothing
+ * caught it: the checks that look for the button inside "Closing your account"
+ * find it whether or not anybody can see it.
+ */
+function openTargetedAnswer() {
+  const id = decodeURIComponent(String(location.hash || '').slice(1));
+  if (!id) return;
+  const found = document.getElementById(id);
+  const answer = found?.closest('details');
+  if (!answer) return;
+  answer.open = true;
+  // Opening it changes the height of everything above, so the browser's own
+  // scroll landed in the wrong place - it happened before the answer existed.
+  answer.scrollIntoView({ block: 'start' });
+}
+openTargetedAnswer();
+window.addEventListener('hashchange', openTargetedAnswer);
+
+/*
  * This page serves itself, terms and privacy, and never registered a worker.
  *
  * It was still controlled by the one home.js or the map registered - scope is

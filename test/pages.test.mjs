@@ -20,7 +20,7 @@ import { SITE } from '../assets/js/config.js';
  * shipped by neither - the build copies a named list and so does this, so a new
  * page is invisible to both until it is named twice.
  */
-const PAGES = ['index.html', 'faq.html', 'map.html', 'terms.html', 'privacy.html', 'admin.html'];
+const PAGES = ['index.html', 'faq.html', 'account.html', 'map.html', 'terms.html', 'privacy.html', 'admin.html'];
 
 /*
  * The two lists, checked against each other rather than by hand.
@@ -473,6 +473,61 @@ test('pages: a reset link that lands on the map is acted on', async () => {
  * against the real library: a recovery link delivered INITIAL_SESSION and
  * nothing else, on every page, and the reset route silently did nothing.
  */
+/*
+ * The gear is for settings, and the account has a page.
+ *
+ * Everything about an account had to fit in a dropdown built for three rows:
+ * the profile, the password, the plan. It did not - "Edit profile" was cut to
+ * "Edit" because the longer label clipped, and closing an account was moved
+ * out to the help page for room as much as for safety. What is left in the
+ * menu is who you are and a way out of it.
+ */
+test('pages: the gear holds a way to the account, not the account', async () => {
+  const panel = await readFile(new URL('../assets/js/lib/account-panel.js', import.meta.url), 'utf8');
+  assert.match(panel, /compact\s*=\s*false/, 'the panel cannot be asked to be compact');
+  assert.match(panel, /compact[\s\S]{0,200}href: 'account\.html'/,
+    'a compact panel should offer the page rather than unfold a form');
+
+  for (const file of ['assets/js/lib/page-settings.js', 'assets/js/viewer.js']) {
+    const source = await readFile(new URL(`../${file}`, import.meta.url), 'utf8');
+    assert.match(source, /createAccountPanel\(\{[\s\S]{0,400}compact: true/,
+      `${file} builds the gear's panel at full size, so the forms are back in the menu`);
+  }
+
+  /*
+   * And the gear on that page does not also open on a reset link: the page
+   * renders the form in the document, so opening the menu as well stacked a
+   * second password form in a dropdown over the first.
+   */
+  const shared = await readFile(new URL('../assets/js/lib/page-settings.js', import.meta.url), 'utf8');
+  assert.match(shared, /handlesInboxLinks/, 'the gear cannot be told it is not the landing spot');
+  assert.match(shared, /recovering && menu && handlesInboxLinks/,
+    'the gear opens on a recovery whatever the page around it is doing');
+  const entry = await readFile(new URL('../assets/js/account.js', import.meta.url), 'utf8');
+  assert.match(entry, /handlesInboxLinks: false/, 'account.html lets its own gear open over its form');
+
+  // And the page is the one place that gets the full thing.
+  const page = await readFile(new URL('../assets/js/lib/account-page.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(page, /compact:\s*true/, 'the account page asked for the cut-down panel');
+  assert.doesNotMatch(page, /id: 'account-panel'/,
+    'the page and the gear would both claim #account-panel, which resolves to the header');
+});
+
+/*
+ * A toast about the thing you are doing must not put that thing away.
+ *
+ * The dismiss button hangs off the body, so its click counted as a click
+ * outside the settings menu and closed it - while somebody was reading a
+ * complaint about the form inside it. The sign-in form is still in there, so
+ * this still matters; it is a source guard because the browser check that
+ * found it now runs on the account page, which has no menu to close.
+ */
+test('pages: dismissing a toast does not count as a click outside the menu', async () => {
+  const ui = await readFile(new URL('../assets/js/lib/ui.js', import.meta.url), 'utf8');
+  assert.match(ui, /stack\.addEventListener\('click',[\s\S]{0,120}?stopPropagation/,
+    'the toast stack lets its clicks reach the document handler that shuts the gear');
+});
+
 test('account: the auth listener is in place before the session is asked for', async () => {
   const source = await readFile(new URL('../assets/js/lib/account.js', import.meta.url), 'utf8');
   const init = source.slice(source.indexOf('async init()'), source.indexOf('async signUp'));

@@ -25,6 +25,13 @@ import { SITE } from '../config.js';
  * @param {object}   options.account   an Account
  * @param {object}   [options.folders] the real folder store, or null
  * @param {Function} options.toast     how this page says things out loud
+ * @param {boolean}  [options.compact] inside the gear, where the long forms
+ *   are replaced by a link to the page that has room for them
+ * @param {boolean}  [options.showsRecovery] whether this copy is the one that
+ *   puts the new-password form up. False for the gear on account.html, where
+ *   the page renders it: two of them is two fields labelled "New password" in
+ *   one document, which is a second target for a password manager and a
+ *   second thing for a screen reader to read out.
  *
  * `folders` decides whether syncing is offered at all. A page that has no
  * folder store has nothing to sync, and "0 folders synced" there is not a
@@ -64,7 +71,9 @@ function revealable(input) {
   return el('div', { class: 'password-field' }, [input, toggle]);
 }
 
-export function createAccountPanel({ container, account, folders = null, toast }) {
+export function createAccountPanel({
+  container, account, folders = null, toast, compact = false, showsRecovery = true,
+}) {
   /*
    * The half-finished edit and the half-typed address live here rather than in
    * a page's state object, because they are this panel's business and nothing
@@ -132,7 +141,16 @@ export function createAccountPanel({ container, account, folders = null, toast }
    * typo here is being locked out by the very thing that was meant to let you
    * back in.
    */
-  function passwordForm({ onDone }) {
+  /*
+   * `cancellable` is false for a recovery, and that is not decoration.
+   *
+   * Cancel sets `changing` back and redraws - which, while a recovery session
+   * is what somebody is holding, redraws the same form, because the branch
+   * above is chosen by account.recovering rather than by `changing`. So the
+   * button did nothing except look like a way out. Leaving somewhere to press
+   * that has no effect is worse than not offering it.
+   */
+  function passwordForm({ onDone, cancellable = true }) {
     const draft = passwordDraft;
     const first = el('input', {
       type: 'password', placeholder: 'New password', autocomplete: 'new-password',
@@ -191,7 +209,8 @@ export function createAccountPanel({ container, account, folders = null, toast }
         }
         render();
       },
-    }, [revealable(first), revealable(again), el('div', { class: 'account-actions' }, [save, cancel])]);
+    }, [revealable(first), revealable(again),
+      el('div', { class: 'account-actions' }, cancellable ? [save, cancel] : [save])]);
   }
 
   function render() {
@@ -246,11 +265,11 @@ export function createAccountPanel({ container, account, folders = null, toast }
        * account is reachable again either way, but leaving without setting a
        * password means the next visit starts at the same dead end.
        */
-      if (account.recovering) {
+      if (account.recovering && showsRecovery) {
         container.append(
           who,
           el('p', { class: 'hint', style: 'margin-bottom:9px', text: 'Choose a new password for this account.' }),
-          passwordForm({ onDone: () => toast('You are signed in.', { tone: 'ok' }) }),
+          passwordForm({ cancellable: false, onDone: () => toast('You are signed in.', { tone: 'ok' }) }),
         );
         return;
       }
@@ -282,19 +301,29 @@ export function createAccountPanel({ container, account, folders = null, toast }
         return;
       }
 
-      const editButton = el('button', {
-        /*
-         * "Edit", not "Edit profile". Measured: bordered, with its icon, and
-         * beside Sign out, the longer label clips to "Edit pro…" at the
-         * panel's width - and a truncated button is worse than a shorter word.
-         * Under the account's own name there is nothing else it could edit.
-         */
-        class: 'button button-secondary button-small account-edit', type: 'button', text: 'Edit',
-        onclick: () => {
-          edit = { name, email: user.email || '' };
-          render();
-        },
-      });
+      /*
+       * In the gear this is a way out, not a form.
+       *
+       * The panel had to hold a profile editor, a password form and the plan
+       * inside a dropdown built for three settings rows, and it showed: "Edit
+       * profile" was cut to "Edit" because the longer label clipped at this
+       * width. Those forms are on account.html now, where there is room for
+       * their real names, and what is left here is who you are and the two
+       * things you do from a menu - go there, or sign out.
+       *
+       * Off the gear - on that page - it is still the button it always was.
+       */
+      const editButton = compact
+        ? el('a', {
+          class: 'button button-secondary button-small account-edit', href: 'account.html', text: 'Account',
+        })
+        : el('button', {
+          class: 'button button-secondary button-small account-edit', type: 'button', text: 'Edit profile',
+          onclick: () => {
+            edit = { name, email: user.email || '' };
+            render();
+          },
+        });
       withIcon(editButton, icons.pencil);
 
       const signOut = el('button', {
@@ -505,7 +534,7 @@ export function createAccountPanel({ container, account, folders = null, toast }
     );
     if (offered.length) {
       container.append(
-        el('div', { class: 'account-actions' }, offered.map((id) => provider(id, PROVIDER_LABELS[id]))),
+        el('div', { class: 'account-actions account-providers' }, offered.map((id) => provider(id, PROVIDER_LABELS[id]))),
         el('p', { class: 'hint account-or', text: 'or with an email address' }),
       );
     }

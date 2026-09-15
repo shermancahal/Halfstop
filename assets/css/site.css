@@ -792,7 +792,27 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 }
 .button.is-danger { color: var(--rust, #a33); }
 .button.is-danger:hover { border-color: var(--rust, #a33); background: var(--rust-soft, rgba(170, 51, 51, .08)); }
-#account-panel input {
+/*
+ * Both of them, and the second one is why this is not an id selector any more.
+ *
+ * The panel is built by one module and mounted twice: compact in the gear,
+ * where it has always been #account-panel, and whole on account.html. Two
+ * elements cannot share an id, so the page's carries a class - and until this
+ * rule knew about it, every field on that page fell back to the browser's own
+ * input: a different width from the one above it, no border to match, and the
+ * eye floating in the gap where the input stopped short.
+ */
+/*
+ * Capped, because a form is not prose.
+ *
+ * The column around it is 74ch, which is right for the sentences in the
+ * sections below and absurd for a pair of buttons: "Sign out" came out six
+ * hundred pixels wide on a laptop. Fields and buttons stop at a width a form
+ * is read at; the paragraphs keep the column.
+ */
+.account-full { max-width: 30rem; }
+#account-panel input,
+.account-full input {
   width: 100%; font: inherit; font-size: .88rem; color: var(--ink); margin-bottom: 7px;
   background: var(--surface); border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm); padding: 8px 9px;
@@ -913,7 +933,8 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
  * JavaScript, a stylesheet only one page loads.
  */
 .hint { font-size: .81rem; color: var(--ink-3); margin: 0; }
-#account-panel .hint { overflow-wrap: anywhere; }
+#account-panel .hint,
+.account-full .hint { overflow-wrap: anywhere; }
 
 /* The way back in, under the three buttons rather than beside them: it is what
    you look for once those have failed, and should not compete until then. */
@@ -927,6 +948,12 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
    two labels cannot sit side by side, and a row that wraps ragged reads as a
    mistake where a list reads as a choice. */
 .account-alternatives { margin-top: 7px; flex-direction: column; align-items: stretch; }
+/* The two provider buttons, for the same reason and now in two widths.
+   Left to wrap they were content-sized, which in the gear happened to look
+   like a list because nothing fit beside anything - and on the account page,
+   where there is room, became two short buttons ragged against a column of
+   full-width ones. A choice reads as a choice when the options match. */
+.account-providers { flex-direction: column; align-items: stretch; }
 /* Sign in and Create account share the row edge to edge, so every control in
    this form lines up with the two fields above it. Sign in takes the smaller
    share: it is one short word, and a button sized to its label rather than to
