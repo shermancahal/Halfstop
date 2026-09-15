@@ -545,6 +545,40 @@ templates at all.
 
 ---
 
+## A custom domain, and the one thing it can break
+
+`auth.halfstop.app` in front of the project is a 10 USD/month add-on. What it
+buys, for mail, is that every link in the templates above is built from the
+project's external API URL — so activating the domain rewrites those links on
+its own. Nothing in this repository has to change for the emails to stop
+pointing at `<project-ref>.supabase.co`, and a link that reads as the site's
+own domain is one fewer reason for a filter to bin it.
+
+**What it does not buy is a licence to repoint the app.** `SUPABASE_URL` in
+`token.js` is a separate decision, and it used to be an unrecoverable one:
+supabase-js names its localStorage entry after the first label of that URL,
+so the moment the app talked to `auth.halfstop.app` the library looked under
+`sb-auth-auth-token` instead of `sb-<project-ref>-auth-token`, found nothing,
+and signed out every signed-in person on every device. Silently, and with no
+way to put them back.
+
+`assets/js/lib/account.js` now pins the name to `sb-halfstop-auth-token` and
+carries any session stored under the derived name onto it, which makes the
+move invisible — **but only if that code is live before the URL changes.**
+Checked in a browser against the real library:
+
+| App points at | Session stored under | Result |
+| --- | --- | --- |
+| `<ref>.supabase.co` | the old derived name | signed in, and carried over |
+| `auth.halfstop.app` | the pinned name | signed in |
+| `auth.halfstop.app` | only the old name | **signed out** |
+
+The third row is what happens if the secret is changed before the deployment
+carrying the pin. So: deploy first, change `ABMAP_SUPABASE_URL` second — or
+simply leave it alone, because the emails do not need it.
+
+---
+
 ## The support queue
 
 `admin.html` lists everything written to support@halfstop.app as a queue: new,
