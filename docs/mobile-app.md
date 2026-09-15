@@ -328,6 +328,12 @@ config; a rotated Mapbox token means a new build for everyone.
 
 ## 7. Things that behave differently inside the shell
 
+**Accounts are their own runbook.** Signing in, registering and every emailed
+link behave differently in here, and getting them working is three separate
+pieces of setup across two consoles. They are written out step by step in
+[app-auth.md](app-auth.md) rather than summarised here.
+
+
 - **Service workers do not run on iOS** under the `capacitor://` scheme. That is
   fine: every asset is already local, so the worker had nothing to do there.
   Android uses `https://localhost` and the worker runs normally.
