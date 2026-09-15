@@ -577,6 +577,19 @@ The third row is what happens if the secret is changed before the deployment
 carrying the pin. So: deploy first, change `ABMAP_SUPABASE_URL` second — or
 simply leave it alone, because the emails do not need it.
 
+### What it did and did not do
+
+Activated on 15 September. The links moved as promised — a reset sent that
+afternoon carried
+`https://auth.halfstop.app/auth/v1/verify?...&redirect_to=https://app.halfstop.app/`,
+with no change to `token.js`. The message still landed in junk at Outlook.
+
+So the link domain was worth something and was not the thing. What is left is
+reputation, which no DNS record shortcuts, and the small print: the subject on
+that send read `[Halfstop] Reset Your Password`, and a bracketed prefix is
+weighed against a message by most filters. The templates above specify short
+subjects with no prefix for exactly that reason.
+
 ---
 
 ## The support queue
