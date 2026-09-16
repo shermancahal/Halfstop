@@ -80,12 +80,26 @@ Free, and no domain to verify.
    in; publishing lifts that.
 3. **APIs & Services → Credentials → Create credentials → OAuth client ID**,
    type **Web application**.
-4. Under **Authorised redirect URIs** paste the callback Supabase shows on its
-   Google provider page. It looks like
-   `https://<project-ref>.supabase.co/auth/v1/callback` — Supabase's domain,
-   not this site's.
+4. Under **Authorized redirect URIs** add the callback. Since the custom
+   domain was activated this is:
+
+   ```
+   https://auth.halfstop.app/auth/v1/callback
+   ```
+
+   Supabase's own server, not this site - and **not** the
+   `<project-ref>.supabase.co` address it used to be. Activating the domain
+   changed what Supabase Auth advertises to every provider, so a client that
+   still lists only the old URL fails with `redirect_uri_mismatch`. Keep both
+   if the old one is already there; extra entries cost nothing.
 5. Copy the client ID and client secret into Supabase → **Authentication →
    Providers → Google**, and enable it.
+6. **Publish the consent screen.** This is the step that gets skipped, because
+   everything works without it for the person who built it: while the app is in
+   **Testing**, only addresses listed as test users can sign in, and everybody
+   else is refused with a screen about the app not being verified. Basic
+   profile and email scopes do not need Google's verification review, so
+   publishing is a button rather than a process.
 
 ### Apple — the paid one, and the order that avoids wasted money
 
