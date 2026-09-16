@@ -296,6 +296,33 @@ Separate from the above and only needed for the site.
    Client IDs field the native side already uses. Both halves coexist: Client
    IDs serves the app, the secret serves the website.
 
+### An app account has no password, so the website needs these too
+
+Not a nicety. Somebody who taps Continue with Apple in the app never sets a
+password - there is nothing to type on the website, and the email form cannot
+help them. Until the web half of both providers is configured, every account
+created in the app is an account that cannot sign in at app.halfstop.app.
+
+The buttons themselves are already built and have been all along; they are
+drawn for whatever `/auth/v1/settings` reports as enabled, so they appear the
+moment the provider is configured and stay hidden while it is not. Nothing in
+this repository needs changing for them.
+
+### Register the sending domain with Apple, or relay mail bounces
+
+Easy to miss because it sits in a different section of the console from
+everything else. Apple's **Sign in with Apple for Email Communication**
+([Services](https://developer.apple.com/account/resources/services/list)) is
+where you list the domains allowed to send to a private relay address.
+
+It matters here because of Hide My Email: somebody who chooses it gets an
+account whose address is `…@privaterelay.appleid.com`, and everything this app
+sends them - the password-changed notice, a reset link, a folder invitation -
+goes through Apple's relay. Mail from a domain that is not registered there is
+dropped rather than forwarded.
+
+So add `send.halfstop.app`, which is the domain Resend sends from.
+
 ### Google needs the same URL, and nobody has checked
 
 Activating the custom domain changed the callback Supabase advertises for
