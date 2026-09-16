@@ -803,14 +803,14 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
  * eye floating in the gap where the input stopped short.
  */
 /*
- * Capped, because a form is not prose.
+ * Full width, to the rule under the heading it sits beneath.
  *
- * The column around it is 74ch, which is right for the sentences in the
- * sections below and absurd for a pair of buttons: "Sign out" came out six
- * hundred pixels wide on a laptop. Fields and buttons stop at a width a form
- * is read at; the paragraphs keep the column.
+ * It was capped at 30rem so a pair of buttons would not come out six hundred
+ * pixels wide on a laptop. What that actually produced was a form ending well
+ * short of the line above it, which reads as a mistake rather than as a
+ * measure - so the pairs below share a row instead, and the width goes back
+ * to matching what it is lined up against.
  */
-.account-full { max-width: 30rem; }
 #account-panel input,
 .account-full input {
   width: 100%; font: inherit; font-size: .88rem; color: var(--ink); margin-bottom: 7px;
@@ -946,17 +946,31 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 .account-close-note { margin-top: 10px; }
 .account-close-note a { color: inherit; text-decoration: underline; }
 
-/* The two passwordless ways in, under the two that use a password.
-   Stacked and full width rather than left to wrap: at this panel's width the
-   two labels cannot sit side by side, and a row that wraps ragged reads as a
-   mistake where a list reads as a choice. */
-.account-alternatives { margin-top: 7px; flex-direction: column; align-items: stretch; }
-/* The two provider buttons, for the same reason and now in two widths.
-   Left to wrap they were content-sized, which in the gear happened to look
-   like a list because nothing fit beside anything - and on the account page,
-   where there is room, became two short buttons ragged against a column of
-   full-width ones. A choice reads as a choice when the options match. */
-.account-providers { flex-direction: column; align-items: stretch; }
+/*
+ * The two passwordless ways in, sharing a row under the two that use a
+ * password - and the two providers above, sharing another.
+ *
+ * They were stacked because the gear was 268px wide and two labels could not
+ * sit side by side there. The gear no longer holds this form at all, so the
+ * only place it renders is the account page, where there is room for both.
+ *
+ * `flex: 1 0 <basis>` - grow, but never shrink. Shrinking is what turns "no
+ * room" into a clipped label instead of a wrap, and it did: "Forgot password?"
+ * came out as "Forgot passwo..." at 390px while the pair sat dutifully side by
+ * side. With no shrink the pair wraps instead, and each takes the full width.
+ *
+ * The bases are measured, not chosen. At 390px "Forgot password?" needs 191px
+ * of button - 136px of text, 36px of padding, 19px of icon and gap - and half
+ * the column is 176px, so that pair has to wrap. "Create account" needs 171px
+ * and fits, so its pair does not. Hence 12rem for one row and 10.5rem for the
+ * other rather than one number for both.
+ */
+.account-alternatives { margin-top: 7px; }
+.account-alternatives .button { flex: 1 0 12rem; justify-content: center; }
+/* Apple first, then Google, sharing the row above the address field - the
+   order comes from PROVIDERS in account.js, not from here. Equal shares so
+   neither reads as the lesser option. */
+.account-providers .button { flex: 1 0 12rem; justify-content: center; }
 /* The one control the gear shows when nobody is signed in. Full width and
    centred, because a single button sized to the word "Sign in" in a panel this
    wide reads as an afterthought rather than as the way in. */
@@ -965,8 +979,7 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
    this form lines up with the two fields above it. Sign in takes the smaller
    share: it is one short word, and a button sized to its label rather than to
    its importance is what stops the pair looking like a mistake. */
-.account-signin { flex-wrap: nowrap; }
-.account-signin .button { flex: 1 1 auto; min-width: 0; }
+.account-signin .button { flex: 1 0 10.5rem; min-width: 0; justify-content: center; }
 
 /* --------------------------------------------------------------- toasts
  * What the app says out loud, wherever it says it.

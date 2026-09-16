@@ -447,6 +447,16 @@ export function createAccountPanel({
       }
     };
 
+    /*
+     * Marks on the four that use an address, and none on the two providers.
+     *
+     * Apple publishes what a Sign in with Apple button must look like, down to
+     * the mark and the wording, and Google does the same - so an approximation
+     * drawn here beside "Continue with Apple" is not a nicer button, it is the
+     * wrong one. Same reasoning that kept the directions row off Apple's and
+     * Google's logos. If those two should carry their marks it is by taking
+     * the real ones from the design resources, deliberately.
+     */
     const buttons = [
       el('button', {
         class: 'button button-primary button-small', type: 'button', text: 'Sign in',
@@ -476,6 +486,9 @@ export function createAccountPanel({
      * same kind of thing as Create account: a way in. So they look like it, on
      * their own row.
      */
+    withIcon(buttons[0], icons.login);
+    withIcon(buttons[1], icons.userPlus);
+
     const alternatives = [
       el('button', {
         class: 'button button-secondary button-small', type: 'button', text: 'Email me a link',
@@ -507,6 +520,8 @@ export function createAccountPanel({
         announce('ok');
       }),
     });
+    withIcon(alternatives[0], icons.mail);
+    withIcon(forgot, icons.key);
     alternatives.push(forgot);
 
     /*

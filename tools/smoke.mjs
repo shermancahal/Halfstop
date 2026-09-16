@@ -2191,6 +2191,60 @@ if (!external) {
   check('with every way in on it', moved.buttons.includes('Sign in') && moved.buttons.includes('Create account')
     && moved.buttons.includes('Email me a link') && moved.buttons.includes('Forgot password?'), true);
 
+  /*
+   * And none of it clips on a phone, which is the bug this pair of rows has
+   * produced twice now.
+   *
+   * "Edit profile" became "Edit" because it clipped in the gear; "Forgot
+   * password?" came out "Forgot passwo..." the first time these buttons were
+   * put side by side. Both were found by looking, which is not a method - a
+   * label one word longer would sail past every check in this file, because
+   * the DOM is perfectly correct either way. So this measures instead: what
+   * the label needs against what the button gives it, on a 390px screen.
+   *
+   * Its own narrow context because the run above is 1280 wide, and the whole
+   * point is the width where things stop fitting.
+   */
+  const narrow = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
+  await narrow.route('**/mapbox-gl.js*', (route) => route.fulfill({
+    status: 200, contentType: 'application/javascript', body: GL,
+  }));
+  await narrow.route('**://*.supabase.co/**', (route) => {
+    const url = route.request().url();
+    // Both providers on, because two is the arrangement that has to fit.
+    if (/\/auth\/v1\/settings/.test(url)) {
+      return route.fulfill({ json: { external: { apple: true, google: true }, disable_signup: false } });
+    }
+    return route.fulfill({ json: [] });
+  });
+  await narrow.addInitScript(() => {
+    window.ABMAP_SUPABASE_URL = 'https://smoke.supabase.co';
+    window.ABMAP_SUPABASE_KEY = 'smoke-anon-key';
+  });
+  const phone = await narrow.newPage();
+  await phone.goto(new URL('account.html', MAP_URL).href, { waitUntil: 'domcontentloaded' });
+  await phone.waitForFunction(
+    () => document.querySelectorAll('#account-page button').length > 3, null, { timeout: 8000 },
+  ).catch(() => {});
+  const fit = await phone.evaluate(() => {
+    const trouble = [];
+    for (const button of document.querySelectorAll('#account-page button, #account-page a.button')) {
+      // withIcon puts the words in a span; without one the button is the label.
+      const label = button.querySelector('span') || button;
+      if (label.scrollWidth > label.clientWidth + 1) trouble.push(`clipped: ${button.textContent.trim()}`);
+    }
+    if (document.documentElement.scrollWidth > document.documentElement.clientWidth + 1) {
+      trouble.push('the page scrolls sideways');
+    }
+    return trouble;
+  });
+  check('nothing on the account page clips at 390px', fit, []);
+  check('and Apple comes before Google', await phone.evaluate(
+    () => [...document.querySelectorAll('#account-page .account-providers .button')]
+      .map((b) => b.textContent.trim())),
+  ['Continue with Apple', 'Continue with Google']);
+  await narrow.close();
+
   await shots.close();
 }
 
