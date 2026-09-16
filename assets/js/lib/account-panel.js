@@ -383,6 +383,29 @@ export function createAccountPanel({
     }
 
     /* signed out */
+
+    /*
+     * In the gear, the way to the form rather than the form.
+     *
+     * Signed out, this panel is ten controls deep - a sentence, two provider
+     * buttons, a separator, two fields and four more buttons - and it renders
+     * inside a dropdown that already scrolls on a phone. Reported as exactly
+     * that: a settings menu you have to scroll to reach the settings in.
+     *
+     * Signing in from the map is still worth something, which is why this was
+     * left in the gear when the profile and the password moved out. But a link
+     * costs one line where the form costs ten, and account.html has the room
+     * to do it properly - including the provider buttons, which are the part
+     * most likely to grow.
+     */
+    if (compact) {
+      container.append(
+        el('p', { class: 'hint', style: 'margin-bottom:10px', text: 'Sign in to sync folders and pins.' }),
+        el('a', { class: 'button button-primary button-small account-go', href: 'account.html', text: 'Sign in' }),
+      );
+      return;
+    }
+
     const email = el('input', {
       type: 'email', placeholder: 'you@example.com', autocomplete: 'email', 'aria-label': 'Email',
       value: emailDraft,

@@ -954,6 +954,10 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
    where there is room, became two short buttons ragged against a column of
    full-width ones. A choice reads as a choice when the options match. */
 .account-providers { flex-direction: column; align-items: stretch; }
+/* The one control the gear shows when nobody is signed in. Full width and
+   centred, because a single button sized to the word "Sign in" in a panel this
+   wide reads as an afterthought rather than as the way in. */
+.account-go { display: flex; justify-content: center; }
 /* Sign in and Create account share the row edge to edge, so every control in
    this form lines up with the two fields above it. Sign in takes the smaller
    share: it is one short word, and a button sized to its label rather than to

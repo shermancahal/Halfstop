@@ -2118,17 +2118,22 @@ check('and drawn rather than written',
 await shot(page.locator('.site-header'), 'site-header');
 
 /*
- * A picture of the sign-in form where it now lives.
+ * What the menu shows when nobody is signed in, and where the form went.
  *
- * Off unless SMOKE_SHOTS asks for it, and on a page of its own so nothing it
- * does reaches the run above. Accounts are configured by two globals that
- * token.js sets, and the smoke build has neither - which is why every check in
- * this file has only ever seen the "accounts are not set up" line, and why the
- * form that a real deployment shows in this menu goes unlooked at. The globals
- * are supplied here and every call to the service is failed, because the point
- * is the layout of the form and not what happens when you fill it in.
+ * On a page of its own so nothing it does reaches the run above. Accounts are
+ * configured by two globals that token.js sets, and the smoke build has
+ * neither - which is why every other check in this file has only ever seen the
+ * "accounts are not set up" line, and why what a real deployment shows in this
+ * menu went unlooked at. The globals are supplied here and every call to the
+ * service is failed, because the point is what is drawn and not what happens
+ * when you fill it in.
+ *
+ * This block used to be gated on SMOKE_SHOTS, which was right while it only
+ * took a picture and wrong the moment it carried checks: they were skipped in
+ * CI and in every ordinary run, and passed by never happening. `shot()` gates
+ * itself, so the pictures are still only taken when asked for.
  */
-if (process.env.SMOKE_SHOTS && !external) {
+if (!external) {
   const shots = await context.newPage();
   await shots.route('**/*.supabase.co/**', (route) => route.abort());
   // The same stub the run above uses; without it the page never gets a map
@@ -2146,6 +2151,46 @@ if (process.env.SMOKE_SHOTS && !external) {
   await shots.click('#settings-trigger');
   await shots.waitForTimeout(400);
   await shot(shots.locator('#settings-panel'), 'settings-signed-out');
+
+  /*
+   * And signed out it is a sentence and a button, not a form.
+   *
+   * It used to be ten controls - two provider buttons, a separator, two fields
+   * and four more - inside a dropdown that already scrolls on a phone, which
+   * is a settings menu you have to scroll past the account to reach the
+   * settings in. Reported from a phone with the scrollbar visible in the shot.
+   */
+  const shut = await shots.evaluate(() => {
+    const panel = document.querySelector('#account-panel');
+    return {
+      fields: panel?.querySelectorAll('input').length,
+      says: panel?.querySelector('.hint')?.textContent.trim(),
+      goes: panel?.querySelector('a.button')?.getAttribute('href'),
+      label: panel?.querySelector('a.button')?.textContent.trim(),
+    };
+  });
+  check('the gear asks for nothing when nobody is signed in', shut.fields, 0);
+  check('it says what an account is for', shut.says, 'Sign in to sync folders and pins.');
+  check('and offers the page that does it', [shut.label, shut.goes], ['Sign in', 'account.html']);
+
+  /*
+   * The form itself did not disappear - it moved. Checked on the page in the
+   * same run, because "the menu is shorter" is only good news if the thing it
+   * stopped doing is being done somewhere.
+   */
+  await shots.goto(new URL('account.html', MAP_URL).href, { waitUntil: 'domcontentloaded' });
+  await shots.waitForTimeout(1800);
+  const moved = await shots.evaluate(() => {
+    const where = document.getElementById('account-page');
+    return {
+      fields: where?.querySelectorAll('input').length,
+      buttons: [...(where?.querySelectorAll('button') || [])].map((b) => b.textContent.trim()),
+    };
+  });
+  check('the account page still asks for an address and a password', moved.fields, 2);
+  check('with every way in on it', moved.buttons.includes('Sign in') && moved.buttons.includes('Create account')
+    && moved.buttons.includes('Email me a link') && moved.buttons.includes('Forgot password?'), true);
+
   await shots.close();
 }
 

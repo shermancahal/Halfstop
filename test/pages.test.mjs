@@ -506,6 +506,14 @@ test('pages: the gear holds a way to the account, not the account', async () => 
   const entry = await readFile(new URL('../assets/js/account.js', import.meta.url), 'utf8');
   assert.match(entry, /handlesInboxLinks: false/, 'account.html lets its own gear open over its form');
 
+  /*
+   * And signed out, the compact panel offers the page instead of the form.
+   * Ten controls in a dropdown that already scrolls on a phone is a settings
+   * menu you have to scroll past the account to reach the settings in.
+   */
+  assert.match(panel, /if \(compact\) \{[\s\S]{0,400}href: 'account\.html'/,
+    'the gear builds the whole sign-in form again when nobody is signed in');
+
   // And the page is the one place that gets the full thing.
   const page = await readFile(new URL('../assets/js/lib/account-page.js', import.meta.url), 'utf8');
   assert.doesNotMatch(page, /compact:\s*true/, 'the account page asked for the cut-down panel');
