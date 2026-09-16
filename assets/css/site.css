@@ -893,9 +893,12 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
    different questions and a single mi/ft toggle only ever answered one. */
 .settings-menu { position: relative; }
 /*
- * Capped and scrollable, because this menu now carries the sign-in form as
- * well as three rows of choices - about 630px of it on a signed-out phone,
- * which is taller than a short landscape window.
+ * Capped and scrollable, and still worth it after the sign-in form left.
+ *
+ * The 630px signed-out menu this was written for is gone - that is a sentence
+ * and a button now. What can still outgrow a short landscape window is the
+ * signed-in map: three rows of choices, the account, the sync line, the plan
+ * and a way out of a subscription, above the legal links.
  */
 .settings-drop {
   width: min(268px, calc(100vw - 24px)); padding: 12px 13px;
