@@ -1528,7 +1528,7 @@ function networkArms(field, valueFor) {
      * fractions - CR 11/5 - which is why they get a marker that can widen.
      */
     ['==', ['slice', net, 0, 3], 'US:'],
-    ['case', COUNTY_ROUTE, valueFor('county'), stateArms(net, valueFor)],
+    ['case', countyRoute(field), valueFor('county'), stateArms(net, valueFor)],
     valueFor(UNCLAIMED)]];
 }
 
@@ -1575,18 +1575,35 @@ function stateArms(net, valueFor) {
 }
 
 /*
- * Whether a network names a county system rather than a state one.
+ * Whether a network names a system of its own rather than the state's routes.
  *
- * The third component, when there is one. OSM writes it as `County` in West
- * Virginia and `Secondary` elsewhere, and both mean the same thing: a road the
- * county numbers, signed differently from the state's own routes. Tested on
- * the network the arm is already looking at, so a state whose data uses
- * neither word is unaffected.
+ * Defined by what it is not, because the alternative is an open set. This
+ * looked for `County` and `Secondary` - the two words West Virginia and
+ * Virginia use - and every other way a county system is named fell through to
+ * the state arm and wore the state's own marker. New York names them after the
+ * county: `US:NY:Orange`, `US:NY:Rockland`, one per county in the state. New
+ * Jersey writes `US:NJ:CR`. Reported as "in New York it all reads as a state
+ * route", which is exactly what a two-word list does to a fifty-state problem.
+ *
+ * The closed set is the other one. A third component is either a plate bolted
+ * above a state route - BANNERS, eight words, fixed - or it is a different
+ * system. So: no third component is the state's own network, a third component
+ * naming a banner is still the state's, and anything else is its own thing and
+ * gets the marker a county route gets.
+ *
+ * That is deliberately broad. `US:TX:FM` and `US:PA:Belt` are not county
+ * systems either, and they are not the state's numbered routes - drawing them
+ * as something other than the state's shield is right for the same reason.
  */
-const COUNTY_ROUTE = ['any',
-  ['==', ['slice', ['coalesce', ['get', 'network'], ''], 5], ':County'],
-  ['==', ['slice', ['coalesce', ['get', 'network'], ''], 5], ':Secondary'],
-];
+function countyRoute(field = 'network') {
+  const net = ['coalesce', ['get', field], ''];
+  return ['let', 'abmap_sub', ['index-of', ':', net, 3], ['case',
+    // No third component: `US:NY` is the state's own route network.
+    ['<=', ['var', 'abmap_sub'], 0], false,
+    // A third component naming a plate is still a state route, wearing a sign.
+    ['!=', bannerExpression(field), ''], false,
+    true]];
+}
 
 /*
  * The banner component of a network, as an expression.

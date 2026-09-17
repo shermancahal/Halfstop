@@ -1727,8 +1727,40 @@ test('shields: a county route is a circle, and an oval when the number is a frac
   // `Secondary` is the same idea under a different word, which other states use.
   assert.equal(evaluate(image, at('US:VA:Secondary', '617')), 'abmap-shield-county-3');
 
+  /*
+   * And every other word, because `County` and `Secondary` were a two-word
+   * list against a fifty-state problem.
+   *
+   * New York names its county systems after the counties - one network per
+   * county, `US:NY:Orange` beside `US:NY:Rockland` - and New Jersey writes
+   * `US:NJ:CR`. None of them matched, so all of them fell to the state arm and
+   * drew New York's and New Jersey's own markers. Reported as "in New York it
+   * all reads as a state route", which is what it was.
+   *
+   * The rule is the complement of a closed set now: a third component is
+   * either one of the eight banner words or it is a system of its own.
+   */
+  for (const [network, text] of [
+    ['US:NY:Orange', '72'], ['US:NY:Rockland', '84'], ['US:NY:Westchester', '98'],
+    ['US:NJ:CR', '68'], ['US:PA:Allegheny', '19'], ['US:OH:Hamilton', '42'],
+  ]) {
+    assert.equal(evaluate(image, at(network, text)), 'abmap-shield-county-2',
+      `${network} drew the state's own marker`);
+  }
+
+  /*
+   * A plate is not a system. `US:NY:Truck` is a New York route wearing a sign,
+   * and a rule that read every third component as a county would have taken
+   * the state marker off all eight of them.
+   */
+  assert.equal(evaluate(image, at('US:NY:Truck', '17')), 'abmap-shield-st-NY-2-truck');
+  assert.equal(evaluate(image, at('US:NY:Business', '17')), 'abmap-shield-st-NY-2-business');
+  assert.equal(evaluate(image, at('US:NY', '17')), 'abmap-shield-st-NY-2');
+
   // The nationals must not be caught by a rule about third components.
   assert.equal(evaluate(image, at('US:I', '77')), 'abmap-shield-interstate-2');
+  // Clamped to the narrowest image that exists, which is two characters wide.
+  assert.equal(evaluate(image, at('US:US:Business', '9')), 'abmap-shield-us-2-business');
 
   /*
    * And the point of the oval: the marker widens, so the number must not

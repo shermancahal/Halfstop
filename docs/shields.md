@@ -99,6 +99,35 @@ https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/{lon},{lat}.json
 Pick a point on the state route itself. The `shield` property on each returned
 feature is the value.
 
+## A third component is a system, unless it is a plate
+
+Under Protomaps a road carries `network`, and the third component decides
+whether it is the state's own route or something else numbered by somebody
+else.
+
+| network | design |
+| --- | --- |
+| `US:I`, `US:US` | the national markers |
+| `US:NY` | New York's own marker |
+| `US:NY:Truck`, `US:NY:Business` | New York's marker, wearing a plate |
+| `US:NY:Orange`, `US:NJ:CR`, `US:WV:County` | the county marker |
+
+The rule is written as the complement of a closed set, and that is the whole
+point. This used to look for the two words `County` and `Secondary`, which is
+what West Virginia and Virginia use — and every other way of naming a county
+system fell through to the state arm and wore the state's own shield. New York
+names them after the county, one network per county in the state; New Jersey
+writes `US:NJ:CR`. Reported as "in New York it all reads as a state route".
+
+County names are an open set and there is no listing them. Banners are eight
+words and they are already written down in `BANNERS`. So a third component
+that names a banner is a plate on a state route, and a third component that
+names anything else is a system of its own.
+
+Deliberately broad: `US:TX:FM` and `US:PA:Belt` are not county systems either,
+and they are not a state's numbered routes. Drawing them as something other
+than the state's shield is right for the same reason.
+
 ## The border case: one state prepared, fifty askable
 
 Registration prepares **one** state's marker — the one under the map centre.
