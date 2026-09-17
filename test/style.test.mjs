@@ -1675,6 +1675,47 @@ test('shields: the marker comes from the road, not from where the map is looking
   assert.equal(evaluate(ink, at('US:I')), '#ffffff');
 });
 
+test('shields: the image healer is listening before anything is awaited', async () => {
+  /*
+   * Ordering, asserted on the source, because there is nowhere else it lives.
+   *
+   * GL starts laying tiles out the moment the map is constructed, and the
+   * workers ask for every icon those tiles name. If `styleimagemissing` has no
+   * listener yet, the answer is a console warning and a shield that does not
+   * draw until something else happens to trigger a re-render.
+   *
+   * That window was real and a hundred and sixty lines wide: the healer was
+   * wired with the other listeners, after `await waitForStyle()`. Reported
+   * from Indiana as `Image "abmap-shield-circle-3" could not be loaded` - the
+   * plain circle, which is drawn rather than fetched and has no reason to be
+   * missing except that nobody had drawn it yet.
+   *
+   * A unit test cannot observe the event, and the smoke suite's stub map does
+   * not fire it. What can be checked is that the listener is attached before
+   * the first await, which is the property that closes the window.
+   */
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(new URL('../assets/js/viewer.js', import.meta.url), 'utf8');
+
+  /*
+   * Matched on the call, not on the words.
+   *
+   * The first version of this looked for 'await waitForStyle()' and found the
+   * comment above the healer, which says that phrase while describing the bug
+   * - so the test failed on correct code. Matching prose instead of code is
+   * the same family of mistake as the shape assertions these shield tests keep
+   * replacing, and it is worth one line to say so.
+   */
+  const built = source.indexOf('state.map = new gl.Map({');
+  const wired = source.indexOf('\n  healMissingImages();');
+  const awaited = source.indexOf('const started = await waitForStyle();');
+
+  assert.ok(built > 0 && wired > 0 && awaited > 0, 'the three landmarks still exist');
+  assert.ok(wired > built, 'the healer needs a map to listen on');
+  assert.ok(wired < awaited,
+    'the healer must be listening before startup yields, or GL asks into silence');
+});
+
 test('shields: every state with a marker can be reached from its network value', async () => {
   /*
    * Stated over the whole table rather than the three states in the report.

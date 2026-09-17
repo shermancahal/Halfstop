@@ -153,6 +153,23 @@ for one, so read it against what you can actually see. A state whose routes
 are visibly generic *and* listed there is the healer not having finished, or
 not having run.
 
+## Images missing at startup
+
+`Image "abmap-shield-circle-3" could not be loaded` on first paint used to be
+routine and is worth knowing about, because it looks like a missing asset and
+is not.
+
+GL starts laying tiles out the moment the map is constructed, and the workers
+ask for every icon those tiles name. The healer that answers that question -
+`styleimagemissing` - is what makes any of this work, and it was being wired
+after `await waitForStyle()`, a hundred and sixty lines later. Everything GL
+asked for in between went into silence. The circle is the tell: it is drawn on
+a canvas rather than fetched, so it has no reason to be missing except that
+nobody had drawn it yet.
+
+It is now wired in the same tick the map is created. If those warnings come
+back, that ordering is the first thing to check, and a test asserts it.
+
 ## If a road still draws the wrong marker
 
 A **state route drawing a circle** now means its `shield` is coming back as

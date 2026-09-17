@@ -737,6 +737,24 @@ async function main() {
   });
 
   /*
+   * The image healer, wired before anything is awaited.
+   *
+   * It used to be set up with the other listeners, a hundred and sixty lines
+   * and one `await waitForStyle()` further down. GL does not wait for that:
+   * the style loads, the workers start laying tiles out, and they ask for
+   * every icon those tiles name - which is the whole shield set, before the
+   * registrar has drawn one and with nobody listening for the event that says
+   * so. Reported from Indiana as `Image "abmap-shield-circle-3" could not be
+   * loaded`, on a road whose marker is drawn rather than fetched and should
+   * never have been missing at all.
+   *
+   * Listening from the same tick the map exists closes that window. The
+   * handler already guards on `hasImage` and catches a throw from a style that
+   * is not up, so being early costs it nothing.
+   */
+  healMissingImages();
+
+  /*
    * Ours first, so the tool you use constantly is not under the ones you do not.
    *
    * A real control rather than a floating div, so it stacks with the engine's
@@ -878,7 +896,6 @@ async function main() {
   exposeOverlayInspector();
   exposeWaypointInspector();
   keepMapSized();
-  healMissingImages();
   keepAppLayersAlive();
   trackShieldState();
   trackQueryOverlays();
