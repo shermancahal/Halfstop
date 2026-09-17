@@ -106,7 +106,7 @@ import {
 // `const` further down the file is in the temporal dead zone at that moment —
 // which threw a ReferenceError that the storage try/catch swallowed, so the
 // remembered sections silently came back empty on every load.
-const DETAIL_SECTIONS_KEY = 'ab-maps-details-closed-v1';
+const DETAIL_SECTIONS_KEY = 'ab-maps-details-open-v1';
 const SKY_PANEL_KEY = 'ab-maps-sky-panel-v1';
 const COORD_FORMATS_KEY = 'ab-maps-coord-formats-v1';
 
@@ -289,7 +289,7 @@ const state = {
    */
   openBlocks: new Set(),
   /** Details sections the reader has collapsed, remembered across pins. */
-  closedDetailSections: new Set(readClosedSections()),
+  openDetailSections: new Set(readOpenSections()),
   /** Set when the chosen basemap could not render as itself, and why. */
   basemapFallback: '',
   /** Which of the sky panels — twilight, moon, milkyway, lines — is open. */
@@ -3183,7 +3183,7 @@ function applyUnits() {
 /* ---------------- collapsible detail sections ---------------- */
 
 /**
- * Which detail sections the reader has folded away.
+ * Which detail sections the reader has opened.
  *
  * The Details panel grew from a few coordinate rows into eight sections — pin,
  * coordinates, elevation, sun and moon, land, weather, notes, photos — and a
@@ -3192,10 +3192,18 @@ function applyUnits() {
  * someone planning a drive never wants it. So the choice is remembered rather
  * than reset with each pin.
  *
- * Stored as the CLOSED set, so a section added later starts open and is
- * discovered rather than hidden.
+ * Stored as the OPEN set, and it used to be the closed one. Everything open
+ * until folded away made the panel arrive as a page of headings and bodies
+ * that had to be scrolled past to reach the next heading - which is the thing
+ * the sections were added to prevent. Shut by default, the whole list of what
+ * this app knows about a place is one screen, and opening one is a tap.
+ *
+ * The key changed with the meaning, on purpose: the stored value is a list of
+ * section ids either way, so an old list of closed sections read as a list of
+ * open ones would come back exactly inverted for anybody who had set a
+ * preference, and nothing about the value's shape would say so.
  */
-function readClosedSections() {
+function readOpenSections() {
   try {
     const raw = globalThis.localStorage?.getItem(DETAIL_SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
@@ -3211,11 +3219,11 @@ function readClosedSections() {
   }
 }
 
-function rememberClosedSections() {
+function rememberOpenSections() {
   try {
     globalThis.localStorage?.setItem(
       DETAIL_SECTIONS_KEY,
-      JSON.stringify([...state.closedDetailSections]),
+      JSON.stringify([...state.openDetailSections]),
     );
   } catch {
     // Storage refused; the preference lasts for this session only.
@@ -3228,7 +3236,7 @@ function rememberClosedSections() {
  * `id` is what is remembered, so it has to be stable — not the pin's name.
  */
 function collapsibleSection(id, title, buildBody, { count = '', icon = '' } = {}) {
-  const open = !state.closedDetailSections.has(id);
+  const open = state.openDetailSections.has(id);
 
   const section = el('details', {
     class: 'detail-block',
@@ -3239,11 +3247,11 @@ function collapsibleSection(id, title, buildBody, { count = '', icon = '' } = {}
     // we already believe, so ignoring them costs nothing and saves a storage
     // write per section per pin.
     ontoggle: (event) => {
-      const nowClosed = !event.target.open;
-      if (nowClosed === state.closedDetailSections.has(id)) return;
-      if (nowClosed) state.closedDetailSections.add(id);
-      else state.closedDetailSections.delete(id);
-      rememberClosedSections();
+      const nowOpen = Boolean(event.target.open);
+      if (nowOpen === state.openDetailSections.has(id)) return;
+      if (nowOpen) state.openDetailSections.add(id);
+      else state.openDetailSections.delete(id);
+      rememberOpenSections();
     },
   }, [
     el('summary', { class: 'detail-block-summary' }, [
@@ -7823,7 +7831,31 @@ function showIdentifyResults(position, groups, { pending = false } = {}) {
    * empty ground has nothing to name.
    */
   if (!pending && groups.length) {
-    const parts = saveToFolderParts(identifiedFeature(position, groups), popup);
+    /*
+     * One press to a waypoint, beside the one that asks where to put it.
+     *
+     * A tap on a river or a road named it, listed what it is, and offered to
+     * file it - and had no way to just keep it, which is what a dropped pin
+     * has offered from the start. The same two words on the same kind of
+     * place should not do different things depending on whether the app
+     * happened to recognise the ground, so this is the dropped pin's button,
+     * saving the same feature the folder picker beside it would save.
+     */
+    const feature = identifiedFeature(position, groups);
+    doing.push(labelledButton(icons.pin, 'Save as waypoint', {
+      tone: 'ghost',
+      title: 'Keep this as a waypoint in your latest folder',
+      onclick: () => {
+        const folders = state.folders.list();
+        const target = folders.length ? folders[folders.length - 1] : state.folders.create('Saved places');
+        saveFeatureToFolder(feature, target.id, null);
+        popup.remove();
+        setProbeMark(null);
+        toast(`Saved to “${target.name}”.`);
+        openTab('folders');
+      },
+    }));
+    const parts = saveToFolderParts(feature, popup);
     doing.push(...parts.actions);
     savePanel = parts.panel;
   }
@@ -9172,13 +9204,26 @@ function renderPointDetails(position) {
   const shared = state.scratchName || '';
   dom.details.append(el('div', { class: 'panel-section' }, [
     el('h2', { class: 'panel-title', style: 'margin:0', text: shared || 'Dropped pin' }),
-    el('p', {
-      class: 'hint', style: 'margin:6px 0 11px',
-      text: shared
-        ? 'Sent to you as a link. Not saved yet — save it to keep it.'
-        : 'Not saved yet — this is wherever you last clicked the map.',
-    }),
-    el('div', { class: 'picker-row' }, [
+    /*
+     * Nothing under the heading unless there is something to say.
+     *
+     * It used to read "Not saved yet - this is wherever you last clicked the
+     * map", which is a sentence explaining the button directly beneath it,
+     * which says "Save as waypoint". A pin you just dropped being unsaved is
+     * not news. What a link brings with it is, so that line stays, minus the
+     * same redundant half.
+     */
+    shared ? el('p', { class: 'hint', style: 'margin:6px 0 0', text: 'Sent to you as a link.' }) : null,
+    /*
+     * Saving on its own row, then the two ways out on the row under it.
+     *
+     * Three across is what a card this narrow holds when the labels are one
+     * word, and "Save as waypoint" is three - so on a phone the row came out
+     * as "Save as way...", "Sh...", "Cl...", none of which say what they do.
+     * It is also the wrong grouping: saving is what this panel is for, and
+     * sharing and clearing are what to do instead of it.
+     */
+    el('div', { class: 'picker-row pin-actions', style: 'margin-top:11px' }, [
       labelledButton(icons.pin, 'Save as waypoint', {
         tone: 'secondary',
         onclick: () => {
@@ -9196,6 +9241,8 @@ function renderPointDetails(position) {
           openTab('folders');
         },
       }),
+    ]),
+    el('div', { class: 'picker-row pin-actions', style: 'margin-top:7px' }, [
       labelledButton(icons.share, 'Share', {
         tone: 'ghost',
         title: 'Send somebody a link that opens the map here',

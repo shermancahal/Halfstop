@@ -305,6 +305,23 @@ const shot = async (locator, name) => {
   await locator.screenshot({ path: path.join(process.env.SMOKE_SHOTS, `${name}.png`) });
 };
 
+/*
+ * Open a details section by name.
+ *
+ * The sections arrive collapsed, so anything that reads or clicks inside one
+ * has to ask for it first. Idempotent, because several checks in a row work on
+ * the same section and a blind click would shut it again - which fails as "the
+ * content is missing" rather than as "it was already open".
+ */
+const openSection = async (target, name) => {
+  const block = target.locator('.detail-block').filter({ hasText: name }).first();
+  if (await block.count() && !(await block.evaluate((node) => node.open))) {
+    await block.locator('.detail-block-summary').first().click();
+    await target.waitForTimeout(150);
+  }
+  return block;
+};
+
 const failures = [];
 const check = (label, actual, expected) => {
   const ok = JSON.stringify(actual) === JSON.stringify(expected);
@@ -1549,6 +1566,7 @@ await page.waitForTimeout(300);
 await page.locator('.waypoint-card').first().click();
 await page.waitForTimeout(900);
 
+await openSection(page, 'Photography');
 check('no panel is open to begin with', await page.locator('.sky-panel').count(), 0);
 await page.locator('.sky-tab', { hasText: /Milky Way/ }).click();
 await page.waitForTimeout(400);
@@ -1596,6 +1614,7 @@ check('the open panel survives a reload', await page.locator('.moon-card').count
 // reading, which is a bad property for the part that matters most when it does
 // have something to say.
 console.log('\nA warned storm reports its heading and draws it');
+await openSection(page, 'Weather');
 const stormText = await page.locator('.detail-block').filter({ hasText: 'Severe Thunderstorm' }).first().innerText();
 check('the warning sits inside the weather section',
   /WEATHER/i.test(await page.locator('.detail-block').filter({ hasText: 'Severe Thunderstorm' }).first().innerText()),
@@ -1878,14 +1897,55 @@ await page.waitForTimeout(300);
 await page.locator('.waypoint-card').first().click();
 await page.waitForTimeout(900);
 
-// Location is a foldable block now, like the rest of the panel — so this
-// looks inside the block rather than for the flat section it used to be.
+// Location is a foldable block, like the rest of the panel — so this looks
+// inside the block rather than for the flat section it used to be.
 const locationSection = () => page.locator('.detail-block').filter({ hasText: 'Location' }).first();
-check('the Location block is open by default, not tidied away',
-  await locationSection().evaluate((node) => node.open), true);
-check('decimal degrees are on screen without opening anything',
+/*
+ * Shut to begin with, and every section with it.
+ *
+ * This used to check the opposite, because every section used to arrive open -
+ * which made the panel a page of headings and bodies to scroll past to reach
+ * the next heading, the thing the folding was added to prevent. What is left
+ * is one screen listing everything this app knows about a place, and a tap on
+ * the one being asked about.
+ */
+check('the Location block starts folded, like the rest of the panel',
+  await locationSection().evaluate((node) => node.open), false);
+check('while the headings are all on screen to choose from',
+  await page.locator('#details-body .detail-block-summary').count() > 3, true);
+
+/*
+ * And nothing at all is open on a browser that has not been used yet.
+ *
+ * Asked of a cleared memory rather than of this page, because by now the suite
+ * has opened Photography and Weather and the app remembers that - which is the
+ * other half of the behaviour and would make "nothing is open" fail here for
+ * the right reason.
+ */
+{
+  const clean = await context.newPage();
+  await clean.route('**/*', serveStubs);
+  await clean.addInitScript(() => {
+    try { localStorage.removeItem('ab-maps-details-open-v1'); } catch { /* storage off */ }
+  });
+  await clean.goto(MAP_URL, { waitUntil: 'networkidle' });
+  await clean.waitForTimeout(600);
+  await clean.locator('#panel-toggle').click();
+  await clean.locator('.panel-tab', { hasText: /Waypoints/ }).click();
+  await clean.waitForTimeout(400);
+  await clean.locator('.waypoint-card').first().click();
+  await clean.waitForTimeout(900);
+  check('on a fresh browser every section starts folded',
+    await clean.locator('#details-body .detail-block[open]').count(), 0);
+  check('and there are sections there to fold',
+    await clean.locator('#details-body .detail-block').count() > 3, true);
+  await clean.close();
+}
+
+await openSection(page, 'Location');
+check('opening Location shows decimal degrees first',
   await locationSection().locator('.detail-line-label', { hasText: /^Decimal$/ }).count(), 1);
-check('the other formats start hidden',
+check('the other formats stay hidden behind their own fold',
   await page.locator('.coord-more').first().evaluate((node) => node.open), false);
 await page.locator('.coord-more-summary').first().click();
 await page.waitForTimeout(200);
@@ -1908,7 +1968,9 @@ check('every section carries a mark',
  * up" — and it was two taps deep. It belongs on the card, trimmed.
  */
 console.log('\nA field note reaches the cards');
-// Sections start open, so no click first — clicking would close it.
+// A folded section like the rest of the panel, so it is opened before the
+// form inside it is filled.
+await openSection(page, 'Field notes');
 await page.locator('textarea[aria-label="New field note"]').fill('Gate locked at the second cattle guard, creek was up over the ford');
 await page.locator('button', { hasText: /^Add note$/ }).click();
 await page.waitForTimeout(400);
@@ -3013,21 +3075,34 @@ await page.waitForTimeout(400);
 await page.locator('.waypoint-card').first().click();
 await page.waitForTimeout(800);
 const sunMoon = () => page.locator('.detail-block').filter({ hasText: 'Photography' }).first();
+
+/*
+ * Both directions, because only one of them used to be remembered and the
+ * default has since flipped.
+ *
+ * Sections arrive folded, so what has to survive a reload is now the opening
+ * as much as the closing - and a memory that only recorded one of the two
+ * would look right in whichever direction happened to be tested.
+ */
+const reopenPin = async () => {
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForTimeout(1200);
+  await showTab('waypoints');
+  await page.waitForTimeout(300);
+  await page.locator('.waypoint-card').first().click();
+  await page.waitForTimeout(900);
+};
+
+await openSection(page, 'Photography');
+check('opening a section opens it', await sunMoon().evaluate((node) => node.open), true);
+await reopenPin();
+check('and it is still open after a reload', await sunMoon().evaluate((node) => node.open), true);
+
 await page.locator('.detail-block-summary', { hasText: /Photography/i }).click();
 await page.waitForTimeout(300);
 check('collapsing closes the section', await sunMoon().evaluate((node) => node.open), false);
-
-await page.reload({ waitUntil: 'networkidle' });
-await page.waitForTimeout(1200);
-await showTab('waypoints');
-await page.waitForTimeout(300);
-await page.locator('.waypoint-card').first().click();
-await page.waitForTimeout(900);
-check('it is still closed after a reload', await sunMoon().evaluate((node) => node.open), false);
-check('sections never collapsed stay open',
-  await page.locator('.detail-block').filter({ hasText: 'Field notes' }).first()
-    .evaluate((node) => node.open),
-  true);
+await reopenPin();
+check('and it is still closed after a reload', await sunMoon().evaluate((node) => node.open), false);
 
 /*
  * A real GaiaGPS export runs to four figures of waypoints. Rendering all of
@@ -3401,6 +3476,79 @@ check('and the symbol that was chosen is the one that was saved',
   typeof saved.icon === 'string' && saved.icon.length > 0 && symbol !== null, true);
 
 /*
+ * The Details panel for a pin that has not been saved.
+ *
+ * Two things reported off a phone: a line of text under the heading explaining
+ * that the pin was not saved, directly above a button reading "Save as
+ * waypoint"; and that button sharing a row with two others, which at phone
+ * width left "Save as way...", "Sh..." and "Cl...".
+ */
+console.log('\nA dropped pin says what it is and nothing more');
+await page.locator('.map-tool').nth(1).click();
+await page.waitForTimeout(400);
+await page.locator('.drop-pin .popup-bar button', { hasText: /^Details$/ }).click();
+await page.waitForTimeout(600);
+
+const pinPanel = page.locator('#details-body .panel-section').first();
+// innerText, so the heading arrives as the stylesheet draws it - in capitals.
+const pinHead = (await pinPanel.innerText()).replace(/\s+/g, ' ').trim();
+check('the heading names it', /^dropped pin/i.test(pinHead), true);
+check('and nothing under the heading explains the button under that',
+  /not saved yet/i.test(pinHead), false);
+
+/*
+ * Measured, at the width it was reported at.
+ *
+ * A row of buttons is only correct if the words in it are readable, and a
+ * label that has been ellipsed still passes every check that asks whether the
+ * button is there. So this compares what each label needs against what its
+ * button gives it - the same measurement the account page's rows get, for the
+ * same reason.
+ */
+await page.setViewportSize({ width: 390, height: 844 });
+await page.waitForTimeout(400);
+const pinRows = await page.evaluate(() => {
+  const rows = [...document.querySelectorAll('#details-body .pin-actions')];
+  return {
+    rows: rows.length,
+    perRow: rows.map((row) => row.querySelectorAll('.button').length),
+    clipped: rows.flatMap((row) => [...row.querySelectorAll('.button')])
+      .map((button) => {
+        const label = button.querySelector('span') || button;
+        return label.scrollWidth > label.clientWidth + 1
+          ? `clipped: ${label.textContent.trim()}` : null;
+      })
+      .filter(Boolean),
+    // Widths as fractions of the row, so the check reads the same at any
+    // viewport and does not have to know the panel's padding.
+    share: rows.map((row) => {
+      const width = row.getBoundingClientRect().width;
+      return [...row.querySelectorAll('.button')]
+        .map((button) => Math.round((button.getBoundingClientRect().width / width) * 100));
+    }),
+  };
+});
+check('saving is on a row of its own, above the two ways out', pinRows.perRow, [1, 2]);
+check('two rows, not three buttons across one', pinRows.rows, 2);
+check('and no label is cut short at 390px', pinRows.clipped, []);
+/*
+ * And the rows are filled rather than huddled at the left.
+ *
+ * Counting the buttons per row says nothing about what they look like: three
+ * content-width buttons wrapped onto two lines would pass that and still read
+ * as a bag of controls. Saving takes its whole row, the two ways out take half
+ * each, and that is the layout that was asked for.
+ */
+check('saving fills its row', pinRows.share[0][0] > 95, true);
+check('and the two ways out split theirs evenly',
+  Math.abs(pinRows.share[1][0] - pinRows.share[1][1]) <= 2 && pinRows.share[1][0] > 45, true);
+
+await page.setViewportSize({ width: 1280, height: 900 });
+await page.waitForTimeout(300);
+await page.locator('#details-body .pin-actions button', { hasText: /^Clear$/ }).click();
+await page.waitForTimeout(300);
+
+/*
  * Opening a saved pin.
  *
  * Two things that were both wrong here. The engine focuses the first focusable
@@ -3671,6 +3819,37 @@ check('one tap leaves one card, not a queried overlay opening a second',
   await page.locator('.identify-card, .feature-popup, .drop-pin').count(), 1);
 check('and the card that named the place is the one offering to keep it',
   await page.locator('.identify-card .popup-save-open').count(), 1);
+
+/*
+ * And offering to just keep it, without asking where.
+ *
+ * A dropped pin has had a one-press Save as waypoint from the start; a tap on
+ * a river or a road named it, listed what it is, offered to file it - and had
+ * no way to simply keep it. The same two words on the same kind of place
+ * should not do different things depending on whether the app happened to
+ * recognise the ground.
+ */
+const quickSave = page.locator('.identify-card button', { hasText: /^Save as waypoint$/ });
+check('the card also offers one press to a waypoint', await quickSave.count(), 1);
+await quickSave.click();
+await page.waitForTimeout(600);
+const keptByName = await page.evaluate(async () => {
+  const list = await window.__readFolders();
+  const named = list.flatMap((entry) => entry.items || [])
+    .map((item) => item.feature?.properties?.name);
+  return named.filter((name) => name === 'Fish Lake').length;
+});
+check('which files it under the name the card gave it', keptByName > 0, true);
+check('and closes the card, the way saving a dropped pin does',
+  await page.locator('.identify-card').count(), 0);
+
+// Back onto the same spot for the folder-picker checks below.
+await showTab('layers');
+await page.evaluate(() => window.__map.fire('click', {
+  lngLat: { lng: -111.5, lat: 38.5 }, point: { x: 400, y: 400 },
+  originalEvent: { pointerType: 'touch', width: 40, height: 40 },
+}));
+await page.waitForTimeout(900);
 
 await page.locator('.identify-card .popup-save-open').click();
 check('which opens the folder picker in place, on the same card',

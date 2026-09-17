@@ -591,6 +591,19 @@ html, body { height: 100%; overflow: hidden; }
   background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); padding: 7px 9px;
 }
 .picker-row { display: flex; gap: 7px; }
+/*
+ * A row of pin actions shares its width out rather than letting the labels
+ * shrink.
+ *
+ * `.picker-row` is a bare flex row, so its buttons keep their default
+ * `flex-shrink: 1` and a label too long for the space becomes an ellipsis
+ * instead of wrapping or pushing: "Save as waypoint" reading "Save as way..."
+ * beside "Sh..." and "Cl...". Equal shares and a floor stop that; `1 0` rather
+ * than `1 1` for the reason written out over .account-signin in site.css -
+ * grow to fill the row, never shrink into a truncation.
+ */
+.pin-actions { flex-wrap: wrap; }
+.pin-actions .button { flex: 1 0 9rem; min-width: 0; justify-content: center; }
 /* Apply and Cancel were sitting flush against the icon grid above them, which
    read as part of it. They are the end of the form, not another row of it. */
 .style-editor .picker-row { margin-top: 13px; }
