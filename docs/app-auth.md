@@ -321,7 +321,55 @@ sends them - the password-changed notice, a reset link, a folder invitation -
 goes through Apple's relay. Mail from a domain that is not registered there is
 dropped rather than forwarded.
 
-So add `send.halfstop.app`, which is the domain Resend sends from.
+#### Register two domains, not one
+
+The obvious answer is `send.halfstop.app`, the domain the mail is *from*. That
+is half of it.
+
+Apple's check is on the **envelope sender** - the `MAIL FROM` / `Return-Path`,
+not the `From:` header - and Apple's own help is specific that "the registered
+domain and envelope sender domain must match exactly to pass the SPF check".
+Resend does not use the From domain as the envelope domain. Its custom
+return-path feature puts the bounce address on `send.<domain>`, which for a
+sending domain of `send.halfstop.app` makes the envelope domain
+`send.send.halfstop.app`. The doubled word is not a typo.
+
+The DNS says the same thing. As it stands:
+
+| Name | TXT |
+| --- | --- |
+| `send.halfstop.app` | `v=spf1 +a +mx include:halfstop.app.spf.auto.dnssmarthost.net ~all` |
+| `send.send.halfstop.app` | `v=spf1 ip4:52.3.252.119 ip4:44.222.39.36 ip4:199.249.231.0/24 ~all` |
+| `rsend.send.halfstop.app` | `v=spf1 include:amazonses.com ~all` |
+
+The record carrying the actual sending IPs is on `send.send.halfstop.app`. The
+one on `send.halfstop.app` is the web host's default, inherited from the parent
+domain, and names no Resend address at all - mail passes today on DKIM
+alignment and on the envelope domain's own SPF, not on that record.
+
+So register both, comma-delimited, in one go:
+
+```
+send.halfstop.app, send.send.halfstop.app
+```
+
+Registering both costs nothing - an individual account may register 32 email
+sources and an organization 100 - and it removes the need to be right about
+which one Apple keys off. If the table still reports a failure, the third
+candidate is `rsend.send.halfstop.app`, Resend's other delegated path.
+
+There is no file to upload. Apple reads DNS, and the Email Sources table shows
+a pass or fail per row.
+
+#### While you are in there
+
+Worth noticing, not worth fixing blind: `send.halfstop.app` publishing the web
+host's SPF record is misleading. It authorizes the hosting provider's mail
+servers to send as the domain Halfstop sends from, and it authorizes none of
+Resend's. Nothing is broken by it - DMARC on `halfstop.app` is `p=none` with
+relaxed alignment, and DKIM aligns - but an SPF record that describes the wrong
+sender is a trap for whoever reads it next. Changing it means knowing what else
+sends as that domain, which is a separate job from this one.
 
 ### Google needs the same URL, and nobody has checked
 
