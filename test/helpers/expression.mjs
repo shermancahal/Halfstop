@@ -87,6 +87,18 @@ export function evaluate(expression, feature = {}, scope = {}) {
       const haystack = String(go(args[1]));
       return haystack.indexOf(needle, args.length > 2 ? Number(go(args[2])) : 0);
     }
+    /*
+     * `in` over a list or a string, which the spec allows both of.
+     *
+     * Needed once the forest-road rule reached this helper: `refDesign` asks
+     * whether the leading token is one of FSR, FR, NF and the rest.
+     */
+    case 'in': {
+      const needle = go(args[0]);
+      const haystack = go(args[1]);
+      if (Array.isArray(haystack)) return haystack.includes(needle);
+      return String(haystack).includes(String(needle));
+    }
     case 'downcase':
       return String(go(args[0])).toLowerCase();
     case 'upcase':

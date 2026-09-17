@@ -818,7 +818,7 @@ test('byways: route shields build their image name from the feature', () => {
   assert.ok(shield.filter.flat(3).includes('ref'), 'only roads with a number get a shield');
 });
 
-test('byways: a concurrency gets two shields, not one hyphenated one', () => {
+test('byways: a concurrency gets two shields, not one hyphenated one', async () => {
   // US 23 and US 60 running together arrive as one feature with ref "23-60".
   // Drawn as a single marker that reads 23-60 — a sign that exists nowhere —
   // so the pair is split across two layers and the combined one stands down.
@@ -837,11 +837,27 @@ test('byways: a concurrency gets two shields, not one hyphenated one', () => {
   assert.ok(JSON.stringify(plain.filter).includes('"!"'), 'the combined shield should exclude concurrencies');
   assert.ok(JSON.stringify(first.filter).includes('duplex'), 'a half shield is only for a concurrency');
 
-  // Opposite ways, or the two markers sit on top of each other.
-  const [firstX] = first.layout['icon-offset'];
-  const [secondX] = second.layout['icon-offset'];
+  /*
+   * Opposite ways, or the two markers sit on top of each other.
+   *
+   * Evaluated rather than destructured. `icon-offset` is an expression on both
+   * styles now - it has to answer differently for a bannered shield, which is
+   * taller and needs lifting so the plate does not push the marker down - so
+   * reading element zero would take the word `case` for a number.
+   */
+  const { evaluate: evalOffset } = await import('./helpers/expression.mjs');
+  const unbannered = { properties: { ref: 'US 23', shield: 'us-highway', reflen: 2 } };
+  const [firstX] = evalOffset(first.layout['icon-offset'], unbannered);
+  const [secondX] = evalOffset(second.layout['icon-offset'], unbannered);
   assert.ok(firstX < 0 && secondX > 0, 'the halves should sit either side of the line');
   assert.equal(firstX, -secondX, 'and the same distance from it');
+
+  // And a bannered half is lifted, where a plain one is not.
+  const bannered = { properties: { ref: 'BUS US 23', shield: 'us-highway', reflen: 2 } };
+  const [, flatY] = evalOffset(first.layout['icon-offset'], unbannered);
+  const [, banneredY] = evalOffset(first.layout['icon-offset'], bannered);
+  assert.equal(flatY, 0, 'an unbannered shield sits where it always did');
+  assert.ok(banneredY < 0, 'a plate lifts the shield rather than pushing it down');
 
   // The number moves with its shield. Text offsets are in ems and icon offsets
   // in pixels, so these are different numbers for the same shift — the failure
@@ -1735,6 +1751,77 @@ test('shields: every state with a marker can be reached from its network value',
       `${code} does not reach its own marker`,
     );
   }
+});
+
+test('shields: a business route is bannered from its number, on either schema', async () => {
+  /*
+   * Reported: "anything that reads BUSINESS or BUS should be bannered, and its
+   * shield determined by its network".
+   *
+   * The plate used to come only from the network, so `US:US:Business` got one
+   * and BUS M 60 did not - its network is `US:MI:Secondary`, which says
+   * nothing about a plate, while the number says BUS. That word was already
+   * being read, to strip it off the shield, and then discarded.
+   *
+   * Checked on both styles because the Mapbox one had no plates at all: the
+   * icon-offset that lifts a bannered shield was gated on a network field it
+   * does not have.
+   */
+  const { evaluate } = await import('./helpers/expression.mjs');
+  const { bywaysStyle, PROTOMAPS_SCHEMA } = await import('../assets/js/lib/byways-style.js');
+
+  const mapbox = bywaysStyle('pk.test');
+  const protomaps = bywaysStyle('', {
+    schema: PROTOMAPS_SCHEMA, archive: 'https://example.test/x.pmtiles', maxzoom: 13,
+  });
+  const shieldLayer = (style) => style.layers.find((layer) => layer.id === 'road-shield').layout;
+  const drawn = (style, properties) => ({
+    image: evaluate(shieldLayer(style)['icon-image'], { properties }),
+    shows: evaluate(shieldLayer(style)['text-field'], { properties }),
+  });
+
+  // Mapbox: the shape says which marker, the number says which plate.
+  assert.deepEqual(drawn(mapbox, { ref: 'BUS M 60', shield: 'circle-white', reflen: 2 }),
+    { image: 'abmap-shield-state-2-business', shows: '60' });
+  assert.deepEqual(drawn(mapbox, { ref: 'M 60 Business', shield: 'circle-white', reflen: 2 }),
+    { image: 'abmap-shield-state-2-business', shows: '60' });
+  assert.deepEqual(drawn(mapbox, { ref: 'BUS US 31', shield: 'us-highway', reflen: 2 }),
+    { image: 'abmap-shield-us-2-business', shows: '31' });
+  // And a plain route grows no plate.
+  assert.deepEqual(drawn(mapbox, { ref: 'M 60', shield: 'circle-white', reflen: 2 }),
+    { image: 'abmap-shield-state-2', shows: '60' });
+
+  // Protomaps: the network says which marker. `shield_text` is the number
+  // already stripped, so the designation survives only in `ref` - which is why
+  // the banner reads that field on both schemas rather than the shield text.
+  assert.deepEqual(
+    drawn(protomaps, { network: 'US:MI:Secondary', ref: 'BUS M 60', shield_text: '60' }),
+    { image: 'abmap-shield-st-MI-2-business', shows: '60' },
+    'a Michigan business route: state marker, BUS plate, bare number',
+  );
+  assert.deepEqual(
+    drawn(protomaps, { network: 'US:MI', ref: 'M 60', shield_text: '60' }),
+    { image: 'abmap-shield-st-MI-2', shows: '60' },
+  );
+
+  /*
+   * And Texas keeps its Loops.
+   *
+   * "Loop 360" is a route whose name begins with Loop; the word is the road's
+   * identity, not a sign above it. Two tokens rather than three is what tells
+   * them apart - "BUS M 60" is a plate, a system and a number - and both the
+   * stripper and the plate rule use that same guard, so the number and the
+   * banner cannot disagree about whether the word was consumed.
+   */
+  assert.deepEqual(drawn(mapbox, { ref: 'Loop 360', shield: 'circle-white', reflen: 3 }),
+    { image: 'abmap-shield-state-4', shows: 'Loop 360' },
+    'Loop 360 is a Texas route, not a loop plate on route 360');
+  assert.deepEqual(drawn(mapbox, { ref: 'Old 61', shield: 'circle-white', reflen: 2 }),
+    { image: 'abmap-shield-state-4', shows: 'Old 61' },
+    'Old is not a designation and the word carries the identity');
+  assert.deepEqual(drawn(mapbox, { ref: 'FSR 300', shield: 'default', reflen: 3 }),
+    { image: 'abmap-shield-forest-3', shows: '300' },
+    'a forest road is still chosen by its number and gets no plate');
 });
 
 test('shields: a county route is a circle, and an oval when the number is a fraction', async () => {

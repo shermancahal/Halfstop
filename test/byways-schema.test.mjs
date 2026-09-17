@@ -24,9 +24,25 @@
  * coalesce, one arm was added, and the fallback's text sizing grew the case a
  * state design needs. Roughly 2.4 KB on a 279 KB document.
  *
+ * Regenerated a second time, for banners, and it grew: 72.7KB to 90.8KB
+ * minified, a quarter again. Measured rather than eyeballed because this file
+ * already carries a scar from expression size - a text-size layer that reached
+ * 261KB and arrived as a report that rendering had got slower - and the first
+ * cut of this change was twice as bad. Two `let` bindings were calling their
+ * source expression three times over, which is free when the source is a bare
+ * coalesce and is not when it strips a designation first.
+ *
+ * The Mapbox path had no banners at all:
+ * the plate comes from a network component, Mapbox carries no network, so the
+ * whole mechanism was gated off. But plenty of roads carry the designation in
+ * the number instead - BUS M 60 - and that was already being read, to strip
+ * the word off the shield, and then thrown away. So the banner now falls back
+ * to the ref on both styles, which means `icon-offset` on the Mapbox shield
+ * layers is an expression where it used to be a literal pair: a bannered
+ * shield is taller and has to be lifted.
+ *
  * A snapshot that is updated without saying why stops being a guard, so the
- * next regeneration should add its own paragraph rather than replacing this
- * one.
+ * next regeneration should add its own paragraph rather than replacing these.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';

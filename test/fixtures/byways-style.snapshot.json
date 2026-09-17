@@ -2086,17 +2086,8 @@
           "let",
           "raw",
           [
-           "coalesce",
-           [
-            "get",
-            "ref"
-           ],
-           ""
-          ],
-          "space",
-          [
-           "index-of",
-           " ",
+           "let",
+           "raw",
            [
             "coalesce",
             [
@@ -2104,6 +2095,124 @@
              "ref"
             ],
             ""
+           ],
+           "first",
+           [
+            "index-of",
+            " ",
+            [
+             "var",
+             "raw"
+            ]
+           ],
+           [
+            "let",
+            "head",
+            [
+             "upcase",
+             [
+              "slice",
+              [
+               "var",
+               "raw"
+              ],
+              0,
+              [
+               "max",
+               0,
+               [
+                "var",
+                "first"
+               ]
+              ]
+             ]
+            ],
+            [
+             "case",
+             [
+              "all",
+              [
+               ">",
+               [
+                "var",
+                "first"
+               ],
+               0
+              ],
+              [
+               ">",
+               [
+                "index-of",
+                " ",
+                [
+                 "var",
+                 "raw"
+                ],
+                [
+                 "+",
+                 [
+                  "var",
+                  "first"
+                 ],
+                 1
+                ]
+               ],
+               0
+              ],
+              [
+               "in",
+               [
+                "var",
+                "head"
+               ],
+               [
+                "literal",
+                [
+                 "SCENIC",
+                 "BUSINESS",
+                 "ALTERNATE",
+                 "ALT",
+                 "BYPASS",
+                 "BYP",
+                 "TRUCK",
+                 "SPUR",
+                 "LOOP",
+                 "CONNECTOR",
+                 "CONN",
+                 "BUS"
+                ]
+               ]
+              ]
+             ],
+             [
+              "slice",
+              [
+               "var",
+               "raw"
+              ],
+              [
+               "+",
+               [
+                "var",
+                "first"
+               ],
+               1
+              ]
+             ],
+             [
+              "var",
+              "raw"
+             ]
+            ]
+           ]
+          ],
+          "space",
+          [
+           "index-of",
+           " ",
+           [
+            "var",
+            "raw"
            ]
           ],
           "dash",
@@ -2111,12 +2220,8 @@
            "index-of",
            "-",
            [
-            "coalesce",
-            [
-             "get",
-             "ref"
-            ],
-            ""
+            "var",
+            "raw"
            ]
           ],
           [
@@ -3050,17 +3155,8 @@
            "let",
            "raw",
            [
-            "coalesce",
-            [
-             "get",
-             "ref"
-            ],
-            ""
-           ],
-           "space",
-           [
-            "index-of",
-            " ",
+            "let",
+            "raw",
             [
              "coalesce",
              [
@@ -3068,6 +3164,124 @@
               "ref"
              ],
              ""
+            ],
+            "first",
+            [
+             "index-of",
+             " ",
+             [
+              "var",
+              "raw"
+             ]
+            ],
+            [
+             "let",
+             "head",
+             [
+              "upcase",
+              [
+               "slice",
+               [
+                "var",
+                "raw"
+               ],
+               0,
+               [
+                "max",
+                0,
+                [
+                 "var",
+                 "first"
+                ]
+               ]
+              ]
+             ],
+             [
+              "case",
+              [
+               "all",
+               [
+                ">",
+                [
+                 "var",
+                 "first"
+                ],
+                0
+               ],
+               [
+                ">",
+                [
+                 "index-of",
+                 " ",
+                 [
+                  "var",
+                  "raw"
+                 ],
+                 [
+                  "+",
+                  [
+                   "var",
+                   "first"
+                  ],
+                  1
+                 ]
+                ],
+                0
+               ],
+               [
+                "in",
+                [
+                 "var",
+                 "head"
+                ],
+                [
+                 "literal",
+                 [
+                  "SCENIC",
+                  "BUSINESS",
+                  "ALTERNATE",
+                  "ALT",
+                  "BYPASS",
+                  "BYP",
+                  "TRUCK",
+                  "SPUR",
+                  "LOOP",
+                  "CONNECTOR",
+                  "CONN",
+                  "BUS"
+                 ]
+                ]
+               ]
+              ],
+              [
+               "slice",
+               [
+                "var",
+                "raw"
+               ],
+               [
+                "+",
+                [
+                 "var",
+                 "first"
+                ],
+                1
+               ]
+              ],
+              [
+               "var",
+               "raw"
+              ]
+             ]
+            ]
+           ],
+           "space",
+           [
+            "index-of",
+            " ",
+            [
+             "var",
+             "raw"
             ]
            ],
            "dash",
@@ -3075,12 +3289,8 @@
             "index-of",
             "-",
             [
-             "coalesce",
-             [
-              "get",
-              "ref"
-             ],
-             ""
+             "var",
+             "raw"
             ]
            ],
            [
@@ -3728,9 +3938,790 @@
         ]
        ]
       ]
+     ],
+     [
+      "let",
+      "abmap_plate",
+      [
+       "let",
+       "abmap_ref",
+       [
+        "coalesce",
+        [
+         "get",
+         "ref"
+        ],
+        ""
+       ],
+       [
+        "let",
+        "abmap_cut",
+        [
+         "index-of",
+         " ",
+         [
+          "var",
+          "abmap_ref"
+         ]
+        ],
+        "abmap_end",
+        [
+         "length",
+         [
+          "var",
+          "abmap_ref"
+         ]
+        ],
+        [
+         "let",
+         "abmap_head",
+         [
+          "case",
+          [
+           "all",
+           [
+            ">",
+            [
+             "var",
+             "abmap_cut"
+            ],
+            0
+           ],
+           [
+            ">",
+            [
+             "index-of",
+             " ",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "+",
+              [
+               "var",
+               "abmap_cut"
+              ],
+              1
+             ]
+            ],
+            0
+           ]
+          ],
+          [
+           "upcase",
+           [
+            "slice",
+            [
+             "var",
+             "abmap_ref"
+            ],
+            0,
+            [
+             "var",
+             "abmap_cut"
+            ]
+           ]
+          ],
+          ""
+         ],
+         [
+          "let",
+          "abmap_lead",
+          [
+           "match",
+           [
+            "var",
+            "abmap_head"
+           ],
+           "BUSINESS",
+           "business",
+           "BUS",
+           "business",
+           "ALTERNATE",
+           "alternate",
+           "ALT",
+           "alternate",
+           "BYPASS",
+           "bypass",
+           "BYP",
+           "bypass",
+           "TRUCK",
+           "truck",
+           "SPUR",
+           "spur",
+           "LOOP",
+           "loop",
+           "CONNECTOR",
+           "connector",
+           "CONN",
+           "connector",
+           ""
+          ],
+          "abmap_t0",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              9
+             ]
+            ]
+           ],
+           " BUSINESS",
+           "business",
+           ""
+          ],
+          "abmap_t1",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              4
+             ]
+            ]
+           ],
+           " BUS",
+           "business",
+           " ALT",
+           "alternate",
+           " BYP",
+           "bypass",
+           ""
+          ],
+          "abmap_t2",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              10
+             ]
+            ]
+           ],
+           " ALTERNATE",
+           "alternate",
+           " CONNECTOR",
+           "connector",
+           ""
+          ],
+          "abmap_t3",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              7
+             ]
+            ]
+           ],
+           " BYPASS",
+           "bypass",
+           ""
+          ],
+          "abmap_t4",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              6
+             ]
+            ]
+           ],
+           " TRUCK",
+           "truck",
+           ""
+          ],
+          "abmap_t5",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              5
+             ]
+            ]
+           ],
+           " SPUR",
+           "spur",
+           " LOOP",
+           "loop",
+           " CONN",
+           "connector",
+           ""
+          ],
+          [
+           "case",
+           [
+            "!=",
+            [
+             "var",
+             "abmap_lead"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_lead"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t0"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t0"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t1"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t1"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t2"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t2"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t3"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t3"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t4"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t4"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t5"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t5"
+           ],
+           ""
+          ]
+         ]
+        ]
+       ]
+      ],
+      [
+       "case",
+       [
+        "!=",
+        [
+         "var",
+         "abmap_plate"
+        ],
+        ""
+       ],
+       [
+        "concat",
+        "-",
+        [
+         "var",
+         "abmap_plate"
+        ]
+       ],
+       ""
+      ]
      ]
     ],
     "icon-size": 1,
+    "icon-offset": [
+     "case",
+     [
+      "!=",
+      [
+       "let",
+       "abmap_ref",
+       [
+        "coalesce",
+        [
+         "get",
+         "ref"
+        ],
+        ""
+       ],
+       [
+        "let",
+        "abmap_cut",
+        [
+         "index-of",
+         " ",
+         [
+          "var",
+          "abmap_ref"
+         ]
+        ],
+        "abmap_end",
+        [
+         "length",
+         [
+          "var",
+          "abmap_ref"
+         ]
+        ],
+        [
+         "let",
+         "abmap_head",
+         [
+          "case",
+          [
+           "all",
+           [
+            ">",
+            [
+             "var",
+             "abmap_cut"
+            ],
+            0
+           ],
+           [
+            ">",
+            [
+             "index-of",
+             " ",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "+",
+              [
+               "var",
+               "abmap_cut"
+              ],
+              1
+             ]
+            ],
+            0
+           ]
+          ],
+          [
+           "upcase",
+           [
+            "slice",
+            [
+             "var",
+             "abmap_ref"
+            ],
+            0,
+            [
+             "var",
+             "abmap_cut"
+            ]
+           ]
+          ],
+          ""
+         ],
+         [
+          "let",
+          "abmap_lead",
+          [
+           "match",
+           [
+            "var",
+            "abmap_head"
+           ],
+           "BUSINESS",
+           "business",
+           "BUS",
+           "business",
+           "ALTERNATE",
+           "alternate",
+           "ALT",
+           "alternate",
+           "BYPASS",
+           "bypass",
+           "BYP",
+           "bypass",
+           "TRUCK",
+           "truck",
+           "SPUR",
+           "spur",
+           "LOOP",
+           "loop",
+           "CONNECTOR",
+           "connector",
+           "CONN",
+           "connector",
+           ""
+          ],
+          "abmap_t0",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              9
+             ]
+            ]
+           ],
+           " BUSINESS",
+           "business",
+           ""
+          ],
+          "abmap_t1",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              4
+             ]
+            ]
+           ],
+           " BUS",
+           "business",
+           " ALT",
+           "alternate",
+           " BYP",
+           "bypass",
+           ""
+          ],
+          "abmap_t2",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              10
+             ]
+            ]
+           ],
+           " ALTERNATE",
+           "alternate",
+           " CONNECTOR",
+           "connector",
+           ""
+          ],
+          "abmap_t3",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              7
+             ]
+            ]
+           ],
+           " BYPASS",
+           "bypass",
+           ""
+          ],
+          "abmap_t4",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              6
+             ]
+            ]
+           ],
+           " TRUCK",
+           "truck",
+           ""
+          ],
+          "abmap_t5",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              5
+             ]
+            ]
+           ],
+           " SPUR",
+           "spur",
+           " LOOP",
+           "loop",
+           " CONN",
+           "connector",
+           ""
+          ],
+          [
+           "case",
+           [
+            "!=",
+            [
+             "var",
+             "abmap_lead"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_lead"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t0"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t0"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t1"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t1"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t2"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t2"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t3"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t3"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t4"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t4"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t5"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t5"
+           ],
+           ""
+          ]
+         ]
+        ]
+       ]
+      ],
+      ""
+     ],
+     [
+      "literal",
+      [
+       0,
+       -5.1
+      ]
+     ],
+     [
+      "literal",
+      [
+       0,
+       0
+      ]
+     ]
+    ],
     "icon-rotation-alignment": "viewport",
     "text-field": [
      "let",
@@ -3739,17 +4730,8 @@
       "let",
       "raw",
       [
-       "coalesce",
-       [
-        "get",
-        "ref"
-       ],
-       ""
-      ],
-      "space",
-      [
-       "index-of",
-       " ",
+       "let",
+       "raw",
        [
         "coalesce",
         [
@@ -3757,6 +4739,124 @@
          "ref"
         ],
         ""
+       ],
+       "first",
+       [
+        "index-of",
+        " ",
+        [
+         "var",
+         "raw"
+        ]
+       ],
+       [
+        "let",
+        "head",
+        [
+         "upcase",
+         [
+          "slice",
+          [
+           "var",
+           "raw"
+          ],
+          0,
+          [
+           "max",
+           0,
+           [
+            "var",
+            "first"
+           ]
+          ]
+         ]
+        ],
+        [
+         "case",
+         [
+          "all",
+          [
+           ">",
+           [
+            "var",
+            "first"
+           ],
+           0
+          ],
+          [
+           ">",
+           [
+            "index-of",
+            " ",
+            [
+             "var",
+             "raw"
+            ],
+            [
+             "+",
+             [
+              "var",
+              "first"
+             ],
+             1
+            ]
+           ],
+           0
+          ],
+          [
+           "in",
+           [
+            "var",
+            "head"
+           ],
+           [
+            "literal",
+            [
+             "SCENIC",
+             "BUSINESS",
+             "ALTERNATE",
+             "ALT",
+             "BYPASS",
+             "BYP",
+             "TRUCK",
+             "SPUR",
+             "LOOP",
+             "CONNECTOR",
+             "CONN",
+             "BUS"
+            ]
+           ]
+          ]
+         ],
+         [
+          "slice",
+          [
+           "var",
+           "raw"
+          ],
+          [
+           "+",
+           [
+            "var",
+            "first"
+           ],
+           1
+          ]
+         ],
+         [
+          "var",
+          "raw"
+         ]
+        ]
+       ]
+      ],
+      "space",
+      [
+       "index-of",
+       " ",
+       [
+        "var",
+        "raw"
        ]
       ],
       "dash",
@@ -3764,12 +4864,8 @@
        "index-of",
        "-",
        [
-        "coalesce",
-        [
-         "get",
-         "ref"
-        ],
-        ""
+        "var",
+        "raw"
        ]
       ],
       [
@@ -4430,17 +5526,8 @@
         "let",
         "raw",
         [
-         "coalesce",
-         [
-          "get",
-          "ref"
-         ],
-         ""
-        ],
-        "space",
-        [
-         "index-of",
-         " ",
+         "let",
+         "raw",
          [
           "coalesce",
           [
@@ -4448,6 +5535,124 @@
            "ref"
           ],
           ""
+         ],
+         "first",
+         [
+          "index-of",
+          " ",
+          [
+           "var",
+           "raw"
+          ]
+         ],
+         [
+          "let",
+          "head",
+          [
+           "upcase",
+           [
+            "slice",
+            [
+             "var",
+             "raw"
+            ],
+            0,
+            [
+             "max",
+             0,
+             [
+              "var",
+              "first"
+             ]
+            ]
+           ]
+          ],
+          [
+           "case",
+           [
+            "all",
+            [
+             ">",
+             [
+              "var",
+              "first"
+             ],
+             0
+            ],
+            [
+             ">",
+             [
+              "index-of",
+              " ",
+              [
+               "var",
+               "raw"
+              ],
+              [
+               "+",
+               [
+                "var",
+                "first"
+               ],
+               1
+              ]
+             ],
+             0
+            ],
+            [
+             "in",
+             [
+              "var",
+              "head"
+             ],
+             [
+              "literal",
+              [
+               "SCENIC",
+               "BUSINESS",
+               "ALTERNATE",
+               "ALT",
+               "BYPASS",
+               "BYP",
+               "TRUCK",
+               "SPUR",
+               "LOOP",
+               "CONNECTOR",
+               "CONN",
+               "BUS"
+              ]
+             ]
+            ]
+           ],
+           [
+            "slice",
+            [
+             "var",
+             "raw"
+            ],
+            [
+             "+",
+             [
+              "var",
+              "first"
+             ],
+             1
+            ]
+           ],
+           [
+            "var",
+            "raw"
+           ]
+          ]
+         ]
+        ],
+        "space",
+        [
+         "index-of",
+         " ",
+         [
+          "var",
+          "raw"
          ]
         ],
         "dash",
@@ -4455,12 +5660,8 @@
          "index-of",
          "-",
          [
-          "coalesce",
-          [
-           "get",
-           "ref"
-          ],
-          ""
+          "var",
+          "raw"
          ]
         ],
         [
@@ -5859,17 +7060,8 @@
          "let",
          "raw",
          [
-          "coalesce",
-          [
-           "get",
-           "ref"
-          ],
-          ""
-         ],
-         "space",
-         [
-          "index-of",
-          " ",
+          "let",
+          "raw",
           [
            "coalesce",
            [
@@ -5877,6 +7069,124 @@
             "ref"
            ],
            ""
+          ],
+          "first",
+          [
+           "index-of",
+           " ",
+           [
+            "var",
+            "raw"
+           ]
+          ],
+          [
+           "let",
+           "head",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "raw"
+             ],
+             0,
+             [
+              "max",
+              0,
+              [
+               "var",
+               "first"
+              ]
+             ]
+            ]
+           ],
+           [
+            "case",
+            [
+             "all",
+             [
+              ">",
+              [
+               "var",
+               "first"
+              ],
+              0
+             ],
+             [
+              ">",
+              [
+               "index-of",
+               " ",
+               [
+                "var",
+                "raw"
+               ],
+               [
+                "+",
+                [
+                 "var",
+                 "first"
+                ],
+                1
+               ]
+              ],
+              0
+             ],
+             [
+              "in",
+              [
+               "var",
+               "head"
+              ],
+              [
+               "literal",
+               [
+                "SCENIC",
+                "BUSINESS",
+                "ALTERNATE",
+                "ALT",
+                "BYPASS",
+                "BYP",
+                "TRUCK",
+                "SPUR",
+                "LOOP",
+                "CONNECTOR",
+                "CONN",
+                "BUS"
+               ]
+              ]
+             ]
+            ],
+            [
+             "slice",
+             [
+              "var",
+              "raw"
+             ],
+             [
+              "+",
+              [
+               "var",
+               "first"
+              ],
+              1
+             ]
+            ],
+            [
+             "var",
+             "raw"
+            ]
+           ]
+          ]
+         ],
+         "space",
+         [
+          "index-of",
+          " ",
+          [
+           "var",
+           "raw"
           ]
          ],
          "dash",
@@ -5884,12 +7194,8 @@
           "index-of",
           "-",
           [
-           "coalesce",
-           [
-            "get",
-            "ref"
-           ],
-           ""
+           "var",
+           "raw"
           ]
          ],
          [
@@ -6824,17 +8130,8 @@
             "let",
             "raw",
             [
-             "coalesce",
-             [
-              "get",
-              "ref"
-             ],
-             ""
-            ],
-            "space",
-            [
-             "index-of",
-             " ",
+             "let",
+             "raw",
              [
               "coalesce",
               [
@@ -6842,6 +8139,124 @@
                "ref"
               ],
               ""
+             ],
+             "first",
+             [
+              "index-of",
+              " ",
+              [
+               "var",
+               "raw"
+              ]
+             ],
+             [
+              "let",
+              "head",
+              [
+               "upcase",
+               [
+                "slice",
+                [
+                 "var",
+                 "raw"
+                ],
+                0,
+                [
+                 "max",
+                 0,
+                 [
+                  "var",
+                  "first"
+                 ]
+                ]
+               ]
+              ],
+              [
+               "case",
+               [
+                "all",
+                [
+                 ">",
+                 [
+                  "var",
+                  "first"
+                 ],
+                 0
+                ],
+                [
+                 ">",
+                 [
+                  "index-of",
+                  " ",
+                  [
+                   "var",
+                   "raw"
+                  ],
+                  [
+                   "+",
+                   [
+                    "var",
+                    "first"
+                   ],
+                   1
+                  ]
+                 ],
+                 0
+                ],
+                [
+                 "in",
+                 [
+                  "var",
+                  "head"
+                 ],
+                 [
+                  "literal",
+                  [
+                   "SCENIC",
+                   "BUSINESS",
+                   "ALTERNATE",
+                   "ALT",
+                   "BYPASS",
+                   "BYP",
+                   "TRUCK",
+                   "SPUR",
+                   "LOOP",
+                   "CONNECTOR",
+                   "CONN",
+                   "BUS"
+                  ]
+                 ]
+                ]
+               ],
+               [
+                "slice",
+                [
+                 "var",
+                 "raw"
+                ],
+                [
+                 "+",
+                 [
+                  "var",
+                  "first"
+                 ],
+                 1
+                ]
+               ],
+               [
+                "var",
+                "raw"
+               ]
+              ]
+             ]
+            ],
+            "space",
+            [
+             "index-of",
+             " ",
+             [
+              "var",
+              "raw"
              ]
             ],
             "dash",
@@ -6849,12 +8264,8 @@
              "index-of",
              "-",
              [
-              "coalesce",
-              [
-               "get",
-               "ref"
-              ],
-              ""
+              "var",
+              "raw"
              ]
             ],
             [
@@ -7510,17 +8921,8 @@
              "let",
              "raw",
              [
-              "coalesce",
-              [
-               "get",
-               "ref"
-              ],
-              ""
-             ],
-             "space",
-             [
-              "index-of",
-              " ",
+              "let",
+              "raw",
               [
                "coalesce",
                [
@@ -7528,6 +8930,124 @@
                 "ref"
                ],
                ""
+              ],
+              "first",
+              [
+               "index-of",
+               " ",
+               [
+                "var",
+                "raw"
+               ]
+              ],
+              [
+               "let",
+               "head",
+               [
+                "upcase",
+                [
+                 "slice",
+                 [
+                  "var",
+                  "raw"
+                 ],
+                 0,
+                 [
+                  "max",
+                  0,
+                  [
+                   "var",
+                   "first"
+                  ]
+                 ]
+                ]
+               ],
+               [
+                "case",
+                [
+                 "all",
+                 [
+                  ">",
+                  [
+                   "var",
+                   "first"
+                  ],
+                  0
+                 ],
+                 [
+                  ">",
+                  [
+                   "index-of",
+                   " ",
+                   [
+                    "var",
+                    "raw"
+                   ],
+                   [
+                    "+",
+                    [
+                     "var",
+                     "first"
+                    ],
+                    1
+                   ]
+                  ],
+                  0
+                 ],
+                 [
+                  "in",
+                  [
+                   "var",
+                   "head"
+                  ],
+                  [
+                   "literal",
+                   [
+                    "SCENIC",
+                    "BUSINESS",
+                    "ALTERNATE",
+                    "ALT",
+                    "BYPASS",
+                    "BYP",
+                    "TRUCK",
+                    "SPUR",
+                    "LOOP",
+                    "CONNECTOR",
+                    "CONN",
+                    "BUS"
+                   ]
+                  ]
+                 ]
+                ],
+                [
+                 "slice",
+                 [
+                  "var",
+                  "raw"
+                 ],
+                 [
+                  "+",
+                  [
+                   "var",
+                   "first"
+                  ],
+                  1
+                 ]
+                ],
+                [
+                 "var",
+                 "raw"
+                ]
+               ]
+              ]
+             ],
+             "space",
+             [
+              "index-of",
+              " ",
+              [
+               "var",
+               "raw"
               ]
              ],
              "dash",
@@ -7535,12 +9055,8 @@
               "index-of",
               "-",
               [
-               "coalesce",
-               [
-                "get",
-                "ref"
-               ],
-               ""
+               "var",
+               "raw"
               ]
              ],
              [
@@ -8190,12 +9706,789 @@
         ]
        ]
       ]
+     ],
+     [
+      "let",
+      "abmap_plate",
+      [
+       "let",
+       "abmap_ref",
+       [
+        "coalesce",
+        [
+         "get",
+         "ref"
+        ],
+        ""
+       ],
+       [
+        "let",
+        "abmap_cut",
+        [
+         "index-of",
+         " ",
+         [
+          "var",
+          "abmap_ref"
+         ]
+        ],
+        "abmap_end",
+        [
+         "length",
+         [
+          "var",
+          "abmap_ref"
+         ]
+        ],
+        [
+         "let",
+         "abmap_head",
+         [
+          "case",
+          [
+           "all",
+           [
+            ">",
+            [
+             "var",
+             "abmap_cut"
+            ],
+            0
+           ],
+           [
+            ">",
+            [
+             "index-of",
+             " ",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "+",
+              [
+               "var",
+               "abmap_cut"
+              ],
+              1
+             ]
+            ],
+            0
+           ]
+          ],
+          [
+           "upcase",
+           [
+            "slice",
+            [
+             "var",
+             "abmap_ref"
+            ],
+            0,
+            [
+             "var",
+             "abmap_cut"
+            ]
+           ]
+          ],
+          ""
+         ],
+         [
+          "let",
+          "abmap_lead",
+          [
+           "match",
+           [
+            "var",
+            "abmap_head"
+           ],
+           "BUSINESS",
+           "business",
+           "BUS",
+           "business",
+           "ALTERNATE",
+           "alternate",
+           "ALT",
+           "alternate",
+           "BYPASS",
+           "bypass",
+           "BYP",
+           "bypass",
+           "TRUCK",
+           "truck",
+           "SPUR",
+           "spur",
+           "LOOP",
+           "loop",
+           "CONNECTOR",
+           "connector",
+           "CONN",
+           "connector",
+           ""
+          ],
+          "abmap_t0",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              9
+             ]
+            ]
+           ],
+           " BUSINESS",
+           "business",
+           ""
+          ],
+          "abmap_t1",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              4
+             ]
+            ]
+           ],
+           " BUS",
+           "business",
+           " ALT",
+           "alternate",
+           " BYP",
+           "bypass",
+           ""
+          ],
+          "abmap_t2",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              10
+             ]
+            ]
+           ],
+           " ALTERNATE",
+           "alternate",
+           " CONNECTOR",
+           "connector",
+           ""
+          ],
+          "abmap_t3",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              7
+             ]
+            ]
+           ],
+           " BYPASS",
+           "bypass",
+           ""
+          ],
+          "abmap_t4",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              6
+             ]
+            ]
+           ],
+           " TRUCK",
+           "truck",
+           ""
+          ],
+          "abmap_t5",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              5
+             ]
+            ]
+           ],
+           " SPUR",
+           "spur",
+           " LOOP",
+           "loop",
+           " CONN",
+           "connector",
+           ""
+          ],
+          [
+           "case",
+           [
+            "!=",
+            [
+             "var",
+             "abmap_lead"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_lead"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t0"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t0"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t1"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t1"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t2"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t2"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t3"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t3"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t4"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t4"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t5"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t5"
+           ],
+           ""
+          ]
+         ]
+        ]
+       ]
+      ],
+      [
+       "case",
+       [
+        "!=",
+        [
+         "var",
+         "abmap_plate"
+        ],
+        ""
+       ],
+       [
+        "concat",
+        "-",
+        [
+         "var",
+         "abmap_plate"
+        ]
+       ],
+       ""
+      ]
      ]
     ],
     "icon-size": 1,
     "icon-offset": [
-     -14.2,
-     0
+     "case",
+     [
+      "!=",
+      [
+       "let",
+       "abmap_ref",
+       [
+        "coalesce",
+        [
+         "get",
+         "ref"
+        ],
+        ""
+       ],
+       [
+        "let",
+        "abmap_cut",
+        [
+         "index-of",
+         " ",
+         [
+          "var",
+          "abmap_ref"
+         ]
+        ],
+        "abmap_end",
+        [
+         "length",
+         [
+          "var",
+          "abmap_ref"
+         ]
+        ],
+        [
+         "let",
+         "abmap_head",
+         [
+          "case",
+          [
+           "all",
+           [
+            ">",
+            [
+             "var",
+             "abmap_cut"
+            ],
+            0
+           ],
+           [
+            ">",
+            [
+             "index-of",
+             " ",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "+",
+              [
+               "var",
+               "abmap_cut"
+              ],
+              1
+             ]
+            ],
+            0
+           ]
+          ],
+          [
+           "upcase",
+           [
+            "slice",
+            [
+             "var",
+             "abmap_ref"
+            ],
+            0,
+            [
+             "var",
+             "abmap_cut"
+            ]
+           ]
+          ],
+          ""
+         ],
+         [
+          "let",
+          "abmap_lead",
+          [
+           "match",
+           [
+            "var",
+            "abmap_head"
+           ],
+           "BUSINESS",
+           "business",
+           "BUS",
+           "business",
+           "ALTERNATE",
+           "alternate",
+           "ALT",
+           "alternate",
+           "BYPASS",
+           "bypass",
+           "BYP",
+           "bypass",
+           "TRUCK",
+           "truck",
+           "SPUR",
+           "spur",
+           "LOOP",
+           "loop",
+           "CONNECTOR",
+           "connector",
+           "CONN",
+           "connector",
+           ""
+          ],
+          "abmap_t0",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              9
+             ]
+            ]
+           ],
+           " BUSINESS",
+           "business",
+           ""
+          ],
+          "abmap_t1",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              4
+             ]
+            ]
+           ],
+           " BUS",
+           "business",
+           " ALT",
+           "alternate",
+           " BYP",
+           "bypass",
+           ""
+          ],
+          "abmap_t2",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              10
+             ]
+            ]
+           ],
+           " ALTERNATE",
+           "alternate",
+           " CONNECTOR",
+           "connector",
+           ""
+          ],
+          "abmap_t3",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              7
+             ]
+            ]
+           ],
+           " BYPASS",
+           "bypass",
+           ""
+          ],
+          "abmap_t4",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              6
+             ]
+            ]
+           ],
+           " TRUCK",
+           "truck",
+           ""
+          ],
+          "abmap_t5",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              5
+             ]
+            ]
+           ],
+           " SPUR",
+           "spur",
+           " LOOP",
+           "loop",
+           " CONN",
+           "connector",
+           ""
+          ],
+          [
+           "case",
+           [
+            "!=",
+            [
+             "var",
+             "abmap_lead"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_lead"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t0"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t0"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t1"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t1"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t2"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t2"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t3"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t3"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t4"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t4"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t5"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t5"
+           ],
+           ""
+          ]
+         ]
+        ]
+       ]
+      ],
+      ""
+     ],
+     [
+      "literal",
+      [
+       -14.2,
+       -5.1
+      ]
+     ],
+     [
+      "literal",
+      [
+       -14.2,
+       0
+      ]
+     ]
     ],
     "icon-rotation-alignment": "viewport",
     "text-field": [
@@ -8207,17 +10500,8 @@
        "let",
        "raw",
        [
-        "coalesce",
-        [
-         "get",
-         "ref"
-        ],
-        ""
-       ],
-       "space",
-       [
-        "index-of",
-        " ",
+        "let",
+        "raw",
         [
          "coalesce",
          [
@@ -8225,6 +10509,124 @@
           "ref"
          ],
          ""
+        ],
+        "first",
+        [
+         "index-of",
+         " ",
+         [
+          "var",
+          "raw"
+         ]
+        ],
+        [
+         "let",
+         "head",
+         [
+          "upcase",
+          [
+           "slice",
+           [
+            "var",
+            "raw"
+           ],
+           0,
+           [
+            "max",
+            0,
+            [
+             "var",
+             "first"
+            ]
+           ]
+          ]
+         ],
+         [
+          "case",
+          [
+           "all",
+           [
+            ">",
+            [
+             "var",
+             "first"
+            ],
+            0
+           ],
+           [
+            ">",
+            [
+             "index-of",
+             " ",
+             [
+              "var",
+              "raw"
+             ],
+             [
+              "+",
+              [
+               "var",
+               "first"
+              ],
+              1
+             ]
+            ],
+            0
+           ],
+           [
+            "in",
+            [
+             "var",
+             "head"
+            ],
+            [
+             "literal",
+             [
+              "SCENIC",
+              "BUSINESS",
+              "ALTERNATE",
+              "ALT",
+              "BYPASS",
+              "BYP",
+              "TRUCK",
+              "SPUR",
+              "LOOP",
+              "CONNECTOR",
+              "CONN",
+              "BUS"
+             ]
+            ]
+           ]
+          ],
+          [
+           "slice",
+           [
+            "var",
+            "raw"
+           ],
+           [
+            "+",
+            [
+             "var",
+             "first"
+            ],
+            1
+           ]
+          ],
+          [
+           "var",
+           "raw"
+          ]
+         ]
+        ]
+       ],
+       "space",
+       [
+        "index-of",
+        " ",
+        [
+         "var",
+         "raw"
         ]
        ],
        "dash",
@@ -8232,12 +10634,8 @@
         "index-of",
         "-",
         [
-         "coalesce",
-         [
-          "get",
-          "ref"
-         ],
-         ""
+         "var",
+         "raw"
         ]
        ],
        [
@@ -8893,17 +11291,8 @@
         "let",
         "raw",
         [
-         "coalesce",
-         [
-          "get",
-          "ref"
-         ],
-         ""
-        ],
-        "space",
-        [
-         "index-of",
-         " ",
+         "let",
+         "raw",
          [
           "coalesce",
           [
@@ -8911,6 +11300,124 @@
            "ref"
           ],
           ""
+         ],
+         "first",
+         [
+          "index-of",
+          " ",
+          [
+           "var",
+           "raw"
+          ]
+         ],
+         [
+          "let",
+          "head",
+          [
+           "upcase",
+           [
+            "slice",
+            [
+             "var",
+             "raw"
+            ],
+            0,
+            [
+             "max",
+             0,
+             [
+              "var",
+              "first"
+             ]
+            ]
+           ]
+          ],
+          [
+           "case",
+           [
+            "all",
+            [
+             ">",
+             [
+              "var",
+              "first"
+             ],
+             0
+            ],
+            [
+             ">",
+             [
+              "index-of",
+              " ",
+              [
+               "var",
+               "raw"
+              ],
+              [
+               "+",
+               [
+                "var",
+                "first"
+               ],
+               1
+              ]
+             ],
+             0
+            ],
+            [
+             "in",
+             [
+              "var",
+              "head"
+             ],
+             [
+              "literal",
+              [
+               "SCENIC",
+               "BUSINESS",
+               "ALTERNATE",
+               "ALT",
+               "BYPASS",
+               "BYP",
+               "TRUCK",
+               "SPUR",
+               "LOOP",
+               "CONNECTOR",
+               "CONN",
+               "BUS"
+              ]
+             ]
+            ]
+           ],
+           [
+            "slice",
+            [
+             "var",
+             "raw"
+            ],
+            [
+             "+",
+             [
+              "var",
+              "first"
+             ],
+             1
+            ]
+           ],
+           [
+            "var",
+            "raw"
+           ]
+          ]
+         ]
+        ],
+        "space",
+        [
+         "index-of",
+         " ",
+         [
+          "var",
+          "raw"
          ]
         ],
         "dash",
@@ -8918,12 +11425,8 @@
          "index-of",
          "-",
          [
-          "coalesce",
-          [
-           "get",
-           "ref"
-          ],
-          ""
+          "var",
+          "raw"
          ]
         ],
         [
@@ -9588,17 +12091,8 @@
          "let",
          "raw",
          [
-          "coalesce",
-          [
-           "get",
-           "ref"
-          ],
-          ""
-         ],
-         "space",
-         [
-          "index-of",
-          " ",
+          "let",
+          "raw",
           [
            "coalesce",
            [
@@ -9606,6 +12100,124 @@
             "ref"
            ],
            ""
+          ],
+          "first",
+          [
+           "index-of",
+           " ",
+           [
+            "var",
+            "raw"
+           ]
+          ],
+          [
+           "let",
+           "head",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "raw"
+             ],
+             0,
+             [
+              "max",
+              0,
+              [
+               "var",
+               "first"
+              ]
+             ]
+            ]
+           ],
+           [
+            "case",
+            [
+             "all",
+             [
+              ">",
+              [
+               "var",
+               "first"
+              ],
+              0
+             ],
+             [
+              ">",
+              [
+               "index-of",
+               " ",
+               [
+                "var",
+                "raw"
+               ],
+               [
+                "+",
+                [
+                 "var",
+                 "first"
+                ],
+                1
+               ]
+              ],
+              0
+             ],
+             [
+              "in",
+              [
+               "var",
+               "head"
+              ],
+              [
+               "literal",
+               [
+                "SCENIC",
+                "BUSINESS",
+                "ALTERNATE",
+                "ALT",
+                "BYPASS",
+                "BYP",
+                "TRUCK",
+                "SPUR",
+                "LOOP",
+                "CONNECTOR",
+                "CONN",
+                "BUS"
+               ]
+              ]
+             ]
+            ],
+            [
+             "slice",
+             [
+              "var",
+              "raw"
+             ],
+             [
+              "+",
+              [
+               "var",
+               "first"
+              ],
+              1
+             ]
+            ],
+            [
+             "var",
+             "raw"
+            ]
+           ]
+          ]
+         ],
+         "space",
+         [
+          "index-of",
+          " ",
+          [
+           "var",
+           "raw"
           ]
          ],
          "dash",
@@ -9613,12 +12225,8 @@
           "index-of",
           "-",
           [
-           "coalesce",
-           [
-            "get",
-            "ref"
-           ],
-           ""
+           "var",
+           "raw"
           ]
          ],
          [
@@ -10274,17 +12882,8 @@
           "let",
           "raw",
           [
-           "coalesce",
-           [
-            "get",
-            "ref"
-           ],
-           ""
-          ],
-          "space",
-          [
-           "index-of",
-           " ",
+           "let",
+           "raw",
            [
             "coalesce",
             [
@@ -10292,6 +12891,124 @@
              "ref"
             ],
             ""
+           ],
+           "first",
+           [
+            "index-of",
+            " ",
+            [
+             "var",
+             "raw"
+            ]
+           ],
+           [
+            "let",
+            "head",
+            [
+             "upcase",
+             [
+              "slice",
+              [
+               "var",
+               "raw"
+              ],
+              0,
+              [
+               "max",
+               0,
+               [
+                "var",
+                "first"
+               ]
+              ]
+             ]
+            ],
+            [
+             "case",
+             [
+              "all",
+              [
+               ">",
+               [
+                "var",
+                "first"
+               ],
+               0
+              ],
+              [
+               ">",
+               [
+                "index-of",
+                " ",
+                [
+                 "var",
+                 "raw"
+                ],
+                [
+                 "+",
+                 [
+                  "var",
+                  "first"
+                 ],
+                 1
+                ]
+               ],
+               0
+              ],
+              [
+               "in",
+               [
+                "var",
+                "head"
+               ],
+               [
+                "literal",
+                [
+                 "SCENIC",
+                 "BUSINESS",
+                 "ALTERNATE",
+                 "ALT",
+                 "BYPASS",
+                 "BYP",
+                 "TRUCK",
+                 "SPUR",
+                 "LOOP",
+                 "CONNECTOR",
+                 "CONN",
+                 "BUS"
+                ]
+               ]
+              ]
+             ],
+             [
+              "slice",
+              [
+               "var",
+               "raw"
+              ],
+              [
+               "+",
+               [
+                "var",
+                "first"
+               ],
+               1
+              ]
+             ],
+             [
+              "var",
+              "raw"
+             ]
+            ]
+           ]
+          ],
+          "space",
+          [
+           "index-of",
+           " ",
+           [
+            "var",
+            "raw"
            ]
           ],
           "dash",
@@ -10299,12 +13016,8 @@
            "index-of",
            "-",
            [
-            "coalesce",
-            [
-             "get",
-             "ref"
-            ],
-            ""
+            "var",
+            "raw"
            ]
           ],
           [
@@ -11705,17 +14418,8 @@
          "let",
          "raw",
          [
-          "coalesce",
-          [
-           "get",
-           "ref"
-          ],
-          ""
-         ],
-         "space",
-         [
-          "index-of",
-          " ",
+          "let",
+          "raw",
           [
            "coalesce",
            [
@@ -11723,6 +14427,124 @@
             "ref"
            ],
            ""
+          ],
+          "first",
+          [
+           "index-of",
+           " ",
+           [
+            "var",
+            "raw"
+           ]
+          ],
+          [
+           "let",
+           "head",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "raw"
+             ],
+             0,
+             [
+              "max",
+              0,
+              [
+               "var",
+               "first"
+              ]
+             ]
+            ]
+           ],
+           [
+            "case",
+            [
+             "all",
+             [
+              ">",
+              [
+               "var",
+               "first"
+              ],
+              0
+             ],
+             [
+              ">",
+              [
+               "index-of",
+               " ",
+               [
+                "var",
+                "raw"
+               ],
+               [
+                "+",
+                [
+                 "var",
+                 "first"
+                ],
+                1
+               ]
+              ],
+              0
+             ],
+             [
+              "in",
+              [
+               "var",
+               "head"
+              ],
+              [
+               "literal",
+               [
+                "SCENIC",
+                "BUSINESS",
+                "ALTERNATE",
+                "ALT",
+                "BYPASS",
+                "BYP",
+                "TRUCK",
+                "SPUR",
+                "LOOP",
+                "CONNECTOR",
+                "CONN",
+                "BUS"
+               ]
+              ]
+             ]
+            ],
+            [
+             "slice",
+             [
+              "var",
+              "raw"
+             ],
+             [
+              "+",
+              [
+               "var",
+               "first"
+              ],
+              1
+             ]
+            ],
+            [
+             "var",
+             "raw"
+            ]
+           ]
+          ]
+         ],
+         "space",
+         [
+          "index-of",
+          " ",
+          [
+           "var",
+           "raw"
           ]
          ],
          "dash",
@@ -11730,12 +14552,8 @@
           "index-of",
           "-",
           [
-           "coalesce",
-           [
-            "get",
-            "ref"
-           ],
-           ""
+           "var",
+           "raw"
           ]
          ],
          [
@@ -12673,17 +15491,8 @@
              "let",
              "raw",
              [
-              "coalesce",
-              [
-               "get",
-               "ref"
-              ],
-              ""
-             ],
-             "space",
-             [
-              "index-of",
-              " ",
+              "let",
+              "raw",
               [
                "coalesce",
                [
@@ -12691,6 +15500,124 @@
                 "ref"
                ],
                ""
+              ],
+              "first",
+              [
+               "index-of",
+               " ",
+               [
+                "var",
+                "raw"
+               ]
+              ],
+              [
+               "let",
+               "head",
+               [
+                "upcase",
+                [
+                 "slice",
+                 [
+                  "var",
+                  "raw"
+                 ],
+                 0,
+                 [
+                  "max",
+                  0,
+                  [
+                   "var",
+                   "first"
+                  ]
+                 ]
+                ]
+               ],
+               [
+                "case",
+                [
+                 "all",
+                 [
+                  ">",
+                  [
+                   "var",
+                   "first"
+                  ],
+                  0
+                 ],
+                 [
+                  ">",
+                  [
+                   "index-of",
+                   " ",
+                   [
+                    "var",
+                    "raw"
+                   ],
+                   [
+                    "+",
+                    [
+                     "var",
+                     "first"
+                    ],
+                    1
+                   ]
+                  ],
+                  0
+                 ],
+                 [
+                  "in",
+                  [
+                   "var",
+                   "head"
+                  ],
+                  [
+                   "literal",
+                   [
+                    "SCENIC",
+                    "BUSINESS",
+                    "ALTERNATE",
+                    "ALT",
+                    "BYPASS",
+                    "BYP",
+                    "TRUCK",
+                    "SPUR",
+                    "LOOP",
+                    "CONNECTOR",
+                    "CONN",
+                    "BUS"
+                   ]
+                  ]
+                 ]
+                ],
+                [
+                 "slice",
+                 [
+                  "var",
+                  "raw"
+                 ],
+                 [
+                  "+",
+                  [
+                   "var",
+                   "first"
+                  ],
+                  1
+                 ]
+                ],
+                [
+                 "var",
+                 "raw"
+                ]
+               ]
+              ]
+             ],
+             "space",
+             [
+              "index-of",
+              " ",
+              [
+               "var",
+               "raw"
               ]
              ],
              "dash",
@@ -12698,12 +15625,8 @@
               "index-of",
               "-",
               [
-               "coalesce",
-               [
-                "get",
-                "ref"
-               ],
-               ""
+               "var",
+               "raw"
               ]
              ],
              [
@@ -13360,17 +16283,8 @@
                "let",
                "raw",
                [
-                "coalesce",
-                [
-                 "get",
-                 "ref"
-                ],
-                ""
-               ],
-               "space",
-               [
-                "index-of",
-                " ",
+                "let",
+                "raw",
                 [
                  "coalesce",
                  [
@@ -13378,6 +16292,124 @@
                   "ref"
                  ],
                  ""
+                ],
+                "first",
+                [
+                 "index-of",
+                 " ",
+                 [
+                  "var",
+                  "raw"
+                 ]
+                ],
+                [
+                 "let",
+                 "head",
+                 [
+                  "upcase",
+                  [
+                   "slice",
+                   [
+                    "var",
+                    "raw"
+                   ],
+                   0,
+                   [
+                    "max",
+                    0,
+                    [
+                     "var",
+                     "first"
+                    ]
+                   ]
+                  ]
+                 ],
+                 [
+                  "case",
+                  [
+                   "all",
+                   [
+                    ">",
+                    [
+                     "var",
+                     "first"
+                    ],
+                    0
+                   ],
+                   [
+                    ">",
+                    [
+                     "index-of",
+                     " ",
+                     [
+                      "var",
+                      "raw"
+                     ],
+                     [
+                      "+",
+                      [
+                       "var",
+                       "first"
+                      ],
+                      1
+                     ]
+                    ],
+                    0
+                   ],
+                   [
+                    "in",
+                    [
+                     "var",
+                     "head"
+                    ],
+                    [
+                     "literal",
+                     [
+                      "SCENIC",
+                      "BUSINESS",
+                      "ALTERNATE",
+                      "ALT",
+                      "BYPASS",
+                      "BYP",
+                      "TRUCK",
+                      "SPUR",
+                      "LOOP",
+                      "CONNECTOR",
+                      "CONN",
+                      "BUS"
+                     ]
+                    ]
+                   ]
+                  ],
+                  [
+                   "slice",
+                   [
+                    "var",
+                    "raw"
+                   ],
+                   [
+                    "+",
+                    [
+                     "var",
+                     "first"
+                    ],
+                    1
+                   ]
+                  ],
+                  [
+                   "var",
+                   "raw"
+                  ]
+                 ]
+                ]
+               ],
+               "space",
+               [
+                "index-of",
+                " ",
+                [
+                 "var",
+                 "raw"
                 ]
                ],
                "dash",
@@ -13385,12 +16417,8 @@
                 "index-of",
                 "-",
                 [
-                 "coalesce",
-                 [
-                  "get",
-                  "ref"
-                 ],
-                 ""
+                 "var",
+                 "raw"
                 ]
                ],
                [
@@ -14078,12 +17106,789 @@
         ]
        ]
       ]
+     ],
+     [
+      "let",
+      "abmap_plate",
+      [
+       "let",
+       "abmap_ref",
+       [
+        "coalesce",
+        [
+         "get",
+         "ref"
+        ],
+        ""
+       ],
+       [
+        "let",
+        "abmap_cut",
+        [
+         "index-of",
+         " ",
+         [
+          "var",
+          "abmap_ref"
+         ]
+        ],
+        "abmap_end",
+        [
+         "length",
+         [
+          "var",
+          "abmap_ref"
+         ]
+        ],
+        [
+         "let",
+         "abmap_head",
+         [
+          "case",
+          [
+           "all",
+           [
+            ">",
+            [
+             "var",
+             "abmap_cut"
+            ],
+            0
+           ],
+           [
+            ">",
+            [
+             "index-of",
+             " ",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "+",
+              [
+               "var",
+               "abmap_cut"
+              ],
+              1
+             ]
+            ],
+            0
+           ]
+          ],
+          [
+           "upcase",
+           [
+            "slice",
+            [
+             "var",
+             "abmap_ref"
+            ],
+            0,
+            [
+             "var",
+             "abmap_cut"
+            ]
+           ]
+          ],
+          ""
+         ],
+         [
+          "let",
+          "abmap_lead",
+          [
+           "match",
+           [
+            "var",
+            "abmap_head"
+           ],
+           "BUSINESS",
+           "business",
+           "BUS",
+           "business",
+           "ALTERNATE",
+           "alternate",
+           "ALT",
+           "alternate",
+           "BYPASS",
+           "bypass",
+           "BYP",
+           "bypass",
+           "TRUCK",
+           "truck",
+           "SPUR",
+           "spur",
+           "LOOP",
+           "loop",
+           "CONNECTOR",
+           "connector",
+           "CONN",
+           "connector",
+           ""
+          ],
+          "abmap_t0",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              9
+             ]
+            ]
+           ],
+           " BUSINESS",
+           "business",
+           ""
+          ],
+          "abmap_t1",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              4
+             ]
+            ]
+           ],
+           " BUS",
+           "business",
+           " ALT",
+           "alternate",
+           " BYP",
+           "bypass",
+           ""
+          ],
+          "abmap_t2",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              10
+             ]
+            ]
+           ],
+           " ALTERNATE",
+           "alternate",
+           " CONNECTOR",
+           "connector",
+           ""
+          ],
+          "abmap_t3",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              7
+             ]
+            ]
+           ],
+           " BYPASS",
+           "bypass",
+           ""
+          ],
+          "abmap_t4",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              6
+             ]
+            ]
+           ],
+           " TRUCK",
+           "truck",
+           ""
+          ],
+          "abmap_t5",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              5
+             ]
+            ]
+           ],
+           " SPUR",
+           "spur",
+           " LOOP",
+           "loop",
+           " CONN",
+           "connector",
+           ""
+          ],
+          [
+           "case",
+           [
+            "!=",
+            [
+             "var",
+             "abmap_lead"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_lead"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t0"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t0"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t1"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t1"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t2"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t2"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t3"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t3"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t4"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t4"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t5"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t5"
+           ],
+           ""
+          ]
+         ]
+        ]
+       ]
+      ],
+      [
+       "case",
+       [
+        "!=",
+        [
+         "var",
+         "abmap_plate"
+        ],
+        ""
+       ],
+       [
+        "concat",
+        "-",
+        [
+         "var",
+         "abmap_plate"
+        ]
+       ],
+       ""
+      ]
      ]
     ],
     "icon-size": 1,
     "icon-offset": [
-     14.2,
-     0
+     "case",
+     [
+      "!=",
+      [
+       "let",
+       "abmap_ref",
+       [
+        "coalesce",
+        [
+         "get",
+         "ref"
+        ],
+        ""
+       ],
+       [
+        "let",
+        "abmap_cut",
+        [
+         "index-of",
+         " ",
+         [
+          "var",
+          "abmap_ref"
+         ]
+        ],
+        "abmap_end",
+        [
+         "length",
+         [
+          "var",
+          "abmap_ref"
+         ]
+        ],
+        [
+         "let",
+         "abmap_head",
+         [
+          "case",
+          [
+           "all",
+           [
+            ">",
+            [
+             "var",
+             "abmap_cut"
+            ],
+            0
+           ],
+           [
+            ">",
+            [
+             "index-of",
+             " ",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "+",
+              [
+               "var",
+               "abmap_cut"
+              ],
+              1
+             ]
+            ],
+            0
+           ]
+          ],
+          [
+           "upcase",
+           [
+            "slice",
+            [
+             "var",
+             "abmap_ref"
+            ],
+            0,
+            [
+             "var",
+             "abmap_cut"
+            ]
+           ]
+          ],
+          ""
+         ],
+         [
+          "let",
+          "abmap_lead",
+          [
+           "match",
+           [
+            "var",
+            "abmap_head"
+           ],
+           "BUSINESS",
+           "business",
+           "BUS",
+           "business",
+           "ALTERNATE",
+           "alternate",
+           "ALT",
+           "alternate",
+           "BYPASS",
+           "bypass",
+           "BYP",
+           "bypass",
+           "TRUCK",
+           "truck",
+           "SPUR",
+           "spur",
+           "LOOP",
+           "loop",
+           "CONNECTOR",
+           "connector",
+           "CONN",
+           "connector",
+           ""
+          ],
+          "abmap_t0",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              9
+             ]
+            ]
+           ],
+           " BUSINESS",
+           "business",
+           ""
+          ],
+          "abmap_t1",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              4
+             ]
+            ]
+           ],
+           " BUS",
+           "business",
+           " ALT",
+           "alternate",
+           " BYP",
+           "bypass",
+           ""
+          ],
+          "abmap_t2",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              10
+             ]
+            ]
+           ],
+           " ALTERNATE",
+           "alternate",
+           " CONNECTOR",
+           "connector",
+           ""
+          ],
+          "abmap_t3",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              7
+             ]
+            ]
+           ],
+           " BYPASS",
+           "bypass",
+           ""
+          ],
+          "abmap_t4",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              6
+             ]
+            ]
+           ],
+           " TRUCK",
+           "truck",
+           ""
+          ],
+          "abmap_t5",
+          [
+           "match",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "abmap_ref"
+             ],
+             [
+              "-",
+              [
+               "var",
+               "abmap_end"
+              ],
+              5
+             ]
+            ]
+           ],
+           " SPUR",
+           "spur",
+           " LOOP",
+           "loop",
+           " CONN",
+           "connector",
+           ""
+          ],
+          [
+           "case",
+           [
+            "!=",
+            [
+             "var",
+             "abmap_lead"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_lead"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t0"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t0"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t1"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t1"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t2"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t2"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t3"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t3"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t4"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t4"
+           ],
+           [
+            "!=",
+            [
+             "var",
+             "abmap_t5"
+            ],
+            ""
+           ],
+           [
+            "var",
+            "abmap_t5"
+           ],
+           ""
+          ]
+         ]
+        ]
+       ]
+      ],
+      ""
+     ],
+     [
+      "literal",
+      [
+       14.2,
+       -5.1
+      ]
+     ],
+     [
+      "literal",
+      [
+       14.2,
+       0
+      ]
+     ]
     ],
     "icon-rotation-alignment": "viewport",
     "text-field": [
@@ -14098,17 +17903,8 @@
         "let",
         "raw",
         [
-         "coalesce",
-         [
-          "get",
-          "ref"
-         ],
-         ""
-        ],
-        "space",
-        [
-         "index-of",
-         " ",
+         "let",
+         "raw",
          [
           "coalesce",
           [
@@ -14116,6 +17912,124 @@
            "ref"
           ],
           ""
+         ],
+         "first",
+         [
+          "index-of",
+          " ",
+          [
+           "var",
+           "raw"
+          ]
+         ],
+         [
+          "let",
+          "head",
+          [
+           "upcase",
+           [
+            "slice",
+            [
+             "var",
+             "raw"
+            ],
+            0,
+            [
+             "max",
+             0,
+             [
+              "var",
+              "first"
+             ]
+            ]
+           ]
+          ],
+          [
+           "case",
+           [
+            "all",
+            [
+             ">",
+             [
+              "var",
+              "first"
+             ],
+             0
+            ],
+            [
+             ">",
+             [
+              "index-of",
+              " ",
+              [
+               "var",
+               "raw"
+              ],
+              [
+               "+",
+               [
+                "var",
+                "first"
+               ],
+               1
+              ]
+             ],
+             0
+            ],
+            [
+             "in",
+             [
+              "var",
+              "head"
+             ],
+             [
+              "literal",
+              [
+               "SCENIC",
+               "BUSINESS",
+               "ALTERNATE",
+               "ALT",
+               "BYPASS",
+               "BYP",
+               "TRUCK",
+               "SPUR",
+               "LOOP",
+               "CONNECTOR",
+               "CONN",
+               "BUS"
+              ]
+             ]
+            ]
+           ],
+           [
+            "slice",
+            [
+             "var",
+             "raw"
+            ],
+            [
+             "+",
+             [
+              "var",
+              "first"
+             ],
+             1
+            ]
+           ],
+           [
+            "var",
+            "raw"
+           ]
+          ]
+         ]
+        ],
+        "space",
+        [
+         "index-of",
+         " ",
+         [
+          "var",
+          "raw"
          ]
         ],
         "dash",
@@ -14123,12 +18037,8 @@
          "index-of",
          "-",
          [
-          "coalesce",
-          [
-           "get",
-           "ref"
-          ],
-          ""
+          "var",
+          "raw"
          ]
         ],
         [
@@ -14785,17 +18695,8 @@
           "let",
           "raw",
           [
-           "coalesce",
-           [
-            "get",
-            "ref"
-           ],
-           ""
-          ],
-          "space",
-          [
-           "index-of",
-           " ",
+           "let",
+           "raw",
            [
             "coalesce",
             [
@@ -14803,6 +18704,124 @@
              "ref"
             ],
             ""
+           ],
+           "first",
+           [
+            "index-of",
+            " ",
+            [
+             "var",
+             "raw"
+            ]
+           ],
+           [
+            "let",
+            "head",
+            [
+             "upcase",
+             [
+              "slice",
+              [
+               "var",
+               "raw"
+              ],
+              0,
+              [
+               "max",
+               0,
+               [
+                "var",
+                "first"
+               ]
+              ]
+             ]
+            ],
+            [
+             "case",
+             [
+              "all",
+              [
+               ">",
+               [
+                "var",
+                "first"
+               ],
+               0
+              ],
+              [
+               ">",
+               [
+                "index-of",
+                " ",
+                [
+                 "var",
+                 "raw"
+                ],
+                [
+                 "+",
+                 [
+                  "var",
+                  "first"
+                 ],
+                 1
+                ]
+               ],
+               0
+              ],
+              [
+               "in",
+               [
+                "var",
+                "head"
+               ],
+               [
+                "literal",
+                [
+                 "SCENIC",
+                 "BUSINESS",
+                 "ALTERNATE",
+                 "ALT",
+                 "BYPASS",
+                 "BYP",
+                 "TRUCK",
+                 "SPUR",
+                 "LOOP",
+                 "CONNECTOR",
+                 "CONN",
+                 "BUS"
+                ]
+               ]
+              ]
+             ],
+             [
+              "slice",
+              [
+               "var",
+               "raw"
+              ],
+              [
+               "+",
+               [
+                "var",
+                "first"
+               ],
+               1
+              ]
+             ],
+             [
+              "var",
+              "raw"
+             ]
+            ]
+           ]
+          ],
+          "space",
+          [
+           "index-of",
+           " ",
+           [
+            "var",
+            "raw"
            ]
           ],
           "dash",
@@ -14810,12 +18829,8 @@
            "index-of",
            "-",
            [
-            "coalesce",
-            [
-             "get",
-             "ref"
-            ],
-            ""
+            "var",
+            "raw"
            ]
           ],
           [
@@ -15521,17 +19536,8 @@
           "let",
           "raw",
           [
-           "coalesce",
-           [
-            "get",
-            "ref"
-           ],
-           ""
-          ],
-          "space",
-          [
-           "index-of",
-           " ",
+           "let",
+           "raw",
            [
             "coalesce",
             [
@@ -15539,6 +19545,124 @@
              "ref"
             ],
             ""
+           ],
+           "first",
+           [
+            "index-of",
+            " ",
+            [
+             "var",
+             "raw"
+            ]
+           ],
+           [
+            "let",
+            "head",
+            [
+             "upcase",
+             [
+              "slice",
+              [
+               "var",
+               "raw"
+              ],
+              0,
+              [
+               "max",
+               0,
+               [
+                "var",
+                "first"
+               ]
+              ]
+             ]
+            ],
+            [
+             "case",
+             [
+              "all",
+              [
+               ">",
+               [
+                "var",
+                "first"
+               ],
+               0
+              ],
+              [
+               ">",
+               [
+                "index-of",
+                " ",
+                [
+                 "var",
+                 "raw"
+                ],
+                [
+                 "+",
+                 [
+                  "var",
+                  "first"
+                 ],
+                 1
+                ]
+               ],
+               0
+              ],
+              [
+               "in",
+               [
+                "var",
+                "head"
+               ],
+               [
+                "literal",
+                [
+                 "SCENIC",
+                 "BUSINESS",
+                 "ALTERNATE",
+                 "ALT",
+                 "BYPASS",
+                 "BYP",
+                 "TRUCK",
+                 "SPUR",
+                 "LOOP",
+                 "CONNECTOR",
+                 "CONN",
+                 "BUS"
+                ]
+               ]
+              ]
+             ],
+             [
+              "slice",
+              [
+               "var",
+               "raw"
+              ],
+              [
+               "+",
+               [
+                "var",
+                "first"
+               ],
+               1
+              ]
+             ],
+             [
+              "var",
+              "raw"
+             ]
+            ]
+           ]
+          ],
+          "space",
+          [
+           "index-of",
+           " ",
+           [
+            "var",
+            "raw"
            ]
           ],
           "dash",
@@ -15546,12 +19670,8 @@
            "index-of",
            "-",
            [
-            "coalesce",
-            [
-             "get",
-             "ref"
-            ],
-            ""
+            "var",
+            "raw"
            ]
           ],
           [
@@ -16208,17 +20328,8 @@
             "let",
             "raw",
             [
-             "coalesce",
-             [
-              "get",
-              "ref"
-             ],
-             ""
-            ],
-            "space",
-            [
-             "index-of",
-             " ",
+             "let",
+             "raw",
              [
               "coalesce",
               [
@@ -16226,6 +20337,124 @@
                "ref"
               ],
               ""
+             ],
+             "first",
+             [
+              "index-of",
+              " ",
+              [
+               "var",
+               "raw"
+              ]
+             ],
+             [
+              "let",
+              "head",
+              [
+               "upcase",
+               [
+                "slice",
+                [
+                 "var",
+                 "raw"
+                ],
+                0,
+                [
+                 "max",
+                 0,
+                 [
+                  "var",
+                  "first"
+                 ]
+                ]
+               ]
+              ],
+              [
+               "case",
+               [
+                "all",
+                [
+                 ">",
+                 [
+                  "var",
+                  "first"
+                 ],
+                 0
+                ],
+                [
+                 ">",
+                 [
+                  "index-of",
+                  " ",
+                  [
+                   "var",
+                   "raw"
+                  ],
+                  [
+                   "+",
+                   [
+                    "var",
+                    "first"
+                   ],
+                   1
+                  ]
+                 ],
+                 0
+                ],
+                [
+                 "in",
+                 [
+                  "var",
+                  "head"
+                 ],
+                 [
+                  "literal",
+                  [
+                   "SCENIC",
+                   "BUSINESS",
+                   "ALTERNATE",
+                   "ALT",
+                   "BYPASS",
+                   "BYP",
+                   "TRUCK",
+                   "SPUR",
+                   "LOOP",
+                   "CONNECTOR",
+                   "CONN",
+                   "BUS"
+                  ]
+                 ]
+                ]
+               ],
+               [
+                "slice",
+                [
+                 "var",
+                 "raw"
+                ],
+                [
+                 "+",
+                 [
+                  "var",
+                  "first"
+                 ],
+                 1
+                ]
+               ],
+               [
+                "var",
+                "raw"
+               ]
+              ]
+             ]
+            ],
+            "space",
+            [
+             "index-of",
+             " ",
+             [
+              "var",
+              "raw"
              ]
             ],
             "dash",
@@ -16233,12 +20462,8 @@
              "index-of",
              "-",
              [
-              "coalesce",
-              [
-               "get",
-               "ref"
-              ],
-              ""
+              "var",
+              "raw"
              ]
             ],
             [

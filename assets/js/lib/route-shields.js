@@ -1663,13 +1663,36 @@ export function bannerExpression(field = 'network') {
  *
  * icon-size on these layers is 1, so these are plain pixels.
  */
-export function bannerIconOffset(field = 'network', shiftPx = 0) {
+/**
+ * The plate a road wears, from whichever of the two says so.
+ *
+ * The network names it when the data has one - `US:US:Business`. Plenty of
+ * roads carry it in the number instead: "BUS M 60" is a Michigan state route
+ * whose network is `US:MI:Secondary`, which says nothing about a plate, while
+ * the ref says BUS twice over. That was already being read - DESIGNATIONS in
+ * byways-style.js strips the word so the shield shows "60" rather than
+ * "BUS M 60" - and then thrown away.
+ *
+ * Network first: it is the tagged, structured answer, and a road with both
+ * should follow the data rather than the label.
+ *
+ * @param {string} field    the network field, or '' for a schema with none
+ * @param {*} fromRef       an expression answering a banner key or '', or null
+ */
+export function effectiveBanner(field = 'network', fromRef = null) {
+  if (!field) return fromRef || '';
+  if (!fromRef) return bannerExpression(field);
+  return ['let', 'abmap_tagged', bannerExpression(field),
+    ['case', ['!=', ['var', 'abmap_tagged'], ''], ['var', 'abmap_tagged'], fromRef]];
+}
+
+export function bannerIconOffset(field = 'network', shiftPx = 0, fromRef = null) {
   // No network to read means no banner is possible, and the answer is the
   // plain literal the duplex layers have always carried - not an expression
   // that evaluates to it. The Mapbox style is byte-for-byte what it was.
-  if (!field) return [shiftPx, 0];
+  if (!field && !fromRef) return [shiftPx, 0];
   return ['case',
-    ['!=', bannerExpression(field), ''], ['literal', [shiftPx, -BANNER_LIFT / 2]],
+    ['!=', effectiveBanner(field, fromRef), ''], ['literal', [shiftPx, -BANNER_LIFT / 2]],
     ['literal', [shiftPx, 0]]];
 }
 
@@ -1779,7 +1802,7 @@ export function shieldImageIdFor(shield, reflen, state = '') {
   return shieldImageId(designForShield(shield, state), reflen);
 }
 
-export function shieldImageExpression(state = '', { length = null, override = null, network = '' } = {}) {
+export function shieldImageExpression(state = '', { length = null, override = null, network = '', banner = null } = {}) {
   // Interstates and US routes look the same in every state, so only the state
   // branch varies. Which state that is comes from where the map is looking
   // rather than from the road's own tags — the road data does not reliably
@@ -1842,7 +1865,7 @@ export function shieldImageExpression(state = '', { length = null, override = nu
      * network can carry a banner at all: Mapbox says what a marker looks like,
      * not what is bolted above it.
      */
-    ...(network ? [['let', 'abmap_plate', bannerExpression(network),
+    ...(network || banner ? [['let', 'abmap_plate', effectiveBanner(network, banner),
       ['case', ['!=', ['var', 'abmap_plate'], ''],
         ['concat', '-', ['var', 'abmap_plate']], '']]] : []),
   ];

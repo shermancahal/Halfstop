@@ -128,6 +128,44 @@ Deliberately broad: `US:TX:FM` and `US:PA:Belt` are not county systems either,
 and they are not a state's numbered routes. Drawing them as something other
 than the state's shield is right for the same reason.
 
+## A plate can come from the number, not just the network
+
+`US:US:Business` names its plate in the network, and that is the easy case.
+Plenty of roads name it in the number instead: **BUS M 60** is a Michigan state
+route whose network is `US:MI:Secondary`, which says nothing about a plate at
+all.
+
+That word was already being read — `DESIGNATIONS` strips it so the shield shows
+`60` rather than `BUS M 60` — and then thrown away. It now feeds the banner as
+well, on both schemas. The network wins where both say something, since it is
+the tagged answer rather than the label.
+
+Two details worth keeping:
+
+**It reads `ref`, never `shield_text`.** Under Protomaps the shield text is the
+number *already stripped of its system*, so the designation survives only in
+`ref`. Both schemas carry `ref`, so that is what both read.
+
+**Three tokens, not two.** `BUS M 60` is a plate, a system and a number.
+`Loop 360` is a Texas route whose name begins with Loop — taking that as a
+plate would sign the word above a shield still reading it. The stripper and the
+plate rule share the same guard, so the number and the banner cannot disagree
+about whether the word was consumed.
+
+Banners on the Mapbox path are new. `icon-offset` there used to be a literal
+pair because a bannered shield is taller and needs lifting, and the whole
+mechanism was gated on a network field Mapbox does not have.
+
+### On size
+
+This added 18KB to the style, 72.7KB to 90.8KB minified, and the first cut of
+it added twice that. The cause both times was a `let` binding whose source
+expression was written out again for each of its siblings — free when the
+source is a bare `coalesce`, expensive once it strips a designation first.
+Bindings see the ones before them; use them. This file already carries one scar
+from expression size, a text-size layer that reached 261KB and arrived as a
+report that rendering had got slower.
+
 ## `Secondary` is two words
 
 It means a system of its own in Virginia and West Virginia - the

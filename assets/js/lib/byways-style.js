@@ -1648,9 +1648,40 @@ function labelLayers() {
  * infer from the string.
  */
 const rawRef = () => ['coalesce', ['get', S.fields.shieldText || S.fields.ref], ''];
-const prefixless = () => ['let', 'raw', rawRef(),
-  'space', ['index-of', ' ', rawRef()],
-  'dash', ['index-of', '-', rawRef()],
+/*
+ * A leading designation, removed before the system prefix is.
+ *
+ * "BUS M 60" is three tokens: a plate, a system and a number. `prefixless`
+ * below strips one leading token, so on its own it takes the BUS and leaves
+ * "M 60" - a shield reading M 60 with a BUS plate above it, which is the
+ * designation shown twice and the number not at all.
+ *
+ * Guarded on there being a second separator, which is what keeps Texas whole.
+ * "Loop 360" is two tokens and Loop is the route's name there, not a plate;
+ * "BUS M 60" is three and the first of them is. Two tokens are left alone.
+ */
+const leadingStripped = () => ['let', 'raw', rawRef(),
+  'first', ['index-of', ' ', ['var', 'raw']],
+  ['let', 'head', ['upcase', ['slice', ['var', 'raw'], 0, ['max', 0, ['var', 'first']]]],
+    ['case',
+      ['all',
+        ['>', ['var', 'first'], 0],
+        ['>', ['index-of', ' ', ['var', 'raw'], ['+', ['var', 'first'], 1]], 0],
+        ['in', ['var', 'head'], ['literal', DESIGNATIONS.map((word) => word.toUpperCase())]]],
+      ['slice', ['var', 'raw'], ['+', ['var', 'first'], 1]],
+      ['var', 'raw']]]];
+
+/*
+ * `raw` first, and the separators read it back.
+ *
+ * These used to call the source expression three times over, which was free
+ * when it was a bare `coalesce` and is not now that a designation is stripped
+ * first: three copies of that rule in every property that shows a number.
+ * `let` binds in order and later bindings see earlier ones, so one call does.
+ */
+const prefixless = () => ['let', 'raw', leadingStripped(),
+  'space', ['index-of', ' ', ['var', 'raw']],
+  'dash', ['index-of', '-', ['var', 'raw']],
   ['let', 'cut',
     // The first separator of either kind, ignoring the one that is absent.
     ['case',
@@ -1725,6 +1756,111 @@ const refDesign = () => ['case',
 
 const DESIGNATIONS = ['Scenic', 'Business', 'Alternate', 'Alt', 'Bypass', 'Byp',
   'Truck', 'Spur', 'Loop', 'Connector', 'Conn', 'Bus'];
+
+/*
+ * The same words, mapped to the plate they mean.
+ *
+ * These were already being recognised and discarded: `ref()` cuts the word off
+ * so the shield reads "60" rather than "BUS M 60", and nothing then said the
+ * road was a business route. On a network that names the plate itself the
+ * banner arrives anyway; on one that does not - `US:MI:Secondary`, which is
+ * what BUS M 60 actually carries - the designation in the number was the only
+ * evidence there was, and it was being thrown away.
+ *
+ * Scenic is deliberately absent. It is not a plate here: it selects the brown
+ * marker through `refDesign` above, and giving it both would put a SCENIC
+ * plate on a shield that is already the scenic one.
+ */
+const REF_BANNERS = {
+  Business: 'business', Bus: 'business',
+  Alternate: 'alternate', Alt: 'alternate',
+  Bypass: 'bypass', Byp: 'bypass',
+  Truck: 'truck', Spur: 'spur', Loop: 'loop',
+  Connector: 'connector', Conn: 'connector',
+};
+
+/*
+ * Read from either end of the ref.
+ *
+ * "M 60 Business" puts it last and "BUS M 60" puts it first, and both are in
+ * the data. The suffix test is the same one `ref()` uses to strip it; the
+ * prefix test reads the leading token, which `head()` already isolates for the
+ * forest-road rule.
+ */
+/*
+ * Read from `ref`, never from `shield_text`.
+ *
+ * `rawRef()` prefers the schema's shield text, and under Protomaps that field
+ * is the number already stripped of its system - "60", with the BUS gone
+ * before this code ever sees it. The designation survives only in `ref`, which
+ * both schemas carry, so that is what this reads on both.
+ */
+const bannerRef = () => ['coalesce', ['get', S.fields.ref], ''];
+/*
+ * The plate a number is wearing, or ''.
+ *
+ * Bound once rather than inlined, and that is not a style preference. Written
+ * out per arm - eleven designations, each repeating the ref expression twice -
+ * this came to 180KB across the shield layers, on a document the browser
+ * parses before it draws anything. The file already carries one scar from
+ * exactly that: a text-size layer that reached 261KB and arrived as a report
+ * that rendering had got slower. One `let` holds the ref, the head and the
+ * length; the arms are then three tokens each.
+ *
+ * The head answers only when the ref has three tokens, which is the same guard
+ * `leadingStripped` uses. "BUS M 60" is a plate, a system and a number;
+ * "Loop 360" is a Texas route whose name begins with Loop, and taking that as
+ * a plate would sign the word above a shield still reading it.
+ */
+const refBanner = () => {
+  /*
+   * Grouped by word length, because the slice is what costs.
+   *
+   * Eleven designations tested one at a time means eleven slices of the ref
+   * and eleven comparisons, written out again in every property that can draw
+   * a plate. The words share only six lengths between them, and a slice of a
+   * given length can be taken once and matched against every word of that
+   * length at the price of a string compare.
+   *
+   * Measured, because this file has been bitten by expression size before: the
+   * naive form added 48% to the whole style document, which the browser parses
+   * before it draws anything.
+   */
+  const byLength = new Map();
+  for (const [word, plate] of Object.entries(REF_BANNERS)) {
+    if (!byLength.has(word.length)) byLength.set(word.length, []);
+    byLength.get(word.length).push([` ${word}`.toUpperCase(), plate]);
+  }
+
+  const tails = [...byLength].map(([length, pairs], index) => [
+    `abmap_t${index}`,
+    ['match', ['upcase', ['slice', ['var', 'abmap_ref'], ['-', ['var', 'abmap_end'], length + 1]]],
+      ...pairs.flatMap(([label, plate]) => [label, plate]), ''],
+  ]);
+
+  return ['let',
+    'abmap_ref', bannerRef(),
+    ['let',
+      'abmap_cut', ['index-of', ' ', ['var', 'abmap_ref']],
+      'abmap_end', ['length', ['var', 'abmap_ref']],
+      ['let',
+        'abmap_head', ['case',
+          ['all',
+            ['>', ['var', 'abmap_cut'], 0],
+            ['>', ['index-of', ' ', ['var', 'abmap_ref'], ['+', ['var', 'abmap_cut'], 1]], 0]],
+          ['upcase', ['slice', ['var', 'abmap_ref'], 0, ['var', 'abmap_cut']]],
+          ''],
+        ['let',
+          'abmap_lead', ['match', ['var', 'abmap_head'],
+            ...Object.entries(REF_BANNERS).flatMap(([word, plate]) => [word.toUpperCase(), plate]), ''],
+          ...tails.flat(),
+          ['case',
+            // The leading token first: "BUS M 60" names its plate before its
+            // system, and the suffix tests would find nothing in it.
+            ['!=', ['var', 'abmap_lead'], ''], ['var', 'abmap_lead'],
+            ...tails.flatMap(([name]) => [['!=', ['var', name], ''], ['var', name]]),
+            '']]]]];
+};
 /*
  * Tested against the end of the string, not the tail after the first space.
  *
@@ -1832,7 +1968,7 @@ export function shieldLayerUpdates(state = '', { schema = MAPBOX_SCHEMA } = {}) 
       layout: {
         // Sized from the number it is actually carrying, exactly as the layer
         // was built — half of a concurrency is as wide as its own half.
-        'icon-image': shieldImageExpression(state, { length, override: refDesign(), network }),
+        'icon-image': shieldImageExpression(state, { length, override: refDesign(), network, banner: refBanner() }),
         /*
          * Rewritten with the marker, because the lift belongs to the image.
          *
@@ -1841,11 +1977,11 @@ export function shieldLayerUpdates(state = '', { schema = MAPBOX_SCHEMA } = {}) 
          * the number - placed in ems by text-offset, which knows nothing about
          * any of this - lands on the shield's top edge.
          */
-        ...(network ? { 'icon-offset': bannerIconOffset(network, shift) } : {}),
+        'icon-offset': bannerIconOffset(network, shift, refBanner()),
         'text-size': shieldTextSizeExpression(state, 2, length, { network }),
-        'text-offset': shieldTextOffsetExpression(state, 2, shift, { override: refDesign(), network }),
+        'text-offset': shieldTextOffsetExpression(state, 2, shift, { override: refDesign(), network, banner: refBanner() }),
       },
-      paint: { 'text-color': shieldTextColour(state, { override: refDesign(), network }) },
+      paint: { 'text-color': shieldTextColour(state, { override: refDesign(), network, banner: refBanner() }) },
     }));
   } finally {
     S = previous;
@@ -1896,14 +2032,14 @@ function shieldLayers(state = '') {
         // tileset's own maxzoom has somewhere to go: 220 at z16 is 880 on
         // screen at z18, where 260 would have been over a thousand.
         'symbol-spacing': ['interpolate', ['linear'], ['zoom'], 6, 170, 14, 220],
-      'icon-image': shieldImageExpression(state, { length: ['length', text], override: refDesign(), network: shieldNetwork() }),
+      'icon-image': shieldImageExpression(state, { length: ['length', text], override: refDesign(), network: shieldNetwork(), banner: refBanner() }),
       'icon-size': 1,
-      'icon-offset': bannerIconOffset(shieldNetwork(), shiftPx),
+      'icon-offset': bannerIconOffset(shieldNetwork(), shiftPx, refBanner()),
       'icon-rotation-alignment': 'viewport',
       'text-field': text,
       'text-font': fontBold(),
       'text-size': shieldTextSizeExpression(state, 2, ['length', text], { network: shieldNetwork() }),
-      'text-offset': shieldTextOffsetExpression(state, 2, shiftPx, { override: refDesign(), network: shieldNetwork() }),
+      'text-offset': shieldTextOffsetExpression(state, 2, shiftPx, { override: refDesign(), network: shieldNetwork(), banner: refBanner() }),
       'text-rotation-alignment': 'viewport',
       'text-anchor': 'center',
       'icon-allow-overlap': true,
@@ -1914,7 +2050,7 @@ function shieldLayers(state = '') {
       'icon-optional': false,
       'symbol-sort-key': shieldOrder(),
     },
-    paint: { 'text-color': shieldTextColour(state, { override: refDesign(), network: shieldNetwork() }) },
+    paint: { 'text-color': shieldTextColour(state, { override: refDesign(), network: shieldNetwork(), banner: refBanner() }) },
   });
 
   // Half a shield's width each way, plus a pixel so the two do not touch.
@@ -1959,14 +2095,14 @@ function shieldLayers(state = '') {
          * number floating in the middle of it. The concurrency layers have
          * always measured their own half; this now does the same.
          */
-        'icon-image': shieldImageExpression(state, { length: ['length', ref()], override: refDesign(), network: shieldNetwork() }),
+        'icon-image': shieldImageExpression(state, { length: ['length', ref()], override: refDesign(), network: shieldNetwork(), banner: refBanner() }),
         // Constant, so the number's size and offset — which are fixed per
         // shield — cannot drift out of register with the marker they sit on.
         'icon-size': 1,
         // Half the plate's height, upwards, when there is a plate — see
         // bannerIconOffset. Absent entirely under a schema with no network,
         // where a banner cannot arise.
-        ...(shieldNetwork() ? { 'icon-offset': bannerIconOffset(shieldNetwork(), 0) } : {}),
+        'icon-offset': bannerIconOffset(shieldNetwork(), 0, refBanner()),
         'icon-rotation-alignment': 'viewport',
         // The stripped number, not the raw ref — see `ref` above. This was the
         // one place that read `ref` straight through, which is why a single
@@ -1979,7 +2115,7 @@ function shieldLayers(state = '') {
         // in a circle built for "21" is the West Virginia secondary route that
         // ran outside its own shield.
         'text-size': shieldTextSizeExpression(state, 2, ['length', ref()], { network: shieldNetwork() }),
-        'text-offset': shieldTextOffsetExpression(state, 2, 0, { override: refDesign(), network: shieldNetwork() }),
+        'text-offset': shieldTextOffsetExpression(state, 2, 0, { override: refDesign(), network: shieldNetwork(), banner: refBanner() }),
         'text-rotation-alignment': 'viewport',
         'text-anchor': 'center',
         /*
@@ -2001,7 +2137,7 @@ function shieldLayers(state = '') {
         // An interstate marker outranks a county route when they land together.
         'symbol-sort-key': shieldOrder(),
       },
-      paint: { 'text-color': shieldTextColour(state, { override: refDesign(), network: shieldNetwork() }) },
+      paint: { 'text-color': shieldTextColour(state, { override: refDesign(), network: shieldNetwork(), banner: refBanner() }) },
     },
     ...(canSplit() ? [
       half('road-shield-first', firstRef(), -apart),
