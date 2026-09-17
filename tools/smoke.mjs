@@ -2223,14 +2223,36 @@ if (!external) {
   });
   const phone = await narrow.newPage();
   await phone.goto(new URL('account.html', MAP_URL).href, { waitUntil: 'domcontentloaded' });
-  await phone.waitForFunction(
-    () => document.querySelectorAll('#account-page button').length > 3, null, { timeout: 8000 },
-  ).catch(() => {});
+  /*
+   * Wait for the providers specifically, not for "some buttons".
+   *
+   * The first version waited for more than three buttons under #account-page,
+   * which the four email ones satisfy on their own - so it measured before
+   * refreshProviders() had painted Apple and Google, found nothing to check,
+   * and reported clean. Proved by squeezing the pair until both labels
+   * ellipsised and watching this pass anyway.
+   *
+   * Not swallowed either: if the two never arrive, that is the finding, not a
+   * reason to check nothing.
+   */
+  const painted = await phone.waitForFunction(
+    () => document.querySelectorAll('#account-page .provider-button').length === 2,
+    null, { timeout: 8000 },
+  ).then(() => true).catch(() => false);
+  check('both provider buttons render before anything is measured', painted, true);
   const fit = await phone.evaluate(() => {
     const trouble = [];
     for (const button of document.querySelectorAll('#account-page button, #account-page a.button')) {
-      // withIcon puts the words in a span; without one the button is the label.
-      const label = button.querySelector('span') || button;
+      /*
+       * The words, wherever this kind of button keeps them.
+       *
+       * withIcon puts them in the only span it makes; a branded provider
+       * button has three spans and the first is the hover tint, so asking for
+       * "the first span" there measures an empty overlay and reports no
+       * clipping however badly the title is cut. Name the label instead.
+       */
+      const label = button.querySelector('.provider-label')
+        || button.querySelector('span') || button;
       if (label.scrollWidth > label.clientWidth + 1) trouble.push(`clipped: ${button.textContent.trim()}`);
     }
     if (document.documentElement.scrollWidth > document.documentElement.clientWidth + 1) {
@@ -2240,7 +2262,7 @@ if (!external) {
   });
   check('nothing on the account page clips at 390px', fit, []);
   check('and Apple comes before Google', await phone.evaluate(
-    () => [...document.querySelectorAll('#account-page .account-providers .button')]
+    () => [...document.querySelectorAll('#account-page .provider-button')]
       .map((b) => b.textContent.trim())),
   ['Continue with Apple', 'Continue with Google']);
   await narrow.close();

@@ -967,10 +967,167 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
  */
 .account-alternatives { margin-top: 7px; }
 .account-alternatives .button { flex: 1 0 12rem; justify-content: center; }
-/* Apple first, then Google, sharing the row above the address field - the
-   order comes from PROVIDERS in account.js, not from here. Equal shares so
-   neither reads as the lesser option. */
-.account-providers .button { flex: 1 0 12rem; justify-content: center; }
+
+/* --------------------------------------------------- branded sign-in
+ *
+ * Sign in with Apple and Sign in with Google.
+ *
+ * The two controls on this site whose appearance is specified by somebody
+ * else, and the reasoning behind every number here is in
+ * assets/js/lib/provider-buttons.js, next to the markup and the links. The
+ * short version: the colours, the mark and the type scale are Apple's and
+ * Google's; only the corner radius, the focus ring and the fact that they
+ * share a row are ours.
+ *
+ * Everything is a fraction of one height so the pair can be resized in one
+ * place without either of them drifting out of spec. Those fractions are
+ * Google's 40px reference button expressed as ratios - 14px type, a 20px mark
+ * and 12px of padding - and Apple's stated rule that the title is 43% of the
+ * button's height.
+ *
+ * Apple's type therefore comes out larger than Google's at the same height.
+ * That is not a mistake to correct: it is what the two specifications say, and
+ * matching them would mean breaking one. What both do insist on is that
+ * neither button is smaller or quieter than the other, which is what the
+ * shared height and equal share of the row are for.
+ *
+ * 44px because it is a comfortable touch target and close to the height of
+ * this form's own buttons. Apple's floor is 140x30.
+ */
+.account-providers { --provider-h: 44px; gap: 8px; }
+
+/*
+ * The theme switch, in the same three blocks the tokens at the top of this
+ * file use: the media query for a reader who has not chosen, and the attribute
+ * for one who has.
+ *
+ * Apple black on a light page and white on a dark one; Google light and dark.
+ * Both are permitted styles for those backgrounds and both are stated to the
+ * hex - a near-miss here is a branding violation rather than a near miss, so
+ * none of these six values reads from a token.
+ *
+ * --pb-apple-logo moves with --pb-fill, and that pairing is load-bearing
+ * rather than decorative: Apple's files carry an opaque background rect, not a
+ * transparent one, and the logo is drawn wider than its box. What keeps that
+ * overflow invisible is the rect being the same colour as the button under it.
+ * Change one of these two without the other and a rectangle appears.
+ */
+.provider-apple  { --pb-fill: #000000; --pb-ink: #ffffff; --pb-edge: transparent; --pb-veil: #ffffff;
+                   --pb-apple-logo: url(../img/siwa-logo-white.svg); }
+.provider-google { --pb-fill: #ffffff; --pb-ink: #1f1f1f; --pb-edge: #747775;     --pb-veil: #303030; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .provider-apple  { --pb-fill: #ffffff; --pb-ink: #000000; --pb-veil: #000000;
+                                                     --pb-apple-logo: url(../img/siwa-logo-black.svg); }
+  :root:not([data-theme="light"]) .provider-google { --pb-fill: #131314; --pb-ink: #e3e3e3; --pb-edge: #8e918f; --pb-veil: #ffffff; }
+}
+
+:root[data-theme="dark"] .provider-apple  { --pb-fill: #ffffff; --pb-ink: #000000; --pb-veil: #000000;
+                                            --pb-apple-logo: url(../img/siwa-logo-black.svg); }
+:root[data-theme="dark"] .provider-google { --pb-fill: #131314; --pb-ink: #e3e3e3; --pb-edge: #8e918f; --pb-veil: #ffffff; }
+
+.provider-button {
+  position: relative; overflow: hidden;
+  display: flex; align-items: center;
+  /* Apple first, then Google, sharing the row - the order comes from PROVIDERS
+     in account.js, not from here. Same `flex: 1 0` as the rows below for the
+     same reason: grow to an equal share, never shrink into an ellipsis, wrap
+     to one per line when the pair no longer fits. The basis is measured; see
+     the note on .account-alternatives above. */
+  flex: 1 0 14rem; min-width: 140px; height: var(--provider-h);
+  /* Apple's black style has no outline, so its border is transparent rather
+     than absent: a button one pixel shorter than the one under it is a worse
+     mismatch than a border nobody can see. */
+  padding: 0 calc(var(--provider-h) * .3);
+  background: var(--pb-fill);
+  border: 1px solid var(--pb-edge);
+  border-radius: var(--radius);
+  color: var(--pb-ink);
+  cursor: pointer;
+  line-height: 1.25;
+  text-align: center;
+  white-space: nowrap;
+  -webkit-appearance: none; appearance: none;
+  transition: box-shadow .218s ease;
+}
+
+.provider-state {
+  position: absolute; inset: 0;
+  background: var(--pb-veil); opacity: 0;
+  pointer-events: none;
+  transition: opacity .218s ease;
+}
+/* Google's stated overlay values. Apple gives none, and borrows them. */
+.provider-button:hover  .provider-state { opacity: .08; }
+.provider-button:active .provider-state { opacity: .12; }
+.provider-button:focus-visible { outline: 2px solid var(--clay); outline-offset: 2px; }
+.provider-button:focus-visible .provider-state { opacity: .12; }
+
+/* Both marks in a box half the button's height - Google's 20-in-40 - so the
+   two line up in the stack whatever is inside them. */
+.provider-mark {
+  position: relative; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  width: calc(var(--provider-h) * .5); height: calc(var(--provider-h) * .5);
+  margin-right: calc(var(--provider-h) * .3);
+}
+.provider-mark svg { display: block; }
+
+/* Centred in what the mark leaves, not in the button. Google's own layout, and
+   the reason the two titles sit on the same axis. */
+.provider-label {
+  position: relative; flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis;
+}
+
+/*
+ * Google Sans is the specified face and is not a webfont anybody may serve -
+ * the guidelines have you install it - so this is Google's own fallback stack
+ * from their button snippet, with Google Sans first for the machines that do
+ * have it.
+ */
+.provider-google {
+  font-family: "Google Sans", Roboto, arial, sans-serif;
+  font-size: calc(var(--provider-h) * .35);   /* 14px in a 40px button */
+  font-weight: 500;
+  letter-spacing: .25px;
+}
+.provider-google .provider-mark svg { width: 100%; height: 100%; }
+.provider-google:hover {
+  box-shadow: 0 1px 2px 0 rgba(60, 64, 67, .3), 0 1px 3px 1px rgba(60, 64, 67, .15);
+}
+
+/*
+ * The system font, which is what Apple prefers for the title. Not var(--font-sans):
+ * that starts with ui-sans-serif, and the rule is about the platform's own face.
+ */
+.provider-apple {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  font-size: calc(var(--provider-h) * .43);   /* Apple's stated proportion */
+  font-weight: 500;
+}
+/*
+ * Apple's own file, drawn at the full height of the button.
+ *
+ * That is their rule, and it is the whole trick: the file is 39x44 with the
+ * margins already in it, so a copy scaled to the button's height puts the
+ * glyph at the size and spacing Apple drew it for. Cropping it, padding it or
+ * fitting it to a smaller box would all undo that, and all three are named in
+ * the guidelines as things not to do.
+ *
+ * It therefore overflows the shared mark box, by about eight pixels a side at
+ * 44. That overflow is not transparent - the file has a solid rect behind the
+ * glyph - and the reason it cannot be seen is that the rect is the same colour
+ * as --pb-fill in both themes. It lands in the button's own padding where
+ * nothing else is drawn, and centring it there is what puts the apple on the
+ * same axis as Google's G. Apple allows exactly this: the leading-edge space
+ * may be adjusted to line the logo up with other authentication logos.
+ */
+.provider-apple .provider-mark::before {
+  content: ""; display: block;
+  height: var(--provider-h); width: calc(var(--provider-h) * 39 / 44);
+  background: center / contain no-repeat var(--pb-apple-logo);
+}
 /* The one control the gear shows when nobody is signed in. Full width and
    centred, because a single button sized to the word "Sign in" in a panel this
    wide reads as an afterthought rather than as the way in. */

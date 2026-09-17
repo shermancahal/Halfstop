@@ -14,6 +14,7 @@
 
 import { el } from './ui.js';
 import { withIcon } from './ui.js';
+import { providerButton, PROVIDER_LABELS } from './provider-buttons.js';
 import { icons } from './icons.js';
 import { isConfigured as accountsAvailable, displayName } from './account.js';
 import { describeSync } from './sync.js';
@@ -448,14 +449,13 @@ export function createAccountPanel({
     };
 
     /*
-     * Marks on the four that use an address, and none on the two providers.
+     * Our marks on the four that use an address. The two providers have their
+     * own, and they are not drawn here.
      *
      * Apple publishes what a Sign in with Apple button must look like, down to
-     * the mark and the wording, and Google does the same - so an approximation
-     * drawn here beside "Continue with Apple" is not a nicer button, it is the
-     * wrong one. Same reasoning that kept the directions row off Apple's and
-     * Google's logos. If those two should carry their marks it is by taking
-     * the real ones from the design resources, deliberately.
+     * the artwork, and Google does the same - so those two are built by
+     * provider-buttons.js from the files Apple and Google ship, and nothing in
+     * this block applies to them. These four are ours to draw.
      */
     const buttons = [
       el('button', {
@@ -534,8 +534,7 @@ export function createAccountPanel({
      * `run` is not used here - it insists on an email address, and the whole
      * point of these is that you do not type one.
      */
-    const provider = (id, label) => el('button', {
-      class: 'button button-secondary button-small', type: 'button', text: label,
+    const provider = (id) => providerButton(id, {
       onclick: async () => {
         try {
           await account.signInWithProvider(id);
@@ -554,7 +553,6 @@ export function createAccountPanel({
      * an error page carrying Apple's or Google's branding, which reads as this
      * site being broken rather than unfinished.
      */
-    const PROVIDER_LABELS = { apple: 'Continue with Apple', google: 'Continue with Google' };
     const offered = (account?.providers || SITE.authProviders || [])
       .filter((id) => PROVIDER_LABELS[id]);
 
@@ -572,7 +570,7 @@ export function createAccountPanel({
     );
     if (offered.length) {
       container.append(
-        el('div', { class: 'account-actions account-providers' }, offered.map((id) => provider(id, PROVIDER_LABELS[id]))),
+        el('div', { class: 'account-actions account-providers' }, offered.map(provider)),
         el('p', { class: 'hint account-or', text: 'or with an email address' }),
       );
     }
