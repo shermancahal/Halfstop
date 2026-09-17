@@ -219,12 +219,21 @@ export const hasShieldBlank = (design, length) => !!shieldBlankFor(design, lengt
  * better than a variant drawn as nothing.
  */
 export function shieldDesign(value = '') {
-  const text = String(value).toLowerCase();
+  const text = String(value ?? '').toLowerCase();
+  /*
+   * The same rule the style expression uses, in the generic vocabulary.
+   *
+   * `default` - and nothing at all - is the road a state has not signed, and
+   * it gets the circle. Everything else Mapbox says is a marker shape, which
+   * means some system numbered the road, so it gets a state design. This used
+   * to answer `circle` for any shape it did not recognise by prefix, which is
+   * the opposite of what the probe at the top of this file found, and the same
+   * mistake the image expression was making about Indiana.
+   */
+  if (!text || text === 'default') return 'circle';
   if (text.startsWith('us-interstate')) return 'interstate';
   if (text.startsWith('us-highway')) return 'us';
-  if (text.startsWith('us-state') || text.startsWith('us-')) return 'state';
-  // Anything else is a numbered road nobody has claimed — see SHIELD_DESIGNS.
-  return 'circle';
+  return 'state';
 }
 
 export function shieldImageId(design, length, banner = '') {
@@ -1164,9 +1173,9 @@ export function shieldTextSizeExpression(state = '', length = 2, refLength = nul
   };
 
   const byShield = network ? networkArms(network, sized) : [
-    'match', ['get', 'shield'],
+    'match', SHIELD_FIELD,
     ...SHIELD_MATCH.flatMap((arm) => [arm.values, sized(arm.design)]),
-    sized(UNCLAIMED),
+    sized(LOCAL),
   ];
   return refLength ? ['let', REF_LENGTH, refLength, byShield] : byShield;
 }
@@ -1197,9 +1206,9 @@ export function shieldTextOffsetExpression(state = '', length = 2, shiftPx = 0, 
   // for the network-named one. It was written out twice and the two copies
   // had already drifted apart on which size the sideways shift divides by.
   const byShield = network ? networkArms(network, placed) : [
-    'match', ['get', 'shield'],
+    'match', SHIELD_FIELD,
     ...SHIELD_MATCH.flatMap((arm) => [arm.values, placed(arm.design)]),
-    placed(UNCLAIMED),
+    placed(LOCAL),
   ];
   if (!override) return byShield;
 
@@ -1625,6 +1634,18 @@ function isStateDesign(design) {
   return design === 'state' || String(design).startsWith('st-');
 }
 
+/** What a road gets when nothing identifies its system. */
+const UNCLAIMED = 'circle';
+
+/*
+ * The shield field, with a missing one read as unclaimed.
+ *
+ * `match` sends a null input to its fallback, and the fallback is now the
+ * state's marker - so a road arriving with no `shield` at all would be handed
+ * one. Coalescing first puts that case on the arm it belongs to.
+ */
+const SHIELD_FIELD = ['coalesce', ['get', 'shield'], 'default'];
+
 const SHIELD_MATCH = [
   {
     design: 'interstate',
@@ -1676,25 +1697,38 @@ const SHIELD_MATCH = [
       'triangle-white', 'trapezoid-white', 'shield-white',
     ],
   },
+  /*
+   * The unclaimed arm, which is the one the probe actually identified.
+   *
+   * `default` is what Mapbox says for a numbered road nobody has signed, and
+   * telling it apart from a shape is the whole finding at the top of this
+   * file: "a signed state route carries a shape; a county road carries
+   * `default`". Naming it here rather than leaving it to fall off the end is
+   * what lets the fallback be the state's marker again, which is what the
+   * shapes above were always for.
+   */
+  { design: UNCLAIMED, values: ['default', ''] },
 ];
 
 /**
  * The design a road with this `shield` value gets, from the map's state.
  *
- * The fallback is the circle, not the state's own marker. A shield value the
- * table does not list is a road nothing has told us about, and Mapbox says
- * `default` for exactly the roads a state has not signed — putting the state's
- * marker on those is how a Leelanau County road ended up wearing Michigan's M.
+ * Mirrors the style expression arm for arm, and is checked against it: the
+ * unclaimed road is `default`, which has an arm of its own, and anything else
+ * is a shape - so a value the table has not been told about is a state route
+ * whose marker nobody has probed, not a road nothing has claimed.
+ *
+ * It used to fall back the other way, which is the Indiana bug: a state whose
+ * shape name is missing from the table drew a plain circle while its own
+ * artwork sat registered and unused.
  */
 export function designForShield(shield, state = '') {
   const local = stateDesign(state);
-  const arm = SHIELD_MATCH.find((entry) => entry.values.includes(String(shield || '').toLowerCase()));
-  const design = arm ? arm.design : UNCLAIMED;
+  const value = String(shield ?? '').toLowerCase() || 'default';
+  const arm = SHIELD_MATCH.find((entry) => entry.values.includes(value));
+  const design = arm ? arm.design : LOCAL;
   return design === LOCAL ? local : design;
 }
-
-/** What a road gets when nothing identifies its system. */
-const UNCLAIMED = 'circle';
 
 /** The image id a road would ask for — the same one the style expression builds. */
 export function shieldImageIdFor(shield, reflen, state = '') {
@@ -1711,11 +1745,18 @@ export function shieldImageExpression(state = '', { length = null, override = nu
 
   const design = (name) => (name === LOCAL ? local : name);
   const byShield = network ? networkArms(network, design) : [
-    'match', ['get', 'shield'],
+    'match', SHIELD_FIELD,
     ...SHIELD_MATCH.flatMap((arm) => [arm.values, arm.design === LOCAL ? local : arm.design]),
-    // Not `local`: a shield value the table does not list is a road nothing
-    // has claimed, and it gets the circle rather than the state's marker.
-    UNCLAIMED,
+    /*
+     * `local`, because by here the value is a shape.
+     *
+     * The unclaimed road is `default`, and it has an arm of its own above, so
+     * what reaches this line is a marker shape the table has not been told
+     * about yet - which is a state route whose state signs it in a shape
+     * nobody has probed. Michigan's county roads got the M when `default`
+     * fell through to here; naming `default` is what makes this safe.
+     */
+    local,
   ];
 
   return [

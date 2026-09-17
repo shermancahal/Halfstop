@@ -39,19 +39,38 @@ through it, and a county road wore Michigan's M. The test recording this is
 So the rule is: **name the shape, or get a circle.** Widening the fallback
 instead of the table puts a state's marker on roads that state never signed.
 
-## The known gap: a state whose shape is not in the table
+## What the probe actually established, and what it did not
 
-Indiana state routes draw as plain circles on the Mapbox-backed map and
-correctly on the Protomaps one. The artwork is not the problem — `st-IN`
-exists, and `statesWithShields()` lists `IN`. Indiana's shape name is simply
-not in `SHIELD_MATCH`.
+It established a **discriminator**, not a list. `default` versus a shape is the
+whole finding, and it is a rule that never goes stale.
 
-Any state can be in this position. The table was built from what a probe
-returned for a handful of states, not from an exhaustive list, and Mapbox does
-not publish one that matches what the tiles actually carry — the documented
-value `us-state` may never appear at all, while `circle-white` and friends do.
+The first fix read it as a list: the shape names seen during the probe were
+enumerated, and anything else fell through to the circle. That fixed Michigan
+and broke every state whose shape had not been probed — Indiana among them,
+drawing plain circles while `st-IN` sat registered and unused, because
+Indiana's marker is not any of the shapes Michigan and Kentucky happen to use.
 
-## Finding the value, which is the only way to fix it
+So the table is now read the way the probe supports. `default` has an arm of
+its own and gets the circle; the shape names stay as documentation of what
+turns up; and the fallback is the state's marker, because by the time a value
+reaches it, `default` is already spoken for and what is left is a shape.
+
+| shield value | design |
+| --- | --- |
+| `default`, or absent | circle |
+| `us-interstate*` | interstate |
+| `us-highway*` | US route |
+| any other shape, probed or not | that state's own marker |
+
+The absent case matters: `match` sends a null input to its fallback, and the
+fallback is now the state's marker, so `SHIELD_FIELD` coalesces a missing
+`shield` to `default` before the match sees it.
+
+## Finding a specific value, when you want to know rather than infer
+
+The rule above no longer needs the shape name to be known. This is still worth
+having — to confirm what a state actually carries, or to work out why a road is
+drawing a circle when it should not.
 
 Do not guess the shape name. Ask the tiles.
 
@@ -80,9 +99,18 @@ https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/{lon},{lat}.json
 Pick a point on the state route itself. The `shield` property on each returned
 feature is the value.
 
-## Adding it
+## If a road still draws the wrong marker
 
-One line: put the shape name in the `LOCAL` arm of `SHIELD_MATCH`, beside
-`circle-white` and the rest. Then check that a county road nearby still draws a
-circle — that is the half the Leelanau probe exists to protect, and adding a
-shape that unsigned roads also carry would repeat it.
+A **state route drawing a circle** now means its `shield` is coming back as
+`default` — Mapbox does not consider it signed. Adding the shape name will not
+help, because the shape name is not what it is sending. Check the value first.
+
+An **unsigned road drawing a state marker** means something other than
+`default` is arriving for a road nobody signed. That is the Leelanau failure
+returning by a different door, and the fix is another arm on the unclaimed
+side, next to `default` — never widening the fallback, which is the only thing
+keeping the two apart.
+
+Adding a probed shape name to the `LOCAL` arm changes no behaviour now. It is
+still worth doing as documentation of what a state carries, which is what that
+list is for.

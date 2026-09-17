@@ -2985,8 +2985,12 @@
        [
         "match",
         [
-         "get",
-         "shield"
+         "coalesce",
+         [
+          "get",
+          "shield"
+         ],
+         "default"
         ],
         [
          "us-interstate",
@@ -3019,7 +3023,12 @@
          "shield-white"
         ],
         "state",
-        "circle"
+        [
+         "default",
+         ""
+        ],
+        "circle",
+        "state"
        ]
       ]
      ],
@@ -5100,8 +5109,12 @@
      [
       "match",
       [
-       "get",
-       "shield"
+       "coalesce",
+       [
+        "get",
+        "shield"
+       ],
+       "default"
       ],
       [
        "us-interstate",
@@ -5225,6 +5238,10 @@
        13.2
       ],
       [
+       "default",
+       ""
+      ],
+      [
        "case",
        [
         ">=",
@@ -5253,6 +5270,37 @@
         3
        ],
        13.2,
+       13.2
+      ],
+      [
+       "case",
+       [
+        ">=",
+        [
+         "var",
+         "abmap_reflen"
+        ],
+        5
+       ],
+       7.8,
+       [
+        ">=",
+        [
+         "var",
+         "abmap_reflen"
+        ],
+        4
+       ],
+       7.8,
+       [
+        ">=",
+        [
+         "var",
+         "abmap_reflen"
+        ],
+        3
+       ],
+       10.34,
        13.2
       ]
      ]
@@ -5462,8 +5510,12 @@
       [
        "match",
        [
-        "get",
-        "shield"
+        "coalesce",
+        [
+         "get",
+         "shield"
+        ],
+        "default"
        ],
        [
         "us-interstate",
@@ -5506,6 +5558,17 @@
         "triangle-white",
         "trapezoid-white",
         "shield-white"
+       ],
+       [
+        "literal",
+        [
+         0,
+         0
+        ]
+       ],
+       [
+        "default",
+        ""
        ],
        [
         "literal",
@@ -6694,8 +6757,12 @@
        [
         "match",
         [
-         "get",
-         "shield"
+         "coalesce",
+         [
+          "get",
+          "shield"
+         ],
+         "default"
         ],
         [
          "us-interstate",
@@ -6728,7 +6795,12 @@
          "shield-white"
         ],
         "state",
-        "circle"
+        [
+         "default",
+         ""
+        ],
+        "circle",
+        "state"
        ]
       ]
      ],
@@ -10883,8 +10955,12 @@
      [
       "match",
       [
-       "get",
-       "shield"
+       "coalesce",
+       [
+        "get",
+        "shield"
+       ],
+       "default"
       ],
       [
        "us-interstate",
@@ -11008,6 +11084,10 @@
        13.2
       ],
       [
+       "default",
+       ""
+      ],
+      [
        "case",
        [
         ">=",
@@ -11036,6 +11116,37 @@
         3
        ],
        13.2,
+       13.2
+      ],
+      [
+       "case",
+       [
+        ">=",
+        [
+         "var",
+         "abmap_reflen"
+        ],
+        5
+       ],
+       7.8,
+       [
+        ">=",
+        [
+         "var",
+         "abmap_reflen"
+        ],
+        4
+       ],
+       7.8,
+       [
+        ">=",
+        [
+         "var",
+         "abmap_reflen"
+        ],
+        3
+       ],
+       10.34,
        13.2
       ]
      ]
@@ -11245,8 +11356,12 @@
       [
        "match",
        [
-        "get",
-        "shield"
+        "coalesce",
+        [
+         "get",
+         "shield"
+        ],
+        "default"
        ],
        [
         "us-interstate",
@@ -11289,6 +11404,17 @@
         "triangle-white",
         "trapezoid-white",
         "shield-white"
+       ],
+       [
+        "literal",
+        [
+         -1.08,
+         0
+        ]
+       ],
+       [
+        "default",
+        ""
        ],
        [
         "literal",
@@ -12477,8 +12603,12 @@
        [
         "match",
         [
-         "get",
-         "shield"
+         "coalesce",
+         [
+          "get",
+          "shield"
+         ],
+         "default"
         ],
         [
          "us-interstate",
@@ -12511,7 +12641,12 @@
          "shield-white"
         ],
         "state",
-        "circle"
+        [
+         "default",
+         ""
+        ],
+        "circle",
+        "state"
        ]
       ]
      ],
@@ -16792,8 +16927,12 @@
      [
       "match",
       [
-       "get",
-       "shield"
+       "coalesce",
+       [
+        "get",
+        "shield"
+       ],
+       "default"
       ],
       [
        "us-interstate",
@@ -16917,6 +17056,10 @@
        13.2
       ],
       [
+       "default",
+       ""
+      ],
+      [
        "case",
        [
         ">=",
@@ -16945,6 +17088,37 @@
         3
        ],
        13.2,
+       13.2
+      ],
+      [
+       "case",
+       [
+        ">=",
+        [
+         "var",
+         "abmap_reflen"
+        ],
+        5
+       ],
+       7.8,
+       [
+        ">=",
+        [
+         "var",
+         "abmap_reflen"
+        ],
+        4
+       ],
+       7.8,
+       [
+        ">=",
+        [
+         "var",
+         "abmap_reflen"
+        ],
+        3
+       ],
+       10.34,
        13.2
       ]
      ]
@@ -17154,8 +17328,12 @@
       [
        "match",
        [
-        "get",
-        "shield"
+        "coalesce",
+        [
+         "get",
+         "shield"
+        ],
+        "default"
        ],
        [
         "us-interstate",
@@ -17198,6 +17376,17 @@
         "triangle-white",
         "trapezoid-white",
         "shield-white"
+       ],
+       [
+        "literal",
+        [
+         1.08,
+         0
+        ]
+       ],
+       [
+        "default",
+        ""
        ],
        [
         "literal",

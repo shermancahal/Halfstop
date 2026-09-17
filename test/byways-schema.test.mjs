@@ -14,6 +14,19 @@
  *
  * When the Protomaps schema lands, this snapshot is what says the Mapbox one
  * still draws exactly what it always did.
+ *
+ * It has been deliberately regenerated once since, and the reason belongs here
+ * rather than in a commit nobody will find: the shield fallback changed from
+ * the circle to the state's own marker, because `default` - the value Mapbox
+ * gives a road nobody has signed - was given an arm of its own instead. That
+ * is what was drawing Indiana's state routes as plain circles. Everything the
+ * regeneration moved is that change: three reads of `shield` gained a
+ * coalesce, one arm was added, and the fallback's text sizing grew the case a
+ * state design needs. Roughly 2.4 KB on a 279 KB document.
+ *
+ * A snapshot that is updated without saying why stops being a guard, so the
+ * next regeneration should add its own paragraph rather than replacing this
+ * one.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';

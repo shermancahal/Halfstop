@@ -1006,44 +1006,64 @@ test('shields: Mapbox shield values collapse onto a handful of designs', () => {
   assert.equal(shieldDesign('us-state'), 'state');
 
   /*
-   * And an unrecognised value is a circle, not a state marker.
+   * `default` is the circle, and a shape is not.
    *
    * Mapbox says `default` for the roads a state has not signed — probed two
    * miles apart in Leelanau County, where M-22 comes back `circle-white` and
    * the county road beside it comes back `default`. Sending the second to the
-   * state's own design is how a county road came to wear Michigan's M.
+   * state's own design is how a county road came to wear Michigan's M, so
+   * `default` is pinned to the circle here and given an arm of its own in
+   * SHIELD_MATCH.
+   *
+   * The other half used to be asserted the other way round, and that was the
+   * Indiana bug written down as a requirement: an unrecognised *shape* was
+   * called a circle, when a shape is precisely what a signed state route
+   * carries. The probe distinguishes `default` from a shape; it says nothing
+   * about which shapes exist, so recognising them one at a time was never the
+   * thing that made this correct.
    */
-  assert.equal(shieldDesign('something-unheard-of'), 'circle');
+  assert.equal(shieldDesign('default'), 'circle');
   assert.equal(shieldDesign(''), 'circle');
   assert.equal(shieldDesign(undefined), 'circle');
+  assert.equal(shieldDesign('something-unheard-of'), 'state',
+    'an unprobed marker shape is a state route, not an unclaimed road');
 });
 
-test('shields: the style expression sends an unlisted shape to the circle too', () => {
+test('shields: an unprobed shape gets the state marker, and `default` does not', () => {
   /*
-   * The same rule as above, checked where it actually decides.
+   * Both halves of the rule, checked where it actually decides.
    *
-   * `shieldDesign` is a helper; the thing that picks a marker on the map is
-   * the match expression, and the two are separate code paths that could
-   * disagree without anything saying so. The fallback arm is the one under
-   * test: a shape name the table does not list gets the circle, not the
-   * state's own marker.
+   * `shieldDesign` is a helper nothing in the app calls; the thing that picks
+   * a marker on the map is this match expression, and the two are separate
+   * code paths that could disagree without anything saying so.
    *
-   * This is deliberately pinned rather than left implicit, because the
-   * tempting fix for the known Indiana gap - send unlisted values to the
-   * state design - is exactly what put Michigan's M on a Leelanau County
-   * road. Changing this fallback should require changing this test and
-   * reading why it is here. See docs/shields.md.
+   * The fallback is the state's marker because by the time a value reaches it,
+   * `default` has already been taken by an arm of its own - which is the
+   * finding the Leelanau probe actually produced. Michigan's county roads got
+   * the M when `default` fell through to the fallback; that is fixed by naming
+   * `default`, not by refusing to trust shapes.
    */
   const expression = shieldImageExpression('IN');
   const byShield = expression.find((part) => Array.isArray(part) && part[0] === 'match');
   assert.ok(byShield, 'the image id is still chosen by a match on the shield field');
-  assert.deepEqual(byShield[1], ['get', 'shield']);
-  assert.equal(byShield[byShield.length - 1], 'circle',
-    'the fallback arm must stay the circle');
+  assert.deepEqual(byShield[1], ['coalesce', ['get', 'shield'], 'default'],
+    'a missing shield has to read as unclaimed rather than reaching the fallback');
+  assert.equal(byShield[byShield.length - 1], 'st-IN',
+    'an unprobed shape over Indiana draws Indiana\u2019s marker');
 
-  // And the state's own marker is reachable - the gap is the table, not the art.
-  assert.ok(byShield.includes('st-IN'),
-    'a listed shape over Indiana should still resolve to Indiana\u2019s marker');
+  /*
+   * And `default` is on an arm, sent to the circle.
+   *
+   * Walked as label/output pairs from index 2 rather than searched flat: index
+   * 1 is the input expression, which now contains the string 'default' itself
+   * because of the coalesce - so a flat search finds the input and reads the
+   * interstate labels as its output.
+   */
+  const arms = [];
+  for (let i = 2; i < byShield.length - 1; i += 2) arms.push([byShield[i], byShield[i + 1]]);
+  const unclaimed = arms.find(([labels]) => Array.isArray(labels) && labels.includes('default'));
+  assert.ok(unclaimed, '`default` needs an arm of its own');
+  assert.equal(unclaimed[1], 'circle', '`default` draws the unclaimed circle');
 });
 
 test('shields: every state with artwork can actually be asked for', () => {
