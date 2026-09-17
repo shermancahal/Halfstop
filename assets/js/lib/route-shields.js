@@ -1595,6 +1595,28 @@ function stateArms(net, valueFor) {
  * systems either, and they are not the state's numbered routes - drawing them
  * as something other than the state's shield is right for the same reason.
  */
+/*
+ * The states where `Secondary` means "a state route that is not primary".
+ *
+ * `Secondary` is two different things depending on who wrote it. Virginia and
+ * West Virginia use it for a system of its own - the six-hundred-series roads
+ * a county numbers, signed in a circle, which is what the Clay County probe
+ * was about. Michigan and Tennessee use it for their own state routes, the
+ * ones that are not trunk or primary: BUS M 60 is a Michigan state route and
+ * belongs in Michigan's diamond.
+ *
+ * So this cannot be decided from the word. It is a per-state fact, and the
+ * only honest way to hold it is a list that is added to when somebody has
+ * looked - never guessed at from the state's name. Both entries here were
+ * reported from the map by somebody who knows the roads.
+ *
+ * A state missing from this list gets the county marker for its secondaries,
+ * which is the conservative direction: a state route drawn in a plain circle
+ * is wrong and legible, where a county road wearing the state's shield claims
+ * something about the road that is not true.
+ */
+const SECONDARY_IS_A_STATE_ROUTE = ['MI', 'TN'];
+
 function countyRoute(field = 'network') {
   const net = ['coalesce', ['get', field], ''];
   return ['let', 'abmap_sub', ['index-of', ':', net, 3], ['case',
@@ -1602,6 +1624,11 @@ function countyRoute(field = 'network') {
     ['<=', ['var', 'abmap_sub'], 0], false,
     // A third component naming a plate is still a state route, wearing a sign.
     ['!=', bannerExpression(field), ''], false,
+    // And `Secondary`, in the states that use it for their own routes.
+    ['all',
+      ['==', ['downcase', ['slice', net, ['+', ['var', 'abmap_sub'], 1]]], 'secondary'],
+      ['match', ['slice', net, 3, 5], SECONDARY_IS_A_STATE_ROUTE, true, false]],
+    false,
     true]];
 }
 

@@ -1790,6 +1790,31 @@ test('shields: a county route is a circle, and an oval when the number is a frac
   }
 
   /*
+   * `Secondary` is two words in one. Virginia and West Virginia use it for a
+   * system of its own - the circle-signed roads a county numbers, which is
+   * what the Clay County probe above was about. Michigan and Tennessee use it
+   * for their own state routes, the ones that are not trunk or primary: BUS
+   * M 60 is a Michigan state route and belongs in Michigan's diamond.
+   *
+   * So the word cannot decide it and a per-state list does. Both entries were
+   * reported from the map by somebody who knows those roads; a state nobody
+   * has looked at keeps the county marker, which is the conservative way to
+   * be wrong - a state route in a plain circle is legible and obviously
+   * generic, where a county road in the state's shield asserts something
+   * false about the road.
+   */
+  assert.equal(evaluate(image, at('US:MI:Secondary', '60')), 'abmap-shield-st-MI-2',
+    'Michigan signs its secondaries as state routes');
+  assert.equal(evaluate(image, at('US:TN:Secondary', '96')), 'abmap-shield-st-TN-2',
+    'so does Tennessee');
+  assert.equal(evaluate(image, at('US:VA:Secondary', '617')), 'abmap-shield-county-3',
+    'Virginia does not, and that is the case the rule started from');
+  assert.equal(evaluate(image, at('US:WV:Secondary', '11')), 'abmap-shield-county-2',
+    'nor West Virginia');
+  assert.equal(evaluate(image, at('US:NY:Secondary', '12')), 'abmap-shield-county-2',
+    'a state nobody has checked keeps the conservative answer');
+
+  /*
    * A plate is not a system. `US:NY:Truck` is a New York route wearing a sign,
    * and a rule that read every third component as a county would have taken
    * the state marker off all eight of them.

@@ -128,6 +128,24 @@ Deliberately broad: `US:TX:FM` and `US:PA:Belt` are not county systems either,
 and they are not a state's numbered routes. Drawing them as something other
 than the state's shield is right for the same reason.
 
+## `Secondary` is two words
+
+It means a system of its own in Virginia and West Virginia - the
+circle-signed roads a county numbers - and it means a state route that is not
+trunk or primary in Michigan and Tennessee. BUS M 60 is a Michigan state route
+and belongs in Michigan's diamond.
+
+The word cannot decide it, so `SECONDARY_IS_A_STATE_ROUTE` in
+`route-shields.js` holds the states where it is the state's own. The list is
+short on purpose: it holds only states somebody has actually looked at. A
+state that is not in it gets the county marker for its secondaries, which is
+the conservative way to be wrong - a state route in a plain circle is legible
+and obviously generic, where a county road wearing the state's shield asserts
+something false about the road.
+
+`docs/shield-matrix.md` has the current answer for every state, generated from
+the expressions themselves.
+
 ## The border case: one state prepared, fifty askable
 
 Registration prepares **one** state's marker — the one under the map centre.
