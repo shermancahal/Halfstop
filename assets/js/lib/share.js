@@ -45,6 +45,23 @@ export function readSharedPin(params) {
   return { lon, lat, name };
 }
 
+/**
+ * Does this link already say where to look?
+ *
+ * The map keeps the camera in the hash, so a link that carries one is either
+ * somebody's shared view or your own reload of a map you had already moved.
+ * Either way the view was chosen, and anything that would move the camera on
+ * arrival has to stand down for it - which is the whole reason this is a
+ * function rather than a truthiness check on location.hash, where a `#photos`
+ * or an empty `#` would read as a view and silently disable the thing that
+ * checks it.
+ */
+export function linkCarriesView(hash) {
+  const text = String(hash || '').replace(/^#/, '');
+  if (!text) return false;
+  return new URLSearchParams(text).has('view');
+}
+
 /** The query and hash that carry one place, for the link that opens on it. */
 export function pinLinkParts({ lon, lat, name = '' }) {
   const params = new URLSearchParams();

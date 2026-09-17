@@ -190,6 +190,50 @@ export function simplify(positions, tolerance = 0.00002) {
   return positions.filter((_, i) => keep[i]);
 }
 
+/* ---------- the camera ---------- */
+
+/** Ground resolution in metres per pixel at zoom 0 on the equator, which is
+    the Web Mercator constant every zoom below is measured against. */
+const EQUATOR_METRES_PER_PIXEL = 156543.03392;
+
+/**
+ * How far to zoom in on a position fix, given how good the fix is.
+ *
+ * A browser will answer "where are you" from GPS, from wifi, or from the IP
+ * address, and it reports which by the accuracy radius rather than by saying
+ * so: twenty metres on a phone outdoors, tens of kilometres from an IP. Those
+ * are different answers and drawing both at the same zoom makes the second one
+ * lie - a street corner in a town the reader may not be anywhere near.
+ *
+ * So the accuracy circle is sized to the viewport instead. The radius is asked
+ * to take up about a quarter of the smaller side, which puts the whole circle
+ * across half the screen: close enough to be useful when the fix is good, wide
+ * enough when it is not that the right place is somewhere on screen.
+ *
+ * @param {number} accuracyMetres  the fix's accuracy radius
+ * @param {number} latitude        needed because a Mercator pixel shrinks with it
+ * @param {number} viewportPx      the smaller side of the map, in CSS pixels
+ * @param {number} maxZoom         never closer than this, however good the fix
+ */
+export function zoomForAccuracy(accuracyMetres, latitude, viewportPx = 640, maxZoom = 12) {
+  if (!Number.isFinite(latitude) || Math.abs(latitude) > 90) return maxZoom;
+  // No accuracy, or a nonsense one, is not a reason to refuse to move; it is a
+  // reason to use the default, which is what a caller with no fix would pick.
+  if (!Number.isFinite(accuracyMetres) || accuracyMetres <= 0) return maxZoom;
+
+  const side = Number.isFinite(viewportPx) && viewportPx > 0 ? viewportPx : 640;
+  const radiusPx = Math.max(1, side / 4);
+  const metresPerPixel = accuracyMetres / radiusPx;
+  const atThisLatitude = EQUATOR_METRES_PER_PIXEL * Math.cos(latitude * Math.PI / 180);
+  const zoom = Math.log2(atThisLatitude / metresPerPixel);
+
+  if (!Number.isFinite(zoom)) return maxZoom;
+  // The floor is the whole world rather than 0: a fix so vague that it wants
+  // less than that is not worth a camera move, but it is the caller's job to
+  // decide that, and returning NaN would make it their bug.
+  return Math.max(1, Math.min(maxZoom, zoom));
+}
+
 /* ---------- formatting ---------- */
 
 export function formatDistance(metres, units = 'imperial') {

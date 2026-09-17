@@ -23,7 +23,7 @@ import { loadCatalog, findMap } from './lib/catalog.js';
 import { parseMapFile, linePositions, findLinkSpans } from './lib/parse.js';
 import {
   boundsAreValid, cumulativeDistances, formatDistance, formatDuration, formatElevation,
-  formatTemperature, formatTemperatureDelta, geojsonBounds, mergeBounds, padBounds,
+  formatTemperature, formatTemperatureDelta, geojsonBounds, mergeBounds, padBounds, zoomForAccuracy,
 } from './lib/geo.js';
 import { el, escapeHTML, createToaster, downloadText, saveBlob, applyStoredTheme, readTheme, setTheme, formatDate, withIcon } from './lib/ui.js';
 import { fogOutlook, nightHours, fogName, fogNote, fogBand } from './lib/fog.js';
@@ -51,6 +51,7 @@ import { createAccountPanel } from './lib/account-panel.js';
 import { wireSettingsMenu as wireSharedSettingsMenu } from './lib/settings-menu.js';
 import {
   formatDD, formatDMS, formatDDM, toUTM, distanceBearing, compassPoint, reverseGeocode, searchPlaces,
+  parseCoordinate,
 } from './lib/place.js';
 import {
   sunTimes, sunPosition, moonTimes, moonPosition, moonIllumination,
@@ -83,7 +84,7 @@ import { describeSync } from './lib/sync.js';
 import { registerServiceWorker, applyServiceWorkerUpdate } from './lib/pwa.js';
 import { managePlanBlock } from './lib/manage-plan.js';
 import { mayEdit } from './lib/editors.js';
-import { shareableURL, readSharedPin, pinLinkParts } from './lib/share.js';
+import { shareableURL, readSharedPin, pinLinkParts, linkCarriesView } from './lib/share.js';
 import {
   canEdit, isShared, looksLikeEmail, describeShares, describeRole,
 } from './lib/shares.js';
@@ -681,6 +682,14 @@ async function main() {
    * The load-time win is in the preload links in map.html, not here.
    */
   const initial = readURL();
+  /*
+   * Read before the map exists, which is the whole reason it is a separate
+   * line. `hash: 'view'` below means the map writes the camera into the hash
+   * as it moves - including the move centreOnYou() makes - so asking after
+   * the map is up always answers "yes, there is a view", and the check turns
+   * itself off.
+   */
+  const arrivedWithAView = linkCarriesView(location.hash);
   state.basemapId = initial.basemap || defaultBasemapId();
 
   const { gl, engine } = await loadEngine(basemapById(state.basemapId));
@@ -931,7 +940,86 @@ async function main() {
     showPointDetails([lon, lat], name);
   }
 
+  /*
+   * Last, because everything above this line is a place somebody asked for and
+   * this is only where you happen to be standing.
+   */
+  if (!arrivedWithAView && !initial.pin && !initial.slugs.length) centreOnYou();
+
   renderDetailsTab();
+}
+
+/**
+ * Open the map where the reader is, on a visit that did not say where to open.
+ *
+ * Every other way in names a place: a shared view in the hash, a pin in the
+ * query, a map file to fit to, or your own reload of a map you had already
+ * moved - the hash carries the camera, so a second visit to the same tab
+ * arrives with one. What is left is a first, cold open, where the alternative
+ * is the default view over east Tennessee and a pinch across three states to
+ * wherever the reader actually is.
+ *
+ * Three things it deliberately does not do:
+ *
+ *   It does not start tracking. GeolocateControl is on the map for that, a tap
+ *   away, and it watches continuously - which is the right trade when asked
+ *   for and the wrong one to sign a reader up for on a device they may be
+ *   navigating from all day with no charger.
+ *
+ *   It does not insist. A fix can take ten seconds, by which time the reader
+ *   may have started panning somewhere else, and a camera that jumps out from
+ *   under a moving hand is worse than one that never moved. The first
+ *   user-driven move cancels it.
+ *
+ *   It does not jump further than the fix can support. An IP-derived fix is
+ *   accurate to tens of kilometres and drawing it at street zoom states a
+ *   confidence nothing here has; zoomForAccuracy sizes the move to the
+ *   accuracy that came back with it.
+ */
+function centreOnYou() {
+  if (!navigator.geolocation || !state.map) return;
+
+  let handedOver = false;
+  /* A programmatic move carries no originalEvent; a drag, a pinch or a scroll
+     does. Only the second means somebody is using the map. */
+  const theyMoved = (event) => { if (event.originalEvent) handedOver = true; };
+  state.map.on('movestart', theyMoved);
+  const done = () => state.map.off('movestart', theyMoved);
+
+  navigator.geolocation.getCurrentPosition(
+    (fix) => {
+      done();
+      if (handedOver) return;
+      const { longitude, latitude, accuracy } = fix.coords || {};
+      if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return;
+
+      const canvas = state.map.getCanvas();
+      const viewport = Math.min(canvas?.clientWidth || 0, canvas?.clientHeight || 0) || 640;
+      /*
+       * A jump rather than a flight. The map is one frame old and showing a
+       * default nobody chose; animating away from it spends two seconds
+       * telling the reader about a view that was never the answer.
+       */
+      state.map.jumpTo({
+        center: [longitude, latitude],
+        zoom: zoomForAccuracy(accuracy, latitude, viewport),
+      });
+    },
+    /*
+     * Silent on refusal, and that is the point. Declining to share a location
+     * is an answer, and a map sitting where it already was is what that answer
+     * looks like; a toast explaining the consequence of a choice just made
+     * would be nagging.
+     */
+    done,
+    /*
+     * Coarse and quick. This is choosing which part of the country to draw,
+     * not marking a spot - high accuracy costs a GPS fix and the seconds it
+     * takes, for a zoom that is capped before either would matter. A fix from
+     * the last five minutes is the same fix.
+     */
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
+  );
 }
 
 /**
@@ -1194,6 +1282,36 @@ function wirePlaceSearch() {
     return found.slice(0, 5);
   };
 
+  /*
+   * A coordinate, if that is what was typed.
+   *
+   * The other way people say where they mean. It comes off a GPS screen, out
+   * of a message, over a radio, or out of this app's own details panel - which
+   * prints all three of the formats parseCoordinate reads, so anything shown
+   * there can be pasted back here.
+   *
+   * Offered rather than acted on: the row carries the coordinate written back
+   * out in full, so an order this had to infer is visible before it is used
+   * rather than after. It needs no network, which is the point on a road with
+   * no signal, and the geocoder still runs underneath it because a coordinate
+   * is worth naming when the name is available.
+   */
+  const coordinateMatches = (query) => {
+    const point = parseCoordinate(query);
+    if (!point) return [];
+    return [{
+      kind: 'Coordinate',
+      name: formatDD([point.lon, point.lat]),
+      // Two things worth saying, in the space of one line: the same point in
+      // the notation on a paper map, and a warning when the order was a guess.
+      context: point.swapped
+        ? `Read longitude first · ${formatDMS([point.lon, point.lat])}`
+        : formatDMS([point.lon, point.lat]),
+      center: [point.lon, point.lat],
+      bbox: null,
+    }];
+  };
+
   const run = async (query) => {
     inFlight?.abort();
     const controller = new AbortController();
@@ -1212,10 +1330,12 @@ function wirePlaceSearch() {
     if (controller !== inFlight) return;
 
     const mine = savedMatches(query);
-    if (!answer.ok && !mine.length) { note(answer.reason); return; }
-    if (!answer.results.length && !mine.length) { note(`Nothing found for “${query}”.`); return; }
+    const typed = coordinateMatches(query);
+    const offline = [...typed, ...mine];
+    if (!answer.ok && !offline.length) { note(answer.reason); return; }
+    if (!answer.results.length && !offline.length) { note(`Nothing found for “${query}”.`); return; }
 
-    show([...mine, ...answer.results]);
+    show([...offline, ...answer.results]);
     // Said under the results rather than instead of them: your own places
     // still answered, and the reason the rest did not is worth one line.
     if (!answer.ok) results.append(el('p', { class: 'map-search-note', text: answer.reason }));
@@ -1242,8 +1362,8 @@ function wirePlaceSearch() {
     // Straight away, from memory. Holding your own waypoints back for a third
     // of a second so they can arrive alongside a network answer is a delay
     // paid for nothing.
-    const mine = savedMatches(query);
-    if (mine.length) show(mine);
+    const instant = [...coordinateMatches(query), ...savedMatches(query)];
+    if (instant.length) show(instant);
     // Long enough that a typed word is one request rather than five, short
     // enough that the list feels like it is keeping up.
     timer = window.setTimeout(() => run(query), 320);

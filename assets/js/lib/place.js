@@ -44,6 +44,211 @@ export function formatDDM([lon, lat]) {
   return `${part(lat, 'N', 'S')} ${part(lon, 'E', 'W')}`;
 }
 
+/* ------------------------------------------------------------------ parsing */
+
+/*
+ * The three formats above, read back.
+ *
+ * This is the inverse of formatDD, formatDDM and formatDMS, and it lives
+ * beside them so the two stay in step: anything the details panel prints can
+ * be pasted into the search box and lands back on the same spot. That is the
+ * test the suite actually makes - format, parse, compare - rather than a list
+ * of strings somebody thought of.
+ *
+ * It also has to read what other things write, because the reason to type a
+ * coordinate at all is usually that something else gave you one: a GPS screen,
+ * a ranger over the radio, a text message, the margin of a paper quad. So the
+ * punctuation is taken loosely - the degree sign is optional, minutes may be
+ * an apostrophe or a prime or nothing, a comma is a separator and so is a
+ * space - while the numbers are taken strictly.
+ */
+
+/*
+ * The characters that get pasted in place of the ones a coordinate is written
+ * with, normalised before any rule below reads them.
+ *
+ * Written as escapes, and the comments name them rather than showing them,
+ * because this table is a list of confusables: a masculine ordinal and a
+ * degree sign are the same shape at reading size, which is the whole reason
+ * people paste one for the other, and a source file that displays them side by
+ * side to prove a point is a source file nobody can proofread. The repo bans
+ * stray non-ASCII in source for that reason, and this is the one place it
+ * would be most tempting, and least useful, to make an exception.
+ */
+const LOOKALIKES = [
+  // degree sign, masculine ordinal, ring above, ring operator
+  [/[\u00B0\u00BA\u02DA\u2218]/g, ' '],
+  // prime, right single quote, acute accent, backtick, apostrophe
+  [/[\u2032\u2019\u00B4\u0060\u0027]/g, ' '],
+  // double prime, right and left double quote, quotation mark
+  [/[\u2033\u201D\u201C\u0022]/g, ' '],
+  // minus sign, en dash, em dash: a minus that is not a hyphen
+  [/[\u2212\u2013\u2014]/g, '-'],
+  // separators that turn up between a pair and mean nothing else here
+  [/[;/|]/g, ' '],
+];
+
+/**
+ * A coordinate a person typed, or null if this is not one.
+ *
+ * Accepts decimal degrees, degrees and decimal minutes, and degrees / minutes
+ * / seconds, with the hemisphere as a letter on either side of its number or
+ * as a sign on the degrees.
+ *
+ * Which number is the latitude:
+ *
+ *   - A letter settles it. N and S mark a latitude, E and W a longitude,
+ *     whichever order they arrive in, so "W84 N35" is read the same as
+ *     "N35 W84".
+ *   - With no letters, latitude comes first. That is the convention, and it
+ *     is the order every format above prints.
+ *   - Unless it cannot: a first number past 90 is not a latitude, so
+ *     "-84.28, 35.96" is read as longitude first and says so. The caller is
+ *     expected to show what it resolved to rather than act on it, because
+ *     this is the one rule here that is a guess.
+ *
+ * @param {string} text
+ * @returns {{lon: number, lat: number, swapped: boolean}|null}
+ */
+export function parseCoordinate(text) {
+  let clean = String(text ?? '').trim();
+  if (!clean) return null;
+  for (const [pattern, replacement] of LOOKALIKES) clean = clean.replace(pattern, replacement);
+  clean = clean.toUpperCase();
+
+  /*
+   * Anything that is not a number, a hemisphere letter or a separator makes
+   * this not a coordinate. Without this check "Mount Elbert 14440" parses:
+   * the letters are ignored, the number survives, and a search for a peak
+   * quietly offers a point in the Gulf of Guinea.
+   */
+  if (/[^0-9NSEW.,\-+\s]/.test(clean)) return null;
+
+  const tokens = clean.match(/-?\d+(?:\.\d+)?|[NSEW]|,/g);
+  if (!tokens) return null;
+
+  /*
+   * Numbers gather into groups; a letter or a comma closes one.
+   *
+   * A letter before its numbers ("N 35 57") is a prefix and waits for them; a
+   * letter after ("35 57 N") closes the group it follows. Both forms are in
+   * circulation and neither is worth refusing.
+   */
+  const groups = [];
+  let numbers = [];
+  let pending = '';          // a letter seen before its numbers
+  const close = (letter) => {
+    if (!numbers.length) return true;
+    if (groups.length === 2) return false;
+    groups.push({ numbers, letter: letter || pending });
+    numbers = [];
+    pending = '';
+    return true;
+  };
+
+  for (const token of tokens) {
+    if (token === ',') {
+      if (!close('')) return null;
+    } else if (/[NSEW]/.test(token)) {
+      if (!numbers.length) {
+        if (pending) return null;   // two letters with no number between them
+        pending = token;
+      } else if (pending) {
+        /*
+         * This group already had its letter in front of it, so this one
+         * belongs to the group after it: "N35.96 W84.28" is two prefixed
+         * numbers, not one suffixed number followed by a stray W.
+         */
+        const next = token;
+        if (!close('')) return null;
+        pending = next;
+      } else if (!close(token)) {
+        return null;
+      }
+    } else {
+      numbers.push(Number(token));
+    }
+  }
+  if (!close('')) return null;
+
+  /*
+   * One long run of numbers and nothing to break it up: split it down the
+   * middle, and only when the middle is unambiguous. Six numbers are two
+   * DMS coordinates and four are two DDM ones; five are not anything.
+   */
+  if (groups.length === 1) {
+    const flat = groups[0].numbers;
+    if (!flat.length || flat.length % 2 || groups[0].letter) return null;
+    groups.length = 0;
+    groups.push({ numbers: flat.slice(0, flat.length / 2), letter: '' });
+    groups.push({ numbers: flat.slice(flat.length / 2), letter: '' });
+  }
+  if (groups.length !== 2) return null;
+
+  const values = groups.map(toDegrees);
+  if (values.some((value) => value === null)) return null;
+
+  return orient(values[0], values[1], groups[0].letter, groups[1].letter);
+}
+
+/** Degrees, minutes and seconds collapsed to one signed number. */
+function toDegrees({ numbers, letter }) {
+  if (!numbers.length || numbers.length > 3) return null;
+  const [degrees, minutes = 0, seconds = 0] = numbers;
+  if (!numbers.every(Number.isFinite)) return null;
+
+  /*
+   * A sign and a letter together is not a coordinate anybody meant. "-35 S"
+   * is either 35 south written twice or 35 north written wrong, and picking
+   * one of those for somebody navigating by it is not a choice this should
+   * make.
+   */
+  if (letter && degrees < 0) return null;
+  // Only the degrees carry the sign; "35 -57" is a typo, not a minute.
+  if (minutes < 0 || seconds < 0) return null;
+  // 60 minutes is the next degree, and every device that emits these knows it.
+  if (minutes >= 60 || seconds >= 60) return null;
+  // Minutes have to be whole before there can be seconds, for the same reason.
+  if (numbers.length === 3 && !Number.isInteger(minutes)) return null;
+  if (numbers.length > 1 && !Number.isInteger(degrees)) return null;
+
+  const magnitude = Math.abs(degrees) + minutes / 60 + seconds / 3600;
+  const sign = degrees < 0 || letter === 'S' || letter === 'W' ? -1 : 1;
+  return { value: magnitude * sign, axis: letter === 'N' || letter === 'S' ? 'lat' : letter === 'E' || letter === 'W' ? 'lon' : '' };
+}
+
+/** Which of the two is the latitude, and is the pair on the globe at all. */
+function orient(first, second, firstLetter, secondLetter) {
+  let lat;
+  let lon;
+  let swapped = false;
+
+  if (first.axis && second.axis) {
+    if (first.axis === second.axis) return null;   // two latitudes is not a place
+    lat = first.axis === 'lat' ? first.value : second.value;
+    lon = first.axis === 'lon' ? first.value : second.value;
+    swapped = first.axis === 'lon';
+  } else if (first.axis || second.axis) {
+    // One letter is enough: it names one axis and the other is the other.
+    const known = first.axis ? first : second;
+    const other = first.axis ? second : first;
+    lat = known.axis === 'lat' ? known.value : other.value;
+    lon = known.axis === 'lon' ? known.value : other.value;
+    swapped = known === second ? known.axis === 'lat' : known.axis === 'lon';
+  } else if (Math.abs(first.value) > 90 && Math.abs(second.value) <= 90) {
+    lat = second.value;
+    lon = first.value;
+    swapped = true;
+  } else {
+    lat = first.value;
+    lon = second.value;
+  }
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  return { lon, lat, swapped };
+}
+
 /**
  * WGS84 to UTM.
  *

@@ -33,6 +33,7 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { SHIELD_DESIGNS } from '../assets/js/lib/route-shields.js';
+import { DEFAULT_VIEW } from '../assets/js/config.js';
 import { buildArchive } from '../test/helpers/pmtiles-writer.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -211,6 +212,11 @@ this._n=box;document.body.appendChild(box);return this}
 addTo(){return this}remove(){this._n?.remove();return this}}
 class M extends E{constructor(o){super();window.__mapOptions=o;this._s=new Map();this._l=new Map();this._img=new Map();
 this._ready=false;window.__map=this;this._apply(o.style);
+if(o.center)this._c={lng:o.center[0],lat:o.center[1]};
+if(o.hash){const q=new URLSearchParams(String(location.hash).replace(/^#/,''));
+const v=q.get(typeof o.hash==='string'?o.hash:'map');
+if(v){const p=v.split('/').map(Number);
+if(p.length>=3&&p.every(n=>Number.isFinite(n))){this._z=p[0];this._c={lng:p[2],lat:p[1]}}}}
 setTimeout(()=>{this.fire('style.load');           // sources NOT loaded yet
   setTimeout(()=>{this._ready=true;this.fire('styledata');this.fire('idle');this.fire('load')},30)},0)}
 _apply(s){this._l.clear();this._s.clear();this._img.clear();if(s&&s.layers)for(const l of s.layers)this._l.set(l.id,l)}
@@ -262,7 +268,18 @@ setStyle(s,o){this._ready=false;
   setTimeout(()=>{if(full)this.fire('style.load');
     setTimeout(()=>{this._ready=true;this.fire('styledata');this.fire('idle')},30)},0)}
 getStyle(){return{layers:[...this._l.values()]}}getBounds(){return new Bounds(-85,35,-83,37)}
-getZoom(){return 12}getCenter(){return{lng:-84.28,lat:35.96}}fitBounds(){}flyTo(){}easeTo(){}jumpTo(){}
+// A camera that remembers where it was put.
+// These returned constants for a long time, which made every assertion about
+// where the map ended up a reading of the constant rather than of the map -
+// including, briefly, one written in this suite that passed because the
+// coordinate under test happened to equal the constant. The defaults below are
+// the values that used to be hardcoded, so nothing that relied on them moves.
+_to(o){if(o&&o.center){const c=o.center;this._c=Array.isArray(c)?{lng:c[0],lat:c[1]}:{lng:c.lng,lat:c.lat}}
+if(o&&Number.isFinite(o.zoom))this._z=o.zoom;return this}
+getZoom(){return this._z===undefined?12:this._z}
+getCenter(){return this._c?{lng:this._c.lng,lat:this._c.lat}:{lng:-84.28,lat:35.96}}
+fitBounds(){}flyTo(o){return this._to(o)}easeTo(o){return this._to(o)}jumpTo(o){return this._to(o)}
+setCenter(c){return this._to({center:c})}setZoom(z){return this._to({zoom:z})}
 project(){return{x:100,y:100}}unproject(){return{lng:0,lat:0}}
 // Answers with whatever the test has staged, the way a vector basemap answers
 // with whatever is drawn under the tap. A stub that always returns nothing
@@ -461,7 +478,16 @@ const PIXEL = Buffer.from(
 
 let pretendNewerBuild = false;
 
-await page.route('**/*', async (route) => {
+/*
+ * Every request the map page makes, answered from here.
+ *
+ * Named rather than inline because startup is now something the suite tests
+ * more than once: a page opened in a fresh context to control what the browser
+ * will say about location needs the same stubs this one does, and a fresh page
+ * that quietly loaded the real MapLibre would fail as "the map is undefined"
+ * rather than as "the routes were not installed".
+ */
+const serveStubs = async (route) => {
   const url = route.request().url();
   if (route.request().resourceType() === 'image' && !url.startsWith(new URL(URL_UNDER_TEST).origin)) {
     return route.fulfill({ status: 200, contentType: 'image/png', body: PIXEL });
@@ -717,8 +743,9 @@ await page.route('**/*', async (route) => {
     });
   }
   return route.fulfill({ status: 200, contentType: 'application/javascript', body: GL });
-});
+};
 
+await page.route('**/*', serveStubs);
 await page.goto(MAP_URL, { waitUntil: 'networkidle' });
 
 /*
@@ -4551,6 +4578,210 @@ check('and the list put away', landed.list, true);
 await page.evaluate(() => { document.querySelector('.identify-card .identify-close')?.click(); });
 await page.fill('#place-search', '');
 await page.waitForTimeout(200);
+
+/*
+ * A coordinate is the other way of saying where you mean.
+ *
+ * Checked through the box rather than against parseCoordinate directly - that
+ * has its own suite - because what matters here is the wiring: that a typed
+ * pair reaches the list, reaches it without waiting for a network answer, and
+ * takes the map to the point it names rather than to a place with a similar
+ * name.
+ */
+console.log('\nTyping a coordinate instead of a name');
+
+/*
+ * Typed, then read back before the box has even scheduled a request.
+ *
+ * The debounce is 320ms, so a list standing here at 150 was built without the
+ * network - which is the property that matters, on a road with no signal, and
+ * a stronger claim than blocking the geocoder and seeing what survives.
+ */
+await page.fill('#place-search', '35.96, -84.28');
+await page.waitForTimeout(150);
+
+const typed = await page.evaluate(() => [...document.querySelectorAll('.map-search-result')].map((row) => ({
+  kind: row.querySelector('.map-search-kind')?.textContent.trim(),
+  name: row.querySelector('.map-search-name')?.textContent.trim(),
+  where: row.querySelector('.map-search-where')?.textContent.trim() || '',
+})));
+check('a typed coordinate is offered', typed[0]?.kind, 'Coordinate');
+check('written back out in full, so what it read is visible before it is used',
+  typed[0]?.name, '35.960000, -84.280000');
+check('with the same point in the notation on a paper map', typed[0]?.where, `35\u00B057'36.0"N 84\u00B016'48.0"W`);
+check('and nothing else, because no request has gone out yet', typed.length, 1);
+
+// And it is still there once the geocoder has had its turn.
+await page.waitForTimeout(800);
+check('it survives the answer that lands underneath it', await page.evaluate(
+  () => document.querySelector('.map-search-result .map-search-kind')?.textContent.trim(),
+), 'Coordinate');
+
+await page.locator('.map-search-result').first().click();
+await page.waitForTimeout(600);
+const wentThere = await page.evaluate(() => ({
+  marked: window.__map.getSource('scratch-cursor')?._d?.geometry?.coordinates || null,
+  centre: [
+    Number(window.__map.getCenter().lng.toFixed(3)),
+    Number(window.__map.getCenter().lat.toFixed(3)),
+  ],
+  card: document.querySelector('.identify-card .identify-source')?.textContent.trim() || '',
+}));
+check('choosing it marks the exact point', wentThere.marked, [-84.28, 35.96]);
+check('and takes the map there', wentThere.centre, [-84.28, 35.96]);
+check('named as a coordinate, not as a place', wentThere.card, 'Coordinate');
+
+/*
+ * Degrees, minutes and seconds, which is what gets read over a radio and
+ * printed in the margin of a paper quad.
+ */
+await page.evaluate(() => { document.querySelector('.identify-card .identify-close')?.click(); });
+await page.fill('#place-search', `35\u00B057'36"N 84\u00B016'48"W`);
+await page.waitForTimeout(400);
+const dms = await page.evaluate(() => document.querySelector('.map-search-result .map-search-name')?.textContent.trim());
+check('a DMS coordinate reads back to the same point', dms, '35.960000, -84.280000');
+
+/*
+ * A pair written the other way round says so.
+ *
+ * This is the one reading the parser infers rather than knows, so the row has
+ * to carry the fact - otherwise a GeoJSON pair pasted in lands somewhere
+ * plausible with nothing on screen to say an assumption was made.
+ */
+await page.fill('#place-search', '-104.99, 39.74');
+await page.waitForTimeout(400);
+const inferred = await page.evaluate(() => ({
+  name: document.querySelector('.map-search-result .map-search-name')?.textContent.trim(),
+  where: document.querySelector('.map-search-result .map-search-where')?.textContent.trim(),
+}));
+check('a longitude-first pair is read as one', inferred.name, '39.740000, -104.990000');
+check('and the row says the order was inferred',
+  (inferred.where || '').startsWith('Read longitude first'), true);
+
+/*
+ * And a place name is still a place name.
+ *
+ * The regression that matters in the other direction: a name with a number and
+ * a compass word in it must not be swallowed as a coordinate.
+ */
+await page.fill('#place-search', 'Trail 6 North 40');
+await page.waitForTimeout(900);
+const stillAName = await page.evaluate(() => [...document.querySelectorAll('.map-search-result')]
+  .map((row) => row.querySelector('.map-search-kind')?.textContent.trim()));
+check('a name whose letters spell a hemisphere is not read as a coordinate',
+  stillAName.includes('Coordinate'), false);
+
+await page.evaluate(() => { document.querySelector('.identify-card .identify-close')?.click(); });
+await page.fill('#place-search', '');
+await page.waitForTimeout(200);
+
+/*
+ * A cold open lands where the reader is.
+ *
+ * Each of these is its own context because the thing under test happens once,
+ * during startup, and depends on what the browser will say about location -
+ * which is a property of the context, not of the page.
+ *
+ * The permission cases matter more than the happy one. A link that already
+ * names a view is somebody's shared map or a reload of a map already moved,
+ * and centring over either would make every shared link open somewhere other
+ * than where it was shared from.
+ */
+console.log('\nA fresh visit opens where you are');
+
+const COLORADO = { latitude: 39.7392, longitude: -104.9903 };
+
+const openAt = async ({ hash = '', search = '', fix = COLORADO, allow = true, interrupt = false } = {}) => {
+  const ctx = await browser.newContext({
+    viewport: { width: 1280, height: 900 },
+    serviceWorkers: 'block',
+    ...(allow ? { permissions: ['geolocation'], geolocation: fix } : {}),
+  });
+  const tab = await ctx.newPage();
+  await tab.route('**/*', serveStubs);
+  if (interrupt) {
+    /*
+     * Hold the fix back so there is a gap to pan in.
+     *
+     * Playwright answers instantly, which is the one thing a real fix never
+     * does - and the whole question here is what happens in the seconds
+     * between asking and being told.
+     */
+    await tab.addInitScript(() => {
+      const real = navigator.geolocation.getCurrentPosition.bind(navigator.geolocation);
+      navigator.geolocation.getCurrentPosition = (ok, fail, options) => {
+        setTimeout(() => real(ok, fail, options), 1200);
+      };
+    });
+  }
+  await tab.goto(`${MAP_URL}${search}${hash}`, { waitUntil: 'load' });
+  if (interrupt) {
+    await tab.waitForTimeout(400);
+    // What a drag, a pinch or a scroll produces, and what a programmatic move
+    // does not: a movestart carrying the input event that caused it.
+    await tab.evaluate(() => window.__map.fire('movestart', { originalEvent: new Event('mousedown') }));
+    await tab.evaluate(() => window.__map.jumpTo({ center: [-90, 45], zoom: 8 }));
+  }
+  // Long enough for a fix to come back and the camera to settle; the fix is
+  // synthetic, so this is not waiting on a satellite.
+  await tab.waitForTimeout(2500);
+  const where = await tab.evaluate(() => ({
+    lon: Number(window.__map.getCenter().lng.toFixed(2)),
+    lat: Number(window.__map.getCenter().lat.toFixed(2)),
+    zoom: Number(window.__map.getZoom().toFixed(2)),
+  }));
+  await ctx.close();
+  return where;
+};
+
+const cold = await openAt({});
+check('a first visit centres on the reported position', [cold.lon, cold.lat], [-104.99, 39.74]);
+check('and zooms in far enough to see the roads around it', cold.zoom >= 11, true);
+
+const shared = await openAt({ hash: '#view=9/35.96/-84.28' });
+check('a link carrying a view is left exactly where it points',
+  [shared.lon, shared.lat, shared.zoom], [-84.28, 35.96, 9]);
+
+/*
+ * A pin in the query names a place, so the reader's own position stands down
+ * for it. The camera is not moved to the pin here because that is the hash's
+ * job - a shared pin link carries both, and pinLinkParts writes both - so what
+ * is checked is the part this feature owns: that it did not take over.
+ */
+const pinned = await openAt({ search: '?p=35.65,-83.58' });
+check('a link carrying a pin is not recentred on the reader',
+  [pinned.lon, pinned.lat], [DEFAULT_VIEW.center[0], DEFAULT_VIEW.center[1]]);
+check('and that is a different place from where the reader is',
+  [pinned.lon, pinned.lat].join() === [COLORADO.longitude, COLORADO.latitude].join(), false);
+
+const refused = await openAt({ allow: false });
+check('a refused permission leaves the map where it was',
+  [refused.lon, refused.lat], [DEFAULT_VIEW.center[0], DEFAULT_VIEW.center[1]]);
+
+/*
+ * A fix that lands after the reader has taken over is dropped.
+ *
+ * Ten seconds is the timeout, and a map that jumps somewhere else in second
+ * eight - while somebody is dragging it - is worse than one that never moved.
+ * The first user-driven move hands the camera over for good.
+ */
+const interrupted = await openAt({ interrupt: true });
+check('a fix that arrives after the reader started panning is dropped',
+  [interrupted.lon, interrupted.lat], [-90, 45]);
+
+/*
+ * A vague fix is drawn as vague.
+ *
+ * A browser answering from an IP address reports tens of kilometres of
+ * accuracy, and drawing that at street zoom names a neighbourhood the reader
+ * may be nowhere near. Same position, two accuracies, and the vague one has
+ * to come out further back.
+ */
+const sharp = await openAt({ fix: { ...COLORADO, accuracy: 10 } });
+const vague = await openAt({ fix: { ...COLORADO, accuracy: 40000 } });
+check('a sharp fix and a vague one are centred the same way',
+  [sharp.lon, sharp.lat], [vague.lon, vague.lat]);
+check('but the vague one is not drawn at street zoom', vague.zoom < sharp.zoom, true);
 
 /*
  * Nothing may be wider than the screen, at any phone width.
