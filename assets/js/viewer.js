@@ -40,7 +40,7 @@ import {
 } from './lib/trip-plan.js';
 import {
   registerShieldImages, shieldRegistrationReport, shieldImageIds, stateDesign, rasterizeShieldById,
-  shieldImageIdFor, loadShieldBlank, shieldImageId, hasShieldBlank,
+  shieldImageIdFor, loadShieldBlank, shieldImageId, hasShieldBlank, statesWithShields,
 } from './lib/route-shields.js';
 import { shieldLayerUpdates, PALETTE, MAPBOX_SCHEMA, PROTOMAPS_SCHEMA } from './lib/byways-style.js';
 import { PMTilesArchive } from './lib/pmtiles.js';
@@ -2100,6 +2100,50 @@ function exposeShieldInspector() {
         const missing = shieldImageIds({ state: state.shieldState })
           .filter((id) => !state.map?.hasImage?.(id));
         return { stillMissing: missing.length, examples: missing.slice(0, 3) };
+      })(),
+      /*
+       * The markers on screen that belong to some other state.
+       *
+       * Everything above this line asks about one state - the one under the
+       * map centre - because that is the only one the registrar was ever told
+       * to prepare. Under the Protomaps schema that assumption is wrong: a
+       * road names its own network, so the style can ask for any of the fifty
+       * markers, and a view spanning a border asks for two.
+       *
+       * Which made this inspector blind to exactly the case it would be opened
+       * for. Illinois and Indiana either side of the Wabash, the centre in
+       * Illinois, Indiana's routes drawing a generic box: `stillMissing` above
+       * counted only Illinois ids, found none missing, and reported health.
+       *
+       * This is the same blindness the enumeration had once before - it left
+       * out the state marker entirely, so every check written against it
+       * missed the shields the feature exists for. Twice is a pattern, so it
+       * is called out by name here rather than fixed quietly.
+       */
+      elsewhere: (() => {
+        const map = state.map;
+        if (!map?.hasImage) return '(no map)';
+        const mine = stateDesign(state.shieldState);
+        const gaps = [];
+        for (const code of statesWithShields()) {
+          const design = `st-${code}`;
+          if (design === mine) continue;
+          const absent = [2, 3, 4]
+            .map((length) => shieldImageId(design, length))
+            .filter((id) => !map.hasImage(id));
+          if (absent.length) gaps.push(`${design} (${absent.length}/3)`);
+        }
+        return {
+          /*
+           * Not a fault on its own. The healer makes a marker the moment the
+           * style asks for one, so a state with no images is simply a state
+           * nothing on screen has asked about yet. It matters when a shield is
+           * visibly generic and its state is listed here.
+           */
+          note: 'absent is normal until something on screen asks; compare against what you can see',
+          statesWithNoMarkerReady: gaps.length,
+          examples: gaps.slice(0, 6),
+        };
       })(),
       geocoder: place?.error ? `failed: ${place.error.message}` : place ? `ok, ${place.regionCode || 'no region'}` : 'no answer',
       design,

@@ -45,6 +45,7 @@ import {
   STATE_SHIELDS,
   stateDesign,
   statesWithShields,
+  hasShieldBlank,
   shieldTextColour,
   shieldImageIdFor,
   shieldDesignsFor,
@@ -1064,6 +1065,39 @@ test('shields: an unprobed shape gets the state marker, and `default` does not',
   const unclaimed = arms.find(([labels]) => Array.isArray(labels) && labels.includes('default'));
   assert.ok(unclaimed, '`default` needs an arm of its own');
   assert.equal(unclaimed[1], 'circle', '`default` draws the unclaimed circle');
+});
+
+test('shields: the network schema can ask for a marker registration never prepares', () => {
+  /*
+   * The border case, written down because it is the shape of the next bug
+   * rather than a fault to fix here.
+   *
+   * Registration prepares one state - the one under the map centre - because
+   * under Mapbox that is the only marker the style can name: every state route
+   * resolves to `local`, and `local` is the viewport's state. Under Protomaps
+   * a road names its own network, so the style can name any of the fifty.
+   *
+   * A view across the Wabash asks for both Illinois and Indiana while the
+   * registrar has prepared one of them. `styleimagemissing` covers it - the
+   * healer draws the shape immediately and swaps the real blank in when it
+   * arrives - so this is a dependency, not a hole. What it is not is a thing
+   * anybody would guess from reading the registrar, and the inspector was
+   * blind to it until it learned to look past the centre state.
+   */
+  const network = JSON.stringify(shieldImageExpression('IL', { network: 'network', length: 3 }));
+  const askable = new Set((network.match(/st-[A-Z]{2}/g) || []));
+  assert.ok(askable.size > 40, 'the network path resolves a marker per state, not one for the view');
+
+  const prepared = new Set(shieldImageIds({ state: 'IL' })
+    .map((id) => (id.match(/st-[A-Z]{2}/) || [''])[0]).filter(Boolean));
+  assert.deepEqual([...prepared], ['st-IL'], 'registration still prepares exactly the centre state');
+
+  assert.ok(askable.has('st-IN') && !prepared.has('st-IN'),
+    'Indiana over an Illinois centre is the reported case, and it is the healer that covers it');
+
+  // And the healer can actually make what it would be handed.
+  assert.ok(hasShieldBlank('st-IN', 3), 'Indiana has a blank for the healer to swap in');
+  assert.ok(hasShieldBlank('st-IL', 3));
 });
 
 test('shields: every state with artwork can actually be asked for', () => {

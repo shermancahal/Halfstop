@@ -99,6 +99,31 @@ https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/{lon},{lat}.json
 Pick a point on the state route itself. The `shield` property on each returned
 feature is the value.
 
+## The border case: one state prepared, fifty askable
+
+Registration prepares **one** state's marker — the one under the map centre.
+That is right under Mapbox, where every state route resolves to `local` and
+`local` is the viewport's state, so the style can only ever name the one
+marker that was prepared.
+
+Under Protomaps it is not, because a road names its own network. The style can
+name any of the fifty, and a view across a state line names two. Measured: the
+network expression resolves 51 distinct `st-XX` markers, while registration
+for a centre in Illinois prepares exactly `st-IL`.
+
+This is covered rather than broken. `styleimagemissing` fires, the healer draws
+the shape in the same tick and swaps the real blank in when the PNG lands. But
+it means a cross-border view depends on the healer for its second state, where
+a single-state view does not — and the difference shows as one state's routes
+carrying their proper lettered blank while the other's sit in a plain box for
+a moment, or for good if the PNG never arrives.
+
+`abmapShields()` reports this now. `elsewhere.statesWithNoMarkerReady` lists
+the markers not yet prepared; absent is normal until something on screen asks
+for one, so read it against what you can actually see. A state whose routes
+are visibly generic *and* listed there is the healer not having finished, or
+not having run.
+
 ## If a road still draws the wrong marker
 
 A **state route drawing a circle** now means its `shield` is coming back as
