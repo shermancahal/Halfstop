@@ -445,15 +445,36 @@ export const BASEMAPS = [
     maxzoom: 18,
     attribution: `${OSM_ATTRIBUTION}, tiles by <a href="https://www.cyclosm.org/">CyclOSM</a>`,
   },
+  /*
+   * The two USGS topos read as a pair, so they sit as one: the current series
+   * first, the scanned paper quads under it, and the imagery hybrid after
+   * both. They used to be separated by the hybrid, which put "Modern" and
+   * "Classic" on either side of a map that is neither.
+   *
+   * The names carry the distinction now rather than a parenthetical. "USGS
+   * Topo" and "USGS Topo (classic)" made one of them sound like the map and
+   * the other like a footnote, when they are two different surveys a reader
+   * picks between on purpose.
+   */
   {
     id: 'usgs-topo',
-    name: 'USGS Topo',
+    name: 'USGS Topo Modern',
     group: 'Topographic',
     description: 'US Topo quads. Best all-round backcountry base.',
     tiles: ['https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}'],
     tileSize: 256,
     maxzoom: 16,
     attribution: USGS_ATTRIBUTION,
+  },
+  {
+    id: 'usgs-classic',
+    name: 'USGS Topo Classic',
+    group: 'Topographic',
+    description: 'Scanned 7.5-minute quads — the classic 20th-century paper topo.',
+    tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}'],
+    tileSize: 256,
+    maxzoom: 15,
+    attribution: 'USGS quadrangles via <a href="https://www.esri.com/">Esri</a>',
   },
   {
     id: 'usgs-imagery-topo',
@@ -464,16 +485,6 @@ export const BASEMAPS = [
     tileSize: 256,
     maxzoom: 16,
     attribution: USGS_ATTRIBUTION,
-  },
-  {
-    id: 'usgs-classic',
-    name: 'USGS Topo (classic)',
-    group: 'Topographic',
-    description: 'Scanned 7.5-minute quads — the classic 20th-century paper topo.',
-    tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}'],
-    tileSize: 256,
-    maxzoom: 15,
-    attribution: 'USGS quadrangles via <a href="https://www.esri.com/">Esri</a>',
   },
   {
     id: 'esri-imagery',

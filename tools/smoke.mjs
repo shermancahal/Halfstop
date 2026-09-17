@@ -1517,7 +1517,7 @@ check('and the rest ask for a tile near the middle of the map',
 
 console.log('\nSwitch to a raster basemap and back');
 await showTab('layers');
-await page.locator('.layer-row', { hasText: /^USGS Topo$/ }).locator('input[type=radio]').check();
+await page.locator('.layer-row', { hasText: /^USGS Topo Modern$/ }).locator('input[type=radio]').check();
 await page.waitForTimeout(900);
 const afterRaster = await state();
 check('waypoints survive the switch', afterRaster.folderFeatures, afterImport.folderFeatures);
@@ -1861,7 +1861,7 @@ check('and the slider actually moved it', Number(paints.fillValue?.toFixed(3)), 
 // A raster basemap bakes its overlays into the style document, and a queried
 // overlay cannot be baked into anything. It has to be added on that path too,
 // or switching to USGS Topo quietly drops it.
-await page.locator('.layer-row', { hasText: /^USGS Topo$/ }).locator('input[type=radio]').check();
+await page.locator('.layer-row', { hasText: /^USGS Topo Modern$/ }).locator('input[type=radio]').check();
 /*
  * Waited for rather than slept through.
  *
