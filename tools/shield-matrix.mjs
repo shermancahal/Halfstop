@@ -101,14 +101,24 @@ say('The conservative direction is deliberate. A state route drawn in a plain');
 say('circle is wrong and obviously generic; a county road wearing the state');
 say('shield asserts something false about the road.');
 say();
-say('| State | shape | artwork | `US:XX` | `US:XX:Secondary` | `US:XX:County` |');
-say('| --- | --- | --- | --- | --- | --- |');
+say('The last column is the Mapbox side of the same question, and it is the');
+say('override list: what that state\u2019s `default` draws with the map over it.');
+say('`circle` is the rule - a road nobody signed - and a state marker there');
+say('means the state has been overridden, because Mapbox reports `default` for');
+say('its signed state routes too and the shape arms never fire. The cost is the');
+say('inverse of the paragraph above: an unsigned numbered road in an overridden');
+say('state wears the state marker. Only states seen doing this are on the list.');
+say();
+
+say('| State | shape | artwork | `US:XX` | `US:XX:Secondary` | `US:XX:County` | Mapbox `default` |');
+say('| --- | --- | --- | --- | --- | --- | --- |');
 for (const code of statesWithShields()) {
   const shape = STATE_SHIELDS[code]?.shape || '—';
   const art = hasShieldBlank(`st-${code}`, 2) ? 'PNG' : 'drawn';
   say(`| ${code} | ${shape} | ${art} | \`${design(byNetwork(`US:${code}`))}\``
     + ` | \`${design(byNetwork(`US:${code}:Secondary`))}\``
-    + ` | \`${design(byNetwork(`US:${code}:County`))}\` |`);
+    + ` | \`${design(byNetwork(`US:${code}:County`))}\``
+    + ` | \`${design(byShape('default', code))}\` |`);
 }
 say();
 

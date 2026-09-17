@@ -58,59 +58,67 @@ The conservative direction is deliberate. A state route drawn in a plain
 circle is wrong and obviously generic; a county road wearing the state
 shield asserts something false about the road.
 
-| State | shape | artwork | `US:XX` | `US:XX:Secondary` | `US:XX:County` |
-| --- | --- | --- | --- | --- | --- |
-| AK | square | PNG | `st-AK` | `county` | `county` |
-| AL | square | PNG | `st-AL` | `county` | `county` |
-| AR | outline | PNG | `st-AR` | `county` | `county` |
-| AZ | square | PNG | `st-AZ` | `county` | `county` |
-| CA | spade | PNG | `st-CA` | `county` | `county` |
-| CO | flag-co | PNG | `st-CO` | `county` | `county` |
-| CT | square | PNG | `st-CT` | `county` | `county` |
-| DC | outline | PNG | `st-DC` | `county` | `county` |
-| DE | circle | drawn | `st-DE` | `county` | `county` |
-| FL | outline | PNG | `st-FL` | `county` | `county` |
-| GA | square | PNG | `st-GA` | `county` | `county` |
-| HI | square | PNG | `st-HI` | `county` | `county` |
-| IA | circle | drawn | `st-IA` | `county` | `county` |
-| ID | outline | PNG | `st-ID` | `county` | `county` |
-| IL | square | PNG | `st-IL` | `county` | `county` |
-| IN | square | PNG | `st-IN` | `county` | `county` |
-| KS | sunflower | PNG | `st-KS` | `county` | `county` |
-| KY | circle | drawn | `st-KY` | `county` | `county` |
-| LA | outline | PNG | `st-LA` | `county` | `county` |
-| MA | square | PNG | `st-MA` | `county` | `county` |
-| MD | square | PNG | `st-MD` | `county` | `county` |
-| ME | square | PNG | `st-ME` | `county` | `county` |
-| MI | diamond | PNG | `st-MI` | `st-MI` | `county` |
-| MN | square | PNG | `st-MN` | `county` | `county` |
-| MO | outline | PNG | `st-MO` | `county` | `county` |
-| MS | circle | drawn | `st-MS` | `county` | `county` |
-| MT | square | PNG | `st-MT` | `county` | `county` |
-| NC | diamond | PNG | `st-NC` | `county` | `county` |
-| ND | outline | PNG | `st-ND` | `county` | `county` |
-| NE | square | PNG | `st-NE` | `county` | `county` |
-| NH | outline | PNG | `st-NH` | `county` | `county` |
-| NJ | circle | drawn | `st-NJ` | `county` | `county` |
-| NM | zia | PNG | `st-NM` | `county` | `county` |
-| NV | square | PNG | `st-NV` | `county` | `county` |
-| NY | square | PNG | `st-NY` | `county` | `county` |
-| OH | square | PNG | `st-OH` | `county` | `county` |
-| OK | outline | PNG | `st-OK` | `county` | `county` |
-| OR | shield | PNG | `st-OR` | `county` | `county` |
-| PA | keystone | PNG | `st-PA` | `county` | `county` |
-| RI | square | PNG | `st-RI` | `county` | `county` |
-| SC | square | PNG | `st-SC` | `county` | `county` |
-| SD | outline | PNG | `st-SD` | `county` | `county` |
-| TN | square | PNG | `st-TN` | `st-TN` | `county` |
-| TX | square | drawn | `st-TX` | `county` | `county` |
-| UT | beehive | PNG | `st-UT` | `county` | `county` |
-| VA | circle | PNG | `st-VA` | `county` | `county` |
-| VT | square | PNG | `st-VT` | `county` | `county` |
-| WA | square | PNG | `st-WA` | `county` | `county` |
-| WI | square | PNG | `st-WI` | `county` | `county` |
-| WV | square | PNG | `st-WV` | `county` | `county` |
-| WY | square | PNG | `st-WY` | `county` | `county` |
+The last column is the Mapbox side of the same question, and it is the
+override list: what that state’s `default` draws with the map over it.
+`circle` is the rule - a road nobody signed - and a state marker there
+means the state has been overridden, because Mapbox reports `default` for
+its signed state routes too and the shape arms never fire. The cost is the
+inverse of the paragraph above: an unsigned numbered road in an overridden
+state wears the state marker. Only states seen doing this are on the list.
+
+| State | shape | artwork | `US:XX` | `US:XX:Secondary` | `US:XX:County` | Mapbox `default` |
+| --- | --- | --- | --- | --- | --- | --- |
+| AK | square | PNG | `st-AK` | `county` | `county` | `circle` |
+| AL | square | PNG | `st-AL` | `county` | `county` | `circle` |
+| AR | outline | PNG | `st-AR` | `county` | `county` | `circle` |
+| AZ | square | PNG | `st-AZ` | `county` | `county` | `circle` |
+| CA | spade | PNG | `st-CA` | `county` | `county` | `circle` |
+| CO | flag-co | PNG | `st-CO` | `county` | `county` | `circle` |
+| CT | square | PNG | `st-CT` | `county` | `county` | `circle` |
+| DC | outline | PNG | `st-DC` | `county` | `county` | `circle` |
+| DE | circle | drawn | `st-DE` | `county` | `county` | `circle` |
+| FL | outline | PNG | `st-FL` | `county` | `county` | `circle` |
+| GA | square | PNG | `st-GA` | `county` | `county` | `circle` |
+| HI | square | PNG | `st-HI` | `county` | `county` | `circle` |
+| IA | circle | drawn | `st-IA` | `county` | `county` | `circle` |
+| ID | outline | PNG | `st-ID` | `county` | `county` | `circle` |
+| IL | square | PNG | `st-IL` | `county` | `county` | `circle` |
+| IN | square | PNG | `st-IN` | `county` | `county` | `st-IN` |
+| KS | sunflower | PNG | `st-KS` | `county` | `county` | `circle` |
+| KY | circle | drawn | `st-KY` | `county` | `county` | `circle` |
+| LA | outline | PNG | `st-LA` | `county` | `county` | `circle` |
+| MA | square | PNG | `st-MA` | `county` | `county` | `circle` |
+| MD | square | PNG | `st-MD` | `county` | `county` | `circle` |
+| ME | square | PNG | `st-ME` | `county` | `county` | `circle` |
+| MI | diamond | PNG | `st-MI` | `st-MI` | `county` | `circle` |
+| MN | square | PNG | `st-MN` | `county` | `county` | `circle` |
+| MO | outline | PNG | `st-MO` | `county` | `county` | `circle` |
+| MS | circle | drawn | `st-MS` | `county` | `county` | `circle` |
+| MT | square | PNG | `st-MT` | `county` | `county` | `circle` |
+| NC | diamond | PNG | `st-NC` | `county` | `county` | `circle` |
+| ND | outline | PNG | `st-ND` | `county` | `county` | `circle` |
+| NE | square | PNG | `st-NE` | `county` | `county` | `circle` |
+| NH | outline | PNG | `st-NH` | `county` | `county` | `circle` |
+| NJ | circle | drawn | `st-NJ` | `county` | `county` | `circle` |
+| NM | zia | PNG | `st-NM` | `county` | `county` | `circle` |
+| NV | square | PNG | `st-NV` | `county` | `county` | `circle` |
+| NY | square | PNG | `st-NY` | `county` | `county` | `circle` |
+| OH | square | PNG | `st-OH` | `county` | `county` | `circle` |
+| OK | outline | PNG | `st-OK` | `county` | `county` | `circle` |
+| OR | shield | PNG | `st-OR` | `county` | `county` | `circle` |
+| PA | keystone | PNG | `st-PA` | `county` | `county` | `circle` |
+| RI | square | PNG | `st-RI` | `county` | `county` | `circle` |
+| SC | square | PNG | `st-SC` | `county` | `county` | `circle` |
+| SD | outline | PNG | `st-SD` | `county` | `county` | `circle` |
+| TN | square | PNG | `st-TN` | `st-TN` | `county` | `circle` |
+| TX | square | drawn | `st-TX` | `county` | `county` | `circle` |
+| UT | beehive | PNG | `st-UT` | `county` | `county` | `circle` |
+| VA | circle | PNG | `st-VA` | `county` | `county` | `circle` |
+| VT | square | PNG | `st-VT` | `county` | `county` | `circle` |
+| WA | square | PNG | `st-WA` | `county` | `county` | `circle` |
+| WI | square | PNG | `st-WI` | `county` | `county` | `circle` |
+| WV | square | PNG | `st-WV` | `county` | `county` | `circle` |
+| WY | square | PNG | `st-WY` | `county` | `county` | `circle` |
 
 States drawn from a shape rather than artwork: DE, IA, KY, MS, NJ, TX.
 

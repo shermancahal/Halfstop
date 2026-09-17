@@ -52,6 +52,47 @@ import {
 } from '../assets/js/lib/route-shields.js';
 
 const rasterBasemaps = BASEMAPS.filter((b) => b.tiles);
+
+/**
+ * Every `['var', name]` in an expression, with the scope GL actually gives it.
+ *
+ * GL parses each binding's value in the context *enclosing* the `let`, so
+ * bindings cannot see their siblings - and an expression that reads one does
+ * not compile. That is not a degraded style: Mapbox GL refuses the document
+ * whole and draws nothing, having reported that it loaded.
+ *
+ * Which happened. Every shield layer on both schemas shipped
+ * `['let', 'raw', X, 'space', [..., ['var', 'raw']], body]`, the official
+ * validator rejected the style in CI, and the suite here was green - the test
+ * evaluator was resolving siblings the permissive way, so the one check that
+ * could have caught it agreed with the bug instead.
+ */
+function unboundVars(node, scope = new Set(), where = 'expression', found = []) {
+  if (!Array.isArray(node)) return found;
+  if (typeof node[0] !== 'string') {
+    for (const child of node) unboundVars(child, scope, where, found);
+    return found;
+  }
+  const [op, ...args] = node;
+  if (op === 'literal') return found;
+  if (op === 'var') {
+    if (!scope.has(args[0])) found.push(`${where}: ${args[0]} is read outside any let that binds it`);
+    return found;
+  }
+  if (op === 'let') {
+    const inner = new Set(scope);
+    let i = 0;
+    for (; i + 1 < args.length; i += 2) {
+      // The binding's value, in the outer scope - this is the whole point.
+      unboundVars(args[i + 1], scope, where, found);
+      inner.add(args[i]);
+    }
+    unboundVars(args[i], inner, where, found);
+    return found;
+  }
+  for (const arg of args) unboundVars(arg, scope, where, found);
+  return found;
+}
 const overlays = () => OVERLAYS.map((o) => ({ ...o }));
 
 /** Walk every value in a style, reporting the path of anything not serialisable. */
@@ -1060,13 +1101,18 @@ test('shields: an unprobed shape gets the state marker, and `default` does not',
    * the M when `default` fell through to the fallback; that is fixed by naming
    * `default`, not by refusing to trust shapes.
    */
-  const expression = shieldImageExpression('IN');
+  /*
+   * Over Michigan, which is where the rule was learned, and no longer over
+   * Indiana: Indiana is now an override state - its `default` means a state
+   * route - so writing the general rule against it checked the exception.
+   */
+  const expression = shieldImageExpression('MI');
   const byShield = expression.find((part) => Array.isArray(part) && part[0] === 'match');
   assert.ok(byShield, 'the image id is still chosen by a match on the shield field');
   assert.deepEqual(byShield[1], ['coalesce', ['get', 'shield'], 'default'],
     'a missing shield has to read as unclaimed rather than reaching the fallback');
-  assert.equal(byShield[byShield.length - 1], 'st-IN',
-    'an unprobed shape over Indiana draws Indiana\u2019s marker');
+  assert.equal(byShield[byShield.length - 1], 'st-MI',
+    'an unprobed shape over Michigan draws Michigan\u2019s marker');
 
   /*
    * And `default` is on an arm, sent to the circle.
@@ -1081,6 +1127,59 @@ test('shields: an unprobed shape gets the state marker, and `default` does not',
   const unclaimed = arms.find(([labels]) => Array.isArray(labels) && labels.includes('default'));
   assert.ok(unclaimed, '`default` needs an arm of its own');
   assert.equal(unclaimed[1], 'circle', '`default` draws the unclaimed circle');
+});
+
+test('shields: Indiana overrides, because Mapbox calls the whole state `default`', async () => {
+  /*
+   * The exception, and it is a measurement rather than an opinion.
+   *
+   * Panning Indiana on the Mapbox basemap, every state route arrives
+   * `shield=default` - IN 246 included - so the shape arms never fire and the
+   * arm above draws a plain circle, while the Protomaps map gets the same road
+   * right from `US:IN`. The override says what Indiana's `default` means.
+   *
+   * What it costs is in the same assertion pair: Michigan's county roads
+   * arrive `default` too, and overriding there is exactly the Leelanau bug
+   * this file records. So the override is per state, and the test says so by
+   * checking both sides of it.
+   */
+  const { evaluate } = await import('./helpers/expression.mjs');
+  const road = { properties: { shield: 'default', reflen: 3 } };
+
+  assert.equal(evaluate(shieldImageExpression('IN'), road), 'abmap-shield-st-IN-3',
+    'an Indiana state route arrives `default` and has to draw Indiana\u2019s marker');
+  assert.equal(evaluate(shieldImageExpression('MI'), road), 'abmap-shield-circle-3',
+    'Michigan is not overridden: `default` there is the county road it was');
+
+  // The table helper is a separate code path and the app asks it for image ids
+  // too - it is what decides which blanks to register - so it has to agree.
+  assert.equal(shieldImageIdFor('default', 3, 'IN'), 'abmap-shield-st-IN-3');
+  assert.equal(shieldImageIdFor('default', 3, 'MI'), 'abmap-shield-circle-3');
+});
+
+test('shields: an overridden road is measured as the marker it draws', async () => {
+  /*
+   * Size and offset keep their own copies of the shield table, so an override
+   * applied to the image alone draws Indiana's square and then sets the number
+   * in the circle's clear space at the circle's size. That is the "21/2 in a
+   * blank sized for 21" failure, arriving from the other direction.
+   */
+  const { evaluate } = await import('./helpers/expression.mjs');
+  const { shieldTextSizeExpression, shieldTextOffsetExpression } =
+    await import('../assets/js/lib/route-shields.js');
+  const road = { properties: { shield: 'default', reflen: 5 } };
+
+  // At five characters, because Indiana's blank and the generic one happen to
+  // take the same size at two - an assertion there would pass either way.
+  assert.equal(evaluate(shieldTextSizeExpression('IN', 5), road), shieldTextSize('st-IN', 5),
+    'the number is sized for Indiana\u2019s blank, not for the circle it no longer draws');
+  assert.notEqual(shieldTextSize('st-IN', 5), evaluate(shieldTextSizeExpression('MI', 5), road),
+    'and that is a different size from what an unoverridden state gives it');
+
+  assert.deepEqual(evaluate(shieldTextOffsetExpression('IN'), road), shieldTextOffset('st-IN', 2),
+    'and set in Indiana\u2019s measured clear space');
+  assert.notDeepEqual(shieldTextOffset('st-IN', 2), shieldTextOffset('circle', 2),
+    'which the circle would not have given it');
 });
 
 test('shields: the network schema can ask for a marker registration never prepares', () => {
@@ -2357,4 +2456,66 @@ test('shields: one id format, one parser', async () => {
   assert.deepEqual(parseShieldId(shieldImageId('st-VA', 2, 'alternate')),
     { design: 'st-VA', length: 2, banner: 'alternate' },
     'a bannered state id no longer resolves to its blank');
+});
+
+test('style: no expression reads a variable the engine has not bound', async () => {
+  /*
+   * Across both schemas and the runtime layers, because the bug that prompted
+   * this was in shared code and reached all three.
+   *
+   * `npm run validate:style` catches it too, and it is the authority - but it
+   * needs a package this suite deliberately runs without, so it runs in CI and
+   * not on a laptop. This is the part of it that can be had for nothing.
+   */
+  const { PROTOMAPS_SCHEMA } = await import('../assets/js/lib/byways-style.js');
+  const { runtimeLayers } = await import('../assets/js/lib/runtime-layers.js');
+
+  const styles = [
+    ['Mapbox', bywaysStyle('pk.example').layers],
+    ['Protomaps', bywaysStyle('', {
+      schema: PROTOMAPS_SCHEMA, archive: 'https://example.test/a.pmtiles', maxzoom: 15,
+    }).layers],
+    ['runtime', runtimeLayers({ labels: true, font: ['Open Sans Regular'] })],
+    /*
+     * And the properties written at runtime, which the validator never sees.
+     *
+     * These are rebuilt and set on the live map every time the state under it
+     * changes, so a bad expression here refuses the style several minutes into
+     * a drive rather than at load - and an overridden state like Indiana is
+     * reached only this way.
+     */
+    ['border crossing', shieldLayerUpdates('IN')],
+    ['border crossing/Protomaps', shieldLayerUpdates('IN', { schema: PROTOMAPS_SCHEMA })],
+  ];
+
+  const found = [];
+  for (const [name, layers] of styles) {
+    for (const layer of layers) {
+      const where = `${name}/${layer.id}`;
+      unboundVars(layer.filter, new Set(), `${where}/filter`, found);
+      for (const bag of ['layout', 'paint']) {
+        for (const [property, value] of Object.entries(layer[bag] || {})) {
+          unboundVars(value, new Set(), `${where}/${property}`, found);
+        }
+      }
+    }
+  }
+  assert.deepEqual(found, [], found.join('\n'));
+});
+
+test('style: the scope walker reads a sibling binding as unbound, as GL does', () => {
+  /*
+   * The walker's own guard. Written the way the broken style was, so a walker
+   * that quietly allowed siblings - which is how this got past the suite the
+   * first time - fails here rather than certifying the next one.
+   */
+  const siblings = ['let', 'raw', ['get', 'ref'],
+    'space', ['index-of', ' ', ['var', 'raw']],
+    ['var', 'space']];
+  assert.equal(unboundVars(siblings).length, 1, 'a sibling binding is not in scope');
+
+  const nested = ['let', 'raw', ['get', 'ref'],
+    ['let', 'space', ['index-of', ' ', ['var', 'raw']],
+      ['var', 'space']]];
+  assert.deepEqual(unboundVars(nested), [], 'nesting is how that is written');
 });

@@ -226,11 +226,39 @@ nobody had drawn it yet.
 It is now wired in the same tick the map is created. If those warnings come
 back, that ordering is the first thing to check, and a test asserts it.
 
+## When a whole state comes back `default`
+
+Indiana does. Every state route on the Mapbox basemap arrives
+`shield=default` — IN 246 included — so the shape arms never fire and the
+whole state draws plain circles, while the Protomaps map gets the same roads
+right from `US:IN`. Mapbox is not distinguishing a signed state route from a
+county road anywhere in Indiana.
+
+No shape name fixes that, because no shape name is being sent. What fixes it
+is a per-state override: `DEFAULT_IS_A_STATE_ROUTE` in
+`assets/js/lib/route-shields.js` lists the states whose `default` means a state
+route, and `shieldMatchFor(state)` swaps that arm from the circle to the
+state's marker when the style is built over one of them. Build time, not draw
+time — the viewport state is already an input to every shield property, so the
+override costs nothing per road.
+
+**What it costs instead**: Mapbox is not telling the two apart, so an unsigned
+numbered road in an overridden state now wears the state's marker too. That is
+the deliberate inverse of the Leelanau decision below, and it is why the list
+is per state and short. The trade is only worth making where the state's own
+routes are the ones being lost.
+
+Before adding a state, look. `abmapRoadFields()` in the console groups what is
+on screen by shield value; a state belongs on the list when its signed routes
+are coming back `default`, not because one road did. The `Mapbox default`
+column of [shield-matrix.md](shield-matrix.md) is the current list.
+
 ## If a road still draws the wrong marker
 
-A **state route drawing a circle** now means its `shield` is coming back as
+A **state route drawing a circle** means its `shield` is coming back as
 `default` — Mapbox does not consider it signed. Adding the shape name will not
-help, because the shape name is not what it is sending. Check the value first.
+help, because the shape name is not what it is sending. Check the value first,
+and if the whole state is doing it, see the section above.
 
 An **unsigned road drawing a state marker** means something other than
 `default` is arriving for a road nobody signed. That is the Leelanau failure
@@ -241,3 +269,31 @@ keeping the two apart.
 Adding a probed shape name to the `LOCAL` arm changes no behaviour now. It is
 still worth doing as documentation of what a state carries, which is what that
 list is for.
+
+## The `let` trap, which cost a deploy
+
+GL parses every binding's value in the scope **outside** the `let`. Bindings
+cannot see their siblings:
+
+```js
+// Refused by the style spec. Not slow, not subtly wrong: refused.
+['let', 'raw', rawRef(),
+  'space', ['index-of', ' ', ['var', 'raw']],
+  body]
+
+// What that has to be written as.
+['let', 'raw', rawRef(),
+  ['let', 'space', ['index-of', ' ', ['var', 'raw']],
+    body]]
+```
+
+The first form shipped in every shield property on both schemas, and Mapbox GL
+does not degrade on an invalid style — it refuses the document and draws
+nothing. `npm run validate:style` caught it in CI; `npm test` did not, because
+the test evaluator was resolving siblings the permissive way and so agreed with
+the bug. Both are fixed: the evaluator now scopes as GL does, and a scope
+walker in `test/style.test.mjs` checks every built layer.
+
+An evaluator more permissive than the engine is worse than none, because it
+reports that the broken thing works. If either of those checks needs relaxing
+to make an expression pass, the expression is wrong.

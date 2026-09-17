@@ -1661,42 +1661,56 @@ const rawRef = () => ['coalesce', ['get', S.fields.shieldText || S.fields.ref], 
  * "BUS M 60" is three and the first of them is. Two tokens are left alone.
  */
 const leadingStripped = () => ['let', 'raw', rawRef(),
-  'first', ['index-of', ' ', ['var', 'raw']],
-  ['let', 'head', ['upcase', ['slice', ['var', 'raw'], 0, ['max', 0, ['var', 'first']]]],
-    ['case',
-      ['all',
-        ['>', ['var', 'first'], 0],
-        ['>', ['index-of', ' ', ['var', 'raw'], ['+', ['var', 'first'], 1]], 0],
-        ['in', ['var', 'head'], ['literal', DESIGNATIONS.map((word) => word.toUpperCase())]]],
-      ['slice', ['var', 'raw'], ['+', ['var', 'first'], 1]],
-      ['var', 'raw']]]];
+  // Nested rather than a sibling binding: GL parses every value in a `let` in
+  // the scope *outside* it, so a second binding cannot read the first. See the
+  // note on `prefixless` below - this is the rule that caught the style out.
+  ['let', 'first', ['index-of', ' ', ['var', 'raw']],
+    ['let', 'head', ['upcase', ['slice', ['var', 'raw'], 0, ['max', 0, ['var', 'first']]]],
+      ['case',
+        ['all',
+          ['>', ['var', 'first'], 0],
+          ['>', ['index-of', ' ', ['var', 'raw'], ['+', ['var', 'first'], 1]], 0],
+          ['in', ['var', 'head'], ['literal', DESIGNATIONS.map((word) => word.toUpperCase())]]],
+        ['slice', ['var', 'raw'], ['+', ['var', 'first'], 1]],
+        ['var', 'raw']]]]];
 
 /*
- * `raw` first, and the separators read it back.
+ * `raw` first, and the separators read it back from inside its body.
  *
  * These used to call the source expression three times over, which was free
  * when it was a bare `coalesce` and is not now that a designation is stripped
- * first: three copies of that rule in every property that shows a number.
- * `let` binds in order and later bindings see earlier ones, so one call does.
+ * first: three copies of that rule in every property that shows a number. One
+ * binding does, but it has to be an *enclosing* one.
+ *
+ * GL parses every value in a `let` in the scope outside that `let`, so
+ * siblings cannot see each other: `['let', 'raw', X, 'space', [..., ['var',
+ * 'raw']], body]` is not a style that computes the separator from `raw`, it is
+ * a style that fails to compile. GL does not degrade on that - it refuses the
+ * whole style and draws nothing - and the first version of this file did
+ * exactly it, in every property of every shield layer, on both schemas. The
+ * unit suite passed: the test evaluator was reading sibling bindings the
+ * permissive way, so the check meant to catch this agreed with the mistake.
+ * Both are fixed, and a scope check now walks the built style for it.
  */
 const prefixless = () => ['let', 'raw', leadingStripped(),
-  'space', ['index-of', ' ', ['var', 'raw']],
-  'dash', ['index-of', '-', ['var', 'raw']],
-  ['let', 'cut',
-    // The first separator of either kind, ignoring the one that is absent.
-    ['case',
-      ['<', ['var', 'space'], 0], ['var', 'dash'],
-      ['<', ['var', 'dash'], 0], ['var', 'space'],
-      ['min', ['var', 'space'], ['var', 'dash']]],
-    ['let', 'head', ['slice', ['var', 'raw'], 0, ['max', 0, ['var', 'cut']]],
+  ['let',
+    'space', ['index-of', ' ', ['var', 'raw']],
+    'dash', ['index-of', '-', ['var', 'raw']],
+    ['let', 'cut',
+      // The first separator of either kind, ignoring the one that is absent.
       ['case',
-        ['all',
-          ['>', ['var', 'cut'], 0],
-          ['>', ['length', ['var', 'raw']], ['+', ['var', 'cut'], 1]],
-          ['==', ['upcase', ['var', 'head']], ['var', 'head']],
-          ['!=', ['downcase', ['var', 'head']], ['var', 'head']]],
-        ['slice', ['var', 'raw'], ['+', ['var', 'cut'], 1]],
-        ['var', 'raw']]]],
+        ['<', ['var', 'space'], 0], ['var', 'dash'],
+        ['<', ['var', 'dash'], 0], ['var', 'space'],
+        ['min', ['var', 'space'], ['var', 'dash']]],
+      ['let', 'head', ['slice', ['var', 'raw'], 0, ['max', 0, ['var', 'cut']]],
+        ['case',
+          ['all',
+            ['>', ['var', 'cut'], 0],
+            ['>', ['length', ['var', 'raw']], ['+', ['var', 'cut'], 1]],
+            ['==', ['upcase', ['var', 'head']], ['var', 'head']],
+            ['!=', ['downcase', ['var', 'head']], ['var', 'head']]],
+          ['slice', ['var', 'raw'], ['+', ['var', 'cut'], 1]],
+          ['var', 'raw']]]]],
 ];
 
 /*

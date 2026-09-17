@@ -41,10 +41,23 @@ export function evaluate(expression, feature = {}, scope = {}) {
     case 'var':
       if (!(args[0] in scope)) throw new Error(`unbound var ${args[0]}`);
       return scope[args[0]];
+    /*
+     * Bindings are evaluated in the scope *outside* the `let`, which is what
+     * GL does and is not what this used to do.
+     *
+     * GL parses each binding's value in the enclosing context, so a second
+     * binding cannot read the first: `['let', 'raw', X, 'space', [..., ['var',
+     * 'raw']], body]` does not compile at all. Evaluating siblings against
+     * each other made that read as working code here, and the style it
+     * certified was one Mapbox GL refuses outright - every shield layer, both
+     * schemas, a map that loads and draws no shields. An evaluator that is
+     * more permissive than the engine is worse than no evaluator: it reports
+     * that the broken thing works.
+     */
     case 'let': {
       const bound = { ...scope };
       let i = 0;
-      for (; i + 1 < args.length; i += 2) bound[args[i]] = evaluate(args[i + 1], feature, bound);
+      for (; i + 1 < args.length; i += 2) bound[args[i]] = evaluate(args[i + 1], feature, scope);
       return evaluate(args[i], feature, bound);
     }
     case 'coalesce': {

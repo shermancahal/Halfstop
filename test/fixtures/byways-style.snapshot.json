@@ -2096,7 +2096,122 @@
             ],
             ""
            ],
-           "first",
+           [
+            "let",
+            "first",
+            [
+             "index-of",
+             " ",
+             [
+              "var",
+              "raw"
+             ]
+            ],
+            [
+             "let",
+             "head",
+             [
+              "upcase",
+              [
+               "slice",
+               [
+                "var",
+                "raw"
+               ],
+               0,
+               [
+                "max",
+                0,
+                [
+                 "var",
+                 "first"
+                ]
+               ]
+              ]
+             ],
+             [
+              "case",
+              [
+               "all",
+               [
+                ">",
+                [
+                 "var",
+                 "first"
+                ],
+                0
+               ],
+               [
+                ">",
+                [
+                 "index-of",
+                 " ",
+                 [
+                  "var",
+                  "raw"
+                 ],
+                 [
+                  "+",
+                  [
+                   "var",
+                   "first"
+                  ],
+                  1
+                 ]
+                ],
+                0
+               ],
+               [
+                "in",
+                [
+                 "var",
+                 "head"
+                ],
+                [
+                 "literal",
+                 [
+                  "SCENIC",
+                  "BUSINESS",
+                  "ALTERNATE",
+                  "ALT",
+                  "BYPASS",
+                  "BYP",
+                  "TRUCK",
+                  "SPUR",
+                  "LOOP",
+                  "CONNECTOR",
+                  "CONN",
+                  "BUS"
+                 ]
+                ]
+               ]
+              ],
+              [
+               "slice",
+               [
+                "var",
+                "raw"
+               ],
+               [
+                "+",
+                [
+                 "var",
+                 "first"
+                ],
+                1
+               ]
+              ],
+              [
+               "var",
+               "raw"
+              ]
+             ]
+            ]
+           ]
+          ],
+          [
+           "let",
+           "space",
            [
             "index-of",
             " ",
@@ -2105,11 +2220,59 @@
              "raw"
             ]
            ],
+           "dash",
+           [
+            "index-of",
+            "-",
+            [
+             "var",
+             "raw"
+            ]
+           ],
            [
             "let",
-            "head",
+            "cut",
             [
-             "upcase",
+             "case",
+             [
+              "<",
+              [
+               "var",
+               "space"
+              ],
+              0
+             ],
+             [
+              "var",
+              "dash"
+             ],
+             [
+              "<",
+              [
+               "var",
+               "dash"
+              ],
+              0
+             ],
+             [
+              "var",
+              "space"
+             ],
+             [
+              "min",
+              [
+               "var",
+               "space"
+              ],
+              [
+               "var",
+               "dash"
+              ]
+             ]
+            ],
+            [
+             "let",
+             "head",
              [
               "slice",
               [
@@ -2122,188 +2285,74 @@
                0,
                [
                 "var",
-                "first"
+                "cut"
                ]
               ]
-             ]
-            ],
-            [
-             "case",
+             ],
              [
-              "all",
+              "case",
               [
-               ">",
+               "all",
                [
-                "var",
-                "first"
-               ],
-               0
-              ],
-              [
-               ">",
-               [
-                "index-of",
-                " ",
+                ">",
                 [
                  "var",
-                 "raw"
+                 "cut"
+                ],
+                0
+               ],
+               [
+                ">",
+                [
+                 "length",
+                 [
+                  "var",
+                  "raw"
+                 ]
                 ],
                 [
                  "+",
                  [
                   "var",
-                  "first"
+                  "cut"
                  ],
                  1
                 ]
                ],
-               0
-              ],
-              [
-               "in",
                [
-                "var",
-                "head"
-               ],
-               [
-                "literal",
+                "==",
                 [
-                 "SCENIC",
-                 "BUSINESS",
-                 "ALTERNATE",
-                 "ALT",
-                 "BYPASS",
-                 "BYP",
-                 "TRUCK",
-                 "SPUR",
-                 "LOOP",
-                 "CONNECTOR",
-                 "CONN",
-                 "BUS"
-                ]
-               ]
-              ]
-             ],
-             [
-              "slice",
-              [
-               "var",
-               "raw"
-              ],
-              [
-               "+",
-               [
-                "var",
-                "first"
-               ],
-               1
-              ]
-             ],
-             [
-              "var",
-              "raw"
-             ]
-            ]
-           ]
-          ],
-          "space",
-          [
-           "index-of",
-           " ",
-           [
-            "var",
-            "raw"
-           ]
-          ],
-          "dash",
-          [
-           "index-of",
-           "-",
-           [
-            "var",
-            "raw"
-           ]
-          ],
-          [
-           "let",
-           "cut",
-           [
-            "case",
-            [
-             "<",
-             [
-              "var",
-              "space"
-             ],
-             0
-            ],
-            [
-             "var",
-             "dash"
-            ],
-            [
-             "<",
-             [
-              "var",
-              "dash"
-             ],
-             0
-            ],
-            [
-             "var",
-             "space"
-            ],
-            [
-             "min",
-             [
-              "var",
-              "space"
-             ],
-             [
-              "var",
-              "dash"
-             ]
-            ]
-           ],
-           [
-            "let",
-            "head",
-            [
-             "slice",
-             [
-              "var",
-              "raw"
-             ],
-             0,
-             [
-              "max",
-              0,
-              [
-               "var",
-               "cut"
-              ]
-             ]
-            ],
-            [
-             "case",
-             [
-              "all",
-              [
-               ">",
-               [
-                "var",
-                "cut"
-               ],
-               0
-              ],
-              [
-               ">",
-               [
-                "length",
+                 "upcase",
+                 [
+                  "var",
+                  "head"
+                 ]
+                ],
                 [
                  "var",
-                 "raw"
+                 "head"
                 ]
+               ],
+               [
+                "!=",
+                [
+                 "downcase",
+                 [
+                  "var",
+                  "head"
+                 ]
+                ],
+                [
+                 "var",
+                 "head"
+                ]
+               ]
+              ],
+              [
+               "slice",
+               [
+                "var",
+                "raw"
                ],
                [
                 "+",
@@ -2315,52 +2364,9 @@
                ]
               ],
               [
-               "==",
-               [
-                "upcase",
-                [
-                 "var",
-                 "head"
-                ]
-               ],
-               [
-                "var",
-                "head"
-               ]
-              ],
-              [
-               "!=",
-               [
-                "downcase",
-                [
-                 "var",
-                 "head"
-                ]
-               ],
-               [
-                "var",
-                "head"
-               ]
-              ]
-             ],
-             [
-              "slice",
-              [
                "var",
                "raw"
-              ],
-              [
-               "+",
-               [
-                "var",
-                "cut"
-               ],
-               1
               ]
-             ],
-             [
-              "var",
-              "raw"
              ]
             ]
            ]
@@ -3165,7 +3171,122 @@
              ],
              ""
             ],
-            "first",
+            [
+             "let",
+             "first",
+             [
+              "index-of",
+              " ",
+              [
+               "var",
+               "raw"
+              ]
+             ],
+             [
+              "let",
+              "head",
+              [
+               "upcase",
+               [
+                "slice",
+                [
+                 "var",
+                 "raw"
+                ],
+                0,
+                [
+                 "max",
+                 0,
+                 [
+                  "var",
+                  "first"
+                 ]
+                ]
+               ]
+              ],
+              [
+               "case",
+               [
+                "all",
+                [
+                 ">",
+                 [
+                  "var",
+                  "first"
+                 ],
+                 0
+                ],
+                [
+                 ">",
+                 [
+                  "index-of",
+                  " ",
+                  [
+                   "var",
+                   "raw"
+                  ],
+                  [
+                   "+",
+                   [
+                    "var",
+                    "first"
+                   ],
+                   1
+                  ]
+                 ],
+                 0
+                ],
+                [
+                 "in",
+                 [
+                  "var",
+                  "head"
+                 ],
+                 [
+                  "literal",
+                  [
+                   "SCENIC",
+                   "BUSINESS",
+                   "ALTERNATE",
+                   "ALT",
+                   "BYPASS",
+                   "BYP",
+                   "TRUCK",
+                   "SPUR",
+                   "LOOP",
+                   "CONNECTOR",
+                   "CONN",
+                   "BUS"
+                  ]
+                 ]
+                ]
+               ],
+               [
+                "slice",
+                [
+                 "var",
+                 "raw"
+                ],
+                [
+                 "+",
+                 [
+                  "var",
+                  "first"
+                 ],
+                 1
+                ]
+               ],
+               [
+                "var",
+                "raw"
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "let",
+            "space",
             [
              "index-of",
              " ",
@@ -3174,11 +3295,59 @@
               "raw"
              ]
             ],
+            "dash",
+            [
+             "index-of",
+             "-",
+             [
+              "var",
+              "raw"
+             ]
+            ],
             [
              "let",
-             "head",
+             "cut",
              [
-              "upcase",
+              "case",
+              [
+               "<",
+               [
+                "var",
+                "space"
+               ],
+               0
+              ],
+              [
+               "var",
+               "dash"
+              ],
+              [
+               "<",
+               [
+                "var",
+                "dash"
+               ],
+               0
+              ],
+              [
+               "var",
+               "space"
+              ],
+              [
+               "min",
+               [
+                "var",
+                "space"
+               ],
+               [
+                "var",
+                "dash"
+               ]
+              ]
+             ],
+             [
+              "let",
+              "head",
               [
                "slice",
                [
@@ -3191,188 +3360,74 @@
                 0,
                 [
                  "var",
-                 "first"
+                 "cut"
                 ]
                ]
-              ]
-             ],
-             [
-              "case",
+              ],
               [
-               "all",
+               "case",
                [
-                ">",
+                "all",
                 [
-                 "var",
-                 "first"
-                ],
-                0
-               ],
-               [
-                ">",
-                [
-                 "index-of",
-                 " ",
+                 ">",
                  [
                   "var",
-                  "raw"
+                  "cut"
+                 ],
+                 0
+                ],
+                [
+                 ">",
+                 [
+                  "length",
+                  [
+                   "var",
+                   "raw"
+                  ]
                  ],
                  [
                   "+",
                   [
                    "var",
-                   "first"
+                   "cut"
                   ],
                   1
                  ]
                 ],
-                0
-               ],
-               [
-                "in",
                 [
-                 "var",
-                 "head"
-                ],
-                [
-                 "literal",
+                 "==",
                  [
-                  "SCENIC",
-                  "BUSINESS",
-                  "ALTERNATE",
-                  "ALT",
-                  "BYPASS",
-                  "BYP",
-                  "TRUCK",
-                  "SPUR",
-                  "LOOP",
-                  "CONNECTOR",
-                  "CONN",
-                  "BUS"
-                 ]
-                ]
-               ]
-              ],
-              [
-               "slice",
-               [
-                "var",
-                "raw"
-               ],
-               [
-                "+",
-                [
-                 "var",
-                 "first"
-                ],
-                1
-               ]
-              ],
-              [
-               "var",
-               "raw"
-              ]
-             ]
-            ]
-           ],
-           "space",
-           [
-            "index-of",
-            " ",
-            [
-             "var",
-             "raw"
-            ]
-           ],
-           "dash",
-           [
-            "index-of",
-            "-",
-            [
-             "var",
-             "raw"
-            ]
-           ],
-           [
-            "let",
-            "cut",
-            [
-             "case",
-             [
-              "<",
-              [
-               "var",
-               "space"
-              ],
-              0
-             ],
-             [
-              "var",
-              "dash"
-             ],
-             [
-              "<",
-              [
-               "var",
-               "dash"
-              ],
-              0
-             ],
-             [
-              "var",
-              "space"
-             ],
-             [
-              "min",
-              [
-               "var",
-               "space"
-              ],
-              [
-               "var",
-               "dash"
-              ]
-             ]
-            ],
-            [
-             "let",
-             "head",
-             [
-              "slice",
-              [
-               "var",
-               "raw"
-              ],
-              0,
-              [
-               "max",
-               0,
-               [
-                "var",
-                "cut"
-               ]
-              ]
-             ],
-             [
-              "case",
-              [
-               "all",
-               [
-                ">",
-                [
-                 "var",
-                 "cut"
-                ],
-                0
-               ],
-               [
-                ">",
-                [
-                 "length",
+                  "upcase",
+                  [
+                   "var",
+                   "head"
+                  ]
+                 ],
                  [
                   "var",
-                  "raw"
+                  "head"
                  ]
+                ],
+                [
+                 "!=",
+                 [
+                  "downcase",
+                  [
+                   "var",
+                   "head"
+                  ]
+                 ],
+                 [
+                  "var",
+                  "head"
+                 ]
+                ]
+               ],
+               [
+                "slice",
+                [
+                 "var",
+                 "raw"
                 ],
                 [
                  "+",
@@ -3384,52 +3439,9 @@
                 ]
                ],
                [
-                "==",
-                [
-                 "upcase",
-                 [
-                  "var",
-                  "head"
-                 ]
-                ],
-                [
-                 "var",
-                 "head"
-                ]
-               ],
-               [
-                "!=",
-                [
-                 "downcase",
-                 [
-                  "var",
-                  "head"
-                 ]
-                ],
-                [
-                 "var",
-                 "head"
-                ]
-               ]
-              ],
-              [
-               "slice",
-               [
                 "var",
                 "raw"
-               ],
-               [
-                "+",
-                [
-                 "var",
-                 "cut"
-                ],
-                1
                ]
-              ],
-              [
-               "var",
-               "raw"
               ]
              ]
             ]
@@ -4740,7 +4752,122 @@
         ],
         ""
        ],
-       "first",
+       [
+        "let",
+        "first",
+        [
+         "index-of",
+         " ",
+         [
+          "var",
+          "raw"
+         ]
+        ],
+        [
+         "let",
+         "head",
+         [
+          "upcase",
+          [
+           "slice",
+           [
+            "var",
+            "raw"
+           ],
+           0,
+           [
+            "max",
+            0,
+            [
+             "var",
+             "first"
+            ]
+           ]
+          ]
+         ],
+         [
+          "case",
+          [
+           "all",
+           [
+            ">",
+            [
+             "var",
+             "first"
+            ],
+            0
+           ],
+           [
+            ">",
+            [
+             "index-of",
+             " ",
+             [
+              "var",
+              "raw"
+             ],
+             [
+              "+",
+              [
+               "var",
+               "first"
+              ],
+              1
+             ]
+            ],
+            0
+           ],
+           [
+            "in",
+            [
+             "var",
+             "head"
+            ],
+            [
+             "literal",
+             [
+              "SCENIC",
+              "BUSINESS",
+              "ALTERNATE",
+              "ALT",
+              "BYPASS",
+              "BYP",
+              "TRUCK",
+              "SPUR",
+              "LOOP",
+              "CONNECTOR",
+              "CONN",
+              "BUS"
+             ]
+            ]
+           ]
+          ],
+          [
+           "slice",
+           [
+            "var",
+            "raw"
+           ],
+           [
+            "+",
+            [
+             "var",
+             "first"
+            ],
+            1
+           ]
+          ],
+          [
+           "var",
+           "raw"
+          ]
+         ]
+        ]
+       ]
+      ],
+      [
+       "let",
+       "space",
        [
         "index-of",
         " ",
@@ -4749,11 +4876,59 @@
          "raw"
         ]
        ],
+       "dash",
+       [
+        "index-of",
+        "-",
+        [
+         "var",
+         "raw"
+        ]
+       ],
        [
         "let",
-        "head",
+        "cut",
         [
-         "upcase",
+         "case",
+         [
+          "<",
+          [
+           "var",
+           "space"
+          ],
+          0
+         ],
+         [
+          "var",
+          "dash"
+         ],
+         [
+          "<",
+          [
+           "var",
+           "dash"
+          ],
+          0
+         ],
+         [
+          "var",
+          "space"
+         ],
+         [
+          "min",
+          [
+           "var",
+           "space"
+          ],
+          [
+           "var",
+           "dash"
+          ]
+         ]
+        ],
+        [
+         "let",
+         "head",
          [
           "slice",
           [
@@ -4766,188 +4941,74 @@
            0,
            [
             "var",
-            "first"
+            "cut"
            ]
           ]
-         ]
-        ],
-        [
-         "case",
+         ],
          [
-          "all",
+          "case",
           [
-           ">",
+           "all",
            [
-            "var",
-            "first"
-           ],
-           0
-          ],
-          [
-           ">",
-           [
-            "index-of",
-            " ",
+            ">",
             [
              "var",
-             "raw"
+             "cut"
+            ],
+            0
+           ],
+           [
+            ">",
+            [
+             "length",
+             [
+              "var",
+              "raw"
+             ]
             ],
             [
              "+",
              [
               "var",
-              "first"
+              "cut"
              ],
              1
             ]
            ],
-           0
-          ],
-          [
-           "in",
            [
-            "var",
-            "head"
-           ],
-           [
-            "literal",
+            "==",
             [
-             "SCENIC",
-             "BUSINESS",
-             "ALTERNATE",
-             "ALT",
-             "BYPASS",
-             "BYP",
-             "TRUCK",
-             "SPUR",
-             "LOOP",
-             "CONNECTOR",
-             "CONN",
-             "BUS"
-            ]
-           ]
-          ]
-         ],
-         [
-          "slice",
-          [
-           "var",
-           "raw"
-          ],
-          [
-           "+",
-           [
-            "var",
-            "first"
-           ],
-           1
-          ]
-         ],
-         [
-          "var",
-          "raw"
-         ]
-        ]
-       ]
-      ],
-      "space",
-      [
-       "index-of",
-       " ",
-       [
-        "var",
-        "raw"
-       ]
-      ],
-      "dash",
-      [
-       "index-of",
-       "-",
-       [
-        "var",
-        "raw"
-       ]
-      ],
-      [
-       "let",
-       "cut",
-       [
-        "case",
-        [
-         "<",
-         [
-          "var",
-          "space"
-         ],
-         0
-        ],
-        [
-         "var",
-         "dash"
-        ],
-        [
-         "<",
-         [
-          "var",
-          "dash"
-         ],
-         0
-        ],
-        [
-         "var",
-         "space"
-        ],
-        [
-         "min",
-         [
-          "var",
-          "space"
-         ],
-         [
-          "var",
-          "dash"
-         ]
-        ]
-       ],
-       [
-        "let",
-        "head",
-        [
-         "slice",
-         [
-          "var",
-          "raw"
-         ],
-         0,
-         [
-          "max",
-          0,
-          [
-           "var",
-           "cut"
-          ]
-         ]
-        ],
-        [
-         "case",
-         [
-          "all",
-          [
-           ">",
-           [
-            "var",
-            "cut"
-           ],
-           0
-          ],
-          [
-           ">",
-           [
-            "length",
+             "upcase",
+             [
+              "var",
+              "head"
+             ]
+            ],
             [
              "var",
-             "raw"
+             "head"
             ]
+           ],
+           [
+            "!=",
+            [
+             "downcase",
+             [
+              "var",
+              "head"
+             ]
+            ],
+            [
+             "var",
+             "head"
+            ]
+           ]
+          ],
+          [
+           "slice",
+           [
+            "var",
+            "raw"
            ],
            [
             "+",
@@ -4959,52 +5020,9 @@
            ]
           ],
           [
-           "==",
-           [
-            "upcase",
-            [
-             "var",
-             "head"
-            ]
-           ],
-           [
-            "var",
-            "head"
-           ]
-          ],
-          [
-           "!=",
-           [
-            "downcase",
-            [
-             "var",
-             "head"
-            ]
-           ],
-           [
-            "var",
-            "head"
-           ]
-          ]
-         ],
-         [
-          "slice",
-          [
            "var",
            "raw"
-          ],
-          [
-           "+",
-           [
-            "var",
-            "cut"
-           ],
-           1
           ]
-         ],
-         [
-          "var",
-          "raw"
          ]
         ]
        ]
@@ -5536,7 +5554,122 @@
           ],
           ""
          ],
-         "first",
+         [
+          "let",
+          "first",
+          [
+           "index-of",
+           " ",
+           [
+            "var",
+            "raw"
+           ]
+          ],
+          [
+           "let",
+           "head",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "raw"
+             ],
+             0,
+             [
+              "max",
+              0,
+              [
+               "var",
+               "first"
+              ]
+             ]
+            ]
+           ],
+           [
+            "case",
+            [
+             "all",
+             [
+              ">",
+              [
+               "var",
+               "first"
+              ],
+              0
+             ],
+             [
+              ">",
+              [
+               "index-of",
+               " ",
+               [
+                "var",
+                "raw"
+               ],
+               [
+                "+",
+                [
+                 "var",
+                 "first"
+                ],
+                1
+               ]
+              ],
+              0
+             ],
+             [
+              "in",
+              [
+               "var",
+               "head"
+              ],
+              [
+               "literal",
+               [
+                "SCENIC",
+                "BUSINESS",
+                "ALTERNATE",
+                "ALT",
+                "BYPASS",
+                "BYP",
+                "TRUCK",
+                "SPUR",
+                "LOOP",
+                "CONNECTOR",
+                "CONN",
+                "BUS"
+               ]
+              ]
+             ]
+            ],
+            [
+             "slice",
+             [
+              "var",
+              "raw"
+             ],
+             [
+              "+",
+              [
+               "var",
+               "first"
+              ],
+              1
+             ]
+            ],
+            [
+             "var",
+             "raw"
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "let",
+         "space",
          [
           "index-of",
           " ",
@@ -5545,11 +5678,59 @@
            "raw"
           ]
          ],
+         "dash",
+         [
+          "index-of",
+          "-",
+          [
+           "var",
+           "raw"
+          ]
+         ],
          [
           "let",
-          "head",
+          "cut",
           [
-           "upcase",
+           "case",
+           [
+            "<",
+            [
+             "var",
+             "space"
+            ],
+            0
+           ],
+           [
+            "var",
+            "dash"
+           ],
+           [
+            "<",
+            [
+             "var",
+             "dash"
+            ],
+            0
+           ],
+           [
+            "var",
+            "space"
+           ],
+           [
+            "min",
+            [
+             "var",
+             "space"
+            ],
+            [
+             "var",
+             "dash"
+            ]
+           ]
+          ],
+          [
+           "let",
+           "head",
            [
             "slice",
             [
@@ -5562,188 +5743,74 @@
              0,
              [
               "var",
-              "first"
+              "cut"
              ]
             ]
-           ]
-          ],
-          [
-           "case",
+           ],
            [
-            "all",
+            "case",
             [
-             ">",
+             "all",
              [
-              "var",
-              "first"
-             ],
-             0
-            ],
-            [
-             ">",
-             [
-              "index-of",
-              " ",
+              ">",
               [
                "var",
-               "raw"
+               "cut"
+              ],
+              0
+             ],
+             [
+              ">",
+              [
+               "length",
+               [
+                "var",
+                "raw"
+               ]
               ],
               [
                "+",
                [
                 "var",
-                "first"
+                "cut"
                ],
                1
               ]
              ],
-             0
-            ],
-            [
-             "in",
              [
-              "var",
-              "head"
-             ],
-             [
-              "literal",
+              "==",
               [
-               "SCENIC",
-               "BUSINESS",
-               "ALTERNATE",
-               "ALT",
-               "BYPASS",
-               "BYP",
-               "TRUCK",
-               "SPUR",
-               "LOOP",
-               "CONNECTOR",
-               "CONN",
-               "BUS"
-              ]
-             ]
-            ]
-           ],
-           [
-            "slice",
-            [
-             "var",
-             "raw"
-            ],
-            [
-             "+",
-             [
-              "var",
-              "first"
-             ],
-             1
-            ]
-           ],
-           [
-            "var",
-            "raw"
-           ]
-          ]
-         ]
-        ],
-        "space",
-        [
-         "index-of",
-         " ",
-         [
-          "var",
-          "raw"
-         ]
-        ],
-        "dash",
-        [
-         "index-of",
-         "-",
-         [
-          "var",
-          "raw"
-         ]
-        ],
-        [
-         "let",
-         "cut",
-         [
-          "case",
-          [
-           "<",
-           [
-            "var",
-            "space"
-           ],
-           0
-          ],
-          [
-           "var",
-           "dash"
-          ],
-          [
-           "<",
-           [
-            "var",
-            "dash"
-           ],
-           0
-          ],
-          [
-           "var",
-           "space"
-          ],
-          [
-           "min",
-           [
-            "var",
-            "space"
-           ],
-           [
-            "var",
-            "dash"
-           ]
-          ]
-         ],
-         [
-          "let",
-          "head",
-          [
-           "slice",
-           [
-            "var",
-            "raw"
-           ],
-           0,
-           [
-            "max",
-            0,
-            [
-             "var",
-             "cut"
-            ]
-           ]
-          ],
-          [
-           "case",
-           [
-            "all",
-            [
-             ">",
-             [
-              "var",
-              "cut"
-             ],
-             0
-            ],
-            [
-             ">",
-             [
-              "length",
+               "upcase",
+               [
+                "var",
+                "head"
+               ]
+              ],
               [
                "var",
-               "raw"
+               "head"
               ]
+             ],
+             [
+              "!=",
+              [
+               "downcase",
+               [
+                "var",
+                "head"
+               ]
+              ],
+              [
+               "var",
+               "head"
+              ]
+             ]
+            ],
+            [
+             "slice",
+             [
+              "var",
+              "raw"
              ],
              [
               "+",
@@ -5755,52 +5822,9 @@
              ]
             ],
             [
-             "==",
-             [
-              "upcase",
-              [
-               "var",
-               "head"
-              ]
-             ],
-             [
-              "var",
-              "head"
-             ]
-            ],
-            [
-             "!=",
-             [
-              "downcase",
-              [
-               "var",
-               "head"
-              ]
-             ],
-             [
-              "var",
-              "head"
-             ]
-            ]
-           ],
-           [
-            "slice",
-            [
              "var",
              "raw"
-            ],
-            [
-             "+",
-             [
-              "var",
-              "cut"
-             ],
-             1
             ]
-           ],
-           [
-            "var",
-            "raw"
            ]
           ]
          ]
@@ -7070,7 +7094,122 @@
            ],
            ""
           ],
-          "first",
+          [
+           "let",
+           "first",
+           [
+            "index-of",
+            " ",
+            [
+             "var",
+             "raw"
+            ]
+           ],
+           [
+            "let",
+            "head",
+            [
+             "upcase",
+             [
+              "slice",
+              [
+               "var",
+               "raw"
+              ],
+              0,
+              [
+               "max",
+               0,
+               [
+                "var",
+                "first"
+               ]
+              ]
+             ]
+            ],
+            [
+             "case",
+             [
+              "all",
+              [
+               ">",
+               [
+                "var",
+                "first"
+               ],
+               0
+              ],
+              [
+               ">",
+               [
+                "index-of",
+                " ",
+                [
+                 "var",
+                 "raw"
+                ],
+                [
+                 "+",
+                 [
+                  "var",
+                  "first"
+                 ],
+                 1
+                ]
+               ],
+               0
+              ],
+              [
+               "in",
+               [
+                "var",
+                "head"
+               ],
+               [
+                "literal",
+                [
+                 "SCENIC",
+                 "BUSINESS",
+                 "ALTERNATE",
+                 "ALT",
+                 "BYPASS",
+                 "BYP",
+                 "TRUCK",
+                 "SPUR",
+                 "LOOP",
+                 "CONNECTOR",
+                 "CONN",
+                 "BUS"
+                ]
+               ]
+              ]
+             ],
+             [
+              "slice",
+              [
+               "var",
+               "raw"
+              ],
+              [
+               "+",
+               [
+                "var",
+                "first"
+               ],
+               1
+              ]
+             ],
+             [
+              "var",
+              "raw"
+             ]
+            ]
+           ]
+          ]
+         ],
+         [
+          "let",
+          "space",
           [
            "index-of",
            " ",
@@ -7079,11 +7218,59 @@
             "raw"
            ]
           ],
+          "dash",
+          [
+           "index-of",
+           "-",
+           [
+            "var",
+            "raw"
+           ]
+          ],
           [
            "let",
-           "head",
+           "cut",
            [
-            "upcase",
+            "case",
+            [
+             "<",
+             [
+              "var",
+              "space"
+             ],
+             0
+            ],
+            [
+             "var",
+             "dash"
+            ],
+            [
+             "<",
+             [
+              "var",
+              "dash"
+             ],
+             0
+            ],
+            [
+             "var",
+             "space"
+            ],
+            [
+             "min",
+             [
+              "var",
+              "space"
+             ],
+             [
+              "var",
+              "dash"
+             ]
+            ]
+           ],
+           [
+            "let",
+            "head",
             [
              "slice",
              [
@@ -7096,188 +7283,74 @@
               0,
               [
                "var",
-               "first"
+               "cut"
               ]
              ]
-            ]
-           ],
-           [
-            "case",
+            ],
             [
-             "all",
+             "case",
              [
-              ">",
+              "all",
               [
-               "var",
-               "first"
-              ],
-              0
-             ],
-             [
-              ">",
-              [
-               "index-of",
-               " ",
+               ">",
                [
                 "var",
-                "raw"
+                "cut"
+               ],
+               0
+              ],
+              [
+               ">",
+               [
+                "length",
+                [
+                 "var",
+                 "raw"
+                ]
                ],
                [
                 "+",
                 [
                  "var",
-                 "first"
+                 "cut"
                 ],
                 1
                ]
               ],
-              0
-             ],
-             [
-              "in",
               [
-               "var",
-               "head"
-              ],
-              [
-               "literal",
+               "==",
                [
-                "SCENIC",
-                "BUSINESS",
-                "ALTERNATE",
-                "ALT",
-                "BYPASS",
-                "BYP",
-                "TRUCK",
-                "SPUR",
-                "LOOP",
-                "CONNECTOR",
-                "CONN",
-                "BUS"
-               ]
-              ]
-             ]
-            ],
-            [
-             "slice",
-             [
-              "var",
-              "raw"
-             ],
-             [
-              "+",
-              [
-               "var",
-               "first"
-              ],
-              1
-             ]
-            ],
-            [
-             "var",
-             "raw"
-            ]
-           ]
-          ]
-         ],
-         "space",
-         [
-          "index-of",
-          " ",
-          [
-           "var",
-           "raw"
-          ]
-         ],
-         "dash",
-         [
-          "index-of",
-          "-",
-          [
-           "var",
-           "raw"
-          ]
-         ],
-         [
-          "let",
-          "cut",
-          [
-           "case",
-           [
-            "<",
-            [
-             "var",
-             "space"
-            ],
-            0
-           ],
-           [
-            "var",
-            "dash"
-           ],
-           [
-            "<",
-            [
-             "var",
-             "dash"
-            ],
-            0
-           ],
-           [
-            "var",
-            "space"
-           ],
-           [
-            "min",
-            [
-             "var",
-             "space"
-            ],
-            [
-             "var",
-             "dash"
-            ]
-           ]
-          ],
-          [
-           "let",
-           "head",
-           [
-            "slice",
-            [
-             "var",
-             "raw"
-            ],
-            0,
-            [
-             "max",
-             0,
-             [
-              "var",
-              "cut"
-             ]
-            ]
-           ],
-           [
-            "case",
-            [
-             "all",
-             [
-              ">",
-              [
-               "var",
-               "cut"
-              ],
-              0
-             ],
-             [
-              ">",
-              [
-               "length",
+                "upcase",
+                [
+                 "var",
+                 "head"
+                ]
+               ],
                [
                 "var",
-                "raw"
+                "head"
                ]
+              ],
+              [
+               "!=",
+               [
+                "downcase",
+                [
+                 "var",
+                 "head"
+                ]
+               ],
+               [
+                "var",
+                "head"
+               ]
+              ]
+             ],
+             [
+              "slice",
+              [
+               "var",
+               "raw"
               ],
               [
                "+",
@@ -7289,52 +7362,9 @@
               ]
              ],
              [
-              "==",
-              [
-               "upcase",
-               [
-                "var",
-                "head"
-               ]
-              ],
-              [
-               "var",
-               "head"
-              ]
-             ],
-             [
-              "!=",
-              [
-               "downcase",
-               [
-                "var",
-                "head"
-               ]
-              ],
-              [
-               "var",
-               "head"
-              ]
-             ]
-            ],
-            [
-             "slice",
-             [
               "var",
               "raw"
-             ],
-             [
-              "+",
-              [
-               "var",
-               "cut"
-              ],
-              1
              ]
-            ],
-            [
-             "var",
-             "raw"
             ]
            ]
           ]
@@ -8140,7 +8170,122 @@
               ],
               ""
              ],
-             "first",
+             [
+              "let",
+              "first",
+              [
+               "index-of",
+               " ",
+               [
+                "var",
+                "raw"
+               ]
+              ],
+              [
+               "let",
+               "head",
+               [
+                "upcase",
+                [
+                 "slice",
+                 [
+                  "var",
+                  "raw"
+                 ],
+                 0,
+                 [
+                  "max",
+                  0,
+                  [
+                   "var",
+                   "first"
+                  ]
+                 ]
+                ]
+               ],
+               [
+                "case",
+                [
+                 "all",
+                 [
+                  ">",
+                  [
+                   "var",
+                   "first"
+                  ],
+                  0
+                 ],
+                 [
+                  ">",
+                  [
+                   "index-of",
+                   " ",
+                   [
+                    "var",
+                    "raw"
+                   ],
+                   [
+                    "+",
+                    [
+                     "var",
+                     "first"
+                    ],
+                    1
+                   ]
+                  ],
+                  0
+                 ],
+                 [
+                  "in",
+                  [
+                   "var",
+                   "head"
+                  ],
+                  [
+                   "literal",
+                   [
+                    "SCENIC",
+                    "BUSINESS",
+                    "ALTERNATE",
+                    "ALT",
+                    "BYPASS",
+                    "BYP",
+                    "TRUCK",
+                    "SPUR",
+                    "LOOP",
+                    "CONNECTOR",
+                    "CONN",
+                    "BUS"
+                   ]
+                  ]
+                 ]
+                ],
+                [
+                 "slice",
+                 [
+                  "var",
+                  "raw"
+                 ],
+                 [
+                  "+",
+                  [
+                   "var",
+                   "first"
+                  ],
+                  1
+                 ]
+                ],
+                [
+                 "var",
+                 "raw"
+                ]
+               ]
+              ]
+             ]
+            ],
+            [
+             "let",
+             "space",
              [
               "index-of",
               " ",
@@ -8149,11 +8294,59 @@
                "raw"
               ]
              ],
+             "dash",
+             [
+              "index-of",
+              "-",
+              [
+               "var",
+               "raw"
+              ]
+             ],
              [
               "let",
-              "head",
+              "cut",
               [
-               "upcase",
+               "case",
+               [
+                "<",
+                [
+                 "var",
+                 "space"
+                ],
+                0
+               ],
+               [
+                "var",
+                "dash"
+               ],
+               [
+                "<",
+                [
+                 "var",
+                 "dash"
+                ],
+                0
+               ],
+               [
+                "var",
+                "space"
+               ],
+               [
+                "min",
+                [
+                 "var",
+                 "space"
+                ],
+                [
+                 "var",
+                 "dash"
+                ]
+               ]
+              ],
+              [
+               "let",
+               "head",
                [
                 "slice",
                 [
@@ -8166,188 +8359,74 @@
                  0,
                  [
                   "var",
-                  "first"
+                  "cut"
                  ]
                 ]
-               ]
-              ],
-              [
-               "case",
+               ],
                [
-                "all",
+                "case",
                 [
-                 ">",
+                 "all",
                  [
-                  "var",
-                  "first"
-                 ],
-                 0
-                ],
-                [
-                 ">",
-                 [
-                  "index-of",
-                  " ",
+                  ">",
                   [
                    "var",
-                   "raw"
+                   "cut"
+                  ],
+                  0
+                 ],
+                 [
+                  ">",
+                  [
+                   "length",
+                   [
+                    "var",
+                    "raw"
+                   ]
                   ],
                   [
                    "+",
                    [
                     "var",
-                    "first"
+                    "cut"
                    ],
                    1
                   ]
                  ],
-                 0
-                ],
-                [
-                 "in",
                  [
-                  "var",
-                  "head"
-                 ],
-                 [
-                  "literal",
+                  "==",
                   [
-                   "SCENIC",
-                   "BUSINESS",
-                   "ALTERNATE",
-                   "ALT",
-                   "BYPASS",
-                   "BYP",
-                   "TRUCK",
-                   "SPUR",
-                   "LOOP",
-                   "CONNECTOR",
-                   "CONN",
-                   "BUS"
-                  ]
-                 ]
-                ]
-               ],
-               [
-                "slice",
-                [
-                 "var",
-                 "raw"
-                ],
-                [
-                 "+",
-                 [
-                  "var",
-                  "first"
-                 ],
-                 1
-                ]
-               ],
-               [
-                "var",
-                "raw"
-               ]
-              ]
-             ]
-            ],
-            "space",
-            [
-             "index-of",
-             " ",
-             [
-              "var",
-              "raw"
-             ]
-            ],
-            "dash",
-            [
-             "index-of",
-             "-",
-             [
-              "var",
-              "raw"
-             ]
-            ],
-            [
-             "let",
-             "cut",
-             [
-              "case",
-              [
-               "<",
-               [
-                "var",
-                "space"
-               ],
-               0
-              ],
-              [
-               "var",
-               "dash"
-              ],
-              [
-               "<",
-               [
-                "var",
-                "dash"
-               ],
-               0
-              ],
-              [
-               "var",
-               "space"
-              ],
-              [
-               "min",
-               [
-                "var",
-                "space"
-               ],
-               [
-                "var",
-                "dash"
-               ]
-              ]
-             ],
-             [
-              "let",
-              "head",
-              [
-               "slice",
-               [
-                "var",
-                "raw"
-               ],
-               0,
-               [
-                "max",
-                0,
-                [
-                 "var",
-                 "cut"
-                ]
-               ]
-              ],
-              [
-               "case",
-               [
-                "all",
-                [
-                 ">",
-                 [
-                  "var",
-                  "cut"
-                 ],
-                 0
-                ],
-                [
-                 ">",
-                 [
-                  "length",
+                   "upcase",
+                   [
+                    "var",
+                    "head"
+                   ]
+                  ],
                   [
                    "var",
-                   "raw"
+                   "head"
                   ]
+                 ],
+                 [
+                  "!=",
+                  [
+                   "downcase",
+                   [
+                    "var",
+                    "head"
+                   ]
+                  ],
+                  [
+                   "var",
+                   "head"
+                  ]
+                 ]
+                ],
+                [
+                 "slice",
+                 [
+                  "var",
+                  "raw"
                  ],
                  [
                   "+",
@@ -8359,52 +8438,9 @@
                  ]
                 ],
                 [
-                 "==",
-                 [
-                  "upcase",
-                  [
-                   "var",
-                   "head"
-                  ]
-                 ],
-                 [
-                  "var",
-                  "head"
-                 ]
-                ],
-                [
-                 "!=",
-                 [
-                  "downcase",
-                  [
-                   "var",
-                   "head"
-                  ]
-                 ],
-                 [
-                  "var",
-                  "head"
-                 ]
-                ]
-               ],
-               [
-                "slice",
-                [
                  "var",
                  "raw"
-                ],
-                [
-                 "+",
-                 [
-                  "var",
-                  "cut"
-                 ],
-                 1
                 ]
-               ],
-               [
-                "var",
-                "raw"
                ]
               ]
              ]
@@ -8931,7 +8967,122 @@
                ],
                ""
               ],
-              "first",
+              [
+               "let",
+               "first",
+               [
+                "index-of",
+                " ",
+                [
+                 "var",
+                 "raw"
+                ]
+               ],
+               [
+                "let",
+                "head",
+                [
+                 "upcase",
+                 [
+                  "slice",
+                  [
+                   "var",
+                   "raw"
+                  ],
+                  0,
+                  [
+                   "max",
+                   0,
+                   [
+                    "var",
+                    "first"
+                   ]
+                  ]
+                 ]
+                ],
+                [
+                 "case",
+                 [
+                  "all",
+                  [
+                   ">",
+                   [
+                    "var",
+                    "first"
+                   ],
+                   0
+                  ],
+                  [
+                   ">",
+                   [
+                    "index-of",
+                    " ",
+                    [
+                     "var",
+                     "raw"
+                    ],
+                    [
+                     "+",
+                     [
+                      "var",
+                      "first"
+                     ],
+                     1
+                    ]
+                   ],
+                   0
+                  ],
+                  [
+                   "in",
+                   [
+                    "var",
+                    "head"
+                   ],
+                   [
+                    "literal",
+                    [
+                     "SCENIC",
+                     "BUSINESS",
+                     "ALTERNATE",
+                     "ALT",
+                     "BYPASS",
+                     "BYP",
+                     "TRUCK",
+                     "SPUR",
+                     "LOOP",
+                     "CONNECTOR",
+                     "CONN",
+                     "BUS"
+                    ]
+                   ]
+                  ]
+                 ],
+                 [
+                  "slice",
+                  [
+                   "var",
+                   "raw"
+                  ],
+                  [
+                   "+",
+                   [
+                    "var",
+                    "first"
+                   ],
+                   1
+                  ]
+                 ],
+                 [
+                  "var",
+                  "raw"
+                 ]
+                ]
+               ]
+              ]
+             ],
+             [
+              "let",
+              "space",
               [
                "index-of",
                " ",
@@ -8940,11 +9091,59 @@
                 "raw"
                ]
               ],
+              "dash",
+              [
+               "index-of",
+               "-",
+               [
+                "var",
+                "raw"
+               ]
+              ],
               [
                "let",
-               "head",
+               "cut",
                [
-                "upcase",
+                "case",
+                [
+                 "<",
+                 [
+                  "var",
+                  "space"
+                 ],
+                 0
+                ],
+                [
+                 "var",
+                 "dash"
+                ],
+                [
+                 "<",
+                 [
+                  "var",
+                  "dash"
+                 ],
+                 0
+                ],
+                [
+                 "var",
+                 "space"
+                ],
+                [
+                 "min",
+                 [
+                  "var",
+                  "space"
+                 ],
+                 [
+                  "var",
+                  "dash"
+                 ]
+                ]
+               ],
+               [
+                "let",
+                "head",
                 [
                  "slice",
                  [
@@ -8957,188 +9156,74 @@
                   0,
                   [
                    "var",
-                   "first"
+                   "cut"
                   ]
                  ]
-                ]
-               ],
-               [
-                "case",
+                ],
                 [
-                 "all",
+                 "case",
                  [
-                  ">",
+                  "all",
                   [
-                   "var",
-                   "first"
-                  ],
-                  0
-                 ],
-                 [
-                  ">",
-                  [
-                   "index-of",
-                   " ",
+                   ">",
                    [
                     "var",
-                    "raw"
+                    "cut"
+                   ],
+                   0
+                  ],
+                  [
+                   ">",
+                   [
+                    "length",
+                    [
+                     "var",
+                     "raw"
+                    ]
                    ],
                    [
                     "+",
                     [
                      "var",
-                     "first"
+                     "cut"
                     ],
                     1
                    ]
                   ],
-                  0
-                 ],
-                 [
-                  "in",
                   [
-                   "var",
-                   "head"
-                  ],
-                  [
-                   "literal",
+                   "==",
                    [
-                    "SCENIC",
-                    "BUSINESS",
-                    "ALTERNATE",
-                    "ALT",
-                    "BYPASS",
-                    "BYP",
-                    "TRUCK",
-                    "SPUR",
-                    "LOOP",
-                    "CONNECTOR",
-                    "CONN",
-                    "BUS"
-                   ]
-                  ]
-                 ]
-                ],
-                [
-                 "slice",
-                 [
-                  "var",
-                  "raw"
-                 ],
-                 [
-                  "+",
-                  [
-                   "var",
-                   "first"
-                  ],
-                  1
-                 ]
-                ],
-                [
-                 "var",
-                 "raw"
-                ]
-               ]
-              ]
-             ],
-             "space",
-             [
-              "index-of",
-              " ",
-              [
-               "var",
-               "raw"
-              ]
-             ],
-             "dash",
-             [
-              "index-of",
-              "-",
-              [
-               "var",
-               "raw"
-              ]
-             ],
-             [
-              "let",
-              "cut",
-              [
-               "case",
-               [
-                "<",
-                [
-                 "var",
-                 "space"
-                ],
-                0
-               ],
-               [
-                "var",
-                "dash"
-               ],
-               [
-                "<",
-                [
-                 "var",
-                 "dash"
-                ],
-                0
-               ],
-               [
-                "var",
-                "space"
-               ],
-               [
-                "min",
-                [
-                 "var",
-                 "space"
-                ],
-                [
-                 "var",
-                 "dash"
-                ]
-               ]
-              ],
-              [
-               "let",
-               "head",
-               [
-                "slice",
-                [
-                 "var",
-                 "raw"
-                ],
-                0,
-                [
-                 "max",
-                 0,
-                 [
-                  "var",
-                  "cut"
-                 ]
-                ]
-               ],
-               [
-                "case",
-                [
-                 "all",
-                 [
-                  ">",
-                  [
-                   "var",
-                   "cut"
-                  ],
-                  0
-                 ],
-                 [
-                  ">",
-                  [
-                   "length",
+                    "upcase",
+                    [
+                     "var",
+                     "head"
+                    ]
+                   ],
                    [
                     "var",
-                    "raw"
+                    "head"
                    ]
+                  ],
+                  [
+                   "!=",
+                   [
+                    "downcase",
+                    [
+                     "var",
+                     "head"
+                    ]
+                   ],
+                   [
+                    "var",
+                    "head"
+                   ]
+                  ]
+                 ],
+                 [
+                  "slice",
+                  [
+                   "var",
+                   "raw"
                   ],
                   [
                    "+",
@@ -9150,52 +9235,9 @@
                   ]
                  ],
                  [
-                  "==",
-                  [
-                   "upcase",
-                   [
-                    "var",
-                    "head"
-                   ]
-                  ],
-                  [
-                   "var",
-                   "head"
-                  ]
-                 ],
-                 [
-                  "!=",
-                  [
-                   "downcase",
-                   [
-                    "var",
-                    "head"
-                   ]
-                  ],
-                  [
-                   "var",
-                   "head"
-                  ]
-                 ]
-                ],
-                [
-                 "slice",
-                 [
                   "var",
                   "raw"
-                 ],
-                 [
-                  "+",
-                  [
-                   "var",
-                   "cut"
-                  ],
-                  1
                  ]
-                ],
-                [
-                 "var",
-                 "raw"
                 ]
                ]
               ]
@@ -10510,7 +10552,122 @@
          ],
          ""
         ],
-        "first",
+        [
+         "let",
+         "first",
+         [
+          "index-of",
+          " ",
+          [
+           "var",
+           "raw"
+          ]
+         ],
+         [
+          "let",
+          "head",
+          [
+           "upcase",
+           [
+            "slice",
+            [
+             "var",
+             "raw"
+            ],
+            0,
+            [
+             "max",
+             0,
+             [
+              "var",
+              "first"
+             ]
+            ]
+           ]
+          ],
+          [
+           "case",
+           [
+            "all",
+            [
+             ">",
+             [
+              "var",
+              "first"
+             ],
+             0
+            ],
+            [
+             ">",
+             [
+              "index-of",
+              " ",
+              [
+               "var",
+               "raw"
+              ],
+              [
+               "+",
+               [
+                "var",
+                "first"
+               ],
+               1
+              ]
+             ],
+             0
+            ],
+            [
+             "in",
+             [
+              "var",
+              "head"
+             ],
+             [
+              "literal",
+              [
+               "SCENIC",
+               "BUSINESS",
+               "ALTERNATE",
+               "ALT",
+               "BYPASS",
+               "BYP",
+               "TRUCK",
+               "SPUR",
+               "LOOP",
+               "CONNECTOR",
+               "CONN",
+               "BUS"
+              ]
+             ]
+            ]
+           ],
+           [
+            "slice",
+            [
+             "var",
+             "raw"
+            ],
+            [
+             "+",
+             [
+              "var",
+              "first"
+             ],
+             1
+            ]
+           ],
+           [
+            "var",
+            "raw"
+           ]
+          ]
+         ]
+        ]
+       ],
+       [
+        "let",
+        "space",
         [
          "index-of",
          " ",
@@ -10519,11 +10676,59 @@
           "raw"
          ]
         ],
+        "dash",
+        [
+         "index-of",
+         "-",
+         [
+          "var",
+          "raw"
+         ]
+        ],
         [
          "let",
-         "head",
+         "cut",
          [
-          "upcase",
+          "case",
+          [
+           "<",
+           [
+            "var",
+            "space"
+           ],
+           0
+          ],
+          [
+           "var",
+           "dash"
+          ],
+          [
+           "<",
+           [
+            "var",
+            "dash"
+           ],
+           0
+          ],
+          [
+           "var",
+           "space"
+          ],
+          [
+           "min",
+           [
+            "var",
+            "space"
+           ],
+           [
+            "var",
+            "dash"
+           ]
+          ]
+         ],
+         [
+          "let",
+          "head",
           [
            "slice",
            [
@@ -10536,188 +10741,74 @@
             0,
             [
              "var",
-             "first"
+             "cut"
             ]
            ]
-          ]
-         ],
-         [
-          "case",
+          ],
           [
-           "all",
+           "case",
            [
-            ">",
+            "all",
             [
-             "var",
-             "first"
-            ],
-            0
-           ],
-           [
-            ">",
-            [
-             "index-of",
-             " ",
+             ">",
              [
               "var",
-              "raw"
+              "cut"
+             ],
+             0
+            ],
+            [
+             ">",
+             [
+              "length",
+              [
+               "var",
+               "raw"
+              ]
              ],
              [
               "+",
               [
                "var",
-               "first"
+               "cut"
               ],
               1
              ]
             ],
-            0
-           ],
-           [
-            "in",
             [
-             "var",
-             "head"
-            ],
-            [
-             "literal",
+             "==",
              [
-              "SCENIC",
-              "BUSINESS",
-              "ALTERNATE",
-              "ALT",
-              "BYPASS",
-              "BYP",
-              "TRUCK",
-              "SPUR",
-              "LOOP",
-              "CONNECTOR",
-              "CONN",
-              "BUS"
-             ]
-            ]
-           ]
-          ],
-          [
-           "slice",
-           [
-            "var",
-            "raw"
-           ],
-           [
-            "+",
-            [
-             "var",
-             "first"
-            ],
-            1
-           ]
-          ],
-          [
-           "var",
-           "raw"
-          ]
-         ]
-        ]
-       ],
-       "space",
-       [
-        "index-of",
-        " ",
-        [
-         "var",
-         "raw"
-        ]
-       ],
-       "dash",
-       [
-        "index-of",
-        "-",
-        [
-         "var",
-         "raw"
-        ]
-       ],
-       [
-        "let",
-        "cut",
-        [
-         "case",
-         [
-          "<",
-          [
-           "var",
-           "space"
-          ],
-          0
-         ],
-         [
-          "var",
-          "dash"
-         ],
-         [
-          "<",
-          [
-           "var",
-           "dash"
-          ],
-          0
-         ],
-         [
-          "var",
-          "space"
-         ],
-         [
-          "min",
-          [
-           "var",
-           "space"
-          ],
-          [
-           "var",
-           "dash"
-          ]
-         ]
-        ],
-        [
-         "let",
-         "head",
-         [
-          "slice",
-          [
-           "var",
-           "raw"
-          ],
-          0,
-          [
-           "max",
-           0,
-           [
-            "var",
-            "cut"
-           ]
-          ]
-         ],
-         [
-          "case",
-          [
-           "all",
-           [
-            ">",
-            [
-             "var",
-             "cut"
-            ],
-            0
-           ],
-           [
-            ">",
-            [
-             "length",
+              "upcase",
+              [
+               "var",
+               "head"
+              ]
+             ],
              [
               "var",
-              "raw"
+              "head"
              ]
+            ],
+            [
+             "!=",
+             [
+              "downcase",
+              [
+               "var",
+               "head"
+              ]
+             ],
+             [
+              "var",
+              "head"
+             ]
+            ]
+           ],
+           [
+            "slice",
+            [
+             "var",
+             "raw"
             ],
             [
              "+",
@@ -10729,52 +10820,9 @@
             ]
            ],
            [
-            "==",
-            [
-             "upcase",
-             [
-              "var",
-              "head"
-             ]
-            ],
-            [
-             "var",
-             "head"
-            ]
-           ],
-           [
-            "!=",
-            [
-             "downcase",
-             [
-              "var",
-              "head"
-             ]
-            ],
-            [
-             "var",
-             "head"
-            ]
-           ]
-          ],
-          [
-           "slice",
-           [
             "var",
             "raw"
-           ],
-           [
-            "+",
-            [
-             "var",
-             "cut"
-            ],
-            1
            ]
-          ],
-          [
-           "var",
-           "raw"
           ]
          ]
         ]
@@ -11301,7 +11349,122 @@
           ],
           ""
          ],
-         "first",
+         [
+          "let",
+          "first",
+          [
+           "index-of",
+           " ",
+           [
+            "var",
+            "raw"
+           ]
+          ],
+          [
+           "let",
+           "head",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "raw"
+             ],
+             0,
+             [
+              "max",
+              0,
+              [
+               "var",
+               "first"
+              ]
+             ]
+            ]
+           ],
+           [
+            "case",
+            [
+             "all",
+             [
+              ">",
+              [
+               "var",
+               "first"
+              ],
+              0
+             ],
+             [
+              ">",
+              [
+               "index-of",
+               " ",
+               [
+                "var",
+                "raw"
+               ],
+               [
+                "+",
+                [
+                 "var",
+                 "first"
+                ],
+                1
+               ]
+              ],
+              0
+             ],
+             [
+              "in",
+              [
+               "var",
+               "head"
+              ],
+              [
+               "literal",
+               [
+                "SCENIC",
+                "BUSINESS",
+                "ALTERNATE",
+                "ALT",
+                "BYPASS",
+                "BYP",
+                "TRUCK",
+                "SPUR",
+                "LOOP",
+                "CONNECTOR",
+                "CONN",
+                "BUS"
+               ]
+              ]
+             ]
+            ],
+            [
+             "slice",
+             [
+              "var",
+              "raw"
+             ],
+             [
+              "+",
+              [
+               "var",
+               "first"
+              ],
+              1
+             ]
+            ],
+            [
+             "var",
+             "raw"
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "let",
+         "space",
          [
           "index-of",
           " ",
@@ -11310,11 +11473,59 @@
            "raw"
           ]
          ],
+         "dash",
+         [
+          "index-of",
+          "-",
+          [
+           "var",
+           "raw"
+          ]
+         ],
          [
           "let",
-          "head",
+          "cut",
           [
-           "upcase",
+           "case",
+           [
+            "<",
+            [
+             "var",
+             "space"
+            ],
+            0
+           ],
+           [
+            "var",
+            "dash"
+           ],
+           [
+            "<",
+            [
+             "var",
+             "dash"
+            ],
+            0
+           ],
+           [
+            "var",
+            "space"
+           ],
+           [
+            "min",
+            [
+             "var",
+             "space"
+            ],
+            [
+             "var",
+             "dash"
+            ]
+           ]
+          ],
+          [
+           "let",
+           "head",
            [
             "slice",
             [
@@ -11327,188 +11538,74 @@
              0,
              [
               "var",
-              "first"
+              "cut"
              ]
             ]
-           ]
-          ],
-          [
-           "case",
+           ],
            [
-            "all",
+            "case",
             [
-             ">",
+             "all",
              [
-              "var",
-              "first"
-             ],
-             0
-            ],
-            [
-             ">",
-             [
-              "index-of",
-              " ",
+              ">",
               [
                "var",
-               "raw"
+               "cut"
+              ],
+              0
+             ],
+             [
+              ">",
+              [
+               "length",
+               [
+                "var",
+                "raw"
+               ]
               ],
               [
                "+",
                [
                 "var",
-                "first"
+                "cut"
                ],
                1
               ]
              ],
-             0
-            ],
-            [
-             "in",
              [
-              "var",
-              "head"
-             ],
-             [
-              "literal",
+              "==",
               [
-               "SCENIC",
-               "BUSINESS",
-               "ALTERNATE",
-               "ALT",
-               "BYPASS",
-               "BYP",
-               "TRUCK",
-               "SPUR",
-               "LOOP",
-               "CONNECTOR",
-               "CONN",
-               "BUS"
-              ]
-             ]
-            ]
-           ],
-           [
-            "slice",
-            [
-             "var",
-             "raw"
-            ],
-            [
-             "+",
-             [
-              "var",
-              "first"
-             ],
-             1
-            ]
-           ],
-           [
-            "var",
-            "raw"
-           ]
-          ]
-         ]
-        ],
-        "space",
-        [
-         "index-of",
-         " ",
-         [
-          "var",
-          "raw"
-         ]
-        ],
-        "dash",
-        [
-         "index-of",
-         "-",
-         [
-          "var",
-          "raw"
-         ]
-        ],
-        [
-         "let",
-         "cut",
-         [
-          "case",
-          [
-           "<",
-           [
-            "var",
-            "space"
-           ],
-           0
-          ],
-          [
-           "var",
-           "dash"
-          ],
-          [
-           "<",
-           [
-            "var",
-            "dash"
-           ],
-           0
-          ],
-          [
-           "var",
-           "space"
-          ],
-          [
-           "min",
-           [
-            "var",
-            "space"
-           ],
-           [
-            "var",
-            "dash"
-           ]
-          ]
-         ],
-         [
-          "let",
-          "head",
-          [
-           "slice",
-           [
-            "var",
-            "raw"
-           ],
-           0,
-           [
-            "max",
-            0,
-            [
-             "var",
-             "cut"
-            ]
-           ]
-          ],
-          [
-           "case",
-           [
-            "all",
-            [
-             ">",
-             [
-              "var",
-              "cut"
-             ],
-             0
-            ],
-            [
-             ">",
-             [
-              "length",
+               "upcase",
+               [
+                "var",
+                "head"
+               ]
+              ],
               [
                "var",
-               "raw"
+               "head"
               ]
+             ],
+             [
+              "!=",
+              [
+               "downcase",
+               [
+                "var",
+                "head"
+               ]
+              ],
+              [
+               "var",
+               "head"
+              ]
+             ]
+            ],
+            [
+             "slice",
+             [
+              "var",
+              "raw"
              ],
              [
               "+",
@@ -11520,52 +11617,9 @@
              ]
             ],
             [
-             "==",
-             [
-              "upcase",
-              [
-               "var",
-               "head"
-              ]
-             ],
-             [
-              "var",
-              "head"
-             ]
-            ],
-            [
-             "!=",
-             [
-              "downcase",
-              [
-               "var",
-               "head"
-              ]
-             ],
-             [
-              "var",
-              "head"
-             ]
-            ]
-           ],
-           [
-            "slice",
-            [
              "var",
              "raw"
-            ],
-            [
-             "+",
-             [
-              "var",
-              "cut"
-             ],
-             1
             ]
-           ],
-           [
-            "var",
-            "raw"
            ]
           ]
          ]
@@ -12101,7 +12155,122 @@
            ],
            ""
           ],
-          "first",
+          [
+           "let",
+           "first",
+           [
+            "index-of",
+            " ",
+            [
+             "var",
+             "raw"
+            ]
+           ],
+           [
+            "let",
+            "head",
+            [
+             "upcase",
+             [
+              "slice",
+              [
+               "var",
+               "raw"
+              ],
+              0,
+              [
+               "max",
+               0,
+               [
+                "var",
+                "first"
+               ]
+              ]
+             ]
+            ],
+            [
+             "case",
+             [
+              "all",
+              [
+               ">",
+               [
+                "var",
+                "first"
+               ],
+               0
+              ],
+              [
+               ">",
+               [
+                "index-of",
+                " ",
+                [
+                 "var",
+                 "raw"
+                ],
+                [
+                 "+",
+                 [
+                  "var",
+                  "first"
+                 ],
+                 1
+                ]
+               ],
+               0
+              ],
+              [
+               "in",
+               [
+                "var",
+                "head"
+               ],
+               [
+                "literal",
+                [
+                 "SCENIC",
+                 "BUSINESS",
+                 "ALTERNATE",
+                 "ALT",
+                 "BYPASS",
+                 "BYP",
+                 "TRUCK",
+                 "SPUR",
+                 "LOOP",
+                 "CONNECTOR",
+                 "CONN",
+                 "BUS"
+                ]
+               ]
+              ]
+             ],
+             [
+              "slice",
+              [
+               "var",
+               "raw"
+              ],
+              [
+               "+",
+               [
+                "var",
+                "first"
+               ],
+               1
+              ]
+             ],
+             [
+              "var",
+              "raw"
+             ]
+            ]
+           ]
+          ]
+         ],
+         [
+          "let",
+          "space",
           [
            "index-of",
            " ",
@@ -12110,11 +12279,59 @@
             "raw"
            ]
           ],
+          "dash",
+          [
+           "index-of",
+           "-",
+           [
+            "var",
+            "raw"
+           ]
+          ],
           [
            "let",
-           "head",
+           "cut",
            [
-            "upcase",
+            "case",
+            [
+             "<",
+             [
+              "var",
+              "space"
+             ],
+             0
+            ],
+            [
+             "var",
+             "dash"
+            ],
+            [
+             "<",
+             [
+              "var",
+              "dash"
+             ],
+             0
+            ],
+            [
+             "var",
+             "space"
+            ],
+            [
+             "min",
+             [
+              "var",
+              "space"
+             ],
+             [
+              "var",
+              "dash"
+             ]
+            ]
+           ],
+           [
+            "let",
+            "head",
             [
              "slice",
              [
@@ -12127,188 +12344,74 @@
               0,
               [
                "var",
-               "first"
+               "cut"
               ]
              ]
-            ]
-           ],
-           [
-            "case",
+            ],
             [
-             "all",
+             "case",
              [
-              ">",
+              "all",
               [
-               "var",
-               "first"
-              ],
-              0
-             ],
-             [
-              ">",
-              [
-               "index-of",
-               " ",
+               ">",
                [
                 "var",
-                "raw"
+                "cut"
+               ],
+               0
+              ],
+              [
+               ">",
+               [
+                "length",
+                [
+                 "var",
+                 "raw"
+                ]
                ],
                [
                 "+",
                 [
                  "var",
-                 "first"
+                 "cut"
                 ],
                 1
                ]
               ],
-              0
-             ],
-             [
-              "in",
               [
-               "var",
-               "head"
-              ],
-              [
-               "literal",
+               "==",
                [
-                "SCENIC",
-                "BUSINESS",
-                "ALTERNATE",
-                "ALT",
-                "BYPASS",
-                "BYP",
-                "TRUCK",
-                "SPUR",
-                "LOOP",
-                "CONNECTOR",
-                "CONN",
-                "BUS"
-               ]
-              ]
-             ]
-            ],
-            [
-             "slice",
-             [
-              "var",
-              "raw"
-             ],
-             [
-              "+",
-              [
-               "var",
-               "first"
-              ],
-              1
-             ]
-            ],
-            [
-             "var",
-             "raw"
-            ]
-           ]
-          ]
-         ],
-         "space",
-         [
-          "index-of",
-          " ",
-          [
-           "var",
-           "raw"
-          ]
-         ],
-         "dash",
-         [
-          "index-of",
-          "-",
-          [
-           "var",
-           "raw"
-          ]
-         ],
-         [
-          "let",
-          "cut",
-          [
-           "case",
-           [
-            "<",
-            [
-             "var",
-             "space"
-            ],
-            0
-           ],
-           [
-            "var",
-            "dash"
-           ],
-           [
-            "<",
-            [
-             "var",
-             "dash"
-            ],
-            0
-           ],
-           [
-            "var",
-            "space"
-           ],
-           [
-            "min",
-            [
-             "var",
-             "space"
-            ],
-            [
-             "var",
-             "dash"
-            ]
-           ]
-          ],
-          [
-           "let",
-           "head",
-           [
-            "slice",
-            [
-             "var",
-             "raw"
-            ],
-            0,
-            [
-             "max",
-             0,
-             [
-              "var",
-              "cut"
-             ]
-            ]
-           ],
-           [
-            "case",
-            [
-             "all",
-             [
-              ">",
-              [
-               "var",
-               "cut"
-              ],
-              0
-             ],
-             [
-              ">",
-              [
-               "length",
+                "upcase",
+                [
+                 "var",
+                 "head"
+                ]
+               ],
                [
                 "var",
-                "raw"
+                "head"
                ]
+              ],
+              [
+               "!=",
+               [
+                "downcase",
+                [
+                 "var",
+                 "head"
+                ]
+               ],
+               [
+                "var",
+                "head"
+               ]
+              ]
+             ],
+             [
+              "slice",
+              [
+               "var",
+               "raw"
               ],
               [
                "+",
@@ -12320,52 +12423,9 @@
               ]
              ],
              [
-              "==",
-              [
-               "upcase",
-               [
-                "var",
-                "head"
-               ]
-              ],
-              [
-               "var",
-               "head"
-              ]
-             ],
-             [
-              "!=",
-              [
-               "downcase",
-               [
-                "var",
-                "head"
-               ]
-              ],
-              [
-               "var",
-               "head"
-              ]
-             ]
-            ],
-            [
-             "slice",
-             [
               "var",
               "raw"
-             ],
-             [
-              "+",
-              [
-               "var",
-               "cut"
-              ],
-              1
              ]
-            ],
-            [
-             "var",
-             "raw"
             ]
            ]
           ]
@@ -12892,7 +12952,122 @@
             ],
             ""
            ],
-           "first",
+           [
+            "let",
+            "first",
+            [
+             "index-of",
+             " ",
+             [
+              "var",
+              "raw"
+             ]
+            ],
+            [
+             "let",
+             "head",
+             [
+              "upcase",
+              [
+               "slice",
+               [
+                "var",
+                "raw"
+               ],
+               0,
+               [
+                "max",
+                0,
+                [
+                 "var",
+                 "first"
+                ]
+               ]
+              ]
+             ],
+             [
+              "case",
+              [
+               "all",
+               [
+                ">",
+                [
+                 "var",
+                 "first"
+                ],
+                0
+               ],
+               [
+                ">",
+                [
+                 "index-of",
+                 " ",
+                 [
+                  "var",
+                  "raw"
+                 ],
+                 [
+                  "+",
+                  [
+                   "var",
+                   "first"
+                  ],
+                  1
+                 ]
+                ],
+                0
+               ],
+               [
+                "in",
+                [
+                 "var",
+                 "head"
+                ],
+                [
+                 "literal",
+                 [
+                  "SCENIC",
+                  "BUSINESS",
+                  "ALTERNATE",
+                  "ALT",
+                  "BYPASS",
+                  "BYP",
+                  "TRUCK",
+                  "SPUR",
+                  "LOOP",
+                  "CONNECTOR",
+                  "CONN",
+                  "BUS"
+                 ]
+                ]
+               ]
+              ],
+              [
+               "slice",
+               [
+                "var",
+                "raw"
+               ],
+               [
+                "+",
+                [
+                 "var",
+                 "first"
+                ],
+                1
+               ]
+              ],
+              [
+               "var",
+               "raw"
+              ]
+             ]
+            ]
+           ]
+          ],
+          [
+           "let",
+           "space",
            [
             "index-of",
             " ",
@@ -12901,11 +13076,59 @@
              "raw"
             ]
            ],
+           "dash",
+           [
+            "index-of",
+            "-",
+            [
+             "var",
+             "raw"
+            ]
+           ],
            [
             "let",
-            "head",
+            "cut",
             [
-             "upcase",
+             "case",
+             [
+              "<",
+              [
+               "var",
+               "space"
+              ],
+              0
+             ],
+             [
+              "var",
+              "dash"
+             ],
+             [
+              "<",
+              [
+               "var",
+               "dash"
+              ],
+              0
+             ],
+             [
+              "var",
+              "space"
+             ],
+             [
+              "min",
+              [
+               "var",
+               "space"
+              ],
+              [
+               "var",
+               "dash"
+              ]
+             ]
+            ],
+            [
+             "let",
+             "head",
              [
               "slice",
               [
@@ -12918,188 +13141,74 @@
                0,
                [
                 "var",
-                "first"
+                "cut"
                ]
               ]
-             ]
-            ],
-            [
-             "case",
+             ],
              [
-              "all",
+              "case",
               [
-               ">",
+               "all",
                [
-                "var",
-                "first"
-               ],
-               0
-              ],
-              [
-               ">",
-               [
-                "index-of",
-                " ",
+                ">",
                 [
                  "var",
-                 "raw"
+                 "cut"
+                ],
+                0
+               ],
+               [
+                ">",
+                [
+                 "length",
+                 [
+                  "var",
+                  "raw"
+                 ]
                 ],
                 [
                  "+",
                  [
                   "var",
-                  "first"
+                  "cut"
                  ],
                  1
                 ]
                ],
-               0
-              ],
-              [
-               "in",
                [
-                "var",
-                "head"
-               ],
-               [
-                "literal",
+                "==",
                 [
-                 "SCENIC",
-                 "BUSINESS",
-                 "ALTERNATE",
-                 "ALT",
-                 "BYPASS",
-                 "BYP",
-                 "TRUCK",
-                 "SPUR",
-                 "LOOP",
-                 "CONNECTOR",
-                 "CONN",
-                 "BUS"
-                ]
-               ]
-              ]
-             ],
-             [
-              "slice",
-              [
-               "var",
-               "raw"
-              ],
-              [
-               "+",
-               [
-                "var",
-                "first"
-               ],
-               1
-              ]
-             ],
-             [
-              "var",
-              "raw"
-             ]
-            ]
-           ]
-          ],
-          "space",
-          [
-           "index-of",
-           " ",
-           [
-            "var",
-            "raw"
-           ]
-          ],
-          "dash",
-          [
-           "index-of",
-           "-",
-           [
-            "var",
-            "raw"
-           ]
-          ],
-          [
-           "let",
-           "cut",
-           [
-            "case",
-            [
-             "<",
-             [
-              "var",
-              "space"
-             ],
-             0
-            ],
-            [
-             "var",
-             "dash"
-            ],
-            [
-             "<",
-             [
-              "var",
-              "dash"
-             ],
-             0
-            ],
-            [
-             "var",
-             "space"
-            ],
-            [
-             "min",
-             [
-              "var",
-              "space"
-             ],
-             [
-              "var",
-              "dash"
-             ]
-            ]
-           ],
-           [
-            "let",
-            "head",
-            [
-             "slice",
-             [
-              "var",
-              "raw"
-             ],
-             0,
-             [
-              "max",
-              0,
-              [
-               "var",
-               "cut"
-              ]
-             ]
-            ],
-            [
-             "case",
-             [
-              "all",
-              [
-               ">",
-               [
-                "var",
-                "cut"
-               ],
-               0
-              ],
-              [
-               ">",
-               [
-                "length",
+                 "upcase",
+                 [
+                  "var",
+                  "head"
+                 ]
+                ],
                 [
                  "var",
-                 "raw"
+                 "head"
                 ]
+               ],
+               [
+                "!=",
+                [
+                 "downcase",
+                 [
+                  "var",
+                  "head"
+                 ]
+                ],
+                [
+                 "var",
+                 "head"
+                ]
+               ]
+              ],
+              [
+               "slice",
+               [
+                "var",
+                "raw"
                ],
                [
                 "+",
@@ -13111,52 +13220,9 @@
                ]
               ],
               [
-               "==",
-               [
-                "upcase",
-                [
-                 "var",
-                 "head"
-                ]
-               ],
-               [
-                "var",
-                "head"
-               ]
-              ],
-              [
-               "!=",
-               [
-                "downcase",
-                [
-                 "var",
-                 "head"
-                ]
-               ],
-               [
-                "var",
-                "head"
-               ]
-              ]
-             ],
-             [
-              "slice",
-              [
                "var",
                "raw"
-              ],
-              [
-               "+",
-               [
-                "var",
-                "cut"
-               ],
-               1
               ]
-             ],
-             [
-              "var",
-              "raw"
              ]
             ]
            ]
@@ -14428,7 +14494,122 @@
            ],
            ""
           ],
-          "first",
+          [
+           "let",
+           "first",
+           [
+            "index-of",
+            " ",
+            [
+             "var",
+             "raw"
+            ]
+           ],
+           [
+            "let",
+            "head",
+            [
+             "upcase",
+             [
+              "slice",
+              [
+               "var",
+               "raw"
+              ],
+              0,
+              [
+               "max",
+               0,
+               [
+                "var",
+                "first"
+               ]
+              ]
+             ]
+            ],
+            [
+             "case",
+             [
+              "all",
+              [
+               ">",
+               [
+                "var",
+                "first"
+               ],
+               0
+              ],
+              [
+               ">",
+               [
+                "index-of",
+                " ",
+                [
+                 "var",
+                 "raw"
+                ],
+                [
+                 "+",
+                 [
+                  "var",
+                  "first"
+                 ],
+                 1
+                ]
+               ],
+               0
+              ],
+              [
+               "in",
+               [
+                "var",
+                "head"
+               ],
+               [
+                "literal",
+                [
+                 "SCENIC",
+                 "BUSINESS",
+                 "ALTERNATE",
+                 "ALT",
+                 "BYPASS",
+                 "BYP",
+                 "TRUCK",
+                 "SPUR",
+                 "LOOP",
+                 "CONNECTOR",
+                 "CONN",
+                 "BUS"
+                ]
+               ]
+              ]
+             ],
+             [
+              "slice",
+              [
+               "var",
+               "raw"
+              ],
+              [
+               "+",
+               [
+                "var",
+                "first"
+               ],
+               1
+              ]
+             ],
+             [
+              "var",
+              "raw"
+             ]
+            ]
+           ]
+          ]
+         ],
+         [
+          "let",
+          "space",
           [
            "index-of",
            " ",
@@ -14437,11 +14618,59 @@
             "raw"
            ]
           ],
+          "dash",
+          [
+           "index-of",
+           "-",
+           [
+            "var",
+            "raw"
+           ]
+          ],
           [
            "let",
-           "head",
+           "cut",
            [
-            "upcase",
+            "case",
+            [
+             "<",
+             [
+              "var",
+              "space"
+             ],
+             0
+            ],
+            [
+             "var",
+             "dash"
+            ],
+            [
+             "<",
+             [
+              "var",
+              "dash"
+             ],
+             0
+            ],
+            [
+             "var",
+             "space"
+            ],
+            [
+             "min",
+             [
+              "var",
+              "space"
+             ],
+             [
+              "var",
+              "dash"
+             ]
+            ]
+           ],
+           [
+            "let",
+            "head",
             [
              "slice",
              [
@@ -14454,188 +14683,74 @@
               0,
               [
                "var",
-               "first"
+               "cut"
               ]
              ]
-            ]
-           ],
-           [
-            "case",
+            ],
             [
-             "all",
+             "case",
              [
-              ">",
+              "all",
               [
-               "var",
-               "first"
-              ],
-              0
-             ],
-             [
-              ">",
-              [
-               "index-of",
-               " ",
+               ">",
                [
                 "var",
-                "raw"
+                "cut"
+               ],
+               0
+              ],
+              [
+               ">",
+               [
+                "length",
+                [
+                 "var",
+                 "raw"
+                ]
                ],
                [
                 "+",
                 [
                  "var",
-                 "first"
+                 "cut"
                 ],
                 1
                ]
               ],
-              0
-             ],
-             [
-              "in",
               [
-               "var",
-               "head"
-              ],
-              [
-               "literal",
+               "==",
                [
-                "SCENIC",
-                "BUSINESS",
-                "ALTERNATE",
-                "ALT",
-                "BYPASS",
-                "BYP",
-                "TRUCK",
-                "SPUR",
-                "LOOP",
-                "CONNECTOR",
-                "CONN",
-                "BUS"
-               ]
-              ]
-             ]
-            ],
-            [
-             "slice",
-             [
-              "var",
-              "raw"
-             ],
-             [
-              "+",
-              [
-               "var",
-               "first"
-              ],
-              1
-             ]
-            ],
-            [
-             "var",
-             "raw"
-            ]
-           ]
-          ]
-         ],
-         "space",
-         [
-          "index-of",
-          " ",
-          [
-           "var",
-           "raw"
-          ]
-         ],
-         "dash",
-         [
-          "index-of",
-          "-",
-          [
-           "var",
-           "raw"
-          ]
-         ],
-         [
-          "let",
-          "cut",
-          [
-           "case",
-           [
-            "<",
-            [
-             "var",
-             "space"
-            ],
-            0
-           ],
-           [
-            "var",
-            "dash"
-           ],
-           [
-            "<",
-            [
-             "var",
-             "dash"
-            ],
-            0
-           ],
-           [
-            "var",
-            "space"
-           ],
-           [
-            "min",
-            [
-             "var",
-             "space"
-            ],
-            [
-             "var",
-             "dash"
-            ]
-           ]
-          ],
-          [
-           "let",
-           "head",
-           [
-            "slice",
-            [
-             "var",
-             "raw"
-            ],
-            0,
-            [
-             "max",
-             0,
-             [
-              "var",
-              "cut"
-             ]
-            ]
-           ],
-           [
-            "case",
-            [
-             "all",
-             [
-              ">",
-              [
-               "var",
-               "cut"
-              ],
-              0
-             ],
-             [
-              ">",
-              [
-               "length",
+                "upcase",
+                [
+                 "var",
+                 "head"
+                ]
+               ],
                [
                 "var",
-                "raw"
+                "head"
                ]
+              ],
+              [
+               "!=",
+               [
+                "downcase",
+                [
+                 "var",
+                 "head"
+                ]
+               ],
+               [
+                "var",
+                "head"
+               ]
+              ]
+             ],
+             [
+              "slice",
+              [
+               "var",
+               "raw"
               ],
               [
                "+",
@@ -14647,52 +14762,9 @@
               ]
              ],
              [
-              "==",
-              [
-               "upcase",
-               [
-                "var",
-                "head"
-               ]
-              ],
-              [
-               "var",
-               "head"
-              ]
-             ],
-             [
-              "!=",
-              [
-               "downcase",
-               [
-                "var",
-                "head"
-               ]
-              ],
-              [
-               "var",
-               "head"
-              ]
-             ]
-            ],
-            [
-             "slice",
-             [
               "var",
               "raw"
-             ],
-             [
-              "+",
-              [
-               "var",
-               "cut"
-              ],
-              1
              ]
-            ],
-            [
-             "var",
-             "raw"
             ]
            ]
           ]
@@ -15501,7 +15573,122 @@
                ],
                ""
               ],
-              "first",
+              [
+               "let",
+               "first",
+               [
+                "index-of",
+                " ",
+                [
+                 "var",
+                 "raw"
+                ]
+               ],
+               [
+                "let",
+                "head",
+                [
+                 "upcase",
+                 [
+                  "slice",
+                  [
+                   "var",
+                   "raw"
+                  ],
+                  0,
+                  [
+                   "max",
+                   0,
+                   [
+                    "var",
+                    "first"
+                   ]
+                  ]
+                 ]
+                ],
+                [
+                 "case",
+                 [
+                  "all",
+                  [
+                   ">",
+                   [
+                    "var",
+                    "first"
+                   ],
+                   0
+                  ],
+                  [
+                   ">",
+                   [
+                    "index-of",
+                    " ",
+                    [
+                     "var",
+                     "raw"
+                    ],
+                    [
+                     "+",
+                     [
+                      "var",
+                      "first"
+                     ],
+                     1
+                    ]
+                   ],
+                   0
+                  ],
+                  [
+                   "in",
+                   [
+                    "var",
+                    "head"
+                   ],
+                   [
+                    "literal",
+                    [
+                     "SCENIC",
+                     "BUSINESS",
+                     "ALTERNATE",
+                     "ALT",
+                     "BYPASS",
+                     "BYP",
+                     "TRUCK",
+                     "SPUR",
+                     "LOOP",
+                     "CONNECTOR",
+                     "CONN",
+                     "BUS"
+                    ]
+                   ]
+                  ]
+                 ],
+                 [
+                  "slice",
+                  [
+                   "var",
+                   "raw"
+                  ],
+                  [
+                   "+",
+                   [
+                    "var",
+                    "first"
+                   ],
+                   1
+                  ]
+                 ],
+                 [
+                  "var",
+                  "raw"
+                 ]
+                ]
+               ]
+              ]
+             ],
+             [
+              "let",
+              "space",
               [
                "index-of",
                " ",
@@ -15510,11 +15697,59 @@
                 "raw"
                ]
               ],
+              "dash",
+              [
+               "index-of",
+               "-",
+               [
+                "var",
+                "raw"
+               ]
+              ],
               [
                "let",
-               "head",
+               "cut",
                [
-                "upcase",
+                "case",
+                [
+                 "<",
+                 [
+                  "var",
+                  "space"
+                 ],
+                 0
+                ],
+                [
+                 "var",
+                 "dash"
+                ],
+                [
+                 "<",
+                 [
+                  "var",
+                  "dash"
+                 ],
+                 0
+                ],
+                [
+                 "var",
+                 "space"
+                ],
+                [
+                 "min",
+                 [
+                  "var",
+                  "space"
+                 ],
+                 [
+                  "var",
+                  "dash"
+                 ]
+                ]
+               ],
+               [
+                "let",
+                "head",
                 [
                  "slice",
                  [
@@ -15527,188 +15762,74 @@
                   0,
                   [
                    "var",
-                   "first"
+                   "cut"
                   ]
                  ]
-                ]
-               ],
-               [
-                "case",
+                ],
                 [
-                 "all",
+                 "case",
                  [
-                  ">",
+                  "all",
                   [
-                   "var",
-                   "first"
-                  ],
-                  0
-                 ],
-                 [
-                  ">",
-                  [
-                   "index-of",
-                   " ",
+                   ">",
                    [
                     "var",
-                    "raw"
+                    "cut"
+                   ],
+                   0
+                  ],
+                  [
+                   ">",
+                   [
+                    "length",
+                    [
+                     "var",
+                     "raw"
+                    ]
                    ],
                    [
                     "+",
                     [
                      "var",
-                     "first"
+                     "cut"
                     ],
                     1
                    ]
                   ],
-                  0
-                 ],
-                 [
-                  "in",
                   [
-                   "var",
-                   "head"
-                  ],
-                  [
-                   "literal",
+                   "==",
                    [
-                    "SCENIC",
-                    "BUSINESS",
-                    "ALTERNATE",
-                    "ALT",
-                    "BYPASS",
-                    "BYP",
-                    "TRUCK",
-                    "SPUR",
-                    "LOOP",
-                    "CONNECTOR",
-                    "CONN",
-                    "BUS"
-                   ]
-                  ]
-                 ]
-                ],
-                [
-                 "slice",
-                 [
-                  "var",
-                  "raw"
-                 ],
-                 [
-                  "+",
-                  [
-                   "var",
-                   "first"
-                  ],
-                  1
-                 ]
-                ],
-                [
-                 "var",
-                 "raw"
-                ]
-               ]
-              ]
-             ],
-             "space",
-             [
-              "index-of",
-              " ",
-              [
-               "var",
-               "raw"
-              ]
-             ],
-             "dash",
-             [
-              "index-of",
-              "-",
-              [
-               "var",
-               "raw"
-              ]
-             ],
-             [
-              "let",
-              "cut",
-              [
-               "case",
-               [
-                "<",
-                [
-                 "var",
-                 "space"
-                ],
-                0
-               ],
-               [
-                "var",
-                "dash"
-               ],
-               [
-                "<",
-                [
-                 "var",
-                 "dash"
-                ],
-                0
-               ],
-               [
-                "var",
-                "space"
-               ],
-               [
-                "min",
-                [
-                 "var",
-                 "space"
-                ],
-                [
-                 "var",
-                 "dash"
-                ]
-               ]
-              ],
-              [
-               "let",
-               "head",
-               [
-                "slice",
-                [
-                 "var",
-                 "raw"
-                ],
-                0,
-                [
-                 "max",
-                 0,
-                 [
-                  "var",
-                  "cut"
-                 ]
-                ]
-               ],
-               [
-                "case",
-                [
-                 "all",
-                 [
-                  ">",
-                  [
-                   "var",
-                   "cut"
-                  ],
-                  0
-                 ],
-                 [
-                  ">",
-                  [
-                   "length",
+                    "upcase",
+                    [
+                     "var",
+                     "head"
+                    ]
+                   ],
                    [
                     "var",
-                    "raw"
+                    "head"
                    ]
+                  ],
+                  [
+                   "!=",
+                   [
+                    "downcase",
+                    [
+                     "var",
+                     "head"
+                    ]
+                   ],
+                   [
+                    "var",
+                    "head"
+                   ]
+                  ]
+                 ],
+                 [
+                  "slice",
+                  [
+                   "var",
+                   "raw"
                   ],
                   [
                    "+",
@@ -15720,52 +15841,9 @@
                   ]
                  ],
                  [
-                  "==",
-                  [
-                   "upcase",
-                   [
-                    "var",
-                    "head"
-                   ]
-                  ],
-                  [
-                   "var",
-                   "head"
-                  ]
-                 ],
-                 [
-                  "!=",
-                  [
-                   "downcase",
-                   [
-                    "var",
-                    "head"
-                   ]
-                  ],
-                  [
-                   "var",
-                   "head"
-                  ]
-                 ]
-                ],
-                [
-                 "slice",
-                 [
                   "var",
                   "raw"
-                 ],
-                 [
-                  "+",
-                  [
-                   "var",
-                   "cut"
-                  ],
-                  1
                  ]
-                ],
-                [
-                 "var",
-                 "raw"
                 ]
                ]
               ]
@@ -16293,7 +16371,122 @@
                  ],
                  ""
                 ],
-                "first",
+                [
+                 "let",
+                 "first",
+                 [
+                  "index-of",
+                  " ",
+                  [
+                   "var",
+                   "raw"
+                  ]
+                 ],
+                 [
+                  "let",
+                  "head",
+                  [
+                   "upcase",
+                   [
+                    "slice",
+                    [
+                     "var",
+                     "raw"
+                    ],
+                    0,
+                    [
+                     "max",
+                     0,
+                     [
+                      "var",
+                      "first"
+                     ]
+                    ]
+                   ]
+                  ],
+                  [
+                   "case",
+                   [
+                    "all",
+                    [
+                     ">",
+                     [
+                      "var",
+                      "first"
+                     ],
+                     0
+                    ],
+                    [
+                     ">",
+                     [
+                      "index-of",
+                      " ",
+                      [
+                       "var",
+                       "raw"
+                      ],
+                      [
+                       "+",
+                       [
+                        "var",
+                        "first"
+                       ],
+                       1
+                      ]
+                     ],
+                     0
+                    ],
+                    [
+                     "in",
+                     [
+                      "var",
+                      "head"
+                     ],
+                     [
+                      "literal",
+                      [
+                       "SCENIC",
+                       "BUSINESS",
+                       "ALTERNATE",
+                       "ALT",
+                       "BYPASS",
+                       "BYP",
+                       "TRUCK",
+                       "SPUR",
+                       "LOOP",
+                       "CONNECTOR",
+                       "CONN",
+                       "BUS"
+                      ]
+                     ]
+                    ]
+                   ],
+                   [
+                    "slice",
+                    [
+                     "var",
+                     "raw"
+                    ],
+                    [
+                     "+",
+                     [
+                      "var",
+                      "first"
+                     ],
+                     1
+                    ]
+                   ],
+                   [
+                    "var",
+                    "raw"
+                   ]
+                  ]
+                 ]
+                ]
+               ],
+               [
+                "let",
+                "space",
                 [
                  "index-of",
                  " ",
@@ -16302,11 +16495,59 @@
                   "raw"
                  ]
                 ],
+                "dash",
+                [
+                 "index-of",
+                 "-",
+                 [
+                  "var",
+                  "raw"
+                 ]
+                ],
                 [
                  "let",
-                 "head",
+                 "cut",
                  [
-                  "upcase",
+                  "case",
+                  [
+                   "<",
+                   [
+                    "var",
+                    "space"
+                   ],
+                   0
+                  ],
+                  [
+                   "var",
+                   "dash"
+                  ],
+                  [
+                   "<",
+                   [
+                    "var",
+                    "dash"
+                   ],
+                   0
+                  ],
+                  [
+                   "var",
+                   "space"
+                  ],
+                  [
+                   "min",
+                   [
+                    "var",
+                    "space"
+                   ],
+                   [
+                    "var",
+                    "dash"
+                   ]
+                  ]
+                 ],
+                 [
+                  "let",
+                  "head",
                   [
                    "slice",
                    [
@@ -16319,188 +16560,74 @@
                     0,
                     [
                      "var",
-                     "first"
+                     "cut"
                     ]
                    ]
-                  ]
-                 ],
-                 [
-                  "case",
+                  ],
                   [
-                   "all",
+                   "case",
                    [
-                    ">",
+                    "all",
                     [
-                     "var",
-                     "first"
-                    ],
-                    0
-                   ],
-                   [
-                    ">",
-                    [
-                     "index-of",
-                     " ",
+                     ">",
                      [
                       "var",
-                      "raw"
+                      "cut"
+                     ],
+                     0
+                    ],
+                    [
+                     ">",
+                     [
+                      "length",
+                      [
+                       "var",
+                       "raw"
+                      ]
                      ],
                      [
                       "+",
                       [
                        "var",
-                       "first"
+                       "cut"
                       ],
                       1
                      ]
                     ],
-                    0
-                   ],
-                   [
-                    "in",
                     [
-                     "var",
-                     "head"
-                    ],
-                    [
-                     "literal",
+                     "==",
                      [
-                      "SCENIC",
-                      "BUSINESS",
-                      "ALTERNATE",
-                      "ALT",
-                      "BYPASS",
-                      "BYP",
-                      "TRUCK",
-                      "SPUR",
-                      "LOOP",
-                      "CONNECTOR",
-                      "CONN",
-                      "BUS"
-                     ]
-                    ]
-                   ]
-                  ],
-                  [
-                   "slice",
-                   [
-                    "var",
-                    "raw"
-                   ],
-                   [
-                    "+",
-                    [
-                     "var",
-                     "first"
-                    ],
-                    1
-                   ]
-                  ],
-                  [
-                   "var",
-                   "raw"
-                  ]
-                 ]
-                ]
-               ],
-               "space",
-               [
-                "index-of",
-                " ",
-                [
-                 "var",
-                 "raw"
-                ]
-               ],
-               "dash",
-               [
-                "index-of",
-                "-",
-                [
-                 "var",
-                 "raw"
-                ]
-               ],
-               [
-                "let",
-                "cut",
-                [
-                 "case",
-                 [
-                  "<",
-                  [
-                   "var",
-                   "space"
-                  ],
-                  0
-                 ],
-                 [
-                  "var",
-                  "dash"
-                 ],
-                 [
-                  "<",
-                  [
-                   "var",
-                   "dash"
-                  ],
-                  0
-                 ],
-                 [
-                  "var",
-                  "space"
-                 ],
-                 [
-                  "min",
-                  [
-                   "var",
-                   "space"
-                  ],
-                  [
-                   "var",
-                   "dash"
-                  ]
-                 ]
-                ],
-                [
-                 "let",
-                 "head",
-                 [
-                  "slice",
-                  [
-                   "var",
-                   "raw"
-                  ],
-                  0,
-                  [
-                   "max",
-                   0,
-                   [
-                    "var",
-                    "cut"
-                   ]
-                  ]
-                 ],
-                 [
-                  "case",
-                  [
-                   "all",
-                   [
-                    ">",
-                    [
-                     "var",
-                     "cut"
-                    ],
-                    0
-                   ],
-                   [
-                    ">",
-                    [
-                     "length",
+                      "upcase",
+                      [
+                       "var",
+                       "head"
+                      ]
+                     ],
                      [
                       "var",
-                      "raw"
+                      "head"
                      ]
+                    ],
+                    [
+                     "!=",
+                     [
+                      "downcase",
+                      [
+                       "var",
+                       "head"
+                      ]
+                     ],
+                     [
+                      "var",
+                      "head"
+                     ]
+                    ]
+                   ],
+                   [
+                    "slice",
+                    [
+                     "var",
+                     "raw"
                     ],
                     [
                      "+",
@@ -16512,52 +16639,9 @@
                     ]
                    ],
                    [
-                    "==",
-                    [
-                     "upcase",
-                     [
-                      "var",
-                      "head"
-                     ]
-                    ],
-                    [
-                     "var",
-                     "head"
-                    ]
-                   ],
-                   [
-                    "!=",
-                    [
-                     "downcase",
-                     [
-                      "var",
-                      "head"
-                     ]
-                    ],
-                    [
-                     "var",
-                     "head"
-                    ]
-                   ]
-                  ],
-                  [
-                   "slice",
-                   [
                     "var",
                     "raw"
-                   ],
-                   [
-                    "+",
-                    [
-                     "var",
-                     "cut"
-                    ],
-                    1
                    ]
-                  ],
-                  [
-                   "var",
-                   "raw"
                   ]
                  ]
                 ]
@@ -17913,7 +17997,122 @@
           ],
           ""
          ],
-         "first",
+         [
+          "let",
+          "first",
+          [
+           "index-of",
+           " ",
+           [
+            "var",
+            "raw"
+           ]
+          ],
+          [
+           "let",
+           "head",
+           [
+            "upcase",
+            [
+             "slice",
+             [
+              "var",
+              "raw"
+             ],
+             0,
+             [
+              "max",
+              0,
+              [
+               "var",
+               "first"
+              ]
+             ]
+            ]
+           ],
+           [
+            "case",
+            [
+             "all",
+             [
+              ">",
+              [
+               "var",
+               "first"
+              ],
+              0
+             ],
+             [
+              ">",
+              [
+               "index-of",
+               " ",
+               [
+                "var",
+                "raw"
+               ],
+               [
+                "+",
+                [
+                 "var",
+                 "first"
+                ],
+                1
+               ]
+              ],
+              0
+             ],
+             [
+              "in",
+              [
+               "var",
+               "head"
+              ],
+              [
+               "literal",
+               [
+                "SCENIC",
+                "BUSINESS",
+                "ALTERNATE",
+                "ALT",
+                "BYPASS",
+                "BYP",
+                "TRUCK",
+                "SPUR",
+                "LOOP",
+                "CONNECTOR",
+                "CONN",
+                "BUS"
+               ]
+              ]
+             ]
+            ],
+            [
+             "slice",
+             [
+              "var",
+              "raw"
+             ],
+             [
+              "+",
+              [
+               "var",
+               "first"
+              ],
+              1
+             ]
+            ],
+            [
+             "var",
+             "raw"
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "let",
+         "space",
          [
           "index-of",
           " ",
@@ -17922,11 +18121,59 @@
            "raw"
           ]
          ],
+         "dash",
+         [
+          "index-of",
+          "-",
+          [
+           "var",
+           "raw"
+          ]
+         ],
          [
           "let",
-          "head",
+          "cut",
           [
-           "upcase",
+           "case",
+           [
+            "<",
+            [
+             "var",
+             "space"
+            ],
+            0
+           ],
+           [
+            "var",
+            "dash"
+           ],
+           [
+            "<",
+            [
+             "var",
+             "dash"
+            ],
+            0
+           ],
+           [
+            "var",
+            "space"
+           ],
+           [
+            "min",
+            [
+             "var",
+             "space"
+            ],
+            [
+             "var",
+             "dash"
+            ]
+           ]
+          ],
+          [
+           "let",
+           "head",
            [
             "slice",
             [
@@ -17939,188 +18186,74 @@
              0,
              [
               "var",
-              "first"
+              "cut"
              ]
             ]
-           ]
-          ],
-          [
-           "case",
+           ],
            [
-            "all",
+            "case",
             [
-             ">",
+             "all",
              [
-              "var",
-              "first"
-             ],
-             0
-            ],
-            [
-             ">",
-             [
-              "index-of",
-              " ",
+              ">",
               [
                "var",
-               "raw"
+               "cut"
+              ],
+              0
+             ],
+             [
+              ">",
+              [
+               "length",
+               [
+                "var",
+                "raw"
+               ]
               ],
               [
                "+",
                [
                 "var",
-                "first"
+                "cut"
                ],
                1
               ]
              ],
-             0
-            ],
-            [
-             "in",
              [
-              "var",
-              "head"
-             ],
-             [
-              "literal",
+              "==",
               [
-               "SCENIC",
-               "BUSINESS",
-               "ALTERNATE",
-               "ALT",
-               "BYPASS",
-               "BYP",
-               "TRUCK",
-               "SPUR",
-               "LOOP",
-               "CONNECTOR",
-               "CONN",
-               "BUS"
-              ]
-             ]
-            ]
-           ],
-           [
-            "slice",
-            [
-             "var",
-             "raw"
-            ],
-            [
-             "+",
-             [
-              "var",
-              "first"
-             ],
-             1
-            ]
-           ],
-           [
-            "var",
-            "raw"
-           ]
-          ]
-         ]
-        ],
-        "space",
-        [
-         "index-of",
-         " ",
-         [
-          "var",
-          "raw"
-         ]
-        ],
-        "dash",
-        [
-         "index-of",
-         "-",
-         [
-          "var",
-          "raw"
-         ]
-        ],
-        [
-         "let",
-         "cut",
-         [
-          "case",
-          [
-           "<",
-           [
-            "var",
-            "space"
-           ],
-           0
-          ],
-          [
-           "var",
-           "dash"
-          ],
-          [
-           "<",
-           [
-            "var",
-            "dash"
-           ],
-           0
-          ],
-          [
-           "var",
-           "space"
-          ],
-          [
-           "min",
-           [
-            "var",
-            "space"
-           ],
-           [
-            "var",
-            "dash"
-           ]
-          ]
-         ],
-         [
-          "let",
-          "head",
-          [
-           "slice",
-           [
-            "var",
-            "raw"
-           ],
-           0,
-           [
-            "max",
-            0,
-            [
-             "var",
-             "cut"
-            ]
-           ]
-          ],
-          [
-           "case",
-           [
-            "all",
-            [
-             ">",
-             [
-              "var",
-              "cut"
-             ],
-             0
-            ],
-            [
-             ">",
-             [
-              "length",
+               "upcase",
+               [
+                "var",
+                "head"
+               ]
+              ],
               [
                "var",
-               "raw"
+               "head"
               ]
+             ],
+             [
+              "!=",
+              [
+               "downcase",
+               [
+                "var",
+                "head"
+               ]
+              ],
+              [
+               "var",
+               "head"
+              ]
+             ]
+            ],
+            [
+             "slice",
+             [
+              "var",
+              "raw"
              ],
              [
               "+",
@@ -18132,52 +18265,9 @@
              ]
             ],
             [
-             "==",
-             [
-              "upcase",
-              [
-               "var",
-               "head"
-              ]
-             ],
-             [
-              "var",
-              "head"
-             ]
-            ],
-            [
-             "!=",
-             [
-              "downcase",
-              [
-               "var",
-               "head"
-              ]
-             ],
-             [
-              "var",
-              "head"
-             ]
-            ]
-           ],
-           [
-            "slice",
-            [
              "var",
              "raw"
-            ],
-            [
-             "+",
-             [
-              "var",
-              "cut"
-             ],
-             1
             ]
-           ],
-           [
-            "var",
-            "raw"
            ]
           ]
          ]
@@ -18705,7 +18795,122 @@
             ],
             ""
            ],
-           "first",
+           [
+            "let",
+            "first",
+            [
+             "index-of",
+             " ",
+             [
+              "var",
+              "raw"
+             ]
+            ],
+            [
+             "let",
+             "head",
+             [
+              "upcase",
+              [
+               "slice",
+               [
+                "var",
+                "raw"
+               ],
+               0,
+               [
+                "max",
+                0,
+                [
+                 "var",
+                 "first"
+                ]
+               ]
+              ]
+             ],
+             [
+              "case",
+              [
+               "all",
+               [
+                ">",
+                [
+                 "var",
+                 "first"
+                ],
+                0
+               ],
+               [
+                ">",
+                [
+                 "index-of",
+                 " ",
+                 [
+                  "var",
+                  "raw"
+                 ],
+                 [
+                  "+",
+                  [
+                   "var",
+                   "first"
+                  ],
+                  1
+                 ]
+                ],
+                0
+               ],
+               [
+                "in",
+                [
+                 "var",
+                 "head"
+                ],
+                [
+                 "literal",
+                 [
+                  "SCENIC",
+                  "BUSINESS",
+                  "ALTERNATE",
+                  "ALT",
+                  "BYPASS",
+                  "BYP",
+                  "TRUCK",
+                  "SPUR",
+                  "LOOP",
+                  "CONNECTOR",
+                  "CONN",
+                  "BUS"
+                 ]
+                ]
+               ]
+              ],
+              [
+               "slice",
+               [
+                "var",
+                "raw"
+               ],
+               [
+                "+",
+                [
+                 "var",
+                 "first"
+                ],
+                1
+               ]
+              ],
+              [
+               "var",
+               "raw"
+              ]
+             ]
+            ]
+           ]
+          ],
+          [
+           "let",
+           "space",
            [
             "index-of",
             " ",
@@ -18714,11 +18919,59 @@
              "raw"
             ]
            ],
+           "dash",
+           [
+            "index-of",
+            "-",
+            [
+             "var",
+             "raw"
+            ]
+           ],
            [
             "let",
-            "head",
+            "cut",
             [
-             "upcase",
+             "case",
+             [
+              "<",
+              [
+               "var",
+               "space"
+              ],
+              0
+             ],
+             [
+              "var",
+              "dash"
+             ],
+             [
+              "<",
+              [
+               "var",
+               "dash"
+              ],
+              0
+             ],
+             [
+              "var",
+              "space"
+             ],
+             [
+              "min",
+              [
+               "var",
+               "space"
+              ],
+              [
+               "var",
+               "dash"
+              ]
+             ]
+            ],
+            [
+             "let",
+             "head",
              [
               "slice",
               [
@@ -18731,188 +18984,74 @@
                0,
                [
                 "var",
-                "first"
+                "cut"
                ]
               ]
-             ]
-            ],
-            [
-             "case",
+             ],
              [
-              "all",
+              "case",
               [
-               ">",
+               "all",
                [
-                "var",
-                "first"
-               ],
-               0
-              ],
-              [
-               ">",
-               [
-                "index-of",
-                " ",
+                ">",
                 [
                  "var",
-                 "raw"
+                 "cut"
+                ],
+                0
+               ],
+               [
+                ">",
+                [
+                 "length",
+                 [
+                  "var",
+                  "raw"
+                 ]
                 ],
                 [
                  "+",
                  [
                   "var",
-                  "first"
+                  "cut"
                  ],
                  1
                 ]
                ],
-               0
-              ],
-              [
-               "in",
                [
-                "var",
-                "head"
-               ],
-               [
-                "literal",
+                "==",
                 [
-                 "SCENIC",
-                 "BUSINESS",
-                 "ALTERNATE",
-                 "ALT",
-                 "BYPASS",
-                 "BYP",
-                 "TRUCK",
-                 "SPUR",
-                 "LOOP",
-                 "CONNECTOR",
-                 "CONN",
-                 "BUS"
-                ]
-               ]
-              ]
-             ],
-             [
-              "slice",
-              [
-               "var",
-               "raw"
-              ],
-              [
-               "+",
-               [
-                "var",
-                "first"
-               ],
-               1
-              ]
-             ],
-             [
-              "var",
-              "raw"
-             ]
-            ]
-           ]
-          ],
-          "space",
-          [
-           "index-of",
-           " ",
-           [
-            "var",
-            "raw"
-           ]
-          ],
-          "dash",
-          [
-           "index-of",
-           "-",
-           [
-            "var",
-            "raw"
-           ]
-          ],
-          [
-           "let",
-           "cut",
-           [
-            "case",
-            [
-             "<",
-             [
-              "var",
-              "space"
-             ],
-             0
-            ],
-            [
-             "var",
-             "dash"
-            ],
-            [
-             "<",
-             [
-              "var",
-              "dash"
-             ],
-             0
-            ],
-            [
-             "var",
-             "space"
-            ],
-            [
-             "min",
-             [
-              "var",
-              "space"
-             ],
-             [
-              "var",
-              "dash"
-             ]
-            ]
-           ],
-           [
-            "let",
-            "head",
-            [
-             "slice",
-             [
-              "var",
-              "raw"
-             ],
-             0,
-             [
-              "max",
-              0,
-              [
-               "var",
-               "cut"
-              ]
-             ]
-            ],
-            [
-             "case",
-             [
-              "all",
-              [
-               ">",
-               [
-                "var",
-                "cut"
-               ],
-               0
-              ],
-              [
-               ">",
-               [
-                "length",
+                 "upcase",
+                 [
+                  "var",
+                  "head"
+                 ]
+                ],
                 [
                  "var",
-                 "raw"
+                 "head"
                 ]
+               ],
+               [
+                "!=",
+                [
+                 "downcase",
+                 [
+                  "var",
+                  "head"
+                 ]
+                ],
+                [
+                 "var",
+                 "head"
+                ]
+               ]
+              ],
+              [
+               "slice",
+               [
+                "var",
+                "raw"
                ],
                [
                 "+",
@@ -18924,52 +19063,9 @@
                ]
               ],
               [
-               "==",
-               [
-                "upcase",
-                [
-                 "var",
-                 "head"
-                ]
-               ],
-               [
-                "var",
-                "head"
-               ]
-              ],
-              [
-               "!=",
-               [
-                "downcase",
-                [
-                 "var",
-                 "head"
-                ]
-               ],
-               [
-                "var",
-                "head"
-               ]
-              ]
-             ],
-             [
-              "slice",
-              [
                "var",
                "raw"
-              ],
-              [
-               "+",
-               [
-                "var",
-                "cut"
-               ],
-               1
               ]
-             ],
-             [
-              "var",
-              "raw"
              ]
             ]
            ]
@@ -19546,7 +19642,122 @@
             ],
             ""
            ],
-           "first",
+           [
+            "let",
+            "first",
+            [
+             "index-of",
+             " ",
+             [
+              "var",
+              "raw"
+             ]
+            ],
+            [
+             "let",
+             "head",
+             [
+              "upcase",
+              [
+               "slice",
+               [
+                "var",
+                "raw"
+               ],
+               0,
+               [
+                "max",
+                0,
+                [
+                 "var",
+                 "first"
+                ]
+               ]
+              ]
+             ],
+             [
+              "case",
+              [
+               "all",
+               [
+                ">",
+                [
+                 "var",
+                 "first"
+                ],
+                0
+               ],
+               [
+                ">",
+                [
+                 "index-of",
+                 " ",
+                 [
+                  "var",
+                  "raw"
+                 ],
+                 [
+                  "+",
+                  [
+                   "var",
+                   "first"
+                  ],
+                  1
+                 ]
+                ],
+                0
+               ],
+               [
+                "in",
+                [
+                 "var",
+                 "head"
+                ],
+                [
+                 "literal",
+                 [
+                  "SCENIC",
+                  "BUSINESS",
+                  "ALTERNATE",
+                  "ALT",
+                  "BYPASS",
+                  "BYP",
+                  "TRUCK",
+                  "SPUR",
+                  "LOOP",
+                  "CONNECTOR",
+                  "CONN",
+                  "BUS"
+                 ]
+                ]
+               ]
+              ],
+              [
+               "slice",
+               [
+                "var",
+                "raw"
+               ],
+               [
+                "+",
+                [
+                 "var",
+                 "first"
+                ],
+                1
+               ]
+              ],
+              [
+               "var",
+               "raw"
+              ]
+             ]
+            ]
+           ]
+          ],
+          [
+           "let",
+           "space",
            [
             "index-of",
             " ",
@@ -19555,11 +19766,59 @@
              "raw"
             ]
            ],
+           "dash",
+           [
+            "index-of",
+            "-",
+            [
+             "var",
+             "raw"
+            ]
+           ],
            [
             "let",
-            "head",
+            "cut",
             [
-             "upcase",
+             "case",
+             [
+              "<",
+              [
+               "var",
+               "space"
+              ],
+              0
+             ],
+             [
+              "var",
+              "dash"
+             ],
+             [
+              "<",
+              [
+               "var",
+               "dash"
+              ],
+              0
+             ],
+             [
+              "var",
+              "space"
+             ],
+             [
+              "min",
+              [
+               "var",
+               "space"
+              ],
+              [
+               "var",
+               "dash"
+              ]
+             ]
+            ],
+            [
+             "let",
+             "head",
              [
               "slice",
               [
@@ -19572,188 +19831,74 @@
                0,
                [
                 "var",
-                "first"
+                "cut"
                ]
               ]
-             ]
-            ],
-            [
-             "case",
+             ],
              [
-              "all",
+              "case",
               [
-               ">",
+               "all",
                [
-                "var",
-                "first"
-               ],
-               0
-              ],
-              [
-               ">",
-               [
-                "index-of",
-                " ",
+                ">",
                 [
                  "var",
-                 "raw"
+                 "cut"
+                ],
+                0
+               ],
+               [
+                ">",
+                [
+                 "length",
+                 [
+                  "var",
+                  "raw"
+                 ]
                 ],
                 [
                  "+",
                  [
                   "var",
-                  "first"
+                  "cut"
                  ],
                  1
                 ]
                ],
-               0
-              ],
-              [
-               "in",
                [
-                "var",
-                "head"
-               ],
-               [
-                "literal",
+                "==",
                 [
-                 "SCENIC",
-                 "BUSINESS",
-                 "ALTERNATE",
-                 "ALT",
-                 "BYPASS",
-                 "BYP",
-                 "TRUCK",
-                 "SPUR",
-                 "LOOP",
-                 "CONNECTOR",
-                 "CONN",
-                 "BUS"
-                ]
-               ]
-              ]
-             ],
-             [
-              "slice",
-              [
-               "var",
-               "raw"
-              ],
-              [
-               "+",
-               [
-                "var",
-                "first"
-               ],
-               1
-              ]
-             ],
-             [
-              "var",
-              "raw"
-             ]
-            ]
-           ]
-          ],
-          "space",
-          [
-           "index-of",
-           " ",
-           [
-            "var",
-            "raw"
-           ]
-          ],
-          "dash",
-          [
-           "index-of",
-           "-",
-           [
-            "var",
-            "raw"
-           ]
-          ],
-          [
-           "let",
-           "cut",
-           [
-            "case",
-            [
-             "<",
-             [
-              "var",
-              "space"
-             ],
-             0
-            ],
-            [
-             "var",
-             "dash"
-            ],
-            [
-             "<",
-             [
-              "var",
-              "dash"
-             ],
-             0
-            ],
-            [
-             "var",
-             "space"
-            ],
-            [
-             "min",
-             [
-              "var",
-              "space"
-             ],
-             [
-              "var",
-              "dash"
-             ]
-            ]
-           ],
-           [
-            "let",
-            "head",
-            [
-             "slice",
-             [
-              "var",
-              "raw"
-             ],
-             0,
-             [
-              "max",
-              0,
-              [
-               "var",
-               "cut"
-              ]
-             ]
-            ],
-            [
-             "case",
-             [
-              "all",
-              [
-               ">",
-               [
-                "var",
-                "cut"
-               ],
-               0
-              ],
-              [
-               ">",
-               [
-                "length",
+                 "upcase",
+                 [
+                  "var",
+                  "head"
+                 ]
+                ],
                 [
                  "var",
-                 "raw"
+                 "head"
                 ]
+               ],
+               [
+                "!=",
+                [
+                 "downcase",
+                 [
+                  "var",
+                  "head"
+                 ]
+                ],
+                [
+                 "var",
+                 "head"
+                ]
+               ]
+              ],
+              [
+               "slice",
+               [
+                "var",
+                "raw"
                ],
                [
                 "+",
@@ -19765,52 +19910,9 @@
                ]
               ],
               [
-               "==",
-               [
-                "upcase",
-                [
-                 "var",
-                 "head"
-                ]
-               ],
-               [
-                "var",
-                "head"
-               ]
-              ],
-              [
-               "!=",
-               [
-                "downcase",
-                [
-                 "var",
-                 "head"
-                ]
-               ],
-               [
-                "var",
-                "head"
-               ]
-              ]
-             ],
-             [
-              "slice",
-              [
                "var",
                "raw"
-              ],
-              [
-               "+",
-               [
-                "var",
-                "cut"
-               ],
-               1
               ]
-             ],
-             [
-              "var",
-              "raw"
              ]
             ]
            ]
@@ -20338,7 +20440,122 @@
               ],
               ""
              ],
-             "first",
+             [
+              "let",
+              "first",
+              [
+               "index-of",
+               " ",
+               [
+                "var",
+                "raw"
+               ]
+              ],
+              [
+               "let",
+               "head",
+               [
+                "upcase",
+                [
+                 "slice",
+                 [
+                  "var",
+                  "raw"
+                 ],
+                 0,
+                 [
+                  "max",
+                  0,
+                  [
+                   "var",
+                   "first"
+                  ]
+                 ]
+                ]
+               ],
+               [
+                "case",
+                [
+                 "all",
+                 [
+                  ">",
+                  [
+                   "var",
+                   "first"
+                  ],
+                  0
+                 ],
+                 [
+                  ">",
+                  [
+                   "index-of",
+                   " ",
+                   [
+                    "var",
+                    "raw"
+                   ],
+                   [
+                    "+",
+                    [
+                     "var",
+                     "first"
+                    ],
+                    1
+                   ]
+                  ],
+                  0
+                 ],
+                 [
+                  "in",
+                  [
+                   "var",
+                   "head"
+                  ],
+                  [
+                   "literal",
+                   [
+                    "SCENIC",
+                    "BUSINESS",
+                    "ALTERNATE",
+                    "ALT",
+                    "BYPASS",
+                    "BYP",
+                    "TRUCK",
+                    "SPUR",
+                    "LOOP",
+                    "CONNECTOR",
+                    "CONN",
+                    "BUS"
+                   ]
+                  ]
+                 ]
+                ],
+                [
+                 "slice",
+                 [
+                  "var",
+                  "raw"
+                 ],
+                 [
+                  "+",
+                  [
+                   "var",
+                   "first"
+                  ],
+                  1
+                 ]
+                ],
+                [
+                 "var",
+                 "raw"
+                ]
+               ]
+              ]
+             ]
+            ],
+            [
+             "let",
+             "space",
              [
               "index-of",
               " ",
@@ -20347,11 +20564,59 @@
                "raw"
               ]
              ],
+             "dash",
+             [
+              "index-of",
+              "-",
+              [
+               "var",
+               "raw"
+              ]
+             ],
              [
               "let",
-              "head",
+              "cut",
               [
-               "upcase",
+               "case",
+               [
+                "<",
+                [
+                 "var",
+                 "space"
+                ],
+                0
+               ],
+               [
+                "var",
+                "dash"
+               ],
+               [
+                "<",
+                [
+                 "var",
+                 "dash"
+                ],
+                0
+               ],
+               [
+                "var",
+                "space"
+               ],
+               [
+                "min",
+                [
+                 "var",
+                 "space"
+                ],
+                [
+                 "var",
+                 "dash"
+                ]
+               ]
+              ],
+              [
+               "let",
+               "head",
                [
                 "slice",
                 [
@@ -20364,188 +20629,74 @@
                  0,
                  [
                   "var",
-                  "first"
+                  "cut"
                  ]
                 ]
-               ]
-              ],
-              [
-               "case",
+               ],
                [
-                "all",
+                "case",
                 [
-                 ">",
+                 "all",
                  [
-                  "var",
-                  "first"
-                 ],
-                 0
-                ],
-                [
-                 ">",
-                 [
-                  "index-of",
-                  " ",
+                  ">",
                   [
                    "var",
-                   "raw"
+                   "cut"
+                  ],
+                  0
+                 ],
+                 [
+                  ">",
+                  [
+                   "length",
+                   [
+                    "var",
+                    "raw"
+                   ]
                   ],
                   [
                    "+",
                    [
                     "var",
-                    "first"
+                    "cut"
                    ],
                    1
                   ]
                  ],
-                 0
-                ],
-                [
-                 "in",
                  [
-                  "var",
-                  "head"
-                 ],
-                 [
-                  "literal",
+                  "==",
                   [
-                   "SCENIC",
-                   "BUSINESS",
-                   "ALTERNATE",
-                   "ALT",
-                   "BYPASS",
-                   "BYP",
-                   "TRUCK",
-                   "SPUR",
-                   "LOOP",
-                   "CONNECTOR",
-                   "CONN",
-                   "BUS"
-                  ]
-                 ]
-                ]
-               ],
-               [
-                "slice",
-                [
-                 "var",
-                 "raw"
-                ],
-                [
-                 "+",
-                 [
-                  "var",
-                  "first"
-                 ],
-                 1
-                ]
-               ],
-               [
-                "var",
-                "raw"
-               ]
-              ]
-             ]
-            ],
-            "space",
-            [
-             "index-of",
-             " ",
-             [
-              "var",
-              "raw"
-             ]
-            ],
-            "dash",
-            [
-             "index-of",
-             "-",
-             [
-              "var",
-              "raw"
-             ]
-            ],
-            [
-             "let",
-             "cut",
-             [
-              "case",
-              [
-               "<",
-               [
-                "var",
-                "space"
-               ],
-               0
-              ],
-              [
-               "var",
-               "dash"
-              ],
-              [
-               "<",
-               [
-                "var",
-                "dash"
-               ],
-               0
-              ],
-              [
-               "var",
-               "space"
-              ],
-              [
-               "min",
-               [
-                "var",
-                "space"
-               ],
-               [
-                "var",
-                "dash"
-               ]
-              ]
-             ],
-             [
-              "let",
-              "head",
-              [
-               "slice",
-               [
-                "var",
-                "raw"
-               ],
-               0,
-               [
-                "max",
-                0,
-                [
-                 "var",
-                 "cut"
-                ]
-               ]
-              ],
-              [
-               "case",
-               [
-                "all",
-                [
-                 ">",
-                 [
-                  "var",
-                  "cut"
-                 ],
-                 0
-                ],
-                [
-                 ">",
-                 [
-                  "length",
+                   "upcase",
+                   [
+                    "var",
+                    "head"
+                   ]
+                  ],
                   [
                    "var",
-                   "raw"
+                   "head"
                   ]
+                 ],
+                 [
+                  "!=",
+                  [
+                   "downcase",
+                   [
+                    "var",
+                    "head"
+                   ]
+                  ],
+                  [
+                   "var",
+                   "head"
+                  ]
+                 ]
+                ],
+                [
+                 "slice",
+                 [
+                  "var",
+                  "raw"
                  ],
                  [
                   "+",
@@ -20557,52 +20708,9 @@
                  ]
                 ],
                 [
-                 "==",
-                 [
-                  "upcase",
-                  [
-                   "var",
-                   "head"
-                  ]
-                 ],
-                 [
-                  "var",
-                  "head"
-                 ]
-                ],
-                [
-                 "!=",
-                 [
-                  "downcase",
-                  [
-                   "var",
-                   "head"
-                  ]
-                 ],
-                 [
-                  "var",
-                  "head"
-                 ]
-                ]
-               ],
-               [
-                "slice",
-                [
                  "var",
                  "raw"
-                ],
-                [
-                 "+",
-                 [
-                  "var",
-                  "cut"
-                 ],
-                 1
                 ]
-               ],
-               [
-                "var",
-                "raw"
                ]
               ]
              ]

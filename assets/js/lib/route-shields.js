@@ -1174,7 +1174,7 @@ export function shieldTextSizeExpression(state = '', length = 2, refLength = nul
 
   const byShield = network ? networkArms(network, sized) : [
     'match', SHIELD_FIELD,
-    ...SHIELD_MATCH.flatMap((arm) => [arm.values, sized(arm.design)]),
+    ...shieldMatchFor(state).flatMap((arm) => [arm.values, sized(arm.design)]),
     sized(LOCAL),
   ];
   return refLength ? ['let', REF_LENGTH, refLength, byShield] : byShield;
@@ -1207,7 +1207,7 @@ export function shieldTextOffsetExpression(state = '', length = 2, shiftPx = 0, 
   // had already drifted apart on which size the sideways shift divides by.
   const byShield = network ? networkArms(network, placed) : [
     'match', SHIELD_FIELD,
-    ...SHIELD_MATCH.flatMap((arm) => [arm.values, placed(arm.design)]),
+    ...shieldMatchFor(state).flatMap((arm) => [arm.values, placed(arm.design)]),
     placed(LOCAL),
   ];
   if (!override) return byShield;
@@ -1777,6 +1777,47 @@ const SHIELD_MATCH = [
   { design: UNCLAIMED, values: ['default', ''] },
 ];
 
+/*
+ * States where Mapbox calls a signed state route `default`.
+ *
+ * The arm above is right almost everywhere: Mapbox names a state route by the
+ * shape of the state's marker, and `default` is left for a numbered road
+ * nobody signed. Indiana is not almost everywhere. Panning Indiana on the
+ * Mapbox map, every state route arrives `default` - the whole state - so the
+ * shape arms never fire and IN 246 draws as a plain circle beside a Protomaps
+ * map that gets it right from `US:IN`.
+ *
+ * The override says what that state's `default` means, and it is not free:
+ * Mapbox is not distinguishing a state route from a county road here, so an
+ * unsigned numbered road in Indiana now wears Indiana's marker too. That is
+ * the deliberate inverse of the Leelanau County decision, where a Michigan
+ * county road came back `default` and the fix was to stop guessing. The
+ * difference is which way the state's own roads fall: guessing costs Michigan
+ * a handful of county roads, and not guessing costs Indiana every state route
+ * it has.
+ *
+ * It is per state rather than global for exactly that reason. Add a state here
+ * only after seeing its state routes arrive `default` on the Mapbox basemap -
+ * `abmapRoadFields()` in the console groups what is on screen by shield value.
+ */
+const DEFAULT_IS_A_STATE_ROUTE = ['IN'];
+
+/*
+ * The shield table as it applies over this state.
+ *
+ * Resolved once per style build rather than in the expression, because the
+ * viewport state is already a build-time input: `applyShieldState` rebuilds
+ * these properties whenever the state under the map changes. An override that
+ * asked the question at draw time would cost every road on screen.
+ */
+function shieldMatchFor(state = '') {
+  const code = String(state || '').trim().toUpperCase();
+  if (!DEFAULT_IS_A_STATE_ROUTE.includes(code)) return SHIELD_MATCH;
+  // By value rather than by design, so this keeps overriding the right arm if
+  // another one is ever given the circle.
+  return SHIELD_MATCH.map((arm) => (arm.values.includes('default') ? { ...arm, design: LOCAL } : arm));
+}
+
 /**
  * The design a road with this `shield` value gets, from the map's state.
  *
@@ -1792,7 +1833,7 @@ const SHIELD_MATCH = [
 export function designForShield(shield, state = '') {
   const local = stateDesign(state);
   const value = String(shield ?? '').toLowerCase() || 'default';
-  const arm = SHIELD_MATCH.find((entry) => entry.values.includes(value));
+  const arm = shieldMatchFor(state).find((entry) => entry.values.includes(value));
   const design = arm ? arm.design : LOCAL;
   return design === LOCAL ? local : design;
 }
@@ -1813,7 +1854,7 @@ export function shieldImageExpression(state = '', { length = null, override = nu
   const design = (name) => (name === LOCAL ? local : name);
   const byShield = network ? networkArms(network, design) : [
     'match', SHIELD_FIELD,
-    ...SHIELD_MATCH.flatMap((arm) => [arm.values, arm.design === LOCAL ? local : arm.design]),
+    ...shieldMatchFor(state).flatMap((arm) => [arm.values, arm.design === LOCAL ? local : arm.design]),
     /*
      * `local`, because by here the value is a shape.
      *
