@@ -1018,6 +1018,43 @@ test('shields: Mapbox shield values collapse onto a handful of designs', () => {
   assert.equal(shieldDesign(undefined), 'circle');
 });
 
+test('shields: the style expression sends an unlisted shape to the circle too', () => {
+  /*
+   * The same rule as above, checked where it actually decides.
+   *
+   * `shieldDesign` is a helper; the thing that picks a marker on the map is
+   * the match expression, and the two are separate code paths that could
+   * disagree without anything saying so. The fallback arm is the one under
+   * test: a shape name the table does not list gets the circle, not the
+   * state's own marker.
+   *
+   * This is deliberately pinned rather than left implicit, because the
+   * tempting fix for the known Indiana gap - send unlisted values to the
+   * state design - is exactly what put Michigan's M on a Leelanau County
+   * road. Changing this fallback should require changing this test and
+   * reading why it is here. See docs/shields.md.
+   */
+  const expression = shieldImageExpression('IN');
+  const byShield = expression.find((part) => Array.isArray(part) && part[0] === 'match');
+  assert.ok(byShield, 'the image id is still chosen by a match on the shield field');
+  assert.deepEqual(byShield[1], ['get', 'shield']);
+  assert.equal(byShield[byShield.length - 1], 'circle',
+    'the fallback arm must stay the circle');
+
+  // And the state's own marker is reachable - the gap is the table, not the art.
+  assert.ok(byShield.includes('st-IN'),
+    'a listed shape over Indiana should still resolve to Indiana\u2019s marker');
+});
+
+test('shields: every state with artwork can actually be asked for', () => {
+  // Indiana is the worked example in docs/shields.md: the marker exists and is
+  // registered, so a circle on the Mapbox map is a missing table entry rather
+  // than missing artwork. This keeps that distinction checkable.
+  assert.ok(statesWithShields().includes('IN'));
+  assert.equal(stateDesign('IN'), 'st-IN');
+  assert.ok(shieldImageIds({ state: 'IN' }).some((id) => id.includes('st-IN')));
+});
+
 test('shields: image ids clamp to the widths actually generated', () => {
   // A seven-character reference must land on the widest image rather than on
   // `abmap-shield-us-7`, which nothing would have registered.

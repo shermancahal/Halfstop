@@ -1648,11 +1648,24 @@ const SHIELD_MATCH = [
    * Kentucky's is a white circle. So `us-state` may never appear at all, and
    * `circle-white`, `rectangle-white` and the rest are what actually arrives.
    *
-   * The trailing fallback below already sent these to the state design, so this
-   * list changes no behaviour. It is here because "works by falling off the end
-   * of the table" and "works" are the same until someone tightens the fallback,
-   * and the next person reading this should not have to re-run the probe to
-   * learn that the documented value is not the live one.
+   * This list is load-bearing, and the comment here used to say it was not.
+   *
+   * It read "the trailing fallback below already sent these to the state
+   * design, so this list changes no behaviour", which was true until the
+   * fallback was tightened to UNCLAIMED - the Leelanau County probe in
+   * test/style.test.mjs, where a county road came back `default` and wore
+   * Michigan's M. After that change a shape name missing from this list stops
+   * being harmless: it falls to the circle.
+   *
+   * Which is a live bug, not a hypothetical. Indiana state routes draw as
+   * plain circles on the Mapbox-backed map while drawing correctly on the
+   * Protomaps one, and `st-IN` artwork exists - so Indiana's shape name is
+   * simply not below. The value is whatever Mapbox actually returns, and the
+   * only way to learn it is the Tilequery probe; see docs/shields.md.
+   *
+   * Do not "fix" this by sending unlisted values to the state design. That is
+   * precisely what put Michigan's M on a county road, and the test that
+   * records it is the reason this fallback is a circle.
    */
   {
     design: LOCAL,
