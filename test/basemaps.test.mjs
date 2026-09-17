@@ -77,3 +77,73 @@ test('no two basemaps share an id or a name', () => {
   assert.equal(new Set(ids).size, ids.length, 'two basemaps share an id');
   assert.equal(new Set(names).size, names.length, 'two basemaps share a name');
 });
+
+/* ---------------------------------------------------------------- premium */
+
+import { featureForLayer, can, gateReason, TIERS, FEATURES } from '../assets/js/lib/tiers.js';
+
+const LIVE = { live: true, plans: {}, defaultPlan: 'month', currency: 'USD', store: 'none', testers: [] };
+const OFF = { ...LIVE, live: false };
+
+/** The three drawn from Mapbox, which is the thing that is metered per view. */
+const METERED = ['byways-topo-mapbox', 'mapbox-outdoors', 'mapbox-satellite-streets'];
+
+test('the metered basemaps are the ones marked premium, and only those', () => {
+  const marked = BASEMAPS.filter((basemap) => basemap.premium).map((basemap) => basemap.id);
+  assert.deepEqual(marked.slice().sort(), METERED.slice().sort());
+});
+
+test('the free maps are left alone', () => {
+  /*
+   * Named individually rather than derived as "everything else", so that a
+   * basemap added later with premium on it fails this and has to be thought
+   * about. The public services and our own archive are the whole free list.
+   */
+  for (const id of ['byways-topo', 'usgs-topo', 'usgs-classic', 'usgs-imagery-topo',
+    'esri-imagery', 'usgs-imagery', 'osm']) {
+    const basemap = BASEMAPS.find((entry) => entry.id === id);
+    assert.ok(basemap, `${id} is missing`);
+    assert.ok(!basemap.premium, `${id} should not be behind the paid plan`);
+  }
+});
+
+test('Byways Topo is never the one behind the gate', () => {
+  /*
+   * The trap that made this an explicit flag rather than a derivation. Byways
+   * Topo falls back to Mapbox geometry when no Protomaps archive is
+   * configured, so a rule of "draws from Mapbox, therefore paid" would lock
+   * the default basemap on any deploy that has not cut an archive - which is
+   * every fresh clone.
+   */
+  const byways = BASEMAPS.find((basemap) => basemap.id === 'byways-topo');
+  assert.equal(featureForLayer(byways), null);
+  assert.equal(byways.id, DEFAULT_BASEMAP, 'and it is still the default');
+});
+
+test('a premium basemap asks for the feature the Premium tier grants', () => {
+  for (const id of METERED) {
+    const basemap = BASEMAPS.find((entry) => entry.id === id);
+    assert.equal(featureForLayer(basemap), 'extraBasemaps', id);
+  }
+  assert.ok(Object.hasOwn(FEATURES, 'extraBasemaps'), 'the feature has to exist to be gated on');
+  assert.ok(TIERS.premium.grants.includes('extraBasemaps'), 'Premium has to actually include it');
+  assert.ok(!TIERS.free.grants.includes('extraBasemaps'), 'Free must not');
+});
+
+test('nothing is locked while billing is off', () => {
+  // Today. can() is true for everything until there is a server-side half to
+  // close it against, so every row draws exactly as it always has.
+  assert.equal(can('extraBasemaps', { billing: OFF }), true);
+  assert.equal(can('extraBasemaps', { tier: TIERS.free, billing: OFF }), true);
+});
+
+test('and locked for Free, not Premium, once it is on', () => {
+  assert.equal(can('extraBasemaps', { tier: TIERS.free, billing: LIVE }), false);
+  assert.equal(can('extraBasemaps', { tier: TIERS.premium, billing: LIVE }), true);
+});
+
+test('the locked row names the thing rather than saying "upgrade"', () => {
+  const reason = gateReason('extraBasemaps', { tier: TIERS.free });
+  assert.match(reason, /Extra basemaps/);
+  assert.match(reason, /Free/);
+});

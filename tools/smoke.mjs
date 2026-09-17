@@ -4866,6 +4866,68 @@ await page.waitForTimeout(200);
  * and centring over either would make every shared link open somewhere other
  * than where it was shared from.
  */
+/*
+ * The paid basemaps, once there is a plan to sell.
+ *
+ * Nothing in the suite had ever run with BILLING.live on, so the whole gating
+ * path - the disabled control, the reason under the row, the greyed styling -
+ * was code that had never been drawn. It reads an injected global, so turning
+ * it on is one line in a fresh context, and that is the only honest way to
+ * check a feature whose entire behaviour is "what happens when the flag
+ * flips".
+ */
+console.log('\nMetered basemaps are shown and not offered, once billing is live');
+{
+  const paid = await context.newPage();
+  await paid.route('**/*', serveStubs);
+  await paid.addInitScript(() => { window.ABMAP_BILLING_LIVE = 'true'; });
+  await paid.goto(MAP_URL, { waitUntil: 'networkidle' });
+  await paid.waitForTimeout(900);
+  await paid.locator('#panel-toggle').click();
+  await paid.waitForTimeout(400);
+
+  const rows = await paid.evaluate(() => [...document.querySelectorAll('#basemap-list .layer-item')]
+    .map((item) => ({
+      name: item.querySelector('.layer-option-label')?.dataset.layer || '',
+      locked: item.querySelector('.layer-row')?.classList.contains('is-locked') || false,
+      disabled: item.querySelector('input[type=radio]')?.disabled || false,
+      note: item.querySelector('.layer-locked-note')?.textContent.trim() || '',
+    })));
+
+  const byId = Object.fromEntries(rows.map((row) => [row.name, row]));
+  const metered = ['byways-topo-mapbox', 'mapbox-outdoors', 'mapbox-satellite-streets'];
+
+  check('the metered maps are listed rather than hidden',
+    metered.every((id) => Boolean(byId[id])), true);
+  check('each one is drawn locked', metered.map((id) => byId[id]?.locked), [true, true, true]);
+  check('and its control cannot be chosen', metered.map((id) => byId[id]?.disabled), [true, true, true]);
+  check('with the reason on the row rather than a bare "upgrade"',
+    (byId['mapbox-outdoors']?.note || '').includes('Extra basemaps'), true);
+
+  // And the free ones are untouched, which is the half that would go unnoticed.
+  const free = ['byways-topo', 'usgs-topo', 'usgs-classic', 'usgs-imagery-topo', 'esri-imagery', 'osm'];
+  check('the free maps are still on offer', free.map((id) => byId[id]?.locked), free.map(() => false));
+  check('and still choosable', free.map((id) => byId[id]?.disabled), free.map(() => false));
+  await paid.close();
+}
+
+/*
+ * And with billing off - today - they are not in the list at all.
+ *
+ * Listing a metered map to everybody with no gate in front of it is the one
+ * outcome worse than not listing it, so until the gate is real they stay on
+ * the editors' rule. This reads the list on the ordinary page, which is the
+ * one every reader gets.
+ */
+const publicBasemaps = await page.evaluate(() => [...document.querySelectorAll('#basemap-list .layer-option-label')]
+  .map((node) => node.dataset.layer));
+check('with billing off the metered maps are not listed at all',
+  ['byways-topo-mapbox', 'mapbox-outdoors', 'mapbox-satellite-streets']
+    .some((id) => publicBasemaps.includes(id)), false);
+check('while the free ones are all there',
+  ['byways-topo', 'usgs-topo', 'usgs-classic', 'usgs-imagery-topo', 'esri-imagery', 'osm']
+    .every((id) => publicBasemaps.includes(id)), true);
+
 console.log('\nA fresh visit opens where you are');
 
 const COLORADO = { latitude: 39.7392, longitude: -104.9903 };

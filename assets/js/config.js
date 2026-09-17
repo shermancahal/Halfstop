@@ -532,6 +532,7 @@ export const BASEMAPS = [
     name: 'Byways Topo (Mapbox)',
     custom: 'byways-mapbox',
     audience: 'editors',
+    premium: true,
     group: 'Topographic',
     description: 'The house map drawn from Mapbox geometry, for comparison.',
     tiles: [
@@ -548,6 +549,7 @@ export const BASEMAPS = [
   {
     id: 'mapbox-outdoors',
     name: 'Mapbox Outdoors',
+    premium: true,
     // Grouped by what it shows, not by who makes it: a reader looking for a
     // topo map looks under Topographic.
     group: 'Topographic',
@@ -560,6 +562,7 @@ export const BASEMAPS = [
   {
     id: 'mapbox-satellite-streets',
     name: 'Mapbox Satellite Streets',
+    premium: true,
     group: 'Imagery',
     description: 'Mapbox imagery with road and place labels.',
     style: 'mapbox://styles/mapbox/satellite-streets-v12',
@@ -578,6 +581,21 @@ export const BASEMAPS = [
  * constants are kept separate because a token still changes what is available.
  */
 /*
+ * `premium: true` puts a basemap behind the paid plan.
+ *
+ * The three that carry it are the three drawn from Mapbox, and the reason is
+ * the meter: every view of one is billed, where the USGS, Esri and OSM rasters
+ * are public services anybody may call and our own archive is a file we
+ * already pay to store. So the split is not a judgement about which maps are
+ * better, it is which ones cost per look.
+ *
+ * It does nothing yet. `can()` is true for everything while `BILLING.live` is
+ * false, so the rows draw exactly as they always have; and until then these
+ * three stay behind `audience: 'editors'` as well, because listing a metered
+ * map to everybody with no gate in front of it is the one outcome worse than
+ * not listing it. When billing goes live they appear for everybody, greyed,
+ * with the reason on the row - which is the point of showing them at all.
+ *
  * `audience: 'editors'` hides a basemap from the picker for everyone else.
  *
  * Decluttering, not access control. The token is in the page either way and

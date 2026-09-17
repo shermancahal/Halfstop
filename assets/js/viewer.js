@@ -417,6 +417,16 @@ function whenStyleReady(run) {
  */
 const availableBasemaps = () => BASEMAPS.filter((basemap) => {
   if (basemap.requiresToken && !hasMapboxToken()) return false;
+  /*
+   * A paid basemap is listed for everybody once there is a plan to sell.
+   *
+   * Which is the whole point of marking one: layerRow draws it disabled with
+   * the reason underneath, and somebody deciding whether to pay has to be able
+   * to see what for. Before that - today - the same three are metered maps
+   * with nothing in front of them, so they stay on the editors' rule below and
+   * the public list is unchanged.
+   */
+  if (basemap.premium && BILLING.live) return true;
   if (basemap.audience === 'editors') return mayEdit(state.account?.user);
   return true;
 });

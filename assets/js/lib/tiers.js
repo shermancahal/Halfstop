@@ -61,6 +61,7 @@ export const FEATURES = {
   tripRouting: 'Trip routing',
   pinPhotos: 'Photographs attached to a waypoint',
   stateLayers: 'State level detail maps',
+  extraBasemaps: 'Extra basemaps',
 };
 
 /*
@@ -381,6 +382,19 @@ export function describePlan(plan = null, { now = Date.now(), billing = BILLING 
  */
 export function featureForLayer(entry) {
   if (!entry) return null;
+  /*
+   * A basemap says so itself, rather than being worked out from what it draws.
+   *
+   * This is the one place the derive-it-from-what-it-is rule above is the
+   * wrong risk, and it is worth saying why. The property that makes the
+   * Mapbox basemaps cost money is that they draw from Mapbox - so the obvious
+   * derivation is "draws from Mapbox, therefore paid". But Byways Topo falls
+   * back to Mapbox whenever there is no Protomaps archive configured, which
+   * would put the default basemap behind the gate on any deploy that has not
+   * cut one. The other rules can afford to over-include; this one would take
+   * the map out from under a first-time reader.
+   */
+  if (entry.premium) return 'extraBasemaps';
   if (entry.group === 'Weather') return 'weatherLayers';
   if (Array.isArray(entry.states) && entry.states.length) return 'stateLayers';
   return null;
