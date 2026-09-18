@@ -151,6 +151,20 @@ let idCounter = 0;
 export const UNFILED_ID = 'f_unfiled';
 export const UNFILED_NAME = 'Unfiled';
 
+/**
+ * The reserved folder above the folders somebody made.
+ *
+ * Sorted rather than named into place: alphabetical order would bury it in the
+ * middle of a long list, and what arrives there is what arrived most recently -
+ * the thing most worth seeing when the tab opens.
+ *
+ * Here rather than in the viewer because a pure rule about ordering is worth
+ * testing on its own, and the viewer is a browser away from `npm test`.
+ */
+export function unfiledFirst(list = []) {
+  return [...list.filter(isUnfiled), ...list.filter((entry) => !isUnfiled(entry))];
+}
+
 /** Whether this is that folder, given either the folder or its id. */
 export function isUnfiled(folder) {
   const id = typeof folder === 'string' ? folder : folder?.id;

@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 
 import {
   FolderStore, fingerprint, packFeature, readTrip, tripStanding, localDay, thinLine, roundGeometry,
-  TRACK_POINT_CAP, UNFILED_ID, UNFILED_NAME, isUnfiled,
+  TRACK_POINT_CAP, UNFILED_ID, UNFILED_NAME, isUnfiled, unfiledFirst,
 } from '../assets/js/lib/folders.js';
 import { toGPX } from '../assets/js/lib/gpx-write.js';
 import { parseGPX } from '../assets/js/lib/gpx.js';
@@ -1095,4 +1095,28 @@ test('folders: a reader cannot be handed the reserved id by accident', () => {
   const made = store.create('Unfiled');
   assert.notEqual(made.id, UNFILED_ID, 'a folder somebody names Unfiled is still their own');
   assert.equal(isUnfiled(made), false);
+});
+
+test('folders: the reserved folder sorts above the ones somebody made', () => {
+  /*
+   * The panel draws top-level folders alphabetically, which would bury this
+   * one in the middle of a long list - and what arrives in it is whatever was
+   * saved most recently, which is the thing most worth seeing on opening the
+   * tab. Ordering rather than naming, so a folder called "Aardvark" cannot
+   * take the place.
+   */
+  const store = new FolderStore({ storage: memoryStorage() });
+  const aardvark = store.create('Aardvark');
+  const unfiled = store.unfiled();
+  const waterfalls = store.create('Waterfalls');
+
+  const alphabetical = [aardvark, unfiled, waterfalls];
+  assert.deepEqual(unfiledFirst(alphabetical).map((f) => f.name),
+    [UNFILED_NAME, 'Aardvark', 'Waterfalls']);
+
+  // The rest keep the order they arrived in, so the alphabetical sort the
+  // panel did before this runs is not undone by it.
+  assert.deepEqual(unfiledFirst([waterfalls, aardvark]).map((f) => f.name),
+    ['Waterfalls', 'Aardvark']);
+  assert.deepEqual(unfiledFirst([]), []);
 });

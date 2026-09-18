@@ -30,7 +30,7 @@ import { fogOutlook, nightHours, fogName, fogNote, fogBand } from './lib/fog.js'
 import { icons } from './lib/icons.js';
 import {
   FolderStore, FOLDER_COLORS, COLOR_NAMES, readColor, inPalette, readTrip, tripStanding, localDay,
-  isUnfiled, UNFILED_NAME,
+  isUnfiled, unfiledFirst, UNFILED_NAME,
 } from './lib/folders.js';
 import {
   PIN_ICONS, DEFAULT_PIN_ICON, pinIconGroups, pinIconSVG, pinImageId, registerPinImages, rasterizePinIcon, pinColorFor, searchPinIcons, getPinIcon,
@@ -10934,15 +10934,6 @@ function tripBar(folder) {
  * comes before "Day 10", and case-blind.
  */
 const byName = (a, b) => String(a.name).localeCompare(String(b.name), undefined, { numeric: true, sensitivity: 'base' });
-
-/*
- * Unfiled above the folders somebody made, whatever it is called.
- *
- * Sorted rather than named into place: alphabetical order would bury it
- * somewhere in the middle of a long list, and what arrives there is what
- * arrived most recently - the thing most worth seeing when the tab opens.
- */
-const unfiledFirst = (list) => [...list.filter(isUnfiled), ...list.filter((entry) => !isUnfiled(entry))];
 
 /**
  * Every folder in reading order, each carrying how deep it sits.
