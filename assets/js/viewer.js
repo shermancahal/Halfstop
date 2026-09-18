@@ -30,6 +30,7 @@ import { fogOutlook, nightHours, fogName, fogNote, fogBand } from './lib/fog.js'
 import { icons } from './lib/icons.js';
 import {
   FolderStore, FOLDER_COLORS, COLOR_NAMES, readColor, inPalette, readTrip, tripStanding, localDay,
+  isUnfiled, UNFILED_NAME,
 } from './lib/folders.js';
 import {
   PIN_ICONS, DEFAULT_PIN_ICON, pinIconGroups, pinIconSVG, pinImageId, registerPinImages, rasterizePinIcon, pinColorFor, searchPinIcons, getPinIcon,
@@ -7943,10 +7944,9 @@ function showIdentifyResults(position, groups, { pending = false } = {}) {
     const feature = identifiedFeature(position, groups);
     doing.push(labelledButton(icons.pin, 'Save as waypoint', {
       tone: 'ghost',
-      title: 'Keep this as a waypoint in your latest folder',
+      title: `Keep this as a waypoint in ${UNFILED_NAME}`,
       onclick: () => {
-        const folders = state.folders.list();
-        const target = folders.length ? folders[folders.length - 1] : state.folders.create('Saved places');
+        const target = state.folders.unfiled();
         saveFeatureToFolder(feature, target.id, null);
         popup.remove();
         setProbeMark(null);
@@ -9326,8 +9326,14 @@ function renderPointDetails(position) {
       labelledButton(icons.pin, 'Save as waypoint', {
         tone: 'secondary',
         onclick: () => {
-          const folders = state.folders.list();
-          const target = folders.length ? folders[folders.length - 1] : state.folders.create('Saved places');
+          /*
+           * Unfiled, rather than the end of the folder array.
+           *
+           * This used to take `folders[folders.length - 1]`, which is the most
+           * recently created folder and nothing anybody chose - so a saved pin
+           * landed in whichever collection happened to be newest, silently.
+           */
+          const target = state.folders.unfiled();
           const feature = {
             type: 'Feature',
             geometry: { type: 'Point', coordinates: position },
@@ -10929,6 +10935,15 @@ function tripBar(folder) {
  */
 const byName = (a, b) => String(a.name).localeCompare(String(b.name), undefined, { numeric: true, sensitivity: 'base' });
 
+/*
+ * Unfiled above the folders somebody made, whatever it is called.
+ *
+ * Sorted rather than named into place: alphabetical order would bury it
+ * somewhere in the middle of a long list, and what arrives there is what
+ * arrived most recently - the thing most worth seeing when the tab opens.
+ */
+const unfiledFirst = (list) => [...list.filter(isUnfiled), ...list.filter((entry) => !isUnfiled(entry))];
+
 /**
  * Every folder in reading order, each carrying how deep it sits.
  *
@@ -10997,7 +11012,10 @@ function renderFoldersTab() {
    * another device points at nothing and would otherwise never be drawn.
    */
   const drawn = new Set();
-  for (const folder of state.folders.childrenOf(null).sort(byName)) {
+  for (const folder of unfiledFirst(state.folders.childrenOf(null).sort(byName))) {
+    // Empty and reserved means there is nothing to say: an account that files
+    // every pin as it saves it should never learn this folder exists.
+    if (isUnfiled(folder) && !folder.items.length && !state.folders.childrenOf(folder.id).length) continue;
     dom.folderList.append(renderFolder(folder, drawn));
   }
   for (const folder of folders) {
@@ -12790,8 +12808,16 @@ function folderNameRow(folder) {
   return el('div', { class: 'editor-folder-name' }, [
     el('div', { class: 'picker-row' }, [
       el('span', { class: 'style-label', text: 'Name' }),
+      /*
+       * Readable, and not editable, for the reserved folder.
+       *
+       * The store refuses the rename either way; a live field that silently
+       * puts the old name back would be the worse way to say so.
+       */
       el('input', {
         class: 'folder-rename', type: 'text', value: folder.name, 'aria-label': 'Folder name', maxlength: 80,
+        readonly: isUnfiled(folder) || undefined,
+        title: isUnfiled(folder) ? `${UNFILED_NAME} is where saved pins land, so it keeps its name.` : '',
         onchange: (event) => state.folders.rename(folder.id, event.target.value),
         onkeydown: (event) => { if (event.key === 'Enter') event.target.blur(); },
       }),
@@ -12923,7 +12949,10 @@ function folderActionsRow(folder) {
         html: `${icons.share}<span>Share</span>`,
         onclick: () => shareFolder(folder),
       }),
-      el('button', {
+      // No delete for the reserved folder: the store refuses it, and the next
+      // saved pin would make it again anyway. Emptying it means moving the
+      // pins somewhere, which is what somebody wanting this actually wants.
+      isUnfiled(folder) ? null : el('button', {
         class: 'button button-ghost button-small is-danger', type: 'button',
         title: `Delete ${folder.name}`,
         html: `${icons.trash}<span>Delete</span>`,

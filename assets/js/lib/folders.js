@@ -127,6 +127,36 @@ export function inPalette(value, palette = FOLDER_COLORS) {
 
 /** Monotonic id generator; the counter keeps ids unique within a millisecond. */
 let idCounter = 0;
+/*
+ * The one folder the app owns rather than the reader.
+ *
+ * A waypoint has to live in a folder: items are stored inside the folder row
+ * and sync moves folders, so "no folder" has nowhere to be. Saving a pin used
+ * to drop it into `folders[folders.length - 1]` - the end of the array, which
+ * is whichever folder happened to be made most recently. Nothing chose it and
+ * nothing said so, so pins quietly accumulated in a real, named collection
+ * somebody was keeping for something else.
+ *
+ * This is where they go instead. It is an ordinary folder in every mechanical
+ * sense - it syncs, exports and styles like any other - and a reserved one in
+ * every human sense: it cannot be renamed or deleted, it sorts above the
+ * folders somebody made, and it is not drawn at all while it is empty.
+ *
+ * Reserved by id rather than by a flag, because the id is the one thing that
+ * survives the round trip through the database. A flag would need a column,
+ * and a name would collide with anybody who happens to call a folder Unfiled.
+ * It also makes two devices that each create one converge on the same row
+ * rather than on two.
+ */
+export const UNFILED_ID = 'f_unfiled';
+export const UNFILED_NAME = 'Unfiled';
+
+/** Whether this is that folder, given either the folder or its id. */
+export function isUnfiled(folder) {
+  const id = typeof folder === 'string' ? folder : folder?.id;
+  return id === UNFILED_ID;
+}
+
 function makeId(prefix) {
   idCounter += 1;
   return `${prefix}_${Date.now().toString(36)}_${idCounter.toString(36)}`;
@@ -742,9 +772,13 @@ export class FolderStore {
     return this.folders.find((folder) => folder.id === id) || null;
   }
 
-  create(name = 'New folder', { color = null, visible = true, trip = null, parentId = null } = {}) {
+  /**
+   * @param id only ever passed by `unfiled()`, which needs the reserved one.
+   *        Everything a reader makes gets a fresh id and must keep it.
+   */
+  create(name = 'New folder', { color = null, visible = true, trip = null, parentId = null, id = null } = {}) {
     const folder = {
-      id: makeId('f'),
+      id: id || makeId('f'),
       name: clampName(name, `Folder ${this.folders.length + 1}`),
       color: color || FOLDER_COLORS[this.folders.length % FOLDER_COLORS.length],
       // Only if the parent exists and has room beneath it; a folder filed
@@ -765,9 +799,22 @@ export class FolderStore {
     return folder;
   }
 
+  /**
+   * Where a pin goes when nobody said where.
+   *
+   * Made on demand rather than for every account: a reader who files
+   * everything the moment they save it should never see it exist.
+   */
+  unfiled() {
+    return this.get(UNFILED_ID) || this.create(UNFILED_NAME, { id: UNFILED_ID });
+  }
+
   /** Find a folder by name, or make one. Used when importing by KML folder path. */
   ensure(name) {
-    const wanted = clampName(name, 'Unfiled');
+    const wanted = clampName(name, UNFILED_NAME);
+    // An import that asks for "Unfiled" means the reserved one, or there would
+    // be two folders with that name and only one of them special.
+    if (wanted.toLowerCase() === UNFILED_NAME.toLowerCase()) return this.unfiled();
     const existing = this.folders.find((folder) => folder.name.toLowerCase() === wanted.toLowerCase());
     return existing || this.create(wanted);
   }
@@ -789,6 +836,10 @@ export class FolderStore {
   }
 
   rename(id, name) {
+    // The reserved folder keeps its name. Renaming it would leave an account
+    // with somewhere pins arrive that is no longer called anything meaningful,
+    // and no way to get the name back.
+    if (isUnfiled(id)) return null;
     const folder = this.get(id);
     if (!folder) return null;
     folder.name = clampName(name, folder.name);
@@ -824,6 +875,16 @@ export class FolderStore {
    * difference. Callers push the tombstone so other devices learn about it.
    */
   remove(id) {
+    /*
+     * And it cannot be deleted.
+     *
+     * Not to be precious about it: deleting it would take the pins inside with
+     * it, and the next save would silently make it again - so the gesture
+     * either loses data or does nothing, depending on whether it was empty.
+     * Emptying it is done by moving the pins somewhere, which is the thing
+     * somebody actually wants.
+     */
+    if (isUnfiled(id)) return null;
     const folder = this.get(id);
     if (!folder) return null;
 

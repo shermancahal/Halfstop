@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 
 import {
   FolderStore, fingerprint, packFeature, readTrip, tripStanding, localDay, thinLine, roundGeometry,
-  TRACK_POINT_CAP,
+  TRACK_POINT_CAP, UNFILED_ID, UNFILED_NAME, isUnfiled,
 } from '../assets/js/lib/folders.js';
 import { toGPX } from '../assets/js/lib/gpx-write.js';
 import { parseGPX } from '../assets/js/lib/gpx.js';
@@ -1012,4 +1012,87 @@ test('folders: a sync round trip keeps every field a folder has', () => {
   }
   assert.equal(store.get(child.id).parentId, top.id, 'and it is still filed inside');
   assert.equal(store.pathOf(child.id), 'Transport \u203a Railroads');
+});
+
+/* --------------------------------------------- the folder nobody chose */
+
+test('folders: a saved pin has somewhere to go that nobody has to pick', () => {
+  /*
+   * Saving used to drop a pin into `folders[folders.length - 1]` - the end of
+   * the array, which is whichever folder was created most recently. Nothing
+   * chose it and nothing said so, so pins accumulated in a real collection
+   * somebody was keeping for something else. Reported as "it defaults to a
+   * folder; in my account that's Transport".
+   */
+  const store = new FolderStore({ storage: memoryStorage() });
+  store.create('Waterfalls');
+  store.create('Transport');
+
+  const target = store.unfiled();
+  assert.equal(target.id, UNFILED_ID);
+  assert.equal(target.name, UNFILED_NAME);
+  assert.notEqual(target.id, store.list()[store.list().length - 2].id,
+    'the pin still lands in whatever folder happens to be newest');
+
+  // Made once, then found. Two calls must not make two of it.
+  assert.equal(store.unfiled().id, target.id);
+  assert.equal(store.list().filter(isUnfiled).length, 1);
+});
+
+test('folders: nothing has to exist before the first save', () => {
+  // The empty account is the case the old code special-cased with a folder
+  // called "Saved places"; there is one answer now, not two.
+  const store = new FolderStore({ storage: memoryStorage() });
+  assert.equal(store.list().length, 0);
+  assert.equal(store.unfiled().id, UNFILED_ID);
+  assert.equal(store.list().length, 1);
+});
+
+test('folders: the reserved folder keeps its name and cannot be deleted', () => {
+  /*
+   * Both refusals are about the same thing. Renaming leaves an account with
+   * somewhere pins arrive that is no longer called anything meaningful and no
+   * way to get the name back; deleting either takes the pins inside with it or
+   * does nothing at all, because the next save makes it again.
+   */
+  const store = new FolderStore({ storage: memoryStorage() });
+  const unfiled = store.unfiled();
+
+  assert.equal(store.rename(UNFILED_ID, 'Everything'), null);
+  assert.equal(store.get(UNFILED_ID).name, UNFILED_NAME);
+
+  assert.equal(store.remove(UNFILED_ID), null);
+  assert.equal(store.get(UNFILED_ID)?.id, UNFILED_ID);
+
+  // And an ordinary folder is untouched by any of it.
+  const ordinary = store.create('Waterfalls');
+  assert.equal(store.rename(ordinary.id, 'Falls').name, 'Falls');
+  assert.equal(store.remove(ordinary.id).deleted, true);
+  assert.equal(store.get(ordinary.id), null);
+  assert.equal(unfiled.id, UNFILED_ID);
+});
+
+test('folders: importing into "Unfiled" finds the reserved one', () => {
+  // `ensure` is what an import calls for each named folder in the file, and
+  // its own fallback name is Unfiled - so without this a KML with an unnamed
+  // folder produced a second folder called Unfiled that was not the special
+  // one, and only one of the two would behave.
+  const store = new FolderStore({ storage: memoryStorage() });
+  assert.equal(store.ensure('Unfiled').id, UNFILED_ID);
+  assert.equal(store.ensure('unfiled').id, UNFILED_ID);
+  assert.equal(store.ensure('').id, UNFILED_ID);
+  assert.equal(store.list().filter(isUnfiled).length, 1);
+  assert.equal(store.list().length, 1);
+
+  // A folder that merely starts with the word is somebody's own.
+  assert.notEqual(store.ensure('Unfiled trips').id, UNFILED_ID);
+});
+
+test('folders: a reader cannot be handed the reserved id by accident', () => {
+  // `create` takes an id only so `unfiled()` can ask for that one. Everything
+  // a reader makes gets a fresh id, or two accounts would collide on sync.
+  const store = new FolderStore({ storage: memoryStorage() });
+  const made = store.create('Unfiled');
+  assert.notEqual(made.id, UNFILED_ID, 'a folder somebody names Unfiled is still their own');
+  assert.equal(isUnfiled(made), false);
 });

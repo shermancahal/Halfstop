@@ -865,6 +865,55 @@ check('and edit as a mark rather than a word', folderHead.editIsMark, true);
 check('and nothing written under the pins', folderHead.prose, 0);
 
 /*
+ * Where a saved pin goes when nobody said where.
+ *
+ * It used to go into `folders[folders.length - 1]` - the end of the array,
+ * which is whichever folder was created most recently. Nothing chose it and
+ * nothing said so, so pins landed in a real collection somebody was keeping
+ * for something else. Reported as "it defaults to a folder; in my account
+ * that's Transport".
+ *
+ * Driven through the actual buttons rather than the store, because the three
+ * claims worth checking here are all about what the panel draws: the folder
+ * sorts above the ones somebody made, its name cannot be edited, and it has no
+ * delete.
+ */
+console.log('\nA saved pin lands somewhere nobody had to choose');
+{
+  const named = await page.evaluate(() => [...document.querySelectorAll('#folder-list .folder')]
+    .map((node) => node.dataset.folder));
+  check('there is no Unfiled folder before anything is saved', named.includes('f_unfiled'), false);
+
+  await page.locator('.map-tool[title="Drop a pin at the center of the map"]').click();
+  await page.waitForTimeout(250);
+  await page.locator('button:has-text("Save as waypoint")').first().click();
+  await page.waitForTimeout(350);
+
+  const after = await page.evaluate(() => [...document.querySelectorAll('#folder-list .folder')]
+    .map((node) => node.dataset.folder));
+  check('saving makes one', after.includes('f_unfiled'), true);
+  check('and it sorts above the folders somebody made', after[0], 'f_unfiled');
+
+  await page.locator('.folder[data-folder="f_unfiled"] > .folder-head .folder-menu-button').click();
+  await page.waitForTimeout(250);
+  const reserved = await page.evaluate(() => {
+    const editor = document.querySelector('.folder[data-folder="f_unfiled"] ~ .style-editor')
+      || document.querySelector('.style-editor');
+    return {
+      readonly: editor?.querySelector('.folder-rename')?.readOnly ?? null,
+      deletes: [...(editor?.querySelectorAll('button') || [])]
+        .filter((b) => b.textContent.trim() === 'Delete').length,
+      exports: [...(editor?.querySelectorAll('button') || [])]
+        .filter((b) => b.textContent.trim() === 'Export').length,
+    };
+  });
+  check('its name cannot be edited', reserved.readonly, true);
+  check('and it has no delete', reserved.deletes, 0);
+  // Everything else it can still do, or it would be a folder in name only.
+  check('while export is still offered', reserved.exports, 1);
+}
+
+/*
  * Folding a folder folds everything open on it.
  *
  * The style editor is a sibling of the folder's body rather than part of it,
