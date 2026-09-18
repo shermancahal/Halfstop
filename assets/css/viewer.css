@@ -942,7 +942,6 @@ html, body { height: 100%; overflow: hidden; }
  */
 @media (max-width: 560px) {
   .brand-text { display: none; }
-  #fit-button { display: none; }
   .panel-brand { display: flex; }
 }
 

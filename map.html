@@ -134,9 +134,15 @@
         </button>
         <div class="account-drop settings-drop" id="settings-panel" role="dialog" aria-label="Units and display" hidden></div>
       </div>
-      <button class="icon-button" id="fit-button" type="button" title="Zoom to all loaded maps" aria-label="Zoom to all loaded maps">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V5a2 2 0 0 1 2-2h3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2h-3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/></svg>
-      </button>
+      <!--
+        No "zoom to all loaded maps" button here.
+        Its icon was four corner brackets, which reads as fullscreen, and what
+        it did was nothing at all unless maps from the library happened to be
+        loaded - so the one question it ever prompted was "what does this do".
+        The camera still frames everything once at startup, and each loaded map
+        keeps its own zoom-to control in the panel, which is where somebody
+        looking at that map already is.
+      -->
       <!--
         Everything about taking the map away with you, in one place.
         It used to be three: a download button here, a camera beside it, and an

@@ -1259,7 +1259,6 @@ function wirePanel() {
   document.getElementById('share-button')?.addEventListener('click', shareView);
   wireOfflineMenu();
   wirePlaceSearch();
-  document.getElementById('fit-button')?.addEventListener('click', fitAll);
 }
 
 /**
