@@ -47,19 +47,50 @@ function pngChunk(type, body) {
   return out;
 }
 
-/** Encode straight RGBA bytes as an 8-bit truecolour-with-alpha PNG. */
+/**
+ * Encode straight RGBA bytes as an 8-bit PNG, truecolour with alpha or without.
+ *
+ * Without, when nothing in the image is transparent, and that is not a size
+ * optimisation - it is what gets an iOS build accepted. Apple rejects an app
+ * icon that carries an alpha channel (ITMS-90717), and it rejects it at
+ * upload, after an archive, which is the most expensive moment to find out.
+ * The artwork here is opaque to the corner already; it was simply being
+ * written into a format with a channel it does not use.
+ *
+ * Decided from the pixels rather than from a flag, because a flag is a thing
+ * to get wrong per icon. Dropping an all-255 alpha channel is lossless: the
+ * two files decode to the same picture.
+ */
 export function encodePNG(width, height, rgba) {
-  const stride = width * 4;
+  let opaque = true;
+  for (let i = 3; i < rgba.length; i += 4) {
+    if (rgba[i] !== 255) { opaque = false; break; }
+  }
+
+  const channels = opaque ? 3 : 4;
+  const stride = width * channels;
   const raw = Buffer.alloc((stride + 1) * height);
   for (let y = 0; y < height; y += 1) {
     raw[y * (stride + 1)] = 0; // filter: none. These are tiny; the win is not worth the code.
-    Buffer.from(rgba.buffer, rgba.byteOffset + y * stride, stride).copy(raw, y * (stride + 1) + 1);
+    const row = y * (stride + 1) + 1;
+    if (opaque) {
+      // Copied channel by channel rather than in one go: the alpha byte is
+      // what is being left behind.
+      for (let x = 0; x < width; x += 1) {
+        const from = y * width * 4 + x * 4;
+        raw[row + x * 3] = rgba[from];
+        raw[row + x * 3 + 1] = rgba[from + 1];
+        raw[row + x * 3 + 2] = rgba[from + 2];
+      }
+    } else {
+      Buffer.from(rgba.buffer, rgba.byteOffset + y * stride, stride).copy(raw, row);
+    }
   }
   const header = Buffer.alloc(13);
   header.writeUInt32BE(width, 0);
   header.writeUInt32BE(height, 4);
   header[8] = 8;   // bit depth
-  header[9] = 6;   // colour type: RGBA
+  header[9] = opaque ? 2 : 6;   // colour type: RGB, or RGBA when it is needed
   return Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     pngChunk('IHDR', header),

@@ -185,3 +185,44 @@ test('the maskable icon shrinks the artwork rather than trusting it to fit', () 
   // 86% of the master, times this, has to land inside Android's 80%.
   assert.ok(0.86 * SAFE < 0.8, `86% x ${SAFE} is ${(0.86 * SAFE).toFixed(3)}`);
 });
+
+test('the icons a store looks at carry no alpha channel', async () => {
+  /*
+   * Apple rejects an app icon with an alpha channel - ITMS-90717 - and does it
+   * at upload, after an archive, which is the most expensive moment to find
+   * out. Every icon here was being written as RGBA regardless, because the
+   * encoder only knew one format.
+   *
+   * The artwork was never actually transparent: every pixel of the bleed
+   * icons is opaque to the corner, so the channel was carrying nothing.
+   * Dropping it is lossless, and the encoder now decides from the pixels
+   * rather than from a flag somebody has to set per icon.
+   *
+   * The tight crops keep theirs, and that is the check that this is reading
+   * the image rather than applying a rule: those are cut into the medallion,
+   * whose corners really are transparent.
+   */
+  const colourType = (png) => png[25];
+  const RGB = 2;
+  const RGBA = 6;
+
+  for (const file of ['icon-1024.png', 'icon-512.png', 'icon-192.png',
+    'apple-touch-icon.png', 'icon-maskable-512.png']) {
+    const bytes = await readFile(new URL(`../assets/img/${file}`, import.meta.url));
+    assert.equal(colourType(bytes), RGB, `${file} still carries an alpha channel`);
+  }
+
+  for (const file of ['favicon-32.png', 'brand-128.png']) {
+    const bytes = await readFile(new URL(`../assets/img/${file}`, import.meta.url));
+    assert.equal(colourType(bytes), RGBA, `${file} is a crop with transparent corners`);
+  }
+});
+
+test('an image with one transparent pixel keeps its alpha', () => {
+  // The encoder's rule, on its own: opaque is a property of the pixels, and
+  // one pixel that is not decides for the whole file.
+  const opaque = new Uint8Array([255, 0, 0, 255, 0, 255, 0, 255]);
+  const translucent = new Uint8Array([255, 0, 0, 255, 0, 255, 0, 254]);
+  assert.equal(encodePNG(2, 1, opaque)[25], 2, 'a fully opaque image is written as RGB');
+  assert.equal(encodePNG(2, 1, translucent)[25], 6, 'one soft pixel keeps the channel');
+});

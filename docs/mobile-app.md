@@ -121,6 +121,15 @@ master have drifted apart. The master is a square PNG of at least 1024px,
 full-bleed and opaque to the corner — Apple rejects transparency and applies
 its own rounding, so artwork that arrives already rounded is rounded twice.
 
+**No alpha channel on the ones a store looks at.** Apple rejects an app icon
+that carries one — ITMS-90717 — and rejects it at upload, after an archive.
+The artwork was always opaque to the corner; the encoder was simply writing
+every icon as RGBA because it only knew one format. It now decides from the
+pixels: an image with nothing transparent in it is written as RGB, which is
+lossless, and the tight crops keep their channel because the medallion's
+corners really are transparent. A test asserts both halves, so this cannot
+quietly come back.
+
 ## 5. Permissions
 
 The app uses the web Geolocation API, which works in both webviews — but only
@@ -221,14 +230,42 @@ geolocation and the locate button does nothing.
 
 ### In Xcode
 
-- **Signing & Capabilities → Team.** A **personal team** (a free Apple ID) is
-  enough to run on your own phone by cable. The app expires after seven days
-  and has to be reinstalled, and nobody else can install it — which is fine for
-  a first look. **TestFlight**, and anyone else's phone, needs the paid
-  developer account.
-- Plug the phone in, pick it as the run target, press Run. The first time, the
-  phone asks you to trust the developer under Settings → General → VPN &
-  Device Management.
+`npm run app:ios` opens `ios/App/App.xcworkspace`. Where each setting lives,
+because none of it is where a first-time reader looks:
+
+- **Signing.** Project navigator (⌘1) → the blue **App** at the very top →
+  in the editor's own column, **TARGETS → App** → the **Signing &
+  Capabilities** tab. Team, Bundle Identifier and automatic signing are all on
+  that pane. If your Apple ID is not in the Team menu, *Add an Account…* opens
+  Xcode → Settings → Accounts, and a **"(Personal Team)"** entry appears after
+  signing in.
+- A **personal team** (a free Apple ID) is enough to run on your own phone by
+  cable. The build expires after seven days and nobody else can install it,
+  which is fine for a first look. **TestFlight**, and anyone else's phone,
+  needs the paid developer account.
+- **While the account is changing entity type there is no team to pick.** Use
+  a personal team against a throwaway identifier — `com.halfstop.app.dev` —
+  and leave the real one unregistered until there is a team to register it to.
+  §6a explains why that order matters and cannot be undone later.
+- **Run target** is the destination menu in the toolbar, immediately right of
+  the ▶ button: it reads `App > iPhone 15 Pro`. Click the right half and pick
+  the attached phone. If it is not listed: cable, unlocked, *Trust This
+  Computer* answered on the phone, then Window → Devices and Simulators (⇧⌘2).
+- **Developer Mode, on iOS 16 and later.** The phone refuses to run a
+  development build until Settings → Privacy & Security → **Developer Mode**
+  is on, which needs a restart. The option only appears *after* Xcode has
+  tried to install once, so the sequence is: Run, fail, enable, restart, Run.
+- First install only: Settings → General → **VPN & Device Management** → your
+  Apple ID → Trust. Until then the app sits on the home screen and will not
+  launch.
+
+**The console you want is not Xcode's.** Xcode (⇧⌘Y) shows native logs, which
+is enough for a 401 on tiles and no use at all for a CORS failure inside the
+webview. For the real JavaScript console: Mac Safari → Settings → Advanced →
+*Show features for web developers*; phone → Settings → Safari → Advanced →
+*Web Inspector*; then, with the app running, Safari's **Develop** menu → the
+phone's name → the Halfstop webview. That is where the answer to the two
+untested questions below will appear.
 
 ### What to actually test, in this order
 
