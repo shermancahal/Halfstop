@@ -162,9 +162,10 @@ This added 18KB to the style, 72.7KB to 90.8KB minified, and the first cut of
 it added twice that. The cause both times was a `let` binding whose source
 expression was written out again for each of its siblings — free when the
 source is a bare `coalesce`, expensive once it strips a designation first.
-Bindings see the ones before them; use them. This file already carries one scar
-from expression size, a text-size layer that reached 261KB and arrived as a
-report that rendering had got slower.
+Bind it once and read it from inside that binding's body - an *enclosing*
+`let`, never a sibling one, which is the trap at the foot of this file. This
+file already carries one scar from expression size, a text-size layer that
+reached 261KB and arrived as a report that rendering had got slower.
 
 ## `Secondary` is two words
 
