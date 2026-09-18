@@ -30,6 +30,17 @@ html, body { height: 100%; overflow: hidden; }
 
 .panel {
   width: 356px; flex: none;
+  /*
+   * Positioned, so what is absolute inside it is absolute to it.
+   *
+   * The collapse button is `position: absolute; top: 6px; right: 6px`, and
+   * without this the nearest positioned ancestor is `.app-body` - so on a wide
+   * screen, where the panel is a plain flex child, the button flew to the top
+   * right of the whole app and sat on the map's own controls, swallowing
+   * clicks meant for zoom and geolocate. It worked on a phone only because the
+   * panel is `position: absolute` there and was already its own frame.
+   */
+  position: relative;
   display: flex; flex-direction: column;
   background: var(--surface); border-right: 1px solid var(--line);
   z-index: 20; min-height: 0;
@@ -278,10 +289,12 @@ html, body { height: 100%; overflow: hidden; }
 /*
  * One column in the top-right corner, not four stacks.
  *
- * The engine adds a group per control - zoom and compass, geolocate,
- * fullscreen - and this app adds a fourth for identify, drop-a-pin and the
- * camera. Four rounded slabs with gaps between them read as four unrelated
- * things and left the app's own tools looking like something bolted on.
+ * The engine adds a group per control - zoom and compass, geolocate - and
+ * this app adds a third for identify, drop-a-pin and the camera. Rounded slabs
+ * with gaps between them read as unrelated things and left the app's own tools
+ * looking like something bolted on. There was a fullscreen group too until it
+ * was removed; the rule is written over whatever the corner holds, so it took
+ * no change when that went.
  *
  * Reported as "two sets of icons", and the person reporting it suggested this.
  *
@@ -830,8 +843,6 @@ html, body { height: 100%; overflow: hidden; }
    Mobile: the panel is an overlay, so it must get out of the way
    ========================================================================== */
 
-.panel-close { display: none; }
-
 @media (max-width: 820px) {
   /* The floating buttons and the hamburger both sit under the open panel —
      the hamburger was landing on top of the "Layers" tab label. The panel has
@@ -851,6 +862,7 @@ html, body { height: 100%; overflow: hidden; }
     border-radius: 50%; color: var(--ink-2); cursor: pointer;
   }
   .panel-close svg { width: 16px; height: 16px; }
+  .panel-close-collapse { display: none; }
   .panel-tabs { padding-right: 44px; }
   .panel-tab { font-size: .74rem; padding: 11px 2px 9px; }
 
@@ -869,6 +881,38 @@ html, body { height: 100%; overflow: hidden; }
   #units-toggle { padding: 6px 8px; font-size: .78rem; white-space: nowrap; }
   .site-header .icon-button { width: 30px; height: 30px; }
   .site-header .icon-button svg { width: 16px; height: 16px; }
+}
+
+/*
+ * The same button on a wide screen, and a way back out of an open panel.
+ *
+ * The toggle hides itself once the panel is open, and this button was a
+ * phone-only control - so on a desktop the panel opened and then could not be
+ * shut, which is a sidebar permanently holding a third of the map. Reported
+ * with a screenshot of the strip that was left.
+ *
+ * It wears the arrow rather than the X here: the panel is a column that
+ * collapses to the left, not a sheet lying over the map to be dismissed.
+ *
+ * Written after the mobile block rather than in the breakpoint further up,
+ * and that is the whole lesson of the first attempt. Media queries carry no
+ * extra specificity, so the plain `.panel-close { display: none }` that used
+ * to sit above beat the rule trying to show it and the button stayed hidden -
+ * silently, because the markup and the wiring were both correct.
+ */
+@media (min-width: 821px) {
+  .panel-close {
+    position: absolute; top: 6px; right: 6px; z-index: 3;
+    display: flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; padding: 0;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 50%; color: var(--ink-3); cursor: pointer;
+  }
+  .panel-close:hover { color: var(--ink); background: var(--paper-2); }
+  .panel-close svg { width: 16px; height: 16px; }
+  .panel-close-dismiss { display: none; }
+  /* Room for it, or it lands on the Details tab's label. */
+  .panel-tabs { padding-right: 40px; }
 }
 
 /* Very narrow: drop the wordmark to the icon alone and shed optional buttons. */

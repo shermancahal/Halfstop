@@ -1496,6 +1496,52 @@ console.log('\nThe panel waits to be asked, and opens on Layers');
   check('no duplicate Layers button floats over the map',
     await fresh.locator('#quick-layers').count(), 0);
   check('nor a duplicate Folders one', await fresh.locator('#quick-folders').count(), 0);
+
+  /*
+   * And a way back out, on a desktop.
+   *
+   * The toggle hides itself once the panel is open, and the panel's own close
+   * button used to be a phone-only control - so on a wide screen the panel
+   * opened and could not be shut, which is a sidebar permanently taking a
+   * third of the map. Reported with a screenshot of the strip that was left.
+   *
+   * This viewport is 1280 wide, which is the side of the breakpoint where it
+   * was broken.
+   */
+  check('the panel can be collapsed again', await fresh.locator('#panel-close').isVisible(), true);
+  const glyphs = await fresh.evaluate(() => {
+    const shown = (selector) => {
+      const node = document.querySelector(selector);
+      return node ? getComputedStyle(node).display !== 'none' : false;
+    };
+    return { arrow: shown('.panel-close-collapse'), cross: shown('.panel-close-dismiss') };
+  });
+  // An arrow, because it collapses leftwards; the X belongs to the phone,
+  // where the panel is a sheet lying over the map and is dismissed.
+  check('and it is drawn as an arrow, not a dismissal', glyphs, { arrow: true, cross: false });
+
+  /*
+   * Inside the panel, which is not where it first landed.
+   *
+   * The button is positioned absolutely, and `.app-body` is the nearest
+   * positioned ancestor unless the panel is one itself - so on a wide screen
+   * it flew to the top right of the whole app, sat on the map's zoom and
+   * geolocate controls and swallowed clicks meant for them. Visible, clickable
+   * and closing the panel correctly the whole time, which is why only a
+   * pointer-interception error in an unrelated check gave it away.
+   */
+  const placed = await fresh.evaluate(() => {
+    const button = document.getElementById('panel-close').getBoundingClientRect();
+    const panel = document.getElementById('panel').getBoundingClientRect();
+    return button.right <= panel.right + 1 && button.left >= panel.left - 1
+      && button.top >= panel.top - 1;
+  });
+  check('and it sits inside the panel, not over the map', placed, true);
+
+  await fresh.locator('#panel-close').click();
+  await fresh.waitForTimeout(250);
+  check('clicking it closes the panel', await fresh.locator('#panel').isHidden(), true);
+  check('and the toggle comes back', await fresh.locator('#panel-toggle').isVisible(), true);
   await fresh.close();
 }
 

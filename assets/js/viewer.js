@@ -858,7 +858,14 @@ async function main() {
     trackUserLocation: true,
     showUserHeading: true,
   }), 'top-right');
-  if (gl.FullscreenControl) state.map.addControl(new gl.FullscreenControl(), 'top-right');
+  /*
+   * No fullscreen control.
+   *
+   * It was one more button in a corner that already holds zoom, compass,
+   * geolocate and this app's own three, and what it does is the one thing
+   * every browser and every phone already has its own way of doing. Wrapped
+   * as an app there is no chrome for it to hide, so it does nothing at all.
+   */
 
 
   state.map.on('sourcedata', (event) => {

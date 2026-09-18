@@ -73,16 +73,28 @@ export function managePlanBlock(summary, { account, toast }) {
    */
   if (summary?.source === 'appstore') {
     /*
-     * Kept, and trimmed to one line. This branch has no button to carry the
-     * answer - there is nothing this app can open, because only Apple can end
-     * an App Store subscription - so removing the sentence would leave
-     * somebody looking at a plan with no way out at all. Where to go is the
-     * part that cannot be inferred; the rest is in the help page.
+     * The same button, pointed at Apple.
+     *
+     * This was a sentence - "Cancel it in Settings, your name, Subscriptions" -
+     * written that way because only Apple can end an App Store subscription and
+     * there seemed to be nothing for a button to open. There is: Apple
+     * publishes a direct link to the subscriptions screen, which opens it on an
+     * iPhone or iPad and the account page everywhere else. Three hops of
+     * navigation somebody has to follow correctly is worse than one link, and a
+     * plan managed one way on the web and another in the app should not look
+     * like two different kinds of thing.
+     *
+     * An anchor rather than a button: this leaves the app, and a link is what
+     * the browser, the wrapper and a long-press all already know how to handle.
      */
-    return el('p', {
-      class: 'hint', style: 'margin:10px 0 0',
-      text: 'Bought through the App Store. Cancel it in Settings, your name, Subscriptions.',
-    });
+    return el('div', { class: 'plan-upgrade' }, [
+      el('a', {
+        class: 'button button-secondary button-small',
+        href: 'https://apps.apple.com/account/subscriptions',
+        target: '_blank', rel: 'noopener',
+        text: 'Manage subscription',
+      }),
+    ]);
   }
 
   return null;
