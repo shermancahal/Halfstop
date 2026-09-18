@@ -355,11 +355,18 @@ test('tiers: every feature the free tier does not grant is gated somewhere', asy
   const sources = await Promise.all(['../assets/js/viewer.js', '../assets/js/lib/account.js']
     .map((file) => readFile(new URL(file, import.meta.url), 'utf8')));
 
-  // Feature keys named in a can() call anywhere in the app, aliases resolved
-  // the way can() itself resolves them.
+  /*
+   * Feature keys named in a gate anywhere in the app, aliases resolved the way
+   * can() itself resolves them.
+   *
+   * `allowed` counts as well as `can`: the viewer asks its gates through a
+   * helper that binds the reader's tier, and a scrape that only knew the bare
+   * form reported every one of those features as ungated the moment that
+   * landed - which is this test failing for the opposite of its reason.
+   */
   const gated = new Set();
   for (const source of sources) {
-    for (const [, named] of source.matchAll(/\bcan\('([a-zA-Z]+)'\)/g)) {
+    for (const [, named] of source.matchAll(/\b(?:can|allowed)\('([a-zA-Z]+)'\s*(?:,[^)]*)?\)/g)) {
       // can() maps the old names onto the feature that replaced them, so a
       // call using one still counts as gating the real feature.
       const key = Object.keys(FEATURES).find((feature) => can(named, {
@@ -615,4 +622,57 @@ test('tiers: nobody is a tester in the shipped configuration', () => {
   // the repository is public, so an address appearing in it here would be
   // somebody's real address in a public file.
   assert.equal(isBillingTester({ email: 'anybody@example.com' }), false);
+});
+
+/* ------------------------------------------- the tier has to reach the gate */
+
+test('tiers: with billing live, a gate asked without a tier answers Free', () => {
+  /*
+   * The trap, written down because it is invisible until the day it is not.
+   *
+   * `can()` falls back to Free when nobody passes a tier, and while billing is
+   * off it never gets that far - it answers true for everything first. So an
+   * app that never passed a tier looks completely correct, right up to the
+   * moment the flag is turned on, and then every gate closes on the people who
+   * just paid. "Subscribing took my basemaps away" is the report that follows.
+   */
+  const premium = { plan: { tier: 'premium', source: 'stripe' } };
+
+  assert.equal(can('extraBasemaps', { billing: LIVE }), false,
+    'no tier means Free, and Free does not include the metered basemaps');
+  assert.equal(can('extraBasemaps', { billing: LIVE, tier: tierFor(premium, { billing: LIVE }) }), true,
+    'the account that pays for them has to get them');
+
+  // And the same question with billing off is true either way, which is what
+  // makes the omission undetectable until the flag flips.
+  assert.equal(can('extraBasemaps', { billing: FREE }), true);
+});
+
+test('tiers: every gate in the app is asked against the reader’s plan', async () => {
+  /*
+   * Asserted on the source because there is nowhere else it lives: the bug is
+   * a missing argument, it is silent, and the only browser that could show it
+   * is one with billing switched on.
+   *
+   * viewer.js goes through `allowed`/`lockedBecause`, which bind the tier from
+   * the account; account.js passes `tierFor(this)`. A bare `can('...')` or
+   * `gateReason('...')` in either is the omission coming back.
+   */
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const path = await import('node:path');
+  const here = path.dirname(fileURLToPath(import.meta.url));
+
+  const bare = [];
+  for (const file of ['../assets/js/viewer.js', '../assets/js/lib/account.js']) {
+    const source = readFileSync(path.join(here, file), 'utf8');
+    source.split('\n').forEach((line, index) => {
+      // Comments explain the rule and quote the broken form; they are prose.
+      const code = line.replace(/^\s*(\*|\/\/).*$/, '');
+      for (const match of code.matchAll(/(?:^|[^.\w])(can|gateReason)\(\s*'([^']+)'([^)]*)\)/g)) {
+        if (!match[3].includes('tier')) bare.push(`${file}:${index + 1}: ${line.trim()}`);
+      }
+    });
+  }
+  assert.deepEqual(bare, [], `a gate is resolving against the default tier:\n${bare.join('\n')}`);
 });

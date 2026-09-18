@@ -62,7 +62,7 @@ import { activeAlerts, describeMotion, alertsToGeoJSON } from './lib/storms.js';
 import { fetchRoute, routeGeoJSON } from './lib/route.js';
 import {
   can, gateReason, planSummary, featureForLayer, describePrice, purchaseRoute, premiumAdds,
-  plansOffered, annualSaving, offersUpgrade, isBillingTester,
+  plansOffered, annualSaving, offersUpgrade, isBillingTester, tierFor,
 } from './lib/tiers.js';
 import {
   RV_CAVEAT, RV_RANGES, normaliseProfile, isRV, routingFor, profileRows,
@@ -415,6 +415,28 @@ function whenStyleReady(run) {
  * way and the tileset is one fetch away - so this keeps a map out of a menu
  * rather than out of reach, which is all it claims to do.
  */
+/*
+ * The gates, asked against the plan this reader actually holds.
+ *
+ * `can()` takes a tier and falls back to Free when nobody passes one, and
+ * nowhere in this file passed one. While BILLING.live is false that is
+ * invisible - can() answers true for everything before it ever looks at a
+ * tier - so every gate in the app was resolving against Free and no test or
+ * screen could tell, because the short circuit came first.
+ *
+ * The day the billing flag is turned on, that stops being invisible and
+ * becomes the opposite of the feature: premium basemaps locked, offline
+ * downloads locked, routing locked, for the paying account most of all. The
+ * flag would have read as "subscribing takes things away".
+ *
+ * So every gate goes through these two. `tierFor` is the only thing that knows
+ * how to turn a plan into permissions, and it reads the plan the server sent -
+ * the browser is not trusted to decide, it is only trusted to draw.
+ */
+const planTier = () => tierFor(state.account);
+const allowed = (feature) => can(feature, { tier: planTier() });
+const lockedBecause = (feature) => gateReason(feature, { tier: planTier() });
+
 const availableBasemaps = () => BASEMAPS.filter((basemap) => {
   if (basemap.requiresToken && !hasMapboxToken()) return false;
   /*
@@ -5385,8 +5407,8 @@ const AUTO_DOWNLOAD_BYTES = 150 * 1024 * 1024;
 function saveRegionFrom(bounds, { download = false, name = '' } = {}) {
   // Every region, however it was drawn, is made here. One check rather than
   // one per entry point, which is what stops the next entry point missing it.
-  if (!can('offlineDownloads')) {
-    toast(gateReason('offlineDownloads'), { tone: 'error', timeout: 9000 });
+  if (!allowed('offlineDownloads')) {
+    toast(lockedBecause('offlineDownloads'), { tone: 'error', timeout: 9000 });
     return null;
   }
   const problem = regionSizeProblem(bounds);
@@ -6123,11 +6145,11 @@ function layerRow({ entry, selected, control, preview = false }) {
    * everything, so every row is drawn exactly as it was.
    */
   const needs = featureForLayer(entry);
-  const locked = Boolean(needs) && !can(needs);
+  const locked = Boolean(needs) && !allowed(needs);
   if (locked) {
     control.disabled = true;
     if (descriptionNode) {
-      descriptionNode.append(el('p', { class: 'layer-locked-note', text: gateReason(needs) }));
+      descriptionNode.append(el('p', { class: 'layer-locked-note', text: lockedBecause(needs) }));
     }
   }
 
@@ -10338,8 +10360,8 @@ async function drawTripRoute(folder, stops, button) {
    * spelling and one home. It is not a check: nothing here stops anyone, and
    * the server in front of the router is what would.
    */
-  if (!can('roadRoute')) {
-    toast(gateReason('roadRoute'), { tone: 'error' });
+  if (!allowed('roadRoute')) {
+    toast(lockedBecause('roadRoute'), { tone: 'error' });
     return;
   }
 
@@ -10441,7 +10463,7 @@ function saveVehicleProfile(patch) {
 function rvAdvisory(profile) {
   const vehicle = normaliseProfile(profile);
   if (!isRV(vehicle)) return null;
-  if (!can('rvRouting')) return null;
+  if (!allowed('rvRouting')) return null;
   const metric = state.units === 'metric';
 
   return el('div', { class: 'rv-advisory' }, [
@@ -10473,7 +10495,7 @@ function vehicleKnobs() {
     type: 'button', title: note,
     // Open today. The gate is asked rather than assumed so that closing it is
     // one edit in tiers.js and not a search through this file.
-    disabled: kind === 'rv' && !can('rvRouting'),
+    disabled: kind === 'rv' && !allowed('rvRouting'),
     text: label,
     onclick: () => {
       if (vehicle.kind === kind) return;
@@ -11686,14 +11708,14 @@ function photoSection(folder, item) {
    * uploaded anywhere, so locking somebody out of their own pictures because a
    * subscription lapsed would be taking something that was never ours to hold.
    */
-  const canAddPhotos = can('pinPhotos');
+  const canAddPhotos = allowed('pinPhotos');
   const actions = el('div', { class: 'picker-row', style: 'margin-top:8px' }, [
     el('button', {
       class: 'button button-secondary button-small', type: 'button', text: 'Add photos',
       disabled: !canAddPhotos,
-      title: canAddPhotos ? '' : gateReason('pinPhotos'),
+      title: canAddPhotos ? '' : lockedBecause('pinPhotos'),
       onclick: () => {
-        if (!canAddPhotos) { toast(gateReason('pinPhotos'), { tone: 'error' }); return; }
+        if (!canAddPhotos) { toast(lockedBecause('pinPhotos'), { tone: 'error' }); return; }
         picker.click();
       },
     }),

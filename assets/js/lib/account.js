@@ -12,7 +12,8 @@
 import { SUPABASE_URL, SUPABASE_KEY } from '../config.js';
 import { mergeFolders, rowToFolder, folderToRow, missingColumn } from './sync.js';
 import { canEdit, markShared, normaliseEmail, readRole } from './shares.js';
-import { can, gateReason } from './tiers.js';
+import { safeStorage } from './folders.js';
+import { can, gateReason, tierFor } from './tiers.js';
 
 const SUPABASE_VERSION = '2.45.4';
 
@@ -49,6 +50,80 @@ const PORTAL_FUNCTION = 'stripe-portal';
 
 /** Invitations, kept beside the folders they are about. */
 const SHARES = 'folder_shares';
+
+/**
+ * Which account the folders on this device were last synced with.
+ *
+ * The folder store is one working set per browser, deliberately - it is what
+ * somebody uses before they ever sign in - and it carried no record of whose
+ * it was. Sync pushes whatever is local to whoever is signed in, so signing in
+ * as a second account adopted the first account's collection wholesale and
+ * wrote it to the server under the new user id.
+ *
+ * That is not hypothetical: it happened here on 2026-09-13, 27 folders and
+ * 8,765 items, same client ids under both accounts. On a shared browser it is
+ * worse than untidy - it is one person's places becoming rows on another
+ * person's account.
+ *
+ * Sign-out already clears the folders once they are safely on the server, so
+ * the intended state when switching accounts is an empty store. This is the
+ * guard for every way that does not happen: a sign-out whose sync failed, a
+ * session that simply expired, a second account signed into beside the first.
+ *
+ * Its own key rather than a field in the collection: the collection lives in
+ * IndexedDB with a localStorage fallback and migrates between them, and this
+ * has to be readable before any of that resolves.
+ */
+const OWNER_KEY = 'ab-maps-folder-owner-v1';
+
+/** The stamp, as a pair of functions so a test needs no browser storage. */
+export function folderOwnerStore(storage = safeStorage()) {
+  return {
+    read() {
+      try {
+        return storage?.getItem(OWNER_KEY) || null;
+      } catch {
+        return null;
+      }
+    },
+    write(userId) {
+      try {
+        if (userId) storage?.setItem(OWNER_KEY, userId);
+        else storage?.removeItem(OWNER_KEY);
+      } catch {
+        // Private mode, or site data switched off. A stamp that cannot be
+        // kept is the state this guard already treats as unknown.
+      }
+      return userId || null;
+    },
+  };
+}
+
+/**
+ * What to do with the folders on this device for the account signing in.
+ *
+ * `merge` is the ordinary two-way sync. `adopt` is the same merge for a set
+ * with no stamp on it - the person who made folders before signing up, and
+ * every device that predates this guard. `replace` is the one that matters:
+ * the set belongs to a different account, so nothing local goes up and the
+ * account's own folders are what this device shows.
+ *
+ * Replace is safe precisely because the stamp is only written after a sync
+ * succeeded. A set stamped to another account is a set that account already
+ * holds on the server, so dropping it here loses nothing - it is the same
+ * position as signing out cleanly, which is what should have happened.
+ *
+ * An unstamped set is not treated that way, and that is deliberate. Nothing
+ * says it was ever uploaded, and discarding folders somebody made offline to
+ * fix a bug about folders would be the same mistake in the other direction.
+ * It is adopted and stamped, so a device can cross accounts at most once more
+ * and never again.
+ */
+export function folderDisposition(owner, userId) {
+  if (!userId) return 'merge';
+  if (!owner) return 'adopt';
+  return owner === userId ? 'merge' : 'replace';
+}
 
 /** Injectable so a test of the waiting does not have to wait. */
 const nap = (ms) => new Promise((resume) => { setTimeout(resume, ms); });
@@ -302,9 +377,12 @@ export class Account extends EventTarget {
    * Both options default to today's behaviour, so nothing but the tests
    * passes anything.
    */
-  constructor(folders, { client = getClient, configured = isConfigured, syncs = true } = {}) {
+  constructor(folders, { client = getClient, configured = isConfigured, syncs = true,
+    owner = folderOwnerStore() } = {}) {
     super();
     this.folders = folders;
+    // Which account this device's folders belong to; see OWNER_KEY.
+    this.owner = owner;
     /*
      * Whether this account has folders worth syncing.
      *
@@ -723,6 +801,9 @@ export class Account extends EventTarget {
 
     if (saved) {
       this.folders.replaceAll([]);
+      // The stamp goes with them. An empty store belongs to nobody, and the
+      // next person to sign in on this browser starts from their own folders.
+      this.owner.write(null);
       this.setStatus('signed-out',
         'Signed out. Your folders are on your account and come back when you sign in.');
       return;
@@ -1096,7 +1177,7 @@ export class Account extends EventTarget {
        * costs money is the row policy and the bandwidth behind it, and neither
        * of those reads a plan yet.
        */
-      if (!can('folderSync')) {
+      if (!can('folderSync', { tier: tierFor(this) })) {
         const onlyShared = await this.pullShared(client);
         if (onlyShared !== null) {
           const held = this.folders.snapshot().filter((folder) => !folder.sharedFrom);
@@ -1104,7 +1185,7 @@ export class Account extends EventTarget {
         }
         this.lastSyncAt = Date.now();
         this.syncing = false;
-        this.setStatus('signed-in', gateReason('folderSync'));
+        this.setStatus('signed-in', gateReason('folderSync', { tier: tierFor(this) }));
         return null;
       }
 
@@ -1131,7 +1212,15 @@ export class Account extends EventTarget {
         this.noteMissingColumns(rows);
 
       const local = this.folders.snapshot();
-      const held = new Map(local.map((folder) => [folder.id, folder]));
+      /*
+       * Whose folders these are, decided before anything is merged or pushed.
+       *
+       * `replace` means they are another account's, so this device's beliefs
+       * about them are that account's beliefs and must not be projected onto
+       * these rows either - hence the empty map rather than `local`.
+       */
+      const disposition = folderDisposition(this.owner.read(), this.user.id);
+      const held = new Map(disposition === 'replace' ? [] : local.map((folder) => [folder.id, folder]));
       const remote = rows.map((row) => {
         const folder = rowToFolder(row);
         const ours = held.get(folder.id);
@@ -1161,6 +1250,30 @@ export class Account extends EventTarget {
        * that every invitation was withdrawn.
        */
       const shared = await this.pullShared(client);
+
+      /*
+       * Another account's folders do not travel with the browser.
+       *
+       * Nothing local goes up and nothing local survives: this account's own
+       * rows become what the device shows, which is the position a clean sign
+       * out would have left it in. Safe because the stamp is written only
+       * after a sync succeeded, so the set being dropped is one the other
+       * account already holds.
+       *
+       * Said out loud, because folders disappearing without a word is the one
+       * thing worse than folders appearing without a word.
+       */
+      if (disposition === 'replace') {
+        this.folders.replaceAll([...remote, ...(shared || [])]);
+        this.owner.write(this.user.id);
+        this.lastSyncAt = Date.now();
+        this.syncing = false;
+        this.setStatus('signed-in',
+          'The folders on this device belonged to another account, so they were not uploaded. '
+          + 'This account\u2019s own folders are shown instead.');
+        return null;
+      }
+
       const result = mergeFolders(local, remote, shared);
 
       this.folders.replaceAll(result.merged);
@@ -1175,6 +1288,10 @@ export class Account extends EventTarget {
         if (sharedError) throw new Error(sharedError.message);
       }
 
+      // Stamped only now, after the push went out. A stamp written before
+      // the folders were safely on the server would be the guard promising
+      // something it had not done.
+      this.owner.write(this.user.id);
       this.lastSyncAt = Date.now();
       this.syncing = false;
       this.setStatus('signed-in');
@@ -1352,7 +1469,7 @@ export class Account extends EventTarget {
     if (folder?.sharedFrom && !canEdit(folder)) return;
     // Your own folders travel on the plan that carries them. A folder somebody
     // shared for editing is not yours and is not that.
-    if (!folder?.sharedFrom && !can('folderSync')) return;
+    if (!folder?.sharedFrom && !can('folderSync', { tier: tierFor(this) })) return;
     try {
       const client = await this.getClient();
       const { error } = folder?.sharedFrom

@@ -13,7 +13,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Account, displayName } from '../assets/js/lib/account.js';
+import { Account, displayName, folderDisposition } from '../assets/js/lib/account.js';
 
 const folders = { list: () => [], replaceAll() {}, toGeoJSON: () => ({ features: [] }) };
 
@@ -1097,4 +1097,162 @@ test('account: signing out clears a half-finished reset', async () => {
 
   assert.equal(account.recovering, false, 'an abandoned reset would follow the account around');
   assert.equal(account.status, 'signed-out');
+});
+
+/* ------------------------------------------------- whose folders these are */
+
+/** A store with a real collection in it, and a client with rows to pull. */
+function withFolders(held, rows = []) {
+  const pushed = [];
+  const store = {
+    list: () => held,
+    snapshot: () => held,
+    replaceAll(next) { held.length = 0; held.push(...next); },
+    toGeoJSON: () => ({ features: [] }),
+  };
+  const client = fakeClient();
+  client.from = (table) => ({
+    select() {
+      return {
+        async eq() {
+          return { data: table === 'folder_shares' ? [] : rows, error: null };
+        },
+        async or() { return { data: [], error: null }; },
+      };
+    },
+    async upsert(values) { pushed.push(...[].concat(values)); return { error: null }; },
+    delete() { return { async eq() { return { error: null }; } }; },
+  });
+  return { store, client, pushed };
+}
+
+/** The stamp, as a pair of functions over a plain object. */
+function fakeOwner(value = null) {
+  let held = value;
+  return { read: () => held, write(next) { held = next || null; return held; } };
+}
+
+test('folders: the disposition is decided by whose stamp the device carries', () => {
+  /*
+   * The rule on its own, because the three answers are three different
+   * outcomes for somebody's data and the wrong one either loses folders or
+   * copies them onto a stranger's account.
+   */
+  assert.equal(folderDisposition('u1', 'u1'), 'merge', 'the usual case is a two-way sync');
+  assert.equal(folderDisposition(null, 'u1'), 'adopt', 'an unstamped set is trusted, once');
+  assert.equal(folderDisposition('u1', 'u2'), 'replace', 'another account’s set does not travel');
+});
+
+test('account: a second account does not inherit the first account’s folders', async () => {
+  /*
+   * The bug this guard exists for, and it is not hypothetical: on 2026-09-13
+   * one account signed in on a browser holding another account's collection
+   * and the sync wrote all 27 folders - 8,765 items, the same client ids -
+   * to the server under the new user id. On a shared browser that is one
+   * person's places becoming rows on another person's account.
+   */
+  const held = [{ id: 'f1', name: 'Red River', items: [{ id: 'i1' }], updatedAt: 10 }];
+  const { store, client, pushed } = withFolders(held, []);
+  const account = new Account(store, {
+    client: async () => client,
+    configured: () => true,
+    owner: fakeOwner('first-user'),
+  });
+  withHash('');
+  account.user = { id: 'second-user' };
+
+  await account.sync();
+
+  assert.deepEqual(pushed, [], 'the first account’s folders were written to the second account');
+  assert.deepEqual(store.snapshot(), [], 'and they were left on screen under the wrong account');
+  assert.match(account.message, /belonged to another account/);
+});
+
+test('account: the second account still gets its own folders', async () => {
+  // The other half of replace: refusing to push must not mean refusing to
+  // pull, or switching accounts would show an empty app.
+  const held = [{ id: 'f1', name: 'Red River', items: [], updatedAt: 10 }];
+  const rows = [{ client_id: 'f9', name: 'Their trip', items: [], updated_at: '2026-09-01T00:00:00Z' }];
+  const { store, client, pushed } = withFolders(held, rows);
+  const owner = fakeOwner('first-user');
+  const account = new Account(store, {
+    client: async () => client, configured: () => true, owner,
+  });
+  withHash('');
+  account.user = { id: 'second-user' };
+
+  await account.sync();
+
+  assert.deepEqual(store.snapshot().map((folder) => folder.id), ['f9']);
+  assert.deepEqual(pushed, []);
+  assert.equal(owner.read(), 'second-user', 'the device now carries this account’s stamp');
+});
+
+test('account: your own folders still sync, and the device is stamped with you', async () => {
+  /*
+   * The guard has to be invisible in the ordinary case. A device stamped with
+   * the account signing in is an ordinary two-way sync, and a device with no
+   * stamp at all - every install that predates this - is adopted rather than
+   * wiped, because nothing says those folders were ever uploaded.
+   */
+  for (const stamp of ['u1', null]) {
+    const held = [{ id: 'f1', name: 'Red River', items: [], updatedAt: 10 }];
+    const { store, client, pushed } = withFolders(held, []);
+    const owner = fakeOwner(stamp);
+    const account = new Account(store, {
+      client: async () => client, configured: () => true, owner,
+    });
+    withHash('');
+    account.user = { id: 'u1' };
+
+    await account.sync();
+
+    assert.equal(pushed.length, 1, `a folder was not pushed with stamp ${stamp}`);
+    assert.equal(store.snapshot().length, 1);
+    assert.equal(owner.read(), 'u1');
+  }
+});
+
+test('account: a sync that failed leaves the stamp alone', async () => {
+  /*
+   * The stamp is a promise that these folders are on that account's server,
+   * and `replace` drops folders on the strength of it. Writing it after a
+   * failed push would make the promise false, and the next account to sign in
+   * here would throw away folders that exist nowhere else.
+   */
+  const held = [{ id: 'f1', name: 'Red River', items: [], updatedAt: 10 }];
+  const { store, client } = withFolders(held, []);
+  client.from = () => ({
+    select() { return { async eq() { return { data: null, error: { message: 'offline' } }; } }; },
+    async upsert() { return { error: null }; },
+  });
+  const owner = fakeOwner(null);
+  const account = new Account(store, {
+    client: async () => client, configured: () => true, owner,
+  });
+  withHash('');
+  account.user = { id: 'u1' };
+
+  await account.sync();
+
+  assert.equal(owner.read(), null, 'an unsynced device was stamped as if it had synced');
+  assert.equal(store.snapshot().length, 1, 'and the folders it never pushed were dropped');
+});
+
+test('account: signing out clears the stamp with the folders', async () => {
+  // An empty store belongs to nobody. Leaving the stamp behind would make the
+  // next account's first sync a `replace` of a set that is not there.
+  const held = [{ id: 'f1', name: 'Red River', items: [], updatedAt: 10 }];
+  const { store, client } = withFolders(held, []);
+  const owner = fakeOwner('u1');
+  const account = new Account(store, {
+    client: async () => client, configured: () => true, owner,
+  });
+  withHash('');
+  account.user = { id: 'u1' };
+
+  await account.signOut();
+
+  assert.deepEqual(store.snapshot(), []);
+  assert.equal(owner.read(), null);
 });

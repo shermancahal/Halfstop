@@ -429,3 +429,44 @@ out of one. A leak from the binary is then one revocation, not two.
    usable in the app at all.
 4. **#2 native.** Needed for review, not for testing.
 5. **#2 web**, whenever. The site works without it.
+
+## Whose folders are on this device
+
+The folder store is one working set per browser — that is what makes folders
+usable before anybody signs in — and it used to carry no record of whose it
+was. Sync pushes whatever is local to whoever is signed in, so signing in as a
+second account on a browser that still held the first account's folders wrote
+the whole collection to the server under the new user id.
+
+That happened here on 2026-09-13: 27 folders, 8,765 items, the same client ids
+under both accounts. Nothing leaked between people — both accounts were the
+same person — but the shape of it is one person's places becoming rows on
+another person's account, which on a shared browser is exactly what it sounds
+like.
+
+Signing out already clears the folders once they are safely on the server, so
+the intended state when switching accounts is an empty store. The guard is for
+every way that does not happen: a sign-out whose sync failed, a session that
+simply expired, a second account signed in beside the first.
+
+`ab-maps-folder-owner-v1` in localStorage holds the user id the folders were
+last synced with, written only *after* a push succeeded. On the next sync:
+
+| stamp | what happens |
+| --- | --- |
+| this account | the ordinary two-way sync |
+| none | adopted and stamped — the sign-up case, and every device older than the guard |
+| another account | nothing local goes up; this account's own folders replace it, and the panel says so |
+
+Replace is safe because of when the stamp is written: a set stamped to another
+account is a set that account already holds on the server, so dropping it here
+loses nothing. An unstamped set is deliberately not treated that way — nothing
+says it was ever uploaded, and discarding folders somebody made offline to fix
+a bug about folders is the same mistake pointing the other way.
+
+**Cleaning up a collection that already crossed** takes the guard first. The
+copies carry the same client ids as the originals, so tombstoning them on the
+wrong account, on a device that has not yet been stamped, would send those
+tombstones on to the account that owns the originals and delete them. With the
+guard in place that cannot happen: the device is stamped to the account it
+synced with, and the other account's sign-in replaces rather than pushes.

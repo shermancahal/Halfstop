@@ -340,3 +340,33 @@ account.
 to *draw*. What actually costs money has to be refused where the bill is — the
 row policy for sync, whatever proxy ends up in front of Valhalla for routing,
 whoever serves the tiles for downloads — and none of those read a plan yet.
+
+## Before turning `ABMAP_BILLING_LIVE` on
+
+The flag is one repository variable — Settings → Secrets and variables →
+Actions → Variables, `ABMAP_BILLING_LIVE = true` — and the next deploy writes
+it into the client config. What it does is close every gate in
+`assets/js/lib/tiers.js` and put the purchase panel in front of everybody, so
+the Stripe keys on the Edge Functions had better be live ones.
+
+Two things to know before flipping it.
+
+**The gates have to be asked with a tier, and for a while they were not.**
+`can()` falls back to Free when no tier is passed, and while the flag is off it
+never gets that far — it answers true for everything first. So the omission is
+completely invisible until the flag flips, at which point every gate closes on
+the people who just paid: metered basemaps locked, offline downloads locked,
+routing locked, for a Premium account. "Subscribing took my basemaps away" is
+the report that would have followed. The viewer now asks through `allowed()`
+and `lockedBecause()`, which bind the tier from the account, and a test fails
+on any bare `can('…')` left in the app.
+
+**Nothing is enforced on the server yet.** Everything in `tiers.js` decides
+what to draw. A reader who opens the console can still call the tileset, the
+routing URL and the row policy directly. That is a decision, not an oversight —
+see the end of the section above — but it means the flag buys a tidy paywall
+and not a real one.
+
+A narrower alternative, if what you want is one account to see the metered
+maps: add the address to `SITE.editors` in `assets/js/config.js`. It changes
+nothing else and nothing for anybody else.
