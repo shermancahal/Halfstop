@@ -122,12 +122,22 @@ export function wireSettingsMenu({
       const plan = planSummary(who);
       drop.append(el('div', { class: 'settings-account' }, [
         el('div', { class: 'settings-label', text: 'Plan' }),
-        // One word, and nothing under it. The countdown used to live here on
-        // the grounds that a trial ending unannounced is a surprise - but this
-        // is a menu somebody opened to change their units, and the place that
-        // sentence actually does some work is the upgrade panel, where it is
-        // still said, beside the thing that stops the clock.
+        /*
+         * The name, and the date under it when there is one.
+         *
+         * This held one word and nothing else, on the grounds that a trial
+         * countdown does not belong in a menu somebody opened to change their
+         * units. That still holds for a countdown. A date does not read the
+         * same way: somebody who has just cancelled comes here to check that
+         * it took, and "Premium" on its own answers a different question than
+         * the one they are asking. It says whether the date is a renewal or an
+         * ending, so it cannot be misread as either.
+         *
+         * Silent for an account with nothing to report - Free, or the account
+         * that runs the service, whose Premium has no end date at all.
+         */
         el('div', { class: 'plan-name', text: plan.name }),
+        plan.renewal ? el('p', { class: 'hint plan-renewal', text: plan.renewal }) : null,
         planExtra ? planExtra(plan) : null,
       ].filter(Boolean)));
     }

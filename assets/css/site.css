@@ -1173,6 +1173,9 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 }
 /* One plan, named. The sentence about it is in the FAQ, not the menu. */
 .plan-name { font-size: .9rem; font-weight: 600; color: var(--ink); }
+/* The renewal or end date, under the plan name rather than beside it: it is
+   a sentence, and it wraps on a phone where the name never does. */
+.plan-renewal { margin: .15rem 0 0; }
 
 /* The one control in the account panel that destroys something, set apart from
    the two that do not. */

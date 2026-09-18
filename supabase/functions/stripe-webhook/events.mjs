@@ -43,9 +43,32 @@ function whose(object) {
 }
 
 /**
+ * Whether this subscription is going to renew when the period ends.
+ *
+ * A cancellation is not an event of its own until the period actually runs
+ * out. Stripe sends `customer.subscription.updated` with the status still
+ * `active` and `cancel_at_period_end` set, so an entitlement written from
+ * status alone says "active until October 13" for a subscription that is
+ * ending on October 13 and one that is renewing on it. The date is the same;
+ * what it means to the person reading it is not.
+ *
+ * Missing reads as renewing, which is the safe direction: a subscription
+ * wrongly said to renew shows a date that turns out to be a renewal, while
+ * one wrongly said to end tells somebody their access is stopping when it is
+ * not.
+ */
+function willRenew(object) {
+  if (object?.cancel_at_period_end === true) return false;
+  // `cancel_at` is the other way Stripe says it, for a cancellation scheduled
+  // at a specific time rather than at the end of the current period.
+  if (Number.isFinite(object?.cancel_at) && object.cancel_at > 0) return false;
+  return true;
+}
+
+/**
  * Read an event into an instruction, or into nothing.
  *
- * @returns {{action: 'grant'|'end'|'ignore', userId?, expiresAt?, externalRef?, status?, why?}}
+ * @returns {{action: 'grant'|'end'|'ignore', userId?, expiresAt?, externalRef?, status?, renews?, why?}}
  */
 export function readEvent(event, { now = Date.now() } = {}) {
   const type = String(event?.type || '');
@@ -132,10 +155,11 @@ export function readEvent(event, { now = Date.now() } = {}) {
       userId,
       externalRef,
       status,
+      renews: willRenew(object),
       expiresAt: new Date(now + 7 * 24 * 60 * 60 * 1000).toISOString(),
       why: 'active with no readable period end; granted a week until the next event',
     };
   }
 
-  return { action: 'grant', userId, externalRef, status, expiresAt };
+  return { action: 'grant', userId, externalRef, status, renews: willRenew(object), expiresAt };
 }

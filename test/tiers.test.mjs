@@ -676,3 +676,62 @@ test('tiers: every gate in the app is asked against the reader’s plan', async 
   }
   assert.deepEqual(bare, [], `a gate is resolving against the default tier:\n${bare.join('\n')}`);
 });
+
+/* ------------------------------------------- renewing, or running out */
+
+test('tiers: the date says whether it is a renewal or an ending', async () => {
+  /*
+   * The distinction the row could not make until the webhook learned to read
+   * `cancel_at_period_end`. Stripe reports a cancelled subscription as
+   * `active` right up to the period end, so both of these arrive carrying the
+   * same status and the same date - and "October 13, 2026" means opposite
+   * things to the person reading it.
+   */
+  const { describeRenewal } = await import('../assets/js/lib/tiers.js');
+  const until = '2026-10-13T12:00:00Z';
+  const at = { billing: LIVE, timeZone: 'UTC' };
+
+  assert.equal(describeRenewal({ tier: 'premium', source: 'stripe', until, renews: true }, at),
+    'Renews October 13, 2026.');
+  assert.equal(describeRenewal({ tier: 'premium', source: 'stripe', until, renews: false }, at),
+    'Ends October 13, 2026.');
+
+  // A row written before the column existed has no answer, and the safe
+  // reading is that it renews: wrongly promising one is a smaller wrong than
+  // wrongly announcing that somebody's access is stopping.
+  assert.equal(describeRenewal({ tier: 'premium', source: 'stripe', until }, at),
+    'Renews October 13, 2026.');
+
+  // A trial and a dated grant do not renew, whatever the flag says.
+  assert.equal(describeRenewal({ tier: 'premium', source: 'trial', until, renews: true }, at),
+    'Trial ends October 13, 2026.');
+  assert.equal(describeRenewal({ tier: 'premium', source: 'granted', until, renews: true }, at),
+    'Ends October 13, 2026.');
+});
+
+test('tiers: an account with nothing to report says nothing', async () => {
+  /*
+   * Three silences, and each is a different account: Free has no date, the
+   * account that runs the service has Premium with no end at all, and an
+   * unreadable date is not worth guessing at in front of somebody.
+   */
+  const { describeRenewal } = await import('../assets/js/lib/tiers.js');
+  const at = { billing: LIVE, timeZone: 'UTC' };
+
+  assert.equal(describeRenewal({ tier: 'free', source: 'none', until: null }, at), '');
+  assert.equal(describeRenewal({ tier: 'premium', source: 'granted', until: null }, at), '');
+  assert.equal(describeRenewal({ tier: 'premium', source: 'stripe', until: 'whenever' }, at), '');
+  assert.equal(describeRenewal(null, at), '');
+});
+
+test('tiers: the plan summary carries the sentence the menu draws', async () => {
+  const { planSummary: summarise } = await import('../assets/js/lib/tiers.js');
+  const account = {
+    plan: { tier: 'premium', source: 'stripe', until: '2026-10-13T12:00:00Z', renews: false },
+  };
+  const summary = summarise(account, { billing: LIVE });
+
+  assert.equal(summary.name, 'Premium');
+  assert.equal(summary.renews, false);
+  assert.match(summary.renewal, /^Ends October 13, 2026\.$/);
+});

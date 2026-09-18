@@ -304,6 +304,22 @@ disagree, at the cost of one request on a page somebody opens rarely.
 **An App Store subscription cannot be cancelled from here**, and the function
 says so rather than failing. Only Apple can end one.
 
+**Cancelling is not a cancellation event.** Stripe keeps the subscription
+`active` with `cancel_at_period_end` set, and the only thing that arrives is an
+ordinary `customer.subscription.updated` carrying the same status and the same
+date as a healthy one. Read from status alone, the entitlement written for a
+cancelled subscription is identical to the one written for a renewing
+subscription — which is how the app came to tell somebody who had just
+cancelled that their plan renewed on the day it actually stopped.
+
+So `entitlements.renews` holds the answer, filled from `cancel_at_period_end`
+(and from `cancel_at`, which is how Stripe says the same thing for a
+cancellation set to a specific moment). `my_plan()` returns it, and the settings
+menu draws either *Renews October 13, 2026* or *Ends October 13, 2026* under the
+plan name. A row that predates the column reads as renewing: wrongly promising a
+renewal is a smaller wrong than wrongly announcing that somebody's access is
+ending.
+
 The policy people actually read is in `terms.html` under *Cancelling* and in
 the FAQ under *Account*. In short: cancelling stops the next payment rather
 than cutting anybody off, Premium runs to the end of the paid period, and

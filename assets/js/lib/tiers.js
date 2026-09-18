@@ -179,6 +179,48 @@ export function tierFor(account = null, { billing = BILLING } = {}) {
   return TIERS[plan?.tier] || TIERS[DEFAULT_TIER];
 }
 
+/** Sources that bill again when the period ends, rather than simply running out. */
+const RENEWING = new Set(['stripe', 'appstore']);
+
+/**
+ * The date on the plan, and what that date means.
+ *
+ * A cancelled subscription and a healthy one carry the same field: Stripe
+ * reports both as active until the period actually runs out, and the entitlement
+ * row holds the same end date for each. So the date alone is not an answer —
+ * "October 13" is a renewal to one reader and the last day to another, and
+ * showing it without saying which is how somebody reads a cancellation into a
+ * subscription that is fine, or the reverse.
+ *
+ * `renews` comes from the webhook, which reads `cancel_at_period_end`. Missing
+ * reads as renewing for a subscription, because wrongly promising a renewal is
+ * a smaller wrong than wrongly announcing an ending.
+ *
+ * Written as a date rather than a countdown. "25 days left" is the right shape
+ * for a trial, where the clock is the point; somebody who has just cancelled
+ * wants the day their access stops, and wants to be able to check it against
+ * what the billing portal told them.
+ *
+ * @param timeZone only for tests — left unset, the date is the reader's own,
+ *        which matters because a period ending at 03:25 UTC is the previous
+ *        evening across the whole country this app is drawn for.
+ */
+export function describeRenewal(plan = null, { billing = BILLING, timeZone = '' } = {}) {
+  if (!billing.live && !SETTLED.has(plan?.source)) return '';
+  if (plan?.tier !== 'premium') return '';
+  if (!plan.until) return '';
+
+  const when = new Date(plan.until);
+  if (Number.isNaN(when.getTime())) return '';
+  const date = when.toLocaleDateString('en-US', {
+    month: 'long', day: 'numeric', year: 'numeric', ...(timeZone ? { timeZone } : {}),
+  });
+
+  if (plan.source === 'trial') return `Trial ends ${date}.`;
+  const renews = RENEWING.has(plan.source) && plan.renews !== false;
+  return renews ? `Renews ${date}.` : `Ends ${date}.`;
+}
+
 /** Whole days left, rounded up, so the last day reads as "1" and not "0". */
 export function daysLeft(until, { now = Date.now() } = {}) {
   const ends = until ? Date.parse(until) : NaN;
@@ -458,8 +500,12 @@ export function planSummary(account = null, { billing = BILLING } = {}) {
     /* Where the entitlement came from: 'trial', 'granted', 'appstore', 'none'. */
     source: plan?.source || 'none',
     until: plan?.until || null,
-    /* The same thing as a sentence, which is what the menu actually shows. */
+    /* The same thing as a sentence, which is what the upgrade panel shows. */
     line: describePlan(plan, { billing }),
+    /* Whether the date below is a renewal or an ending; see describeRenewal. */
+    renews: plan?.renews !== false,
+    /* And that date said out loud, which is what the menu shows. */
+    renewal: describeRenewal(plan, { billing }),
     /* Whether any of this is real yet, which the interface should not hide. */
     live: Boolean(billing.live),
     /*

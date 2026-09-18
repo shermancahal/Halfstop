@@ -145,3 +145,48 @@ test('stripe: events we do not act on are left alone', () => {
   assert.equal(readEvent(null, { now: NOW }).action, 'ignore', 'and nothing throws on rubbish');
   assert.equal(readEvent(undefined, { now: NOW }).action, 'ignore');
 });
+
+test('stripe: a cancellation at period end still grants, and says it will not renew', () => {
+  /*
+   * The shape of a cancellation, which is not a cancellation event.
+   *
+   * Cancelling in the billing portal does not end anything on the spot -
+   * Stripe keeps the subscription `active` and sets `cancel_at_period_end`,
+   * and the only event that arrives is an ordinary update carrying the same
+   * status and the same date as a healthy one. Read from status alone, the
+   * entitlement written for a cancelled subscription is byte for byte the one
+   * written for a renewing subscription, and the app then tells somebody who
+   * has just cancelled that their plan renews on the day it actually stops.
+   *
+   * Access is untouched, which is the other half: they paid through that date
+   * and they keep it until then.
+   */
+  const read = readEvent(subscription({ cancel_at_period_end: true }), { now: NOW });
+  assert.equal(read.action, 'grant', 'cancelling is not losing access today');
+  assert.equal(read.expiresAt, new Date(IN_A_MONTH * 1000).toISOString());
+  assert.equal(read.renews, false);
+
+  // And the ordinary one says the opposite, or the flag would mean nothing.
+  assert.equal(readEvent(subscription(), { now: NOW }).renews, true);
+});
+
+test('stripe: a cancellation scheduled for a date also counts', () => {
+  // `cancel_at` is the other way Stripe says the same thing, for a
+  // cancellation set to a specific moment rather than to the period boundary.
+  const read = readEvent(subscription({ cancel_at: IN_A_MONTH }), { now: NOW });
+  assert.equal(read.action, 'grant');
+  assert.equal(read.renews, false);
+});
+
+test('stripe: an active subscription with no readable end still reports renewal', () => {
+  /*
+   * The capped grant takes the flag too. It is the branch a malformed event
+   * lands on, and a week of Premium that claims to be ending when it is not -
+   * or the reverse - is the same wrong answer in a smaller window.
+   */
+  const read = readEvent(
+    subscription({ current_period_end: undefined, cancel_at_period_end: true }), { now: NOW },
+  );
+  assert.equal(read.action, 'grant');
+  assert.equal(read.renews, false);
+});

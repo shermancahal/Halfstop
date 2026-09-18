@@ -310,6 +310,20 @@ create table if not exists public.entitlements (
   -- Null means it does not expire. That is the administrator case.
   expires_at  timestamptz,
 
+  -- Whether the date above is a renewal or an ending.
+  --
+  -- Stripe reports a cancelled subscription as `active` right up to the period
+  -- end, so expires_at cannot tell the two apart on its own: the row written
+  -- for a subscription ending on October 13 is identical to the one written
+  -- for a subscription renewing on it, and the app then tells somebody who has
+  -- just cancelled that their plan renews on the day it stops. The webhook
+  -- fills this from cancel_at_period_end.
+  --
+  -- Defaults to true, which is the safe direction for a row that predates it:
+  -- wrongly promising a renewal is a smaller wrong than wrongly announcing
+  -- that somebody's access is ending.
+  renews      boolean not null default true,
+
   note        text not null default '',
   updated_at  timestamptz not null default now()
 );
@@ -321,6 +335,8 @@ alter table public.entitlements drop constraint if exists entitlements_source_ch
 alter table public.entitlements add constraint entitlements_source_check
   check (source in ('granted', 'appstore', 'stripe', 'comp'));
 alter table public.entitlements add column if not exists external_ref text;
+-- Added after the table shipped; see the column comment above.
+alter table public.entitlements add column if not exists renews boolean not null default true;
 
 alter table public.entitlements enable row level security;
 
@@ -357,7 +373,7 @@ security definer
 set search_path = public
 as $$
   with granted as (
-    select tier, source, expires_at
+    select tier, source, expires_at, renews
     from public.entitlements
     where user_id = auth.uid()
       and tier = 'premium'
@@ -374,14 +390,17 @@ as $$
     when exists (select 1 from granted) then jsonb_build_object(
       'tier', 'premium',
       'source', (select source from granted),
-      'until', (select expires_at from granted)
+      'until', (select expires_at from granted),
+      'renews', (select renews from granted)
     )
     when (select ends from trial) > now() then jsonb_build_object(
       'tier', 'premium',
       'source', 'trial',
-      'until', (select ends from trial)
+      'until', (select ends from trial),
+      -- A trial runs out; it does not renew.
+      'renews', false
     )
-    else jsonb_build_object('tier', 'free', 'source', 'none', 'until', null)
+    else jsonb_build_object('tier', 'free', 'source', 'none', 'until', null, 'renews', false)
   end;
 $$;
 

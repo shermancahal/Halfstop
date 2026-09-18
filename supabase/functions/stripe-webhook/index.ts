@@ -113,6 +113,14 @@ Deno.serve(async (req: Request) => {
     source: 'stripe',
     expires_at: read.expiresAt,
     external_ref: read.externalRef,
+    /*
+     * Whether the date above is a renewal or an ending.
+     *
+     * Stripe reports a cancelled subscription as `active` until the period
+     * actually runs out, so without this the row cannot tell the two apart and
+     * neither can anything reading it.
+     */
+    renews: read.renews !== false,
     note: `Stripe ${read.status}`,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'user_id' });
