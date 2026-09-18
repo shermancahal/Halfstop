@@ -133,8 +133,10 @@ subscribing to more only makes the log harder to read.
 
 **The signing secret** is on the destination's own page once it exists, under
 **Signing secret**, behind a *Reveal* or *Click to reveal*. It reads
-`whsec_...`. That value goes in `STRIPE_WEBHOOK_SECRET` in Supabase, and the
-function has to be redeployed afterwards to pick it up.
+`whsec_...`. That value goes in `STRIPE_WEBHOOK_SECRET` in Supabase. No redeploy: a
+secret set in the dashboard is available to every function immediately, which
+is what `docs/auth-setup.md` says two pages over and what this line used to
+contradict.
 
 It belongs to that one destination: create a second, or switch from test mode
 to live, and the secret is different. Until it is set, the function answers
