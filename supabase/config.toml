@@ -41,3 +41,12 @@ verify_jwt = true
 # be a body somebody else can write, and the portal can cancel a subscription.
 [functions.stripe-portal]
 verify_jwt = true
+
+# Managing other people's accounts: listing them, inviting one, granting
+# Premium by hand, deleting one outright. The gateway check is the first of
+# two, and the weaker one - it only proves somebody is signed in. The address
+# on that token is then checked against ADMIN_EMAILS on the function itself,
+# which is a value the browser cannot read or edit, unlike SITE.editors. An
+# unset ADMIN_EMAILS is nobody rather than everybody; see actions.mjs.
+[functions.admin-accounts]
+verify_jwt = true

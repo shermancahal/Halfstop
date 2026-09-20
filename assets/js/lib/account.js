@@ -48,6 +48,16 @@ const CHECKOUT_FUNCTION = 'stripe-checkout';
 /** And the one that opens Stripe's billing portal, where a subscription ends. */
 const PORTAL_FUNCTION = 'stripe-portal';
 
+/**
+ * The one that manages other people's accounts.
+ *
+ * Every call here is refused by the function unless the address on the token
+ * is in its own ADMIN_EMAILS. Nothing in this file is the check: a method that
+ * exists in a page anybody can open is not a permission, and the refusal comes
+ * back as an ordinary error the caller shows.
+ */
+const ADMIN_FUNCTION = 'admin-accounts';
+
 /** Invitations, kept beside the folders they are about. */
 const SHARES = 'folder_shares';
 
@@ -1041,6 +1051,30 @@ export class Account extends EventTarget {
     }
     if (!data?.ok || !data.url) return { ok: false, reason: data?.error || 'The billing page did not open.' };
     return { ok: true, url: data.url };
+  }
+
+  /**
+   * Ask the account tool to do something, and report what it said.
+   *
+   * One method for every action because the shape is identical - a body, a
+   * yes or a sentence explaining the no - and because the function is where
+   * the decisions live. Refusals arrive as prose meant to be read: "that
+   * account subscribes through Stripe", not a status code.
+   */
+  async administer(action, payload = {}) {
+    if (!this.user) return { ok: false, reason: 'Sign in first.' };
+    const client = await this.getClient();
+    if (!client) return { ok: false, reason: 'Accounts are not configured here.' };
+
+    const { data, error } = await client.functions.invoke(ADMIN_FUNCTION, {
+      body: { action, ...payload },
+    });
+    if (error) {
+      const said = await readFunctionError(error);
+      return { ok: false, reason: said || error.message };
+    }
+    if (!data?.ok) return { ok: false, reason: data?.error || 'That did not work.' };
+    return { ok: true, ...data };
   }
 
   /** Who a folder has been shared with, withdrawn invitations included. */

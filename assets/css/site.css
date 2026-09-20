@@ -747,6 +747,21 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 
 .admin-wrap { padding-bottom: 56px; display: grid; gap: 12px; }
 .admin-gate { padding: 18px 0; }
+
+/* The accounts list: one row per person, actions on their own line so a long
+   address never squeezes the buttons off the side of a narrow window. */
+.admin-accounts { display: grid; gap: 12px; padding-top: 8px; }
+.admin-account {
+  display: grid; gap: 8px; padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.admin-account-who p { margin: 3px 0 0; }
+.admin-account-does { flex-wrap: wrap; gap: 7px; }
+.admin-confirm, .admin-invite {
+  flex: 1 1 200px; min-width: 0; padding: 6px 9px;
+  font: inherit; font-size: .84rem; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+}
 .ticket {
   border: 1px solid var(--line); border-left: 3px solid var(--line-strong);
   border-radius: var(--radius); background: var(--surface); padding: 14px 16px;

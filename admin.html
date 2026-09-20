@@ -73,6 +73,24 @@
     -->
     <div id="admin-gate" class="admin-gate" hidden></div>
     <div id="admin-queue" hidden></div>
+
+    <!--
+      Accounts, under the queue rather than beside it.
+
+      The queue is what this page is opened for; managing an account is what
+      somebody comes here to do once, on purpose, usually because of something
+      in the queue above it. Nothing here is authorised by being drawn: every
+      button calls a function that checks the address on the token against its
+      own list, which is a value this page cannot read.
+    -->
+    <section id="admin-accounts" class="admin-accounts" hidden>
+      <div class="section-head">
+        <h2>Accounts</h2>
+        <p class="hint" id="accounts-lede"></p>
+      </div>
+      <div class="picker-row" id="accounts-invite"></div>
+      <div id="accounts-list"></div>
+    </section>
   </div>
 
 </main>

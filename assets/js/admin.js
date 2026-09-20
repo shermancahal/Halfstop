@@ -31,6 +31,10 @@ for (const node of document.querySelectorAll('#brand-parent')) {
 const dom = {
   gate: document.getElementById('admin-gate'),
   queue: document.getElementById('admin-queue'),
+  accounts: document.getElementById('admin-accounts'),
+  accountsLede: document.getElementById('accounts-lede'),
+  accountsInvite: document.getElementById('accounts-invite'),
+  accountsList: document.getElementById('accounts-list'),
   lede: document.getElementById('queue-lede'),
 };
 const toast = createToaster(document.body);
@@ -141,6 +145,113 @@ async function drawQueue() {
   dom.queue.replaceChildren(...tickets.map((ticket) => ticketRow(ticket, drawQueue)));
 }
 
+/* ---------------------------------------------------------------- accounts */
+
+/** A date somebody reads, or a dash. Dates here are facts, not decorations. */
+const on = (iso) => (iso ? formatDate(new Date(iso)) : '—');
+
+/**
+ * What an account has, in the words the rest of the app uses.
+ *
+ * A trial says so rather than reading Premium: it is the one state with a
+ * clock on it, and this is where somebody decides whether to grant anything.
+ */
+function planLine(row) {
+  if (row.plan === 'premium') {
+    const until = row.until ? `, ${row.renews ? 'renews' : 'ends'} ${on(row.until)}` : '';
+    return `Premium via ${row.source}${until}`;
+  }
+  if (row.plan === 'trial') return `Trial, ends ${on(row.until)}`;
+  return 'Free';
+}
+
+function accountRow(row, reload) {
+  const say = (result) => {
+    toast(result.ok ? 'Done.' : result.reason, { tone: result.ok ? 'ok' : 'error', timeout: 9000 });
+    if (result.ok) reload();
+  };
+
+  /*
+   * Deleting asks for the address to be typed, and the button stays disabled
+   * until it matches. The function checks the same thing again - this guard
+   * lives in a page, and a page is skippable - but the typing is what stops
+   * the mis-click, which is the failure this actually has.
+   */
+  const typed = el('input', {
+    class: 'admin-confirm', type: 'text', placeholder: 'type the address to delete',
+    'aria-label': `Type ${row.email} to confirm deleting it`,
+  });
+  const remove = el('button', {
+    class: 'button button-ghost button-small is-danger', type: 'button', text: 'Delete',
+    disabled: true,
+    onclick: async () => {
+      remove.disabled = true;
+      say(await account.administer('delete', {
+        userId: row.id, email: row.email, confirm: typed.value.trim(),
+      }));
+    },
+  });
+  typed.addEventListener('input', () => {
+    remove.disabled = typed.value.trim().toLowerCase() !== row.email.toLowerCase();
+  });
+
+  const grant = el('button', {
+    class: 'button button-secondary button-small', type: 'button',
+    text: row.plan === 'premium' ? 'Revoke Premium' : 'Grant Premium',
+    // A bought subscription is not this tool's to change, and the row says so
+    // before the function has to: revoking one takes access from somebody who
+    // is still paying.
+    disabled: !row.changeable,
+    title: row.changeable ? '' : `${row.source} manages this one`,
+    onclick: async () => {
+      grant.disabled = true;
+      say(await account.administer(row.plan === 'premium' ? 'revoke' : 'grant', { userId: row.id }));
+    },
+  });
+
+  return el('div', { class: 'admin-account' }, [
+    el('div', { class: 'admin-account-who' }, [
+      el('b', { text: row.email }),
+      el('p', {
+        class: 'hint',
+        text: `${planLine(row)} · ${row.folders} folder${row.folders === 1 ? '' : 's'} · `
+          + `joined ${on(row.created)} · ${row.confirmed ? 'confirmed' : 'never confirmed'}`
+          + `${row.provider && row.provider !== 'email' ? ` · ${row.provider}` : ''}`,
+      }),
+    ]),
+    el('div', { class: 'picker-row admin-account-does' }, [grant, typed, remove]),
+  ]);
+}
+
+async function drawAccounts() {
+  const result = await account.administer('list');
+  if (!result.ok) {
+    dom.accounts.hidden = false;
+    dom.accountsList.replaceChildren(el('p', { class: 'hint', text: result.reason }));
+    return;
+  }
+
+  const rows = [...(result.accounts || [])].sort((a, b) => String(b.created).localeCompare(String(a.created)));
+  dom.accounts.hidden = false;
+  dom.accountsLede.textContent = `${rows.length} account${rows.length === 1 ? '' : 's'}, newest first.`;
+
+  const field = el('input', {
+    class: 'admin-invite', type: 'email', placeholder: 'friend@example.com',
+    'aria-label': 'Email address to invite',
+  });
+  dom.accountsInvite.replaceChildren(field, el('button', {
+    class: 'button button-secondary button-small', type: 'button', text: 'Send an invitation',
+    onclick: async () => {
+      const result2 = await account.administer('invite', { email: field.value.trim() });
+      toast(result2.ok ? `Invited ${field.value.trim()}.` : result2.reason,
+        { tone: result2.ok ? 'ok' : 'error', timeout: 9000 });
+      if (result2.ok) { field.value = ''; drawAccounts(); }
+    },
+  }));
+
+  dom.accountsList.replaceChildren(...rows.map((row) => accountRow(row, drawAccounts)));
+}
+
 function render() {
   if (!isConfigured()) {
     drawGate('Accounts are not configured on this build, so there is no queue to read.');
@@ -150,6 +261,7 @@ function render() {
   if (!user) { drawGate('This page is for administrators.', { showSignIn: true }); return; }
   if (!mayEdit(user)) { drawGate(`Signed in as ${user.email}, which is not an administrator.`); return; }
   drawQueue();
+  drawAccounts();
 }
 
 account.addEventListener('change', render);
