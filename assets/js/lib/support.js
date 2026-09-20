@@ -53,3 +53,30 @@ export function describeTicket(ticket = {}) {
   const subject = String(ticket.subject || '').trim() || '(no subject)';
   return `${who}: ${subject}`;
 }
+
+/**
+ * The ones that are finished, which are the ones worth clearing out.
+ *
+ * Kept next to countWaiting because they are the same question asked from
+ * either end, and because a bulk delete that offered to remove "everything"
+ * would be offering to remove the messages somebody has not answered yet.
+ */
+export function doneTickets(tickets = []) {
+  return tickets.filter((ticket) => ticket.status === 'done');
+}
+
+/**
+ * Whether a ticket should be open when the queue is drawn.
+ *
+ * The queue is a page of somebody else's email, and a page that renders every
+ * message in full is a page you cannot see the shape of: ten tickets is ten
+ * screens of scrolling to find out that two of them need answering.
+ *
+ * So the finished ones are folded away and the rest are not. That is the split
+ * that costs nothing - a done ticket is one nobody is going to read again,
+ * while one still waiting is the reason the page was opened. Collapsing those
+ * too would hide the work behind a click each.
+ */
+export function openByDefault(ticket = {}) {
+  return ticket.status !== 'done';
+}

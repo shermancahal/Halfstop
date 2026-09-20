@@ -80,7 +80,7 @@ select * from probe;
 rollback;
 
 -- ---------------------------------------------------------------------------
--- And the same question about entitlements.
+-- And the same question about entitlements and trials.
 --
 -- Run this separately from the block above: the write attempt is refused by
 -- the policy, and a refusal aborts the transaction it is in, which is the
@@ -88,14 +88,25 @@ rollback;
 --
 -- Expected:
 --
---   the administrator   tier premium, source granted, until null
---   a new account       tier premium, source trial,   until 30 days on
---   an old account      tier free
+--   the administrator   tier premium, source granted, until null,
+--                       trialAvailable false
+--   an account on its   tier premium, source trial, until the end of the
+--     free month         month, trialAvailable false
+--   any other account   tier free, source none. trialAvailable is true only
+--                       if it has never started a trial and holds no
+--                       entitlement row at all
 --   rows it can see     1 for itself, and never anybody else's
 --
--- Then, on its own, the write attempt below: it must fail with
+-- A new account reads FREE here, which is the change worth noticing. The trial
+-- used to be worked out from the signup date, so every account less than a
+-- month old reported premium whether or not anybody had asked for one. It is a
+-- row now, written by public.start_trial(), and an account that has not taken
+-- one has not got one.
+--
+-- Then, on their own, the write attempts below: each must fail with
 -- 42501 "new row violates row-level security policy". A success there means
--- any signed-in account can hand itself premium, and the table is decoration.
+-- any signed-in account can hand itself premium - or a free month that never
+-- ends - and the tables are decoration.
 
 begin;
 create temp table plans (case_name text, result text) on commit drop;
@@ -106,20 +117,33 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"OWNER-USER-ID","email":"owner@example.com","role":"authenticated"}';
 insert into plans select 'administrator', public.my_plan()::text;
 insert into plans select 'rows it can see', (select count(*)::text from public.entitlements);
+insert into plans select 'trials it can see', (select count(*)::text from public.trials);
 
 set local request.jwt.claims = '{"sub":"INVITED-USER-ID","email":"invited@example.com","role":"authenticated"}';
 insert into plans select 'other account', public.my_plan()::text;
 insert into plans select 'rows it can see', (select count(*)::text from public.entitlements);
+insert into plans select 'trials it can see', (select count(*)::text from public.trials);
 
 reset role;
 select * from plans;
 rollback;
 
--- The write attempt, alone, because it aborts what it is in.
+-- The write attempts, one at a time, because each aborts what it is in.
 --
 -- begin;
 -- set local role authenticated;
 -- set local request.jwt.claims = '{"sub":"INVITED-USER-ID","email":"invited@example.com","role":"authenticated"}';
 -- insert into public.entitlements (user_id, tier, source)
 -- values ('INVITED-USER-ID', 'premium', 'granted');
+-- rollback;
+--
+-- And the same for the trial, which is the other way to help yourself to
+-- Premium: a row this account could write is a row it could date ten years
+-- out. public.start_trial() is the only way in, and it picks the dates.
+--
+-- begin;
+-- set local role authenticated;
+-- set local request.jwt.claims = '{"sub":"INVITED-USER-ID","email":"invited@example.com","role":"authenticated"}';
+-- insert into public.trials (user_id, ends_at)
+-- values ('INVITED-USER-ID', now() + interval '3650 days');
 -- rollback;

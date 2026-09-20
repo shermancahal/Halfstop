@@ -756,12 +756,21 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
   border-top: 1px solid var(--line);
 }
 .admin-account-who p { margin: 3px 0 0; }
+/* The three plans, joined into one control so they read as a choice between
+   three rather than as three unrelated buttons. The one an account is already
+   on is disabled, so it needs to look deliberate rather than broken: full
+   opacity, and the cursor says "this is where you are", not "try again". */
+.admin-plans { flex-wrap: wrap; gap: 6px; }
+.admin-plans .is-on[disabled] { opacity: 1; cursor: default; }
 .admin-account-does { flex-wrap: wrap; gap: 7px; }
 .admin-confirm, .admin-invite {
   flex: 1 1 200px; min-width: 0; padding: 6px 9px;
   font: inherit; font-size: .84rem; color: var(--ink);
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
 }
+/* The tools above the list: collapse the lot, or clear out the finished. */
+.queue-tools { flex-wrap: wrap; gap: 8px; padding-bottom: 4px; }
+
 .ticket {
   border: 1px solid var(--line); border-left: 3px solid var(--line-strong);
   border-radius: var(--radius); background: var(--surface); padding: 14px 16px;
@@ -770,9 +779,35 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 .ticket.is-new { border-left-color: var(--clay); }
 .ticket.is-open { border-left-color: var(--pine); }
 .ticket.is-done { opacity: .62; }
-.ticket-head { display: flex; justify-content: space-between; gap: 12px; font-size: .82rem; color: var(--ink-3); }
-.ticket-from { font-weight: 600; color: var(--ink-2); }
-.ticket-subject { margin: 4px 0 6px; font-size: 1rem; }
+
+/* ---- the fold ----
+   Each ticket is a <details>, and the summary is the only line that is always
+   on show — so it carries all three things that decide whether this is the
+   ticket you want: who wrote, what about, and when. The sender and the date
+   hold their size and the subject takes what is left, truncating rather than
+   wrapping, so a long subject cannot push the date off a narrow window or turn
+   one row into three. */
+.ticket-head {
+  display: flex; gap: 12px; align-items: baseline;
+  font-size: .82rem; color: var(--ink-3);
+  cursor: pointer; list-style: none;
+}
+/* Safari draws its own triangle through ::-webkit-details-marker, which
+   list-style does not reach. */
+.ticket-head::-webkit-details-marker { display: none; }
+.ticket-head:hover .ticket-subject { text-decoration: underline; }
+.ticket-head:focus-visible { outline: 2px solid var(--clay); outline-offset: 3px; border-radius: 3px; }
+.ticket-from { font-weight: 600; color: var(--ink-2); flex: 0 0 auto; }
+.ticket-when { flex: 0 0 auto; margin-left: auto; white-space: nowrap; }
+.ticket-subject {
+  flex: 1 1 auto; min-width: 0;
+  margin: 0; font-family: inherit; font-size: .92rem; font-weight: 500; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Open, the subject is a heading again rather than a line in a summary: it can
+   wrap, and it gets the space under it that the body needs. */
+.ticket[open] .ticket-subject { white-space: normal; overflow: visible; font-size: 1rem; }
+.ticket[open] .ticket-head { margin-bottom: 8px; }
 .ticket-address { margin: 0 0 8px; font-size: .85rem; }
 .ticket-body { margin: 0 0 10px; font-size: .92rem; color: var(--ink-2); white-space: pre-wrap; }
 .ticket-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

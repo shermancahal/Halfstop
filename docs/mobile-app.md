@@ -524,18 +524,28 @@ the least commission and the most paperwork.
 2. ~~Decide the entitlement claim before writing any purchase code.~~ **Done.**
    `public.entitlements` holds explicit grants, readable by the account it is
    about and writable by nothing short of the service role, and
-   `public.my_plan()` answers grant, then trial, then free. The trial is not
-   stored anywhere: thirty days from the day the account was made is already
-   knowable, and a stored copy is a second answer that can disagree with the
-   first. An administrator is one row with no expiry rather than a special case
-   in the app.
+   `public.my_plan()` reads rows and nothing else: an entitlement, or free. An
+   administrator is one row with no expiry rather than a special case in the
+   app.
 
-   Two things follow from that which matter on launch day. The trial runs from
-   signup, so every account that exists before billing goes live will already
-   be past it: either accept that, or insert grants for the people who were
-   there early. And nothing is gated yet, so the countdown is currently
-   counting down to nothing happening, which is why the interface says "Free,
-   with everything switched on" rather than showing it.
+   The trial used to be the exception - worked out from the day the account was
+   made rather than stored, on the grounds that a stored copy is a second
+   answer that can disagree with the first. That is true and it bought the
+   wrong thing. A computed trial cannot be declined, started or ended early,
+   because there is nothing to write, so every account that had ever signed up
+   was inside one whether anybody wanted it or not, and nobody could subscribe
+   during their free month because there was no row for a purchase to replace.
+
+   It is now a row with `source = 'trial'`, written by `public.start_trial()`
+   when somebody presses the button, and a second row in `public.trials` that
+   records the month was spent. Two tables because the first is not a record:
+   an entitlement is overwritten by a purchase and deleted when an
+   administrator sets somebody back to Free, and a free month you can have
+   again by cancelling is not a free month.
+
+   What follows for launch day is smaller than it was. Accounts that exist
+   before billing goes live are Free, like everybody else, and each still has
+   its month to take whenever it wants one.
 3. **Ship the native shell** (sections 2 to 6), with no purchases in it.
 4. **Then in-app purchase**, product ids and App Store Server Notifications
    into a Supabase function that writes an `entitlements` row with

@@ -5,7 +5,7 @@ import {
   FEATURES, TIERS, DEFAULT_TIER, tierFor,
   can, gateReason, planSummary, describePlan,
   daysLeft, featureForLayer, describePrice, purchaseRoute,
-  premiumAdds, annualSaving, plansOffered, offersUpgrade, isBillingTester,
+  premiumAdds, annualSaving, plansOffered, offersUpgrade, isBillingTester, TRIAL_DAYS,
 } from '../assets/js/lib/tiers.js';
 
 const FREE = { live: false };
@@ -513,8 +513,11 @@ test('tiers: a trial is offered the thing that stops it ending', () => {
   // Somebody who is actually paying is not sold it again.
   assert.equal(offersUpgrade(summary('stripe')), false);
   assert.equal(offersUpgrade(summary('appstore')), false);
-  // Nor is somebody who was given it.
+  // Nor is somebody who was given it. 'comp' looks like the odd one out here -
+  // nobody paid - but a comped account has been handed the thing the purchase
+  // would buy, and offering to sell it is asking for money for a gift.
   assert.equal(offersUpgrade(summary('granted')), false);
+  assert.equal(offersUpgrade(summary('comp')), false);
 
   // And nothing at all is offered while billing is off, whatever the source.
   assert.equal(offersUpgrade({ live: false, source: 'trial', tier: { id: 'premium' } }), false);
@@ -547,6 +550,7 @@ test('tiers: the test-mode panel does not try to sell to somebody who already pa
   assert.equal(asPanel('granted'), false, 'a granted account is not sold what it was given');
   assert.equal(asPanel('stripe'), false, 'and an account already paying by card is not sold it twice');
   assert.equal(asPanel('appstore'), false);
+  assert.equal(asPanel('comp'), false, 'nor a comped one');
   // The two that should still see the buttons, because neither is paying.
   assert.equal(asPanel('trial'), true);
   assert.equal(asPanel('none'), true);
@@ -734,4 +738,71 @@ test('tiers: the plan summary carries the sentence the menu draws', async () => 
   assert.equal(summary.name, 'Premium');
   assert.equal(summary.renews, false);
   assert.match(summary.renewal, /^Ends October 13, 2026\.$/);
+});
+
+/* --------------------------------------------- whether to offer the trial */
+
+test('tiers: whether a trial is still available comes from the server, never from here', () => {
+  /*
+   * It is not derivable from anything else on the summary, which is the whole
+   * reason it is a field. Free with a trial still to take and Free with one
+   * already spent are the same plan and a different offer, and only the server
+   * holds the row that tells them apart.
+   */
+  const summarise = (plan) => planSummary({ plan }, { billing: LIVE });
+
+  assert.equal(summarise({ tier: 'free', source: 'none', trialAvailable: true }).trialAvailable, true);
+  assert.equal(summarise({ tier: 'free', source: 'none', trialAvailable: false }).trialAvailable, false);
+
+  /*
+   * Absent reads as false, and that direction is the point.
+   *
+   * A build talking to a database that predates the trials table gets no
+   * button, which is harmless. The other way round draws a control whose only
+   * possible outcome is an error, for somebody who has been told they can have
+   * a free month.
+   */
+  assert.equal(summarise({ tier: 'free', source: 'none' }).trialAvailable, false);
+  assert.equal(planSummary(null, { billing: LIVE }).trialAvailable, false);
+  // And not the string "true", or anything else truthy that is not the answer.
+  assert.equal(summarise({ tier: 'free', source: 'none', trialAvailable: 'true' }).trialAvailable, false);
+  assert.equal(summarise({ tier: 'free', source: 'none', trialAvailable: 1 }).trialAvailable, false);
+});
+
+test('tiers: somebody already on a trial is not offered another one', () => {
+  // The server says so, and this checks that the summary carries the answer
+  // through rather than deciding for itself that premium means no trial.
+  const summary = planSummary(
+    { plan: { tier: 'premium', source: 'trial', until: '2026-10-20T00:00:00Z', trialAvailable: false } },
+    { billing: LIVE },
+  );
+  assert.equal(summary.trialAvailable, false);
+  assert.equal(summary.name, 'Trial', 'and it is still named as the thing it is');
+  assert.equal(offersUpgrade(summary), true, 'while still being able to subscribe');
+});
+
+test('tiers: the three places that know how long a trial is agree', async () => {
+  /*
+   * Thirty days is written in three files that cannot import each other: the
+   * database function that decides it, the account tool that hands one out,
+   * and this module, which says the number out loud before there is a trial to
+   * count - "Try it free for 30 days" is written for somebody who has not got
+   * one yet, so there is no date to read it off.
+   *
+   * Three copies of a number stay honest only if something checks, so this
+   * reads the other two off disk. A disagreement here is an offer of thirty
+   * days that turns into fourteen once it is pressed.
+   */
+  const { readFile } = await import('node:fs/promises');
+
+  const { TRIAL_DAYS: adminDays } = await import(
+    '../supabase/functions/admin-accounts/actions.mjs'
+  );
+  assert.equal(adminDays, TRIAL_DAYS, 'the account tool hands out a different length');
+
+  const schema = await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8');
+  const start = schema.slice(schema.indexOf('function public.start_trial()'));
+  const said = start.match(/ends\s+timestamptz\s*:=\s*now\(\)\s*\+\s*interval '(\d+) days'/);
+  assert.ok(said, 'start_trial() no longer states its length where this can read it');
+  assert.equal(Number(said[1]), TRIAL_DAYS, 'the database grants a different length');
 });

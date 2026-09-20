@@ -11,3 +11,6 @@ assets/js/token.js
 ios/
 android/
 assets-src/
+
+# The CLI drops a version stamp here when it runs.
+supabase/.temp/

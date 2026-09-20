@@ -996,6 +996,44 @@ export class Account extends EventTarget {
   }
 
   /**
+   * Take the free month, once.
+   *
+   * WHY THIS IS A DATABASE FUNCTION AND NOT A WRITE
+   *
+   * The obvious shape is an insert: the browser writes itself a row saying
+   * premium until thirty days from now. It is also the shape where anybody
+   * with devtools gives themselves Premium until 2075, because a row the
+   * client can write is a row the client can write anything into. So the
+   * entitlements table has no insert policy for anybody, and the only way in
+   * is public.start_trial(), which decides the dates itself and refuses a
+   * second trial. Nothing in this method is trusted with any of that - it
+   * sends no argument at all, not even who is asking.
+   *
+   * The refusals come back as sentences rather than as failures, because they
+   * are things a person should be told: "this account has already had its free
+   * month" is an answer, not an error.
+   */
+  async startTrial() {
+    if (!this.user) return { ok: false, reason: 'Sign in first.' };
+    const client = await this.getClient();
+    if (!client) return { ok: false, reason: 'Accounts are not configured here.' };
+
+    const { data, error } = await client.rpc('start_trial');
+    if (error) return { ok: false, reason: error.message };
+    if (!data?.ok) return { ok: false, reason: data?.error || 'The trial did not start.' };
+
+    /*
+     * The function hands back the new plan, so this does not have to ask for
+     * it again. Worth doing rather than calling refreshPlan(): the row was
+     * written a moment ago by the same statement that returned this, so it
+     * cannot be the stale read that a second round trip occasionally is.
+     */
+    this.plan = data.plan || this.plan;
+    this.emit();
+    return { ok: true, plan: this.plan };
+  }
+
+  /**
    * Wait for a checkout to show up as an entitlement.
    *
    * Paying and being entitled are not the same instant. Stripe sends the
@@ -1013,13 +1051,15 @@ export class Account extends EventTarget {
    *
    * WAIT ON THE SOURCE, NOT THE TIER
    *
-   * `my_plan()` reports premium for anybody inside their first thirty days,
-   * because a trial is premium - everything works, which is the point of it.
-   * So a wait that ends on `tier === 'premium'` ends on the very first read for
-   * every new account, and the app says "Premium is active" to somebody whose
-   * payment never reached us. It would have been right nearly every time and
-   * wrong in exactly the case this function exists for. Pass the source a
-   * purchase writes and the wait means what it says.
+   * `my_plan()` reports premium for somebody on a trial, because a trial is
+   * premium - everything works, which is the point of it. So a wait that ends
+   * on `tier === 'premium'` ends on the very first read for anybody who
+   * subscribes during their free month, and the app says "Premium is active"
+   * to somebody whose payment never reached us. It would be right nearly every
+   * time and wrong in exactly the case this function exists for - and that
+   * case is now the common one, because subscribing during the trial is the
+   * path the panel offers. Pass the source a purchase writes and the wait
+   * means what it says.
    */
   async waitForPlan({ tries = 8, wait = 1500, sleep = nap, wanted = 'premium', source = null } = {}) {
     let plan = null;
@@ -1138,6 +1178,42 @@ export class Account extends EventTarget {
       .eq('id', id);
     if (error) return { ok: false, reason: error.message };
     return { ok: true };
+  }
+
+  /**
+   * Throw tickets away, for good.
+   *
+   * Deleted rather than hidden, because a support queue that only ever grows
+   * is a support queue nobody can read, and a ticket marked done and kept
+   * forever is a copy of somebody's email sitting in a database for no reason.
+   *
+   * No policy is added for this: the one on support_tickets is `for all`, so
+   * the address that may read the queue is the address that may empty it, and
+   * every other session is refused by the same rule that already refuses the
+   * read. That is why this takes ids rather than a filter - a delete with a
+   * filter and a policy that failed open would empty the table.
+   *
+   * @param {string[]} ids
+   * @returns {{ok: boolean, reason?: string, deleted?: number}}
+   */
+  async deleteTickets(ids = []) {
+    const wanted = [...new Set(ids.filter(Boolean))];
+    if (!wanted.length) return { ok: true, deleted: 0 };
+    const client = await this.getClient();
+    if (!client) return { ok: false, reason: 'Accounts are not configured here.' };
+
+    /*
+     * Asked back for what it actually removed, rather than assuming.
+     *
+     * A delete refused by the policy is not an error - it matches no rows and
+     * reports success - so without this, an unauthorised session would be told
+     * the queue had been emptied while nothing had happened at all.
+     */
+    const { data, error } = await client.from(TICKETS).delete().in('id', wanted).select('id');
+    if (error) return { ok: false, reason: error.message };
+    const deleted = (data || []).length;
+    if (!deleted) return { ok: false, reason: 'Nothing was deleted. That session may not be allowed to.' };
+    return { ok: true, deleted };
   }
 
   /**

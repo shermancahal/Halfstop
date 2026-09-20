@@ -16,7 +16,9 @@ import { el, applyStoredTheme, formatDate, createToaster } from './lib/ui.js';
 import { mountPageSettings } from './lib/page-settings.js';
 import { Account, isConfigured } from './lib/account.js';
 import { mayEdit } from './lib/editors.js';
-import { STATUS_LABELS, nextStatuses, queueOrder, countWaiting } from './lib/support.js';
+import {
+  STATUS_LABELS, nextStatuses, queueOrder, countWaiting, doneTickets, openByDefault, describeTicket,
+} from './lib/support.js';
 
 applyStoredTheme();
 // The same two lines every other page runs: the name from the config, and the
@@ -83,17 +85,40 @@ function ticketRow(ticket, refresh) {
     refresh();
   };
 
-  return el('article', { class: `ticket is-${ticket.status}` }, [
-    el('div', { class: 'ticket-head' }, [
+  /*
+   * A <details>, so the queue is a list you can see the shape of.
+   *
+   * Every ticket used to render in full: the sender, the subject, the address,
+   * the whole body and a row of buttons. Ten of those is ten screens of
+   * scrolling to find out which two need answering, and the finished ones -
+   * which is eventually most of them - take exactly as much room as the ones
+   * that do not.
+   *
+   * Native rather than a class and a click handler. <details> gets keyboard
+   * behaviour, find-in-page that opens the section it matched, and the right
+   * announcement to a screen reader, none of which is worth reimplementing.
+   */
+  return el('details', { class: `ticket is-${ticket.status}`, open: openByDefault(ticket) }, [
+    /*
+     * Who, what about, and when - the three things that decide whether this is
+     * the one you are looking for. All on the summary line, because a fold
+     * that shows only a name and a date is a fold you have to open one by one
+     * to triage, which is the scrolling it was meant to save.
+     *
+     * The subject is a heading inside the summary, which is valid: <summary>
+     * takes phrasing content intermixed with heading content. It is here
+     * rather than repeated in the body so there is one copy of the text.
+     */
+    el('summary', { class: 'ticket-head' }, [
       /*
        * Every one of these came out of somebody else's mail client, so it is
        * set as text rather than markup. `el` assigns `text` to textContent,
        * which is the escaping.
        */
       el('span', { class: 'ticket-from', text: ticket.from_name || ticket.from_email || 'Unknown sender' }),
+      el('h3', { class: 'ticket-subject', text: ticket.subject || '(no subject)' }),
       el('span', { class: 'ticket-when', text: formatDate(ticket.received_at) }),
     ]),
-    el('h3', { class: 'ticket-subject', text: ticket.subject || '(no subject)' }),
     ticket.from_email
       ? el('p', { class: 'ticket-address' }, [
         el('a', { href: `mailto:${encodeURIComponent(ticket.from_email)}`, text: ticket.from_email }),
@@ -111,6 +136,24 @@ function ticketRow(ticket, refresh) {
         text: STATUS_LABELS[status],
         onclick: () => save({ status }),
       })),
+      /*
+       * Confirmed before it happens, because there is nothing behind this.
+       *
+       * The row is gone from the database, the original is in whatever inbox
+       * forwarded it, and this page has no undo. window.confirm is what the
+       * rest of the app uses for a delete that cannot be taken back, and the
+       * message names the sender so a mis-click on the wrong row is visible in
+       * the dialog rather than afterwards.
+       */
+      el('button', {
+        class: 'button button-ghost button-small is-danger', type: 'button', text: 'Delete',
+        onclick: async () => {
+          if (!window.confirm(`Delete “${describeTicket(ticket)}”? This cannot be undone.`)) return;
+          const result = await account.deleteTickets([ticket.id]);
+          if (!result.ok) { toast(result.reason, { tone: 'error', timeout: 9000 }); return; }
+          refresh();
+        },
+      }),
     ]),
   ]);
 }
@@ -142,7 +185,62 @@ async function drawQueue() {
     return;
   }
 
-  dom.queue.replaceChildren(...tickets.map((ticket) => ticketRow(ticket, drawQueue)));
+  const rows = tickets.map((ticket) => ticketRow(ticket, drawQueue));
+
+  /*
+   * Open or shut the lot.
+   *
+   * The per-ticket default - finished ones folded, the rest not - is right for
+   * arriving at the page and wrong the moment somebody wants the other thing:
+   * reading back through a week of answered mail, or getting a queue of
+   * fifteen down to something they can see at once. Written against the nodes
+   * that are already on the page rather than by redrawing, so opening one by
+   * hand and then pressing Collapse all does what it looks like it does.
+   */
+  const fold = el('button', {
+    class: 'button button-ghost button-small', type: 'button', text: 'Collapse all',
+    onclick: () => {
+      const shutting = fold.textContent === 'Collapse all';
+      for (const row of dom.queue.querySelectorAll('details.ticket')) row.open = !shutting;
+      fold.textContent = shutting ? 'Expand all' : 'Collapse all';
+    },
+  });
+
+  /*
+   * Clearing out, and only the finished ones.
+   *
+   * A button that emptied the whole queue would be a button that throws away
+   * the messages nobody has answered yet, which is the one thing this page
+   * exists to stop happening. So the bulk delete is scoped to done, which is a
+   * state somebody put each of those tickets into by hand.
+   */
+  const done = doneTickets(tickets);
+  const clear = done.length
+    ? el('button', {
+      class: 'button button-ghost button-small is-danger', type: 'button',
+      text: `Delete the ${done.length} finished`,
+      onclick: async () => {
+        const ask = `Delete ${done.length} finished message${done.length === 1 ? '' : 's'}? `
+          + 'This cannot be undone.';
+        if (!window.confirm(ask)) return;
+        clear.disabled = true;
+        const result = await account.deleteTickets(done.map((ticket) => ticket.id));
+        if (!result.ok) {
+          clear.disabled = false;
+          toast(result.reason, { tone: 'error', timeout: 9000 });
+          return;
+        }
+        // The number it actually removed, not the number that was asked for.
+        toast(`${result.deleted} deleted.`, { tone: 'ok' });
+        drawQueue();
+      },
+    })
+    : null;
+
+  dom.queue.replaceChildren(
+    el('div', { class: 'picker-row queue-tools' }, [fold, clear].filter(Boolean)),
+    ...rows,
+  );
 }
 
 /* ---------------------------------------------------------------- accounts */
@@ -162,8 +260,18 @@ function planLine(row) {
     return `Premium via ${row.source}${until}`;
   }
   if (row.plan === 'trial') return `Trial, ends ${on(row.until)}`;
-  return 'Free';
+  // Free, and whether the free month is still there to be taken. The two are
+  // the same plan and different situations: one is somebody who has not
+  // decided yet, the other is somebody who tried it and did not subscribe.
+  return row.trialUsed ? 'Free, trial spent' : 'Free';
 }
+
+/** The three plans, in the order they escalate. */
+const PLANS = [
+  { id: 'free', label: 'Free' },
+  { id: 'trial', label: 'Trial' },
+  { id: 'premium', label: 'Premium' },
+];
 
 function accountRow(row, reload) {
   const say = (result) => {
@@ -195,19 +303,40 @@ function accountRow(row, reload) {
     remove.disabled = typed.value.trim().toLowerCase() !== row.email.toLowerCase();
   });
 
-  const grant = el('button', {
-    class: 'button button-secondary button-small', type: 'button',
-    text: row.plan === 'premium' ? 'Revoke Premium' : 'Grant Premium',
-    // A bought subscription is not this tool's to change, and the row says so
-    // before the function has to: revoking one takes access from somebody who
-    // is still paying.
-    disabled: !row.changeable,
-    title: row.changeable ? '' : `${row.source} manages this one`,
-    onclick: async () => {
-      grant.disabled = true;
-      say(await account.administer(row.plan === 'premium' ? 'revoke' : 'grant', { userId: row.id }));
-    },
-  });
+  /*
+   * Three buttons that name the three plans, rather than one that toggles.
+   *
+   * This was a single Grant Premium / Revoke Premium button, which could only
+   * ever express two of the three states - a trial was worked out from the
+   * signup date back then, so there was nothing to set and no way to reach it.
+   * A toggle also answers the wrong question: "is this on" has no answer when
+   * there are three, and pressing Trial against an account already on Trial
+   * should give it a trial rather than whatever the opposite of one is.
+   *
+   * The one it is already on is marked and does nothing, so the row says what
+   * an account has without having to be read twice.
+   */
+  const plans = el('div', { class: 'picker-row admin-plans', role: 'group', 'aria-label': `Plan for ${row.email}` },
+    PLANS.map(({ id, label }) => {
+      const here = row.plan === id;
+      const button = el('button', {
+        class: `button button-small ${here ? 'button-primary is-on' : 'button-ghost'}`,
+        type: 'button',
+        text: label,
+        // A bought subscription is not this tool's to change, and the row says
+        // so before the function has to: revoking one takes access from
+        // somebody who is still paying. The plan they are on is disabled too -
+        // there is nothing for it to do.
+        disabled: here || !row.changeable,
+        'aria-pressed': String(here),
+        title: row.changeable ? '' : `${row.source} manages this one`,
+        onclick: async () => {
+          button.disabled = true;
+          say(await account.administer('setPlan', { userId: row.id, plan: id }));
+        },
+      });
+      return button;
+    }));
 
   return el('div', { class: 'admin-account' }, [
     el('div', { class: 'admin-account-who' }, [
@@ -219,7 +348,8 @@ function accountRow(row, reload) {
           + `${row.provider && row.provider !== 'email' ? ` · ${row.provider}` : ''}`,
       }),
     ]),
-    el('div', { class: 'picker-row admin-account-does' }, [grant, typed, remove]),
+    plans,
+    el('div', { class: 'picker-row admin-account-does' }, [typed, remove]),
   ]);
 }
 

@@ -11,7 +11,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  administrators, mayAdminister, readRequest, mayChange, whyNot, describeAccount, ACTIONS,
+  administrators, mayAdminister, readRequest, mayChange, whyNot, describeAccount,
+  planRow, ACTIONS, PLANS, TRIAL_DAYS,
 } from '../supabase/functions/admin-accounts/actions.mjs';
 
 const ADMIN = 'shermancahal@gmail.com';
@@ -42,10 +43,14 @@ test('admin: the list is read the way addresses are actually typed', () => {
 
 test('admin: only the actions this function has are answered', () => {
   for (const action of ACTIONS) {
-    const read = readRequest({ action, userId: 'u1', email: 'a@b.test', confirm: 'a@b.test' });
+    const read = readRequest({
+      action, userId: 'u1', email: 'a@b.test', confirm: 'a@b.test', plan: 'free',
+    });
     assert.equal(read.ok, true, `${action} should be readable`);
   }
-  for (const action of ['', 'drop', 'list; drop', 'LIST', undefined]) {
+  // The two that went: a toggle could not say "trial", so both were replaced
+  // by one action that names the plan.
+  for (const action of ['grant', 'revoke', '', 'drop', 'list; drop', 'LIST', undefined]) {
     const read = readRequest({ action });
     assert.equal(read.ok, false);
     assert.equal(read.status, 400);
@@ -99,6 +104,9 @@ test('admin: a bought subscription is not this tool’s to change', () => {
    */
   assert.equal(mayChange('granted'), true);
   assert.equal(mayChange('comp'), true);
+  // A trial is this tool's to change, and has to be: moving somebody from a
+  // trial to Premium is the whole reason the three-way control exists.
+  assert.equal(mayChange('trial'), true);
   assert.equal(mayChange(undefined), true, 'an account with no entitlement is grantable');
   assert.equal(mayChange('stripe'), false);
   assert.equal(mayChange('appstore'), false);
@@ -115,11 +123,78 @@ test('admin: an invitation needs something that could be an address', () => {
   }
 });
 
-test('admin: a grant may carry an expiry, and only a real one', () => {
-  assert.equal(readRequest({ action: 'grant', userId: 'u1' }).until, null, 'no date means no end');
-  assert.equal(readRequest({ action: 'grant', userId: 'u1', until: '2027-01-01T00:00:00Z' }).ok, true);
-  assert.equal(readRequest({ action: 'grant', userId: 'u1', until: 'next tuesday' }).ok, false);
-  assert.equal(readRequest({ action: 'grant' }).ok, false, 'and it has to name an account');
+test('admin: a plan is named, and an unknown one is refused rather than defaulted', () => {
+  /*
+   * The two ways a default would go wrong are "take Premium away" and "hand
+   * Premium out", which are the two things worth never doing because somebody
+   * mistyped. So there is no default.
+   */
+  for (const plan of PLANS) {
+    assert.equal(readRequest({ action: 'setPlan', userId: 'u1', plan }).ok, true, plan);
+  }
+  for (const plan of ['', 'Premium', 'paid', 'free; drop', undefined, null]) {
+    const read = readRequest({ action: 'setPlan', userId: 'u1', plan });
+    assert.equal(read.ok, false, `${plan} should be refused`);
+    assert.equal(read.status, 400);
+    assert.match(read.error, /free, trial, premium/);
+  }
+  assert.equal(readRequest({ action: 'setPlan', plan: 'free' }).ok, false, 'and it has to name an account');
+});
+
+test('admin: a plan may carry an expiry, and only a real one', () => {
+  assert.equal(readRequest({ action: 'setPlan', userId: 'u1', plan: 'premium' }).until, null,
+    'no date means no end');
+  assert.equal(readRequest({
+    action: 'setPlan', userId: 'u1', plan: 'premium', until: '2027-01-01T00:00:00Z',
+  }).ok, true);
+  assert.equal(readRequest({
+    action: 'setPlan', userId: 'u1', plan: 'premium', until: 'next tuesday',
+  }).ok, false);
+});
+
+/* ------------------------------------------------------ the row it writes */
+
+const AT = Date.parse('2026-09-20T12:00:00Z');
+
+test('admin: Free is the absence of a row, not a row saying free', () => {
+  /*
+   * my_plan() reads a missing row and an expired one the same way, and the
+   * missing one cannot be misread later as "this account once paid". A null
+   * here means delete; it is the one return value in this function that is not
+   * something to write.
+   */
+  assert.equal(planRow('free', { now: AT, by: ADMIN }), null);
+});
+
+test('admin: a trial always ends, and a grant does not have to', () => {
+  const trial = planRow('trial', { now: AT, by: ADMIN });
+  assert.equal(trial.source, 'trial');
+  assert.equal(trial.tier, 'premium', 'a trial is premium - everything works, which is the point');
+  // A trial with no end date would be Premium wearing the word Trial, and
+  // every countdown in the app would have nothing to count.
+  assert.equal(Date.parse(trial.expires_at), AT + TRIAL_DAYS * 86400000);
+  assert.equal(trial.renews, false, 'it runs out; it does not bill again');
+
+  const granted = planRow('premium', { now: AT, by: ADMIN });
+  assert.equal(granted.source, 'granted');
+  assert.equal(granted.expires_at, null, 'null is the administrator case: it does not expire');
+  assert.equal(granted.renews, false);
+
+  // An expiry that was asked for is honoured on either, which is how a trial
+  // about to lapse gets set up to test what happens when it does.
+  assert.equal(
+    planRow('trial', { now: AT, until: '2026-09-21T00:00:00Z', by: ADMIN }).expires_at,
+    new Date('2026-09-21T00:00:00Z').toISOString(),
+  );
+  assert.equal(planRow('premium', { until: '2027-01-01T00:00:00Z', by: ADMIN }).expires_at,
+    '2027-01-01T00:00:00Z');
+});
+
+test('admin: the row says who did it', () => {
+  // The note is the only trace a hand-made entitlement leaves. Without it, a
+  // row granted by somebody is indistinguishable from one written by a bug.
+  assert.match(planRow('premium', { by: ADMIN }).note, /shermancahal@gmail\.com/);
+  assert.match(planRow('trial', { by: ADMIN }).note, /shermancahal@gmail\.com/);
 });
 
 /* ------------------------------------------------------------ the list row */
@@ -156,17 +231,54 @@ test('admin: the list says what somebody has and where it came from', () => {
 test('admin: a trial is reported as a trial, not as Premium', () => {
   /*
    * It is the one state with a clock on it, and this list is where somebody
-   * decides whether to grant anything - "Premium" against an account that is
-   * simply new would be the wrong basis for that decision.
+   * decides whether to change anything - "Premium" against an account that is
+   * three weeks from losing it would be the wrong basis for that decision.
+   */
+  const trialing = describeAccount(
+    user(),
+    { tier: 'premium', source: 'trial', expires_at: '2026-10-01T00:00:00Z', renews: false },
+    0,
+    { now: NOW, trialUsed: true },
+  );
+  assert.equal(trialing.plan, 'trial');
+  assert.equal(trialing.source, 'trial');
+  assert.equal(trialing.until, '2026-10-01T00:00:00Z');
+  assert.equal(trialing.changeable, true, 'and it can be moved to either of the other two');
+});
+
+test('admin: a new account is Free, not on a trial nobody started', () => {
+  /*
+   * The whole point of the change, checked at the place it was most visible.
+   * This list used to work a trial out from `created_at`, so every account
+   * less than a month old read "Trial, ends <date>" whether or not anybody had
+   * asked for one - and an administrator looking at it could not tell somebody
+   * who had opted in from somebody who had simply signed up.
    */
   const fresh = describeAccount(user(), null, 0, { now: NOW });
-  assert.equal(fresh.plan, 'trial');
-  assert.equal(fresh.source, 'trial');
-  assert.equal(Date.parse(fresh.until), Date.parse('2026-10-01T00:00:00Z'));
+  assert.equal(fresh.plan, 'free');
+  assert.equal(fresh.source, 'none');
+  assert.equal(fresh.until, null);
+  assert.equal(fresh.trialUsed, false, 'and the free month is still there to be taken');
 
   const old = describeAccount(user({ created_at: '2026-01-01T00:00:00Z' }), null, 0, { now: NOW });
   assert.equal(old.plan, 'free');
-  assert.equal(old.until, null);
+});
+
+test('admin: a spent trial is visible after it has gone', () => {
+  /*
+   * Free-with-a-trial-still-to-take and Free-with-one-already-used are the
+   * same plan and different situations: the second is somebody who tried
+   * Halfstop and decided not to pay. The entitlement row is gone by then, so
+   * this is the only thing that carries it.
+   */
+  const lapsed = describeAccount(
+    user(),
+    { tier: 'premium', source: 'trial', expires_at: '2026-09-10T00:00:00Z' },
+    0,
+    { now: NOW, trialUsed: true },
+  );
+  assert.equal(lapsed.plan, 'free', 'the trial is over');
+  assert.equal(lapsed.trialUsed, true, 'and it is on the record that it happened');
 });
 
 test('admin: an expired grant is not a plan', () => {
@@ -179,6 +291,8 @@ test('admin: an expired grant is not a plan', () => {
     { now: NOW },
   );
   assert.equal(lapsed.plan, 'free');
+  assert.equal(lapsed.source, 'none', 'and it does not still name where the lapsed one came from');
+  assert.equal(lapsed.until, null);
   assert.equal(lapsed.changeable, true, 'and it can be granted again');
 });
 

@@ -144,19 +144,32 @@ Deno.serve(async (req: Request) => {
     .eq('tier', 'premium')
     .maybeSingle();
 
+  /*
+   * ONLY THE ONES THAT BILL.
+   *
+   * This used to refuse anybody holding premium at all, whatever it came
+   * from, and that was a real bug: a trial is premium - everything works,
+   * which is the point of it - so somebody inside their free month was told
+   * "this account already has Premium, so there is nothing to buy" and had to
+   * let the trial lapse, lose everything, and only then be allowed to pay.
+   * Backwards. The month exists to decide whether to subscribe, and the
+   * decision has to be actionable while it is being made.
+   *
+   * The refusal was always about not being charged twice, and only Stripe and
+   * the App Store can charge. A trial cannot, and neither can something an
+   * administrator handed out - so those are cases where starting to pay is a
+   * choice somebody is allowed to make. It writes over the row they had,
+   * which is what starting to pay means.
+   */
+  const BILLS: Record<string, string> = {
+    stripe: 'You already subscribe. Cancel the current subscription first, '
+      + 'from Manage subscription in the account menu, and you can start a new one straight after.',
+    appstore: 'You already subscribe through the App Store. Cancel it there first '
+      + '(Settings, your name, Subscriptions on an iPhone), and it will stay active until the period you have paid for runs out.',
+  };
   const stillRunning = held && (!held.expires_at || new Date(held.expires_at) > new Date());
-  if (stillRunning) {
-    const WHERE: Record<string, string> = {
-      stripe: 'You already subscribe. Cancel the current subscription first, '
-        + 'from Manage subscription in the account menu, and you can start a new one straight after.',
-      appstore: 'You already subscribe through the App Store. Cancel it there first '
-        + '(Settings, your name, Subscriptions on an iPhone), and it will stay active until the period you have paid for runs out.',
-    };
-    return reply(409, {
-      error: WHERE[held.source]
-        || 'This account already has Premium, so there is nothing to buy.',
-      already: held.source,
-    });
+  if (stillRunning && Object.hasOwn(BILLS, held.source)) {
+    return reply(409, { error: BILLS[held.source], already: held.source });
   }
 
   let body: Record<string, unknown> = {};

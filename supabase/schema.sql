@@ -285,10 +285,17 @@ create policy "a co-edited folder is writable by whoever it names"
 -- and means it: anybody can set their tier in devtools in about four seconds.
 -- This is the other half, and the half that counts.
 
--- Only explicit grants are stored. The trial is not, because it is already
--- knowable: an account's thirtieth day is thirty days after the day it was
--- created, and a stored copy of that is a second answer that can disagree with
--- the first. Nothing to write on signup, nothing to backfill, nothing to drift.
+-- What this account has today, whatever it came from - a purchase, a grant,
+-- or the free month. One row per account, replaced when the plan changes.
+--
+-- The trial used to be the exception: it was computed from the day the account
+-- was made rather than stored, on the grounds that a stored copy is a second
+-- answer that can disagree with the first. True, and it bought the wrong
+-- thing. A computed trial cannot be declined, started, or ended early, because
+-- there is nothing to write - so every account that had ever signed up was
+-- inside one whether or not anybody wanted it, and nobody could subscribe
+-- during their free month because there was no row to replace. It is a row
+-- now, with source 'trial', like every other plan.
 create table if not exists public.entitlements (
   user_id     uuid primary key references auth.users (id) on delete cascade,
 
@@ -333,7 +340,7 @@ alter table public.entitlements add constraint entitlements_tier_check
   check (tier in ('free', 'premium'));
 alter table public.entitlements drop constraint if exists entitlements_source_check;
 alter table public.entitlements add constraint entitlements_source_check
-  check (source in ('granted', 'appstore', 'stripe', 'comp'));
+  check (source in ('granted', 'appstore', 'stripe', 'comp', 'trial'));
 alter table public.entitlements add column if not exists external_ref text;
 -- Added after the table shipped; see the column comment above.
 alter table public.entitlements add column if not exists renews boolean not null default true;
@@ -355,52 +362,99 @@ create policy "your own entitlement is readable by you"
   to authenticated
   using ((select auth.uid()) = user_id);
 
+-- ------------------------------------------------------------------- trials
+--
+-- That an account has had its free month. Once, ever.
+--
+-- Separate from entitlements because entitlements is not a record. That row is
+-- overwritten by a purchase and deleted when an administrator sets somebody
+-- back to Free, so reading "has this account had its trial" off it would mean
+-- the answer went back to no every time it was cleared - and a free month you
+-- can have again by cancelling is not a free month, it is the whole product.
+--
+-- It holds the dates too, even though the entitlement carries the same end
+-- date, because by the time anybody asks this table anything the entitlement
+-- is gone.
+create table if not exists public.trials (
+  user_id    uuid primary key references auth.users (id) on delete cascade,
+  started_at timestamptz not null default now(),
+  ends_at    timestamptz not null
+);
+
+alter table public.trials enable row level security;
+
+-- Readable by the person it is about, and writable by nobody.
+--
+-- The same shape as entitlements above, for the same reason: with row-level
+-- security on and no policy for insert, update or delete, those commands are
+-- refused for every signed-in user, so the only thing that can write here is
+-- something holding the secret key. Which is start_trial(), below, and the
+-- account tool. Checked rather than assumed - see rls-probe.sql.
+drop policy if exists "your own trial is readable by you" on public.trials;
+create policy "your own trial is readable by you"
+  on public.trials
+  for select
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
 -- The one question worth asking, answered for the caller and nobody else.
 --
 -- It takes no argument on purpose. A plan_for(uid) would let any signed-in
 -- account ask about any other, which is not worth handing out to save a
--- keystroke. Reading auth.users is why it is SECURITY DEFINER, and auth.uid()
--- is the only row it ever reads.
+-- keystroke.
 --
--- Precedence is grant, then trial, then free. A grant that has expired falls
--- back to the trial rather than straight to free, which matters only in the
--- first month of an account and is the answer somebody would expect if it did.
+-- SECURITY INVOKER, which it did not used to be. It was DEFINER because it
+-- had to read auth.users to work out when the trial ended, and authenticated
+-- cannot read auth.users. It does not read it any more - a trial is a row in
+-- the two tables above, both of which let somebody read their own - so the
+-- definer's privileges were the only thing left that it was not using, and a
+-- function that does not need them should not have them. The execute grants
+-- below still matter and are unchanged.
+--
+-- It answers two things. What this account holds, and - when it holds nothing
+-- - whether the free month is still there to be taken. The second is not
+-- derivable from the first: Free with a trial still to take and Free with one
+-- already spent are the same plan and a different offer, and the interface
+-- draws a button on the difference.
 create or replace function public.my_plan()
 returns jsonb
 language sql
 stable
-security definer
+security invoker
 set search_path = public
 as $$
-  with granted as (
+  with held as (
     select tier, source, expires_at, renews
     from public.entitlements
-    where user_id = auth.uid()
+    where user_id = (select auth.uid())
       and tier = 'premium'
       and (expires_at is null or expires_at > now())
     limit 1
   ),
-  trial as (
-    -- Thirty days from the day the account was made. One place, one interval.
-    select u.created_at + interval '30 days' as ends
-    from auth.users u
-    where u.id = auth.uid()
+  offered as (
+    -- Both halves, and they are not the same test. The trials row is what
+    -- survives an entitlement being cleared, so it is what stops a second
+    -- trial; the entitlements row stops one being started on top of something
+    -- already held, which start_trial() refuses anyway.
+    select not exists (select 1 from public.trials where user_id = (select auth.uid()))
+       and not exists (select 1 from public.entitlements where user_id = (select auth.uid()))
+       as available
   )
   select case
-    when exists (select 1 from granted) then jsonb_build_object(
+    when exists (select 1 from held) then jsonb_build_object(
       'tier', 'premium',
-      'source', (select source from granted),
-      'until', (select expires_at from granted),
-      'renews', (select renews from granted)
+      'source', (select source from held),
+      'until', (select expires_at from held),
+      'renews', (select renews from held),
+      'trialAvailable', false
     )
-    when (select ends from trial) > now() then jsonb_build_object(
-      'tier', 'premium',
-      'source', 'trial',
-      'until', (select ends from trial),
-      -- A trial runs out; it does not renew.
-      'renews', false
+    else jsonb_build_object(
+      'tier', 'free',
+      'source', 'none',
+      'until', null,
+      'renews', false,
+      'trialAvailable', (select available from offered)
     )
-    else jsonb_build_object('tier', 'free', 'source', 'none', 'until', null, 'renews', false)
   end;
 $$;
 
@@ -410,16 +464,71 @@ $$;
 -- so revoking from anon alone leaves the PUBLIC grant sitting behind it and the
 -- function stays callable with no session at all. Supabase's linter catches it;
 -- this is the fix it asks for.
---
--- The linter also reports that signed-in users can call a SECURITY DEFINER
--- function, and that one is meant: this is how an account asks what it is
--- entitled to. It has no arguments and reads auth.uid()'s own row and nothing
--- else, which is why the answer is safe to give. SECURITY INVOKER is not an
--- option, because reading auth.users is the whole point and authenticated
--- cannot.
 revoke execute on function public.my_plan() from public;
 revoke execute on function public.my_plan() from anon;
 grant execute on function public.my_plan() to authenticated;
+
+-- The opt in: take the free month, once.
+--
+-- SECURITY DEFINER, and this one means it. entitlements has no insert policy
+-- for anybody, which is the entire point of the table, so the only way a row
+-- gets written for an ordinary account is through a function holding the
+-- definer's privileges. The linter reports that authenticated can call a
+-- SECURITY DEFINER function, and that is what it is for.
+--
+-- It takes no argument, for the same reason my_plan() does not: a
+-- start_trial(uid) would let any signed-in account start a trial on any other.
+-- Nothing about the length or the end date comes from the caller either - a
+-- browser that could name its own expiry would name one a long way off.
+--
+-- It returns a refusal as a value rather than raising. These come back to a
+-- person as a sentence, and "this account has already had its free month" is
+-- an answer rather than an error.
+create or replace function public.start_trial()
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  me    uuid := (select auth.uid());
+  -- Thirty days. Said again in assets/js/lib/tiers.js, which is what the
+  -- interface counts down with, and in the account tool's actions.mjs, which
+  -- is what an administrator handing one out writes. test/tiers.test.mjs reads
+  -- all three and fails if they disagree; this is the one that decides.
+  ends  timestamptz := now() + interval '30 days';
+begin
+  if me is null then
+    return jsonb_build_object('ok', false, 'error', 'Sign in first.');
+  end if;
+
+  if exists (select 1 from public.trials where user_id = me) then
+    return jsonb_build_object('ok', false,
+      'error', 'This account has already had its free month.');
+  end if;
+
+  -- Any entitlement at all, expired or not. Somebody holding Premium has
+  -- nothing to start, and somebody whose subscription has lapsed is not a new
+  -- account. An administrator can still hand out a trial from the account
+  -- tool, which is the deliberate exception rather than this path.
+  if exists (select 1 from public.entitlements where user_id = me) then
+    return jsonb_build_object('ok', false,
+      'error', 'This account already has a plan, so there is no trial to start.');
+  end if;
+
+  insert into public.trials (user_id, started_at, ends_at) values (me, now(), ends);
+
+  insert into public.entitlements (user_id, tier, source, expires_at, renews, note, updated_at)
+  values (me, 'premium', 'trial', ends, false, 'Free trial, started from the app.', now());
+
+  return jsonb_build_object('ok', true, 'plan', public.my_plan());
+end;
+$$;
+
+revoke execute on function public.start_trial() from public;
+revoke execute on function public.start_trial() from anon;
+grant execute on function public.start_trial() to authenticated;
 
 -- Whoever runs the service, premium with no end date. Edit the address, or add
 -- rows here for anybody else who should have it: this is what "code it into the

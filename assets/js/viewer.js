@@ -63,7 +63,7 @@ import { activeAlerts, describeMotion, alertsToGeoJSON } from './lib/storms.js';
 import { fetchRoute, routeGeoJSON } from './lib/route.js';
 import {
   can, gateReason, planSummary, featureForLayer, describePrice, purchaseRoute, premiumAdds,
-  plansOffered, annualSaving, offersUpgrade, isBillingTester, tierFor,
+  plansOffered, annualSaving, offersUpgrade, isBillingTester, tierFor, TRIAL_DAYS,
 } from './lib/tiers.js';
 import {
   RV_CAVEAT, RV_RANGES, normaliseProfile, isRV, routingFor, profileRows,
@@ -3126,6 +3126,37 @@ async function startSubscription(button = null, plan = 'month') {
 }
 
 /**
+ * Take the free month.
+ *
+ * Nothing about the length or the dates is sent: public.start_trial() decides
+ * those, because a browser that could name its own expiry would name one a
+ * long way off. This only presses the button and says what came back.
+ */
+async function startTrial(button = null) {
+  const said = button?.textContent || 'Start the free trial';
+  if (button) { button.disabled = true; button.textContent = 'Starting…'; }
+  const result = await state.account.startTrial();
+
+  if (!result.ok) {
+    // Put the button back, because nothing else will: a refusal changes no
+    // plan, so the panel it is sitting in is not redrawn.
+    if (button) { button.disabled = false; button.textContent = said; }
+    toast(result.reason, { tone: 'error', timeout: 9000 });
+    return false;
+  }
+
+  /*
+   * Nothing puts the button back on the way out, and that is right: the plan
+   * changed, so the account's change listener has already repainted the menu
+   * and this button is no longer in the document. What replaced it is the
+   * panel for somebody who now has Premium.
+   */
+  toast(`Premium is on for the next ${TRIAL_DAYS} days. Nothing to cancel — it simply runs out.`,
+    { tone: 'ok', timeout: 9000 });
+  return true;
+}
+
+/**
  * What Premium is and how to get it, for somebody who has not got it.
  *
  * Nothing at all while BILLING.live is false, which is today: every account
@@ -3167,6 +3198,23 @@ function upgradeBlock(plan) {
   const saving = annualSaving();
 
   /*
+   * The free month, offered rather than assumed.
+   *
+   * Everybody who signed up used to be inside a trial whether they wanted one
+   * or not, because it was worked out from the day the account was made. That
+   * gave Premium to people who had come to look at a map, put a clock on their
+   * account that they had never started, and - the part that actually broke -
+   * left nothing to opt into. Now it is a row, and this button is what writes
+   * it.
+   *
+   * Drawn only when the server says this account may still have one. The
+   * client does not work that out: `trialAvailable` comes from my_plan(),
+   * which holds the record of whether the month has already been spent. A
+   * button drawn on a guess is a button whose only outcome is an error.
+   */
+  const offerTrial = plan.trialAvailable && route.available;
+
+  /*
    * Somebody on a trial is being asked to keep what they already have, not
    * sold something new, and the sentence has to say which.
    */
@@ -3184,11 +3232,26 @@ function upgradeBlock(plan) {
    * small.
    */
   const buttons = plansOffered().map((plan) => el('button', {
-    class: `button button-small ${plan.id === 'month' ? 'button-primary' : 'button-secondary'}`,
+    /*
+     * The month is the primary button, unless there is a trial to take -
+     * then that is, and both prices step back to being the other option.
+     * Two primary buttons side by side is two things claiming to be the
+     * obvious one, which is the same as neither being it.
+     */
+    class: `button button-small ${!offerTrial && plan.id === 'month' ? 'button-primary' : 'button-secondary'}`,
     type: 'button',
     text: describePrice({ plan: plan.id }),
     onclick: (event) => startSubscription(event.currentTarget, plan.id),
   }));
+
+  if (offerTrial) {
+    buttons.unshift(el('button', {
+      class: 'button button-small button-primary',
+      type: 'button',
+      text: `Try it free for ${TRIAL_DAYS} days`,
+      onclick: (event) => startTrial(event.currentTarget),
+    }));
+  }
 
   return el('div', { class: 'plan-upgrade' }, [
     el('p', { class: 'plan-upgrade-head', text: heading }),
@@ -3204,6 +3267,21 @@ function upgradeBlock(plan) {
             + 'iPhone and iPad app rather than here.'
           : 'There is no way to subscribe yet.',
       }),
+    /*
+     * The three things somebody weighing up a free trial wants to know, before
+     * they press it rather than after.
+     *
+     * No card is the one that matters: the commonest reason not to start a
+     * free trial is the suspicion that it is a subscription with a delay on
+     * it. This one is not - there is nothing to cancel, because nothing was
+     * started that continues.
+     */
+    offerTrial
+      ? el('p', {
+        class: 'hint', style: 'margin:8px 0 0',
+        text: 'No card, nothing to cancel, and it stops on its own. One to an account.',
+      })
+      : null,
     // Worked out from the two prices rather than written down, so it cannot
     // overstate the discount or go stale when one of them moves.
     route.available && saving

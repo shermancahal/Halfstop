@@ -37,7 +37,37 @@ export function mayAdminister(email, raw) {
 }
 
 /** The actions this function answers to, and nothing else. */
-export const ACTIONS = ['list', 'invite', 'grant', 'revoke', 'delete'];
+export const ACTIONS = ['list', 'invite', 'setPlan', 'delete'];
+
+/**
+ * The three plans an account can be put on, by name.
+ *
+ * This replaced a pair of buttons - Grant Premium and Revoke Premium - that
+ * between them could only express two of the three states. Free and Premium
+ * were reachable and Trial was not, because a trial was computed from the
+ * account's creation date and there was nothing to set. So the one state with
+ * a clock on it, which is the one worth being able to put somebody into for
+ * testing or for a friend who wants to look before paying, was the state the
+ * tool could not reach.
+ *
+ * Named rather than toggled for a second reason: a toggle asks "is this on",
+ * which has no answer when there are three. Somebody pressing Trial against an
+ * account already on Trial should get a trial, not whatever the opposite of
+ * one is.
+ */
+export const PLANS = ['free', 'trial', 'premium'];
+
+/**
+ * How long a trial runs when this tool starts one.
+ *
+ * Said in three places, on purpose, because each of them has to work without
+ * the other two: public.start_trial() in the database is the one that decides
+ * when somebody opts in themselves, assets/js/lib/tiers.js is what the
+ * interface counts down with, and this is what an administrator hands out.
+ * test/tiers.test.mjs reads all three and fails if they disagree, which is the
+ * only thing that keeps three copies of a number honest.
+ */
+export const TRIAL_DAYS = 30;
 
 /**
  * Read a request body into an instruction, or into a refusal.
@@ -71,15 +101,29 @@ export function readRequest(body, { caller = '' } = {}) {
   const userId = String(body?.userId || '').trim();
   if (!userId) return { ok: false, status: 400, error: 'Which account?' };
 
-  if (action === 'grant') {
+  if (action === 'setPlan') {
+    const plan = String(body?.plan || '').trim();
+    /*
+     * Named, and refused rather than defaulted.
+     *
+     * A misspelled plan that fell through to a default would be this tool
+     * quietly doing something to an account nobody asked for - and the two
+     * directions it could default in are "take Premium away" and "hand
+     * Premium out", which are the two things worth never doing by accident.
+     */
+    if (!PLANS.includes(plan)) {
+      return {
+        ok: false,
+        status: 400,
+        error: `${plan || '(none)'} is not a plan. It is one of: ${PLANS.join(', ')}.`,
+      };
+    }
     const until = body?.until ? String(body.until) : null;
     if (until && Number.isNaN(Date.parse(until))) {
       return { ok: false, status: 400, error: 'That expiry is not a date.' };
     }
-    return { ok: true, action, userId, until };
+    return { ok: true, action, userId, plan, until };
   }
-
-  if (action === 'revoke') return { ok: true, action, userId };
 
   /*
    * Deleting asks for the address to be typed, and the check is here rather
@@ -119,7 +163,58 @@ export function readRequest(body, { caller = '' } = {}) {
  * anyway. The same goes for the App Store, which nothing here can cancel.
  */
 export function mayChange(source) {
-  return !source || source === 'granted' || source === 'comp';
+  return !source || source === 'granted' || source === 'comp' || source === 'trial';
+}
+
+/**
+ * The entitlement row a chosen plan means, or null for "there should not be
+ * one".
+ *
+ * Separated from the function that writes it so the decision can be tested
+ * without a database, which is the same reason everything else in this file is
+ * here. The interesting parts are the two nulls and they mean opposite things:
+ * a null return is Free, which is the absence of a row, while a null
+ * `expires_at` on a returned row is Premium that does not end.
+ *
+ * Free is the absence of a row rather than a row saying free. my_plan() reads
+ * a missing row and an expired one the same way, and the absent one cannot be
+ * misread later as "this account once paid".
+ *
+ * @param {string} plan  one of PLANS
+ * @param {object} opts
+ * @param {string|null} opts.until  an end date, if one was asked for
+ * @param {number} opts.now         for tests
+ * @param {string} opts.by          who is doing this, for the note
+ */
+export function planRow(plan, { until = null, now = Date.now(), by = '' } = {}) {
+  if (plan === 'free') return null;
+
+  if (plan === 'trial') {
+    /*
+     * A trial always ends, and that is what distinguishes it from a grant.
+     * A trial with no end date would be Premium wearing the word Trial, and
+     * every countdown in the app would have nothing to count.
+     */
+    const ends = until ? Date.parse(until) : now + TRIAL_DAYS * 86400000;
+    return {
+      tier: 'premium',
+      source: 'trial',
+      expires_at: new Date(ends).toISOString(),
+      renews: false,
+      note: `Trial set by ${by}`,
+    };
+  }
+
+  return {
+    tier: 'premium',
+    source: 'granted',
+    // Null means it does not expire, which is the ordinary case for a grant.
+    expires_at: until,
+    // A grant does not bill again, so it ends rather than renews. The panel
+    // reads this to decide which word it puts in front of the date.
+    renews: false,
+    note: `Granted by ${by}`,
+  };
 }
 
 /** What to say when it is not. */
@@ -130,18 +225,28 @@ export function whyNot(source) {
 }
 
 /**
- * One row of the list, from the three places an account's state actually lives.
+ * One row of the list, from the places an account's state actually lives.
  *
  * Assembled here so the shape is testable without a database: the auth record,
- * the entitlement if there is one, and how many folders the account holds.
+ * the entitlement if there is one, how many folders the account holds, and
+ * whether its free month has been spent.
+ *
+ * NOTHING IS COMPUTED FROM THE SIGNUP DATE ANY MORE
+ *
+ * It used to work out a trial from `created_at` - thirty days after the day
+ * the account was made - because that was how the trial worked. It is a row
+ * now, so this reads the row. The difference is visible in the list: an
+ * account that signed up last week and never started a trial reads Free, which
+ * is what it is, rather than Premium-until-a-date it was never offered.
  */
-export function describeAccount(user, entitlement, folders = 0, { now = Date.now(), trialDays = 30 } = {}) {
-  const created = user?.created_at ? Date.parse(user.created_at) : NaN;
-  const trialEnds = Number.isFinite(created) ? created + trialDays * 86400000 : NaN;
+export function describeAccount(user, entitlement, folders = 0, { now = Date.now(), trialUsed = false } = {}) {
   const expires = entitlement?.expires_at ? Date.parse(entitlement.expires_at) : null;
+  // An expired row is not a plan. my_plan() ignores one, and this list has to
+  // agree with it or the interface reports access somebody does not have.
   const entitled = Boolean(entitlement)
     && entitlement.tier === 'premium'
     && (expires === null || expires > now);
+  const source = entitled ? (entitlement.source || 'granted') : 'none';
 
   return {
     id: user?.id || '',
@@ -154,12 +259,20 @@ export function describeAccount(user, entitlement, folders = 0, { now = Date.now
     /*
      * What they have, and where it came from. A trial is reported as a trial
      * rather than as Premium: it is the one state with a clock on it, and the
-     * list is the place somebody decides whether to grant anything.
+     * list is the place somebody decides whether to change anything.
      */
-    plan: entitled ? 'premium' : (Number.isFinite(trialEnds) && trialEnds > now ? 'trial' : 'free'),
-    source: entitled ? (entitlement.source || 'granted') : (Number.isFinite(trialEnds) && trialEnds > now ? 'trial' : 'none'),
-    until: entitled ? entitlement.expires_at : (Number.isFinite(trialEnds) && trialEnds > now ? new Date(trialEnds).toISOString() : null),
+    plan: entitled ? (source === 'trial' ? 'trial' : 'premium') : 'free',
+    source,
+    until: entitled ? entitlement.expires_at : null,
     renews: entitled ? entitlement.renews !== false : false,
     changeable: entitled ? mayChange(entitlement.source) : true,
+    /*
+     * Whether the free month is spent, which the plan does not say.
+     *
+     * Free-with-a-trial-still-to-take and Free-with-one-already-used are the
+     * same plan, and they are different situations to be looking at: the
+     * second is somebody who tried Halfstop and decided not to pay.
+     */
+    trialUsed: Boolean(trialUsed),
   };
 }

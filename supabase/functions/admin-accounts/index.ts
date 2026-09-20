@@ -25,7 +25,7 @@
  */
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { mayAdminister, readRequest, mayChange, whyNot, describeAccount } from './actions.mjs';
+import { mayAdminister, readRequest, mayChange, whyNot, describeAccount, planRow } from './actions.mjs';
 
 /** The table the app keeps folders in. Rows are filed under `user_id`. */
 const TABLE = 'folders';
@@ -115,8 +115,13 @@ Deno.serve(async (req: Request) => {
     const users = listed?.users || [];
     const { data: rights } = await admin.from('entitlements').select('*');
     const { data: folders } = await admin.from(TABLE).select('user_id').eq('deleted', false);
+    // Who has spent their free month. Read separately from the entitlement
+    // because it outlives one: the row stays after a trial ends, after it is
+    // replaced by a purchase, and after somebody is set back to Free.
+    const { data: trials } = await admin.from('trials').select('user_id');
 
     const byUser = new Map((rights || []).map((row: Record<string, unknown>) => [row.user_id, row]));
+    const tried = new Set((trials || []).map((row: Record<string, unknown>) => row.user_id as string));
     const counted = new Map<string, number>();
     for (const row of folders || []) {
       counted.set(row.user_id as string, (counted.get(row.user_id as string) || 0) + 1);
@@ -124,7 +129,12 @@ Deno.serve(async (req: Request) => {
 
     return reply(200, {
       ok: true,
-      accounts: users.map((user) => describeAccount(user, byUser.get(user.id), counted.get(user.id) || 0)),
+      accounts: users.map((user) => describeAccount(
+        user,
+        byUser.get(user.id),
+        counted.get(user.id) || 0,
+        { trialUsed: tried.has(user.id) },
+      )),
     });
   }
 
@@ -150,38 +160,58 @@ Deno.serve(async (req: Request) => {
     .eq('user_id', read.userId)
     .maybeSingle();
 
-  if (read.action === 'grant') {
+  if (read.action === 'setPlan') {
     if (held && !mayChange(held.source)) return reply(409, { error: whyNot(held.source) });
+
+    const row = planRow(read.plan, { until: read.until, by: caller.email });
+
+    if (!row) {
+      /*
+       * Free: the row is deleted rather than given a date in the past.
+       *
+       * A row that has expired and a row that is not there mean the same
+       * thing to my_plan(), and the absent one cannot be misread later as
+       * "this account once paid".
+       *
+       * The trials row is deliberately left alone. It is the record that this
+       * account has had its free month, and clearing it here would mean
+       * setting somebody back to Free silently handed them another one -
+       * which is the exact loop the separate table exists to close. An
+       * administrator who does mean to give a second trial presses Trial,
+       * which says so.
+       */
+      const { error } = await admin.from('entitlements').delete().eq('user_id', read.userId);
+      if (error) return reply(500, { error: `Could not set them to Free: ${error.message}` });
+      console.log(`[admin-accounts] ${caller.email} set ${read.userId} to free`);
+      return reply(200, { ok: true, plan: 'free' });
+    }
+
     const { error } = await admin.from('entitlements').upsert({
       user_id: read.userId,
-      tier: 'premium',
-      source: 'granted',
-      expires_at: read.until,
-      // A grant does not bill again, so it ends rather than renews. The panel
-      // reads this to decide which word it puts in front of the date.
-      renews: false,
-      note: `Granted by ${caller.email}`,
+      ...row,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id' });
-    if (error) return reply(500, { error: `Could not grant it: ${error.message}` });
-    console.log(`[admin-accounts] granted ${read.userId} until ${read.until || 'forever'}`);
-    return reply(200, { ok: true });
-  }
+    if (error) return reply(500, { error: `Could not set that plan: ${error.message}` });
 
-  if (read.action === 'revoke') {
-    if (held && !mayChange(held.source)) return reply(409, { error: whyNot(held.source) });
     /*
-     * Deleted rather than expired.
-     *
-     * A row with a past date and a row that is not there mean the same thing
-     * to my_plan(), and the absent one cannot be misread later as "this
-     * account once paid". The trial, which is computed from the account's age
-     * rather than stored, is untouched either way.
+     * A trial set from here is recorded as one, so it cannot be started again
+     * from the app afterwards. Upserted rather than inserted because an
+     * administrator handing out a second trial is a thing they are allowed to
+     * do - deliberately, by pressing the button - and it must not fail on the
+     * primary key of the row saying they had the first.
      */
-    const { error } = await admin.from('entitlements').delete().eq('user_id', read.userId);
-    if (error) return reply(500, { error: `Could not revoke it: ${error.message}` });
-    console.log(`[admin-accounts] revoked ${read.userId}`);
-    return reply(200, { ok: true });
+    if (read.plan === 'trial') {
+      const { error: markError } = await admin.from('trials').upsert({
+        user_id: read.userId,
+        started_at: new Date().toISOString(),
+        ends_at: row.expires_at,
+      }, { onConflict: 'user_id' });
+      if (markError) return reply(500, { error: `The trial was set but not recorded: ${markError.message}` });
+    }
+
+    console.log(`[admin-accounts] ${caller.email} set ${read.userId} to ${read.plan}`
+      + ` until ${row.expires_at || 'forever'}`);
+    return reply(200, { ok: true, plan: read.plan });
   }
 
   /*
@@ -196,6 +226,13 @@ Deno.serve(async (req: Request) => {
 
   const { error: rightsError } = await admin.from('entitlements').delete().eq('user_id', read.userId);
   if (rightsError) return reply(500, { error: `Could not delete their plan: ${rightsError.message}` });
+
+  // The trial record goes with the account, unlike every other path here,
+  // where it deliberately survives. Both rows would cascade off the auth
+  // record anyway; they are deleted by name so that a failure is reported
+  // rather than discovered later as a row pointing at nobody.
+  const { error: trialError } = await admin.from('trials').delete().eq('user_id', read.userId);
+  if (trialError) return reply(500, { error: `Could not delete their trial record: ${trialError.message}` });
 
   const { error: userError } = await admin.auth.admin.deleteUser(read.userId);
   if (userError) return reply(500, { error: `Could not delete the account: ${userError.message}` });

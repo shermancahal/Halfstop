@@ -125,11 +125,14 @@ export const TIERS = {
 export const DEFAULT_TIER = 'free';
 
 /**
- * How long a new account gets everything.
+ * How long a trial runs, for the sentence that offers one.
  *
- * Stated here as well as in the database because the interface counts down
- * with it. The database is the one that decides; this is the one that can be
- * wrong without anybody losing access, which is the right way round.
+ * Stated here as well as in the database because the interface says the number
+ * out loud before anybody has a trial to count down - "Try Premium free for 30
+ * days" is written before public.start_trial() has been called and therefore
+ * before there is a date to read. The database is the one that decides; this
+ * is the one that can be wrong without anybody losing access, which is the
+ * right way round. test/tiers.test.mjs checks the two against each other.
  */
 export const TRIAL_DAYS = 30;
 
@@ -137,7 +140,15 @@ export const TRIAL_DAYS = 30;
  * Where an entitlement came from, when it came from somewhere real.
  *
  * A trial is not one of these, and neither is 'none'. Both mean "has not
- * bought anything", which while billing is off is what everybody is.
+ * bought anything", which while billing is off is what everybody is. That the
+ * trial is missing from this list is the thing that lets somebody subscribe
+ * during their free month rather than having to wait for it to run out, so it
+ * is an omission on purpose rather than one to tidy up.
+ *
+ * 'comp' is here, which looks like the odd one out: nobody paid for it. But
+ * this list is read to decide whether to offer somebody a purchase, and a
+ * comped account has been given the thing the purchase would buy. Offering to
+ * sell it to them would be asking for money for what they were handed.
  *
  * A list of what counts as settled rather than a list of what does not, with
  * anything unrecognised falling through to being offered a purchase. That way
@@ -146,7 +157,7 @@ export const TRIAL_DAYS = 30;
  * which is visible and harmless, while the other way round means a free
  * account that is silently never shown a way to pay.
  */
-const SETTLED = new Set(['granted', 'stripe', 'appstore']);
+const SETTLED = new Set(['granted', 'stripe', 'appstore', 'comp']);
 
 /**
  * The tier a reader is on.
@@ -500,6 +511,20 @@ export function planSummary(account = null, { billing = BILLING } = {}) {
     /* Where the entitlement came from: 'trial', 'granted', 'appstore', 'none'. */
     source: plan?.source || 'none',
     until: plan?.until || null,
+    /*
+     * Whether this account may still start its free month.
+     *
+     * Straight through from my_plan(), and not worked out here, because it is
+     * not derivable from anything else on this object: Free with a trial still
+     * to take and Free with one already spent are the same plan and different
+     * offers. The server knows, because it holds the row saying the trial
+     * happened; this file cannot, and should not guess from the plan.
+     *
+     * Absent reads as false. A build talking to a database that predates the
+     * trials table gets no button, which is the harmless direction - the other
+     * way round draws a control whose only outcome is an error.
+     */
+    trialAvailable: plan?.trialAvailable === true,
     /* The same thing as a sentence, which is what the upgrade panel shows. */
     line: describePlan(plan, { billing }),
     /* Whether the date below is a renewal or an ending; see describeRenewal. */
