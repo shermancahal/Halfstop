@@ -76,5 +76,5 @@ for (const node of document.querySelectorAll('#brand-parent')) {
   node.textContent = parentName;
   node.hidden = !parentName;
 }
-mountSiteFooter();
+mountSiteFooter({ account });
 

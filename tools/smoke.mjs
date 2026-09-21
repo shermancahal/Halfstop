@@ -33,7 +33,7 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { SHIELD_DESIGNS } from '../assets/js/lib/route-shields.js';
-import { DEFAULT_VIEW } from '../assets/js/config.js';
+import { DEFAULT_VIEW, SITE } from '../assets/js/config.js';
 import { buildArchive } from '../test/helpers/pmtiles-writer.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -2708,6 +2708,103 @@ if (!external) {
     check(`${page} knows who is signed in`, seen.name, 'Sherman Cahal');
     check(`${page} does not ask again`, seen.asksAgain, false);
     await other.close();
+  }
+
+  /*
+   * The way in to the admin page, which is drawn for one address and nobody else.
+   *
+   * admin.html was the only page nothing linked to, so its own administrator
+   * had to remember the URL. The link is built in JavaScript rather than
+   * shipped in the markup, which puts it out of reach of every check in
+   * test/pages.test.mjs - those read HTML, and this link is not in any. So it
+   * is checked here, in a browser, against a real session.
+   *
+   * Four states, because the interesting failures are at the edges: the wrong
+   * person offered it, and the right person offered it after they sign out.
+   */
+  console.log('\nThe way in to the admin page');
+  {
+    const asAdmin = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    await asAdmin.route(`**://${REF}.supabase.co/**`, (route) => route.abort());
+    await asAdmin.addInitScript(([url, key, storageKey, session]) => {
+      window.ABMAP_SUPABASE_URL = url;
+      window.ABMAP_SUPABASE_KEY = key;
+      localStorage.setItem(storageKey, session);
+    }, [`https://${REF}.supabase.co`, 'smoke-anon-key', `sb-${REF}-auth-token`,
+      JSON.stringify({ ...stored, user: { ...stored.user, id: 'u-admin', email: SITE.admins[0] } })]);
+
+    const boss = await asAdmin.newPage();
+    await boss.goto(new URL('faq.html', MAP_URL).href, { waitUntil: 'domcontentloaded' });
+    await boss.waitForSelector('.footer-admin a', { timeout: 8000 }).catch(() => {});
+    const offered = await boss.evaluate(() => document.querySelector('.footer-admin a')?.getAttribute('href') || null);
+    check('an administrator is offered the admin page', offered, 'admin.html');
+
+    /*
+     * Followed rather than read. A link with the right href in a footer that
+     * is scrolled past the bottom of the document is not a way in.
+     *
+     * Only when there is one to click: a click on a selector that matched
+     * nothing throws, and an uncaught throw here would take every check below
+     * it down as well - reporting as a suite that died rather than as one
+     * missing link.
+     */
+    if (offered) {
+      await boss.click('.footer-admin a');
+      await boss.waitForLoadState('domcontentloaded');
+      check('and following it lands on the queue',
+        new URL(boss.url()).pathname.endsWith('/admin.html'), true);
+    } else {
+      check('and following it lands on the queue', 'there was no link to follow', true);
+    }
+    await boss.close();
+    await asAdmin.close();
+
+    // The same page, signed in as somebody who is not one.
+    const reader = await carried.newPage();
+    await reader.goto(new URL('faq.html', MAP_URL).href, { waitUntil: 'domcontentloaded' });
+    await reader.waitForFunction(() => document.querySelector('#account-panel .account-name'), null, { timeout: 8000 })
+      .catch(() => {});
+    check('a reader signed in as somebody else is not',
+      await reader.evaluate(() => document.querySelectorAll('.footer-admin').length), 0);
+
+    /*
+     * And it follows the session rather than the page load.
+     *
+     * Driven against the real module with a stand-in account, because the two
+     * transitions that matter - signing in, and signing out again - are a
+     * round trip to Supabase away in a real one, and a check that needs the
+     * network to fail in the right order is a check that fails on its own.
+     */
+    const moved = await reader.evaluate(async (email) => {
+      const { mountSiteFooter } = await import('./assets/js/lib/site-footer.js');
+      const account = new EventTarget();
+      account.user = null;
+      mountSiteFooter({ account });
+
+      const count = () => document.querySelectorAll('.footer-admin').length;
+      const before = count();
+      account.user = { email };
+      account.dispatchEvent(new CustomEvent('change'));
+      const after = count();
+      account.user = null;
+      account.dispatchEvent(new CustomEvent('change'));
+      return { before, after, gone: count() };
+    }, SITE.admins[0]);
+    check('it arrives on sign-in and goes on sign-out', moved, { before: 0, after: 1, gone: 0 });
+    await reader.close();
+
+    // And nobody signed in at all, which is every other reader of the site.
+    const anyone = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const stranger = await anyone.newPage();
+    await stranger.goto(new URL('faq.html', MAP_URL).href, { waitUntil: 'domcontentloaded' });
+    await stranger.waitForTimeout(500);
+    check('a signed-out reader is offered nothing',
+      await stranger.evaluate(() => document.querySelectorAll('.footer-admin').length), 0);
+    check('and the footer they do get is the shared one',
+      await stranger.evaluate(() => [...document.querySelectorAll('.footer-menu a')].map((a) => a.textContent.trim())),
+      ['Home', 'Map', 'About', 'Help & FAQ', 'Roadmap', 'What it costs', 'Terms', 'Privacy']);
+    await stranger.close();
+    await anyone.close();
   }
 
   /*

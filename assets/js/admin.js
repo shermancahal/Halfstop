@@ -16,7 +16,7 @@ import { mountSiteFooter } from './lib/site-footer.js';
 import { el, applyStoredTheme, formatDate, createToaster } from './lib/ui.js';
 import { mountPageSettings } from './lib/page-settings.js';
 import { Account, isConfigured } from './lib/account.js';
-import { mayEdit } from './lib/editors.js';
+import { mayAdminister } from './lib/admins.js';
 import {
   STATUS_LABELS, nextStatuses, queueOrder, countWaiting, doneTickets, openByDefault, describeTicket,
 } from './lib/support.js';
@@ -30,7 +30,6 @@ for (const node of document.querySelectorAll('#brand-parent')) {
   node.textContent = parentName;
   node.hidden = !parentName;
 }
-mountSiteFooter();
 
 const dom = {
   gate: document.getElementById('admin-gate'),
@@ -56,6 +55,10 @@ const noFolders = { list: () => [], snapshot: () => [], replaceAll() {}, toGeoJS
 const account = new Account(noFolders, { syncs: false });
 // The same account the queue gates on, so signing out here does both.
 mountPageSettings({ toast, account });
+// And the same one the footer's admin link follows. Below the Account rather
+// than up with the brand lines, because `account` is a const and reading it
+// early throws rather than quietly coming back undefined.
+mountSiteFooter({ account });
 
 function show(node, hidden) { node.hidden = hidden; }
 
@@ -431,7 +434,7 @@ function render() {
   }
   const user = account.user;
   if (!user) { drawGate('This page is for administrators.', { showSignIn: true }); return; }
-  if (!mayEdit(user)) { drawGate(`Signed in as ${user.email}, which is not an administrator.`); return; }
+  if (!mayAdminister(user)) { drawGate(`Signed in as ${user.email}, which is not an administrator.`); return; }
   /*
    * Said once, here, rather than discovered one dead button at a time.
    *

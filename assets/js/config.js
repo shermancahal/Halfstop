@@ -52,6 +52,28 @@ export const SITE = {
    */
   editors: ['shermancahal@gmail.com'],
   /*
+   * Who is offered the way in to admin.html.
+   *
+   * Separate from `editors` above, which answers a different question - which
+   * basemaps are offered, and whether a layer's source note names the service
+   * behind it. The admin page borrowed that list for a while because the two
+   * happened to hold the same address, and two ideas sharing one list is how
+   * granting somebody a basemap quietly grants them the support queue.
+   *
+   * This is presentation, exactly as `editors` is. It decides whether a link
+   * is drawn and whether the page draws its queue; it decides nothing about
+   * what a server will hand over. Two other things do that, and neither reads
+   * this file:
+   *
+   *   - the row-level policy on support_tickets, which compares the email on
+   *     the verified JWT, server-side;
+   *   - ADMIN_EMAILS in the admin-accounts edge function, same idea.
+   *
+   * So adding an address here shows somebody an empty page with real-looking
+   * furniture. Adding an administrator means all three.
+   */
+  admins: ['shermancahal@gmail.com'],
+  /*
    * Which "Continue with …" buttons the sign-in panel offers.
    *
    * Empty because neither is configured yet, and a button that starts an OAuth

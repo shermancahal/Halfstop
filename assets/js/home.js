@@ -37,14 +37,6 @@ function applyBranding() {
   set('brand-name', SITE.name);
 
   /*
-   * The footer is the same markup on every page now, so it is filled by the
-   * module that owns it rather than by three more lines here. Those three
-   * lines were the reason only the homepage ever showed the configured name:
-   * no other page runs this function.
-   */
-  mountSiteFooter();
-
-  /*
    * Everything that names a parent organisation disappears when there is none.
    *
    * Two places say it on this page - the line under the brand and the hero's
@@ -206,7 +198,15 @@ async function main() {
   cacheDom();
   applyBranding();
   applyStoredTheme();
-  mountPageSettings({ toast: createToaster(document.body) });
+  /*
+   * The footer is the same markup on every page now, and filled by the module
+   * that owns it rather than by three more lines in applyBranding - those
+   * three lines were the reason only the homepage ever showed the configured
+   * name. It is handed the account so the admin link can follow whoever signs
+   * in, which is why it is called here rather than up there.
+   */
+  const { account } = mountPageSettings({ toast: createToaster(document.body) });
+  mountSiteFooter({ account });
 
   /*
    * The catalogue is optional markup now.

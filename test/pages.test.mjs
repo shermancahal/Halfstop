@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 import { SITE } from '../assets/js/config.js';
+import { ADMIN_PAGE } from '../assets/js/lib/site-footer.js';
 
 /*
  * What the shipped HTML has to be true about itself.
@@ -182,6 +183,70 @@ test('pages: every footer link points at something that exists', async () => {
       assert.ok(home.includes(`id="${hash}"`), `${href} points at an id that is not on the page`);
     }
   }
+});
+
+/*
+ * The admin link is built in JavaScript, which puts it outside the check
+ * above: that one reads the markup, and a link that is not in the markup
+ * cannot be read out of it. So the destination is exported and checked here
+ * instead, against the same list of pages the build ships.
+ */
+test('pages: the admin link points at a page the build ships', async () => {
+  assert.ok(PAGES.includes(ADMIN_PAGE), `the footer's admin link goes to ${ADMIN_PAGE}, which is not shipped`);
+  await assert.doesNotReject(read(ADMIN_PAGE), `${ADMIN_PAGE} is a 404`);
+});
+
+test('pages: the admin link is built rather than shipped hidden', async () => {
+  // Hiding it in the markup would be the easy way and would either break the
+  // footers-are-identical check or need excusing from it.
+  for (const page of PAGES) {
+    assert.ok(!(await read(page)).includes(`href="${ADMIN_PAGE}"`),
+      `${page} links to the admin page in its markup`);
+  }
+});
+
+/* -------------------------------------------------------------- the help */
+
+/*
+ * The index at the top of the help page is hand-written, and a section added
+ * without an entry is a section nobody scrolling the list knows is there.
+ */
+test('pages: every help section is in the index above it, and the other way round', async () => {
+  const html = live(await read('faq.html'));
+  const index = html.slice(html.indexOf('<ul class="faq-index">'), html.indexOf('</ul>'));
+
+  const listed = [...index.matchAll(/href="#([^"]+)"/g)].map((m) => m[1]);
+  const present = [...html.matchAll(/<section class="faq-section" id="([^"]+)"/g)].map((m) => m[1]);
+
+  assert.deepEqual(listed, present,
+    'the help index and the help sections are not the same list in the same order');
+});
+
+/*
+ * One address, and config's copy of it.
+ *
+ * It is written out in the terms, the privacy notice and now the help page,
+ * and none of those read config - so the day it changes, config is the one
+ * that gets edited and eight pages go on printing the old one.
+ */
+test('pages: every address written on a page is the one config publishes', async () => {
+  const found = [];
+  for (const page of PAGES) {
+    for (const [, address] of (await read(page)).matchAll(/mailto:([^"?]+)/g)) {
+      found.push([page, address]);
+    }
+  }
+  assert.ok(found.length, 'no page offers an address to write to');
+  for (const [page, address] of found) {
+    assert.equal(address, SITE.contactEmail, `${page} writes to an address config does not name`);
+  }
+});
+
+test('pages: the help page says how to open a support inquiry', async () => {
+  const html = await read('faq.html');
+  const section = html.slice(html.indexOf('id="support"'), html.indexOf('</section>', html.indexOf('id="support"')));
+  assert.match(section, new RegExp(`mailto:${SITE.contactEmail}`),
+    'the support section does not offer the address');
 });
 
 test('pages: the manifest and the native shell call it that too', async () => {
