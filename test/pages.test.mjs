@@ -20,7 +20,7 @@ import { SITE } from '../assets/js/config.js';
  * shipped by neither - the build copies a named list and so does this, so a new
  * page is invisible to both until it is named twice.
  */
-const PAGES = ['index.html', 'faq.html', 'account.html', 'map.html', 'terms.html', 'privacy.html', 'admin.html'];
+const PAGES = ['index.html', 'about.html', 'faq.html', 'account.html', 'map.html', 'terms.html', 'privacy.html', 'admin.html'];
 
 /*
  * The two lists, checked against each other rather than by hand.

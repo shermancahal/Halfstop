@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>About — Halfstop</title>
+<meta name="description" content="Why Halfstop exists: one map that answers the questions a photographer actually asks, instead of six apps and a pile of dropped pins.">
+<meta property="og:title" content="About — Halfstop">
+<meta property="og:description" content="Why Halfstop exists: one map that answers the questions a photographer actually asks, instead of six apps and a pile of dropped pins.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#1f2846" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1f2846" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="assets/img/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="assets/img/icon-192.png" sizes="192x192" type="image/png">
+<link rel="manifest" href="manifest.webmanifest">
+<!-- iOS ignores the manifest for "Add to Home Screen"; these three are what it
+     reads instead. apple-touch-icon must be a PNG with no transparency: Safari
+     composites anything transparent onto black. -->
+<link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Halfstop">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="./">
+      <img class="brand-mark" src="assets/img/brand-128.png" alt="" width="44" height="44">
+      <span class="brand-text">
+        <span class="brand-name" id="brand-name">Halfstop</span>
+        <span class="brand-parent" id="brand-parent" hidden></span>
+      </span>
+    </a>
+    <nav class="nav nav-icons">
+      <a href="./" title="Home" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 10.5 9-7 9 7"/><path d="M5.5 9.4V20a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V9.4"/><path d="M9.5 21v-6h5v6"/></svg></a>
+      <a href="map.html" title="Map" aria-label="Map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 3-6 3v15l6-3 6 3 6-3V3l-6 3Z"/><path d="M9 3v15"/><path d="M15 6v15"/></svg></a>
+      <a href="faq.html" title="Help" aria-label="Help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.9.7c0 1.7-2.5 2.5-2.5 2.5"/><path d="M12 17h.01"/></svg></a>
+    </nav>
+    <div class="settings-menu" id="settings-menu">
+      <button class="icon-button" id="settings-trigger" type="button"
+              title="Settings" aria-label="Settings"
+              aria-haspopup="dialog" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1v.2a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-2.8-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3.5 15a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.1-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 10.3 4.4a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7h.2a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.6 1.2Z"/></svg>
+      </button>
+      <div class="account-drop settings-drop" id="settings-panel" role="dialog" aria-label="Settings" hidden></div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <section class="hero hero-compact">
+    <div class="wrap">
+      <div class="hero-inner">
+        <span class="eyebrow">About</span>
+        <h1>It started out of pure selfishness</h1>
+        <p class="lede">I wanted all of it in one place, on a map that actually shows the ground.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="about-section">
+    <div class="wrap about-wrap">
+      <h2>The routine this replaces</h2>
+      <p>If you shoot on the road you know it. One app for sunrise and sunset. Another for the
+        moon. A website for the Milky Way. A different one for aurora. Weather somewhere else
+        entirely. And then a notes app, or a screenshot folder, or a pile of dropped pins in Google
+        Maps where you sort of keep track of where you have been and where you still want to get
+        to.</p>
+      <p>And we know how unreliable some services can be once they get acquired by larger
+        companies.</p>
+      <p>I have been an avid user of Gaia GPS, onX, Google Maps, The Photographer&rsquo;s Ephemeris,
+        PhotoPills and PlanIt Pro. They all have their strengths and their weaknesses. Halfstop is
+        not an attempt to beat any of them at what they are good at &mdash; it is the one map I
+        wanted that did the whole job in a single place.</p>
+    </div>
+  </section>
+
+  <section class="about-section">
+    <div class="wrap about-wrap">
+      <h2>What you get for a pin</h2>
+      <p>Drop a pin anywhere and you get sunrise, sunset, moonrise, moonset, golden hour and blue
+        hour for that exact spot. Eclipse tracks and aurora forecasts. When the Milky Way core is
+        up, how high it climbs, and whether the sky is going to be dark and clear enough for it to
+        matter. Cloud cover, fog, snow and storm tracks over the ground you are actually driving
+        toward.</p>
+      <h2>And the ground underneath it</h2>
+      <p>I pulled in every free, reliable data source I could get my hands on. USGS topographic
+        quads and aerials. Hillshade and contours. State level maps. Public land overlays so you
+        know whose ground you are standing on. Drone ceilings and advisories.</p>
+    </div>
+  </section>
+
+  <section class="about-section">
+    <div class="wrap about-wrap">
+      <h2>On pricing, because I would rather just tell you</h2>
+      <p>A lot of it is free. Some of it genuinely costs me money every time someone uses it, so
+        that part is not. Place search costs me per lookup and is free anyway; saving the view as a
+        picture costs me nothing, so it is free too. Syncing, weather, offline downloads, routing,
+        photographs on a waypoint, the state detail maps and the extra basemaps are the paid side.
+        <a href="./#costs">The full split is on the homepage</a>, and it is the same list the app
+        itself enforces.</p>
+      <p>There is a free month if you want to try the paid side. You start it yourself from the
+        plan in settings after signing in, it needs no card, and when it runs out it just stops.
+        Nothing to cancel, nothing to forget about. One per account.</p>
+    </div>
+  </section>
+
+  <section class="about-section">
+    <div class="wrap about-wrap">
+      <h2>Where it is right now</h2>
+      <p>The web version is live and works well, including on a phone. Sign in and it syncs between
+        browsers. You can <a href="map.html">start using it today</a>.</p>
+      <p>I am waiting on refreshed Apple Developer credentials, and once those land it goes into
+        TestFlight for real testing. I would like it out before peak fall foliage. An Android port
+        comes after that.</p>
+    </div>
+  </section>
+
+  <section class="about-section">
+    <div class="wrap about-wrap">
+      <!--
+        The portrait shows up when its file does.
+
+        Hidden to start and revealed by the image's own load event, rather than
+        shown and removed on error. The two are not equivalent: removing on
+        error is a race, and it lost it once already - at one width the figure
+        was gone and at another an empty caption was still on the page while
+        the 404 was in flight. Starting hidden has no race, because the state
+        before anything loads is the correct one.
+
+        Drop the file in at assets/img/sherman.jpg and it appears. `loading` is
+        deliberately not lazy: a lazy image inside a hidden figure is never in
+        the viewport, so it is never fetched, so it never loads, so it never
+        reveals itself.
+      -->
+      <figure class="about-portrait" hidden>
+        <img src="assets/img/sherman.jpg" alt="Sherman Cahal, sitting on a boulder in an autumn hardwood forest."
+             width="1080" height="1620" decoding="async"
+             onload="this.closest('figure').hidden = false">
+        <figcaption>Sherman Cahal</figcaption>
+      </figure>
+      <h2>Tell me what is missing</h2>
+      <p>I built this for how I shoot, which means I have almost certainly overlooked how you
+        shoot. Tear into it. Write to <a href="mailto:support@halfstop.app">support@halfstop.app</a>
+        and it reaches me directly.</p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <ul class="footer-links">
+      <li><a href="./">Home</a></li>
+      <li><a href="about.html">About</a></li>
+      <li><a href="map.html">Map</a></li>
+    </ul>
+  </div>
+</footer>
+
+<script src="assets/js/token.js"></script>
+<!--
+  build.js sets ABMAP_BUILD, and registerServiceWorker treats its absence as
+  "this page was never built" and UNREGISTERS the worker. Without this line the
+  homepage silently tore down offline support for the whole site every time
+  somebody opened it - which was already true of the old library page, and
+  became much more consequential when that page became the homepage.
+-->
+<script src="assets/js/build.js"></script>
+<script type="module" src="assets/js/faq.js"></script>
+</body>
+</html>

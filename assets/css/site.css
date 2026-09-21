@@ -661,17 +661,34 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 
 /* ----------------------------------------------------------------- legal */
 
-.legal-wrap { max-width: 74ch; padding-bottom: 20px; }
+/* The measured column the terms, the privacy page and the about page all read
+   in. Shared by selector rather than by giving the about page a class called
+   "legal", which is what the shortcut would have cost. */
+.legal-wrap, .about-wrap { max-width: 74ch; padding-bottom: 20px; }
 .legal-date { color: var(--ink-3); font-size: .86rem; margin: 0 0 30px; }
-.legal-section { margin-bottom: 34px; }
-.legal-section h2 {
+.legal-section, .about-section { margin-bottom: 34px; }
+.legal-section h2, .about-section h2 {
   font-size: 1.22rem; margin: 0 0 12px;
   padding-bottom: 8px; border-bottom: 1px solid var(--line);
 }
-.legal-section p { color: var(--ink-2); line-height: 1.66; margin: 0 0 12px; }
-.legal-section ul { margin: 0 0 12px; padding-left: 1.2em; display: grid; gap: 8px; }
-.legal-section li { color: var(--ink-2); line-height: 1.6; }
-.legal-section b { color: var(--ink); }
+.legal-section p, .about-section p { color: var(--ink-2); line-height: 1.66; margin: 0 0 12px; }
+.legal-section ul, .about-section ul { margin: 0 0 12px; padding-left: 1.2em; display: grid; gap: 8px; }
+.legal-section li, .about-section li { color: var(--ink-2); line-height: 1.6; }
+.legal-section b, .about-section b { color: var(--ink); }
+
+/* The portrait. Floated beside the text on a wide screen and full width on a
+   phone, and it removes itself when the file is not there - see about.html. */
+.about-portrait { margin: 0 0 18px; }
+.about-portrait img {
+  display: block; width: 100%; height: auto;
+  border-radius: var(--radius); border: 1px solid var(--line);
+}
+.about-portrait figcaption {
+  margin-top: 7px; font-size: .84rem; color: var(--ink-3);
+}
+@media (min-width: 620px) {
+  .about-portrait { float: right; width: 236px; margin: 4px 0 16px 26px; }
+}
 
 /* ---------- sharing a folder ---------- */
 
