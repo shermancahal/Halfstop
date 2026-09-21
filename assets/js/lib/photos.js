@@ -8,7 +8,19 @@
  * folder JSON small: a pin records only photo ids.
  *
  * Like folders, this is per-browser and per-device until sync exists.
+ *
+ * NOTHING IS STORED AT THE SIZE IT ARRIVED
+ *
+ * Every photograph goes through lib/photo-encode.js on the way in: fitted
+ * inside 1024 on the long edge and squeezed under 100 KB. A phone picture is
+ * three to six megabytes, and twenty of those on one trip is a hundred
+ * megabytes sitting in a browser to be drawn at 80 pixels a side. The shrink
+ * is in here rather than at the call sites so that it cannot be skipped by a
+ * new one that forgets - which is exactly how the map snapshot and the linked
+ * photo importer came to store full frames.
  */
+
+import { shrinkToBudget } from './photo-encode.js';
 
 const DB_NAME = 'ab-maps-photos';
 const DB_VERSION = 1;
@@ -62,28 +74,69 @@ function makeId() {
 }
 
 /**
- * Store an image.
+ * Store an image, shrunk to something worth keeping on a phone.
+ *
  * @param {Blob} blob
  * @param {object} meta  { name, source, caption }
+ * @param {object} options
+ * @param {boolean} options.shrink  false only for a caller that has already
+ *        sized its own image; everything from a camera or a file picker wants
+ *        the default.
  * @returns {Promise<object>} the stored record, without its blob
  */
-export async function putPhoto(blob, meta = {}) {
+export async function putPhoto(blob, meta = {}, { shrink = true } = {}) {
   if (!(blob instanceof Blob)) throw new Error('Not an image.');
   if (!PHOTO_TYPES.includes(blob.type)) {
     throw new Error(`${meta.name || 'That file'} is a ${blob.type || 'unknown'} — only JPEG, PNG, WebP, GIF and AVIF can be shown.`);
   }
+  /*
+   * The ceiling is on what arrives, not on what is kept.
+   *
+   * It is a guard against decoding something absurd - a 200 MP panorama will
+   * exhaust the tab before the canvas is even sized - rather than a storage
+   * limit, because after the shrink below nothing reaches storage at more than
+   * about a tenth of a megabyte.
+   */
   if (blob.size > MAX_PHOTO_BYTES) {
     throw new Error(`${meta.name || 'That image'} is ${(blob.size / 1048576).toFixed(1)} MB; the limit is ${MAX_PHOTO_BYTES / 1048576} MB.`);
   }
 
+  let kept = blob;
+  let width = null;
+  let height = null;
+
+  if (shrink) {
+    try {
+      const shrunk = await shrinkToBudget(blob);
+      kept = shrunk.blob;
+      width = shrunk.width;
+      height = shrunk.height;
+    } catch (error) {
+      /*
+       * Stored as it came rather than refused.
+       *
+       * A browser too old to encode WebP or JPEG from a canvas, or an image it
+       * can read but not draw, should cost somebody a larger file - not their
+       * photograph. The console says what happened; the person does not need
+       * to hear about an encoder.
+       */
+      console.warn('[photos] could not shrink, storing as-is:', error?.message || error);
+    }
+  }
+
   const record = {
     id: makeId(),
-    blob,
+    blob: kept,
     name: meta.name || '',
     caption: meta.caption || '',
     source: meta.source || 'device',
-    type: blob.type,
-    bytes: blob.size,
+    type: kept.type,
+    bytes: kept.size,
+    // What it weighed before, so the interface can say what it saved and a
+    // support question about disk use has an answer.
+    original: blob.size,
+    width,
+    height,
     added: Date.now(),
   };
   await transact('readwrite', (store) => store.put(record));

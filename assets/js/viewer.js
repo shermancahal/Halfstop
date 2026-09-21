@@ -99,6 +99,9 @@ import {
   putPhoto, photoURL, deletePhoto, pruneUnreferenced, fetchLinkedPhoto, formatBytes, PHOTO_TYPES,
   listSnapshots, SNAPSHOT_SOURCE,
 } from './lib/photos.js';
+// The two numbers the card quotes, from the module that decides them rather
+// than written out again here.
+import { LONG_EDGE, TARGET_BYTES } from './lib/photo-encode.js';
 
 /* ------------------------------------------------------------------ state */
 
@@ -9512,24 +9515,94 @@ function renderPinDetails(folder, item) {
     ]),
   ]));
 
-  /* photos */
-  const photos = props.photos || [];
-  if (photos.length) {
-    const section = el('div', { class: 'panel-section' }, [
-      sectionTitle(`Photos (${photos.length})`, icons.image),
-    ]);
+  /*
+   * Photos, offered here rather than only in the style editor.
+   *
+   * This section used to draw only when the pin already had photographs on it,
+   * which made attaching one findable only by opening the pin's editor and
+   * scrolling past the colour swatches. So the feature the website sells as
+   * "photographs attached to a waypoint" looked, from the waypoint, as though
+   * it did not exist. It is offered where somebody standing at the place
+   * actually is: on the card for the pin, with the camera one tap away.
+   */
+  {
+    const section = el('div', { class: 'panel-section' });
+    const photos = props.photos || [];
+    section.append(sectionTitle(photos.length ? `Photos (${photos.length})` : 'Photos', icons.image));
+
     const strip = el('div', { class: 'photo-strip' });
     section.append(strip);
-    dom.details.append(section);
-    (async () => {
-      for (const photo of photos) {
-        const url = await photoURL(photo.id).catch(() => null);
-        if (!url) continue;
-        strip.append(el('a', { class: 'photo-tile', href: url, target: '_blank', rel: 'noopener' }, [
-          el('img', { src: url, alt: photo.name || 'Pin photo', loading: 'lazy' }),
-        ]));
+
+    const paint = () => {
+      const current = item.feature.properties.photos || [];
+      strip.replaceChildren();
+      if (!current.length) {
+        strip.append(el('p', {
+          class: 'hint', style: 'margin:0',
+          text: 'Nothing here yet. One frame from last time is the fastest way to remember '
+            + 'what the light was doing.',
+        }));
+        return;
       }
-    })();
+      (async () => {
+        for (const photo of current) {
+          const url = await photoURL(photo.id).catch(() => null);
+          if (!url) continue;
+          strip.append(el('a', { class: 'photo-tile', href: url, target: '_blank', rel: 'noopener' }, [
+            el('img', { src: url, alt: photo.caption || photo.name || 'Pin photo', loading: 'lazy' }),
+          ]));
+        }
+      })();
+    };
+    paint();
+
+    /*
+     * Adding is gated; looking is not. Photographs already on a pin stay
+     * readable whatever the plan says - they are held in this browser and were
+     * never uploaded anywhere, so locking somebody out of their own pictures
+     * because a subscription lapsed would be taking something that was never
+     * ours to hold.
+     */
+    const mayAdd = allowed('pinPhotos');
+    const redraw = () => renderDetailsTab();
+
+    const addButton = el('button', {
+      class: 'button button-secondary button-small', type: 'button', text: 'Add photos',
+      disabled: !mayAdd, title: mayAdd ? '' : lockedBecause('pinPhotos'),
+    });
+    const cameraButton = el('button', {
+      class: 'button button-secondary button-small', type: 'button', text: 'Take one',
+      disabled: !mayAdd, title: mayAdd ? '' : lockedBecause('pinPhotos'),
+    });
+    const onBusy = (working) => {
+      addButton.disabled = working || !mayAdd;
+      cameraButton.disabled = working || !mayAdd;
+      addButton.textContent = working ? 'Shrinking…' : 'Add photos';
+    };
+
+    const fromFiles = photoPicker(folder, item, { onDone: redraw, onBusy });
+    const fromCamera = photoPicker(folder, item, { camera: true, onDone: redraw, onBusy });
+    addButton.addEventListener('click', () => fromFiles.click());
+    cameraButton.addEventListener('click', () => fromCamera.click());
+
+    section.append(fromFiles, fromCamera,
+      el('div', { class: 'picker-row', style: 'margin-top:8px' }, [addButton, cameraButton]));
+
+    /*
+     * Said once, under the buttons: what is about to happen to their picture.
+     * Only to somebody who can actually add one - explaining the resizing to a
+     * reader whose buttons are greyed out is a third line of clutter about
+     * something that is not going to happen to them.
+     */
+    if (mayAdd) {
+      section.append(el('p', {
+        class: 'hint', style: 'margin:8px 0 0',
+        text: `Kept at ${LONG_EDGE} pixels on the long edge and under `
+          + `${Math.round(TARGET_BYTES / 1024)} KB, on this device only.`,
+      }));
+    }
+
+    dom.details.append(section);
   }
 
   if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
@@ -11725,6 +11798,87 @@ function renderFolderItem(folder, item) {
 }
 
 /**
+ * Take files from a picker and put them on a pin.
+ *
+ * Shared by the two places that offer it - the waypoint card and the style
+ * editor - because they were about to be the same twenty lines twice, and the
+ * half that matters is the reporting: a photograph goes in at four megabytes
+ * and lands at ninety kilobytes, and somebody who just watched a spinner
+ * deserves to be told that is what happened rather than left wondering what
+ * was done to their picture.
+ *
+ * Failures are per file. One unreadable image out of five should cost that
+ * one, not the other four.
+ */
+async function attachPhotos(folder, item, files) {
+  const stored = [];
+  let before = 0;
+  let after = 0;
+
+  for (const file of files) {
+    try {
+      const photo = await putPhoto(file, { name: file.name });
+      stored.push(photo);
+      before += photo.original || photo.bytes || 0;
+      after += photo.bytes || 0;
+    } catch (error) {
+      toast(error.message, { tone: 'error', timeout: 9000 });
+    }
+  }
+
+  if (!stored.length) return stored;
+  state.folders.addPhotos(folder.id, item.id, stored);
+
+  const count = `${stored.length} photo${stored.length === 1 ? '' : 's'}`;
+  // Only worth saying when the shrink actually did something. A picture that
+  // arrived under the budget was kept as it was, and announcing a saving of
+  // nothing reads as a bug.
+  const saved = before > after + 1024
+    ? ` ${formatBytes(before)} down to ${formatBytes(after)}.`
+    : '';
+  toast(`Added ${count}.${saved}`, { tone: 'ok', timeout: saved ? 7000 : 4000 });
+  return stored;
+}
+
+/**
+ * A hidden file input, wired to put what it is given on this pin.
+ *
+ * `capture` is set only on the camera one: on a phone it opens the camera
+ * straight away, and on a desktop it is ignored, so the same control does the
+ * right thing in both places without asking which one this is.
+ */
+function photoPicker(folder, item, { camera = false, onDone = () => {}, onBusy = () => {} } = {}) {
+  return el('input', {
+    type: 'file',
+    accept: PHOTO_TYPES.join(','),
+    multiple: !camera,
+    ...(camera ? { capture: 'environment' } : {}),
+    hidden: true,
+    onchange: async (event) => {
+      const files = [...event.target.files];
+      event.target.value = '';
+      if (!files.length) return;
+      /*
+       * Said out loud, because this is not instant.
+       *
+       * Decoding and re-encoding a twelve-megapixel frame is about seven
+       * hundred milliseconds on a laptop and two to four seconds on a phone,
+       * and several at once is that again each. A button that looks idle for
+       * four seconds is a button somebody presses a second time, which is how
+       * one photograph becomes two.
+       */
+      onBusy(true);
+      try {
+        await attachPhotos(folder, item, files);
+      } finally {
+        onBusy(false);
+      }
+      onDone();
+    },
+  });
+}
+
+/**
  * Photo strip for one pin: thumbnails of what is stored, plus an add button.
  *
  * Thumbnails come from object URLs, which are revoked when the strip is
@@ -11773,26 +11927,7 @@ function photoSection(folder, item) {
     }
   };
 
-  const picker = el('input', {
-    type: 'file', accept: PHOTO_TYPES.join(','), multiple: true, hidden: true,
-    onchange: async (event) => {
-      const files = [...event.target.files];
-      event.target.value = '';
-      const stored = [];
-      for (const file of files) {
-        try {
-          stored.push(await putPhoto(file, { name: file.name }));
-        } catch (error) {
-          toast(error.message, { tone: 'error', timeout: 9000 });
-        }
-      }
-      if (stored.length) {
-        state.folders.addPhotos(folder.id, item.id, stored);
-        toast(`Added ${stored.length} photo${stored.length === 1 ? '' : 's'}.`, { tone: 'ok' });
-      }
-      paint();
-    },
-  });
+  const picker = photoPicker(folder, item, { onDone: paint });
 
   /*
    * Photographs already on a pin stay readable whatever the plan says.
