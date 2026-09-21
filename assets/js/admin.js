@@ -57,6 +57,46 @@ mountPageSettings({ toast, account });
 
 function show(node, hidden) { node.hidden = hidden; }
 
+/**
+ * Run a click handler, and say so when it throws.
+ *
+ * An async `onclick` that rejects produces nothing at all: no toast, no
+ * change, no sign the button did anything. That is not a small thing here -
+ * it is how "the delete button is broken" and "the delete button did nothing
+ * because the page is running half of an old build" look identical, and the
+ * error it was swallowing named the problem outright.
+ *
+ * The message is the raw one on purpose. This page has one reader, who can act
+ * on "account.deleteTickets is not a function" and cannot act on "something
+ * went wrong".
+ */
+const safely = (fn) => async (event) => {
+  try {
+    await fn(event);
+  } catch (error) {
+    console.error('[admin]', error);
+    toast(`That did not work: ${error?.message || error}`, { tone: 'error', timeout: 12000 });
+  }
+};
+
+/*
+ * What this page needs the account module to be able to do.
+ *
+ * These two files are cached under different rules and can therefore be out of
+ * step. admin.html loads this page as admin.js?v=<hash of its contents>, so a
+ * change to it is picked up the moment it deploys; this page then imports
+ * './lib/account.js', a URL that never changes, which the browser may answer
+ * from its own cache for as long as the host's max-age says. So a fresh page
+ * can be driving a stale module, and the first sign of it is a method that is
+ * simply not there.
+ *
+ * Checked by name rather than by a version number, because the names are the
+ * thing that actually has to be present, and a version constant is one more
+ * thing to forget to raise.
+ */
+const NEEDED = ['supportTickets', 'updateTicket', 'deleteTickets', 'administer'];
+const missingFromAccount = () => NEEDED.filter((name) => typeof account[name] !== 'function');
+
 function drawGate(message, { showSignIn = false } = {}) {
   show(dom.queue, true);
   show(dom.gate, false);
@@ -147,12 +187,12 @@ function ticketRow(ticket, refresh) {
        */
       el('button', {
         class: 'button button-ghost button-small is-danger', type: 'button', text: 'Delete',
-        onclick: async () => {
+        onclick: safely(async () => {
           if (!window.confirm(`Delete “${describeTicket(ticket)}”? This cannot be undone.`)) return;
           const result = await account.deleteTickets([ticket.id]);
           if (!result.ok) { toast(result.reason, { tone: 'error', timeout: 9000 }); return; }
           refresh();
-        },
+        }),
       }),
     ]),
   ]);
@@ -219,7 +259,7 @@ async function drawQueue() {
     ? el('button', {
       class: 'button button-ghost button-small is-danger', type: 'button',
       text: `Delete the ${done.length} finished`,
-      onclick: async () => {
+      onclick: safely(async () => {
         const ask = `Delete ${done.length} finished message${done.length === 1 ? '' : 's'}? `
           + 'This cannot be undone.';
         if (!window.confirm(ask)) return;
@@ -233,7 +273,7 @@ async function drawQueue() {
         // The number it actually removed, not the number that was asked for.
         toast(`${result.deleted} deleted.`, { tone: 'ok' });
         drawQueue();
-      },
+      }),
     })
     : null;
 
@@ -292,12 +332,12 @@ function accountRow(row, reload) {
   const remove = el('button', {
     class: 'button button-ghost button-small is-danger', type: 'button', text: 'Delete',
     disabled: true,
-    onclick: async () => {
+    onclick: safely(async () => {
       remove.disabled = true;
       say(await account.administer('delete', {
         userId: row.id, email: row.email, confirm: typed.value.trim(),
       }));
-    },
+    }),
   });
   typed.addEventListener('input', () => {
     remove.disabled = typed.value.trim().toLowerCase() !== row.email.toLowerCase();
@@ -330,10 +370,10 @@ function accountRow(row, reload) {
         disabled: here || !row.changeable,
         'aria-pressed': String(here),
         title: row.changeable ? '' : `${row.source} manages this one`,
-        onclick: async () => {
+        onclick: safely(async () => {
           button.disabled = true;
           say(await account.administer('setPlan', { userId: row.id, plan: id }));
-        },
+        }),
       });
       return button;
     }));
@@ -390,6 +430,22 @@ function render() {
   const user = account.user;
   if (!user) { drawGate('This page is for administrators.', { showSignIn: true }); return; }
   if (!mayEdit(user)) { drawGate(`Signed in as ${user.email}, which is not an administrator.`); return; }
+  /*
+   * Said once, here, rather than discovered one dead button at a time.
+   *
+   * This is the page running newer code than the module it drives - see
+   * NEEDED above for why that can happen at all. Without this the symptom is a
+   * button that does nothing whatever, which is indistinguishable from a
+   * feature that was never built, and it took a database, a policy and a
+   * request trace to rule those out the first time.
+   */
+  const missing = missingFromAccount();
+  if (missing.length) {
+    drawGate(`This page is running newer code than the rest of the build: `
+      + `${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} missing from the account module. `
+      + `Reload the page (hold Shift while you do it) and it will sort itself out.`);
+    return;
+  }
   drawQueue();
   drawAccounts();
 }

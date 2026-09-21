@@ -114,10 +114,48 @@ function isTileURL(url) {
   return /bbox=/i.test(url.search) && /f=image|format=image/i.test(url.search);
 }
 
-async function networkFirst(request, { fallback } = {}) {
+/*
+ * URLs this worker has already checked with the server since it started.
+ *
+ * WHY ANY OF THIS IS NEEDED
+ *
+ * Network-first is only network-first as far as this worker: the fetch it
+ * makes still goes through the browser's own HTTP cache, which on the live
+ * host holds assets for minutes. For a file whose URL carries a content hash
+ * that is exactly right - the URL changed, so there is nothing stale to hit.
+ * For a file whose URL never changes it is the opposite, and the two kinds are
+ * loaded side by side: admin.html asks for admin.js?v=47dba32c, and admin.js
+ * imports ./lib/account.js. The stamped one updates the instant it is
+ * published; the bare one can still be the previous build's. New code then
+ * calls into old code and fails however that particular pair fails - in the
+ * case that prompted this, a delete button that did nothing whatsoever,
+ * because the method it called was not in the module yet.
+ *
+ * WHY IT IS A SET RATHER THAN ALWAYS
+ *
+ * Revalidating every module on every load would add a conditional request per
+ * import, on every visit, to an app whose whole point is working on a bad
+ * connection. The mismatch can only appear just after a deploy, so checking
+ * once per worker generation is enough: the first load after a build pays for
+ * a handful of 304s, and every load after that is as it was.
+ *
+ * The set is lost when the worker is stopped, which costs one more round of
+ * 304s and is not worth persisting.
+ */
+const checked = new Set();
+
+function firstTimeThisBuild(request) {
+  if (checked.has(request.url)) return false;
+  checked.add(request.url);
+  return true;
+}
+
+async function networkFirst(request, { fallback, revalidate = false } = {}) {
   const cache = await caches.open(CACHE);
   try {
-    const response = await fetch(request);
+    const response = await fetch(revalidate && firstTimeThisBuild(request)
+      ? new Request(request, { cache: 'no-cache' })
+      : request);
     if (isCacheable(response)) cache.put(request, response.clone());
     return response;
   } catch (error) {
@@ -241,9 +279,15 @@ self.addEventListener('fetch', (event) => {
    * is not evidence of anything — see the header. Network first, with the
    * cache still answering when there is no network, which is what keeps the
    * app working offline.
+   *
+   * `revalidate` is what makes "network first" mean it for these: without it
+   * the fetch can still be answered out of the browser's own HTTP cache, which
+   * is how a page ends up running one build's entry script against another
+   * build's modules. See `checked` above for why it happens once per worker
+   * rather than every time.
    */
   if (/\.m?js$/.test(path) && !url.searchParams.has('v')) {
-    event.respondWith(networkFirst(request));
+    event.respondWith(networkFirst(request, { revalidate: true }));
     return;
   }
 
