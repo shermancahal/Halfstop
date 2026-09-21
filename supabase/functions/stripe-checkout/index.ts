@@ -21,6 +21,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { allowedReturn, withFlag } from './returns.mjs';
+import { taxFields } from './tax.mjs';
 
 /** Trimmed, because a value pasted into a dashboard field brings whitespace. */
 function env(name: string): string {
@@ -238,6 +239,17 @@ Deno.serve(async (req: Request) => {
       // The one that matters: every later event carries the subscription
       // rather than the session, so the id has to live on the subscription.
       'subscription_data[metadata][supabase_user_id]': user.id,
+      /*
+       * VAT, when the project is set up to charge it.
+       *
+       * Empty until STRIPE_AUTOMATIC_TAX is set, because Stripe refuses a
+       * Session whose price has no tax_behavior and that is a setting on the
+       * price rather than here - see tax.mjs. On a subscription Session these
+       * carry through to the subscription Stripe creates, so renewals are
+       * taxed on the same footing as the first payment rather than quietly
+       * going out untaxed a month later.
+       */
+      ...taxFields(env('STRIPE_AUTOMATIC_TAX')),
     }),
   });
 

@@ -286,6 +286,77 @@ replays events if something in the middle is not firing.
 
 ---
 
+## VAT, and selling into the EU
+
+A digital subscription sold to somebody in the EU is taxed where *they* are,
+not where you are, and from the first euro. The threshold that lets small
+sellers off is for businesses established in the EU; a US company does not get
+it. There are two halves to this and Stripe only does the second one.
+
+**Registering** is yours. The **non-Union OSS** scheme lets a non-EU seller
+register in one member state and file a single quarterly return covering all
+of them; the alternative is registering country by country. Stripe Tax
+calculates and collects — it does not file your return.
+
+**Collecting** is Stripe Tax: Dashboard → **Tax**, set the origin address, and
+add each registration under **Tax → Registrations**. Two settings on the
+product are easy to miss and both bite:
+
+- **`tax_behavior` on every price.** Stripe refuses a Checkout Session whose
+  price does not have one, so an unset price is not a slightly wrong tax, it is
+  a checkout that 502s. It is also immutable once set: changing inclusive to
+  exclusive means new prices and new ids in the secrets. Inclusive is the EU
+  consumer convention — the listed price is what they pay — and exclusive puts
+  up to 27% on top at the last screen, which reads as a bait and switch.
+- **A tax code on the product**, rather than the account default. A digital
+  services or SaaS code is the one to look for.
+
+### The switch, in Supabase
+
+| Name | Value |
+| --- | --- |
+| `STRIPE_AUTOMATIC_TAX` | `true` |
+
+Unset is off, and off is the default on purpose. Stripe Tax being on in the
+dashboard does nothing to a Checkout Session that does not ask for it, and a
+Session that asks for it before the prices have a `tax_behavior` fails
+outright — so this switch is the window between the code shipping and the
+dashboard being finished, held open. Flip it when the dashboard side is done;
+it needs no deploy.
+
+It turns on three things at once, and they are one setting with three names —
+see `stripe-checkout/tax.mjs`:
+
+- `automatic_tax` is the calculation.
+- `billing_address_collection: required` is what the calculation runs on.
+  Stripe has to place somebody in a country to know the rate, and for a
+  digital service that address is the evidence they were placed correctly.
+  `auto` asks for an address only when the payment method insists, which for a
+  card is often never.
+- `tax_id_collection` is the business case. An EU company that cannot type its
+  VAT number is charged VAT it then has to reclaim, where the reverse charge
+  would have meant not charging it.
+
+On a subscription Session these carry through to the subscription Stripe
+creates, so a renewal is taxed on the same footing as the first payment rather
+than quietly going out untaxed a month later.
+
+### What Stripe does not cover
+
+**Payment methods** need no code. Nothing pins `payment_method_types`, so
+whatever is enabled under Settings → Payment methods appears by itself — SEPA
+Direct Debit is the one that matters for EU recurring, with iDEAL and
+Bancontact able to set up a SEPA mandate. SCA and 3D Secure are handled by
+Checkout with nothing to configure.
+
+**The 14-day right of withdrawal** is not a Stripe setting and is not written
+anywhere in this repository yet. An EU consumer buying at a distance has one;
+digital services are exempt, but only where the customer expressly consents to
+immediate performance *and* acknowledges losing the right. That is wording in
+`terms.html`, and it is not there.
+
+---
+
 ## Cancelling
 
 `stripe-portal` opens Stripe's own billing pages for whoever is signed in,
