@@ -77,6 +77,113 @@ test('pages: the app calls itself the same thing everywhere', async () => {
   }
 });
 
+/* ------------------------------------------------------------- the footer */
+
+/*
+ * map.html is the one page with no footer, and should stay that way. It is a
+ * full-screen map; a footer under it is either off the bottom of the screen or
+ * taking room from the only thing the page is.
+ */
+const FOOTERED = PAGES.filter((page) => page !== 'map.html');
+
+/** The `<footer class="site-footer">…</footer>` block, or null. */
+function footerOf(html) {
+  const start = html.indexOf('<footer class="site-footer">');
+  if (start === -1) return null;
+  const end = html.indexOf('</footer>', start);
+  assert.notEqual(end, -1, 'a <footer> was never closed');
+  return html.slice(start, end + '</footer>'.length);
+}
+
+/*
+ * There were five different footers.
+ *
+ * The homepage had a brand block and seven links, the help page five links,
+ * About and the legal pages three, the account page a different three, and the
+ * admin page two. No single one of them was wrong, which is how they drifted:
+ * each page was written on its own day, and nothing compares one page against
+ * another. This is that comparison.
+ */
+test('pages: every page ships the same footer, character for character', async () => {
+  const footers = new Map();
+  for (const page of FOOTERED) {
+    const footer = footerOf(await read(page));
+    assert.ok(footer, `${page}: has no site footer`);
+    footers.set(page, footer);
+  }
+
+  const [[reference, expected]] = [...footers];
+  for (const [page, footer] of footers) {
+    assert.equal(footer, expected, `${page}: its footer has drifted from ${reference}'s`);
+  }
+});
+
+test('pages: the map is the page without one', async () => {
+  assert.equal(footerOf(await read('map.html')), null,
+    'map.html grew a footer; either it wants one or this check does');
+});
+
+/*
+ * The markup carries the configured values as its fallback rather than empty
+ * elements, so a page whose JavaScript has not run - or has failed - still
+ * shows a footer rather than a blank one with stray punctuation in it. That is
+ * only true while the fallback and config agree.
+ */
+test('pages: the footer falls back to what config actually says', async () => {
+  const footer = footerOf(await read('index.html'));
+  const slot = (name) => new RegExp(`data-site="${name}"[^>]*>([^<]*)<`).exec(footer)?.[1].trim();
+
+  assert.equal(slot('name'), SITE.name);
+  assert.equal(slot('tagline'), SITE.tagline);
+  assert.equal(slot('holder'), SITE.copyrightHolder);
+});
+
+test('pages: the footer says who owns this and from when', async () => {
+  const footer = footerOf(await read('index.html'));
+  assert.match(footer, /&copy;/, 'no copyright notice');
+
+  const year = Number.parseInt(slotYear(footer), 10);
+  // Parseable, because lib/site-footer.js reads it back to decide whether the
+  // clock is ahead of it; an unparseable year silently freezes the notice.
+  assert.ok(Number.isFinite(year), 'the year is not a number site-footer.js can read');
+  assert.ok(year >= 2026, `the notice is dated ${year}`);
+});
+
+function slotYear(footer) {
+  return /data-site="year"[^>]*>([^<]*)</.exec(footer)?.[1].trim();
+}
+
+test('pages: the footer menu is two columns', async () => {
+  const footer = footerOf(await read('index.html'));
+  const nav = footer.slice(footer.indexOf('<nav'), footer.indexOf('</nav>'));
+  assert.equal([...nav.matchAll(/<ul\b/g)].length, 2, 'the footer menu is not two lists');
+});
+
+/*
+ * A footer that links to a 404 is the failure this whole file was started for:
+ * terms.html and privacy.html were written, linked, and shipped by nothing.
+ * Now that one footer links to seven places from eight pages, one bad href is
+ * wrong eight times over.
+ */
+test('pages: every footer link points at something that exists', async () => {
+  const footer = footerOf(await read('index.html'));
+  const hrefs = [...footer.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(hrefs.length >= 7, `only ${hrefs.length} links in the footer`);
+
+  const home = await read('index.html');
+  for (const href of hrefs) {
+    const [path, hash] = href.split('#');
+    const file = path === './' || path === '' ? 'index.html' : path;
+    assert.ok(PAGES.includes(file), `the footer links to ${file}, which the build does not ship`);
+    await assert.doesNotReject(read(file), `${file} is a 404`);
+    // A fragment pointing at no id scrolls nowhere and reports nothing, which
+    // is worse than a broken link: it looks like it worked.
+    if (hash) {
+      assert.ok(home.includes(`id="${hash}"`), `${href} points at an id that is not on the page`);
+    }
+  }
+});
+
 test('pages: the manifest and the native shell call it that too', async () => {
   const manifest = JSON.parse(await read('manifest.webmanifest'));
   assert.equal(manifest.name, SITE.name);

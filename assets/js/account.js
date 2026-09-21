@@ -14,6 +14,7 @@ import { NO_FOLDERS, mountPageSettings } from './lib/page-settings.js';
 import { mountAccountPage } from './lib/account-page.js';
 import { registerServiceWorker, reloadOntoNewBuild } from './lib/pwa.js';
 import { SITE } from './config.js';
+import { mountSiteFooter } from './lib/site-footer.js';
 
 applyStoredTheme();
 const toast = createToaster(document.body);
@@ -55,3 +56,4 @@ for (const node of document.querySelectorAll('#brand-parent')) {
   node.textContent = parentName;
   node.hidden = !parentName;
 }
+mountSiteFooter();

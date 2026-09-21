@@ -10,6 +10,7 @@ import { applyStoredTheme, createToaster } from './lib/ui.js';
 import { mountPageSettings } from './lib/page-settings.js';
 import { mountDeleteAccount } from './lib/delete-account.js';
 import { registerServiceWorker, reloadOntoNewBuild } from './lib/pwa.js';
+import { mountSiteFooter } from './lib/site-footer.js';
 import { SITE } from './config.js';
 
 /*
@@ -66,15 +67,14 @@ window.addEventListener('hashchange', openTargetedAnswer);
  */
 registerServiceWorker({ onUpdate: reloadOntoNewBuild });
 for (const node of document.querySelectorAll('#brand-name')) node.textContent = SITE.name;
-// The parent line and the "A project of ..." note go when there is no parent
-// to name; the markup's fallback would otherwise keep showing the old one.
+// The parent line goes when there is no parent to name; the markup's fallback
+// would otherwise keep showing the old one. The footer is filled from the same
+// config by the module that owns it - this page, About, Terms and Privacy all
+// run this file, and all four carry the one shared footer.
 const parentName = SITE.parent?.name || '';
 for (const node of document.querySelectorAll('#brand-parent')) {
   node.textContent = parentName;
   node.hidden = !parentName;
 }
-for (const node of document.querySelectorAll('#parent-name-footer')) {
-  if (parentName) node.textContent = parentName;
-  else node.closest('p')?.remove();
-}
+mountSiteFooter();
 

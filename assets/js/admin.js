@@ -12,6 +12,7 @@
  */
 
 import { SITE } from './config.js';
+import { mountSiteFooter } from './lib/site-footer.js';
 import { el, applyStoredTheme, formatDate, createToaster } from './lib/ui.js';
 import { mountPageSettings } from './lib/page-settings.js';
 import { Account, isConfigured } from './lib/account.js';
@@ -29,6 +30,7 @@ for (const node of document.querySelectorAll('#brand-parent')) {
   node.textContent = parentName;
   node.hidden = !parentName;
 }
+mountSiteFooter();
 
 const dom = {
   gate: document.getElementById('admin-gate'),

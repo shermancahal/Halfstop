@@ -96,11 +96,33 @@
 </main>
 
 <footer class="site-footer">
-  <div class="wrap footer-inner">
-    <ul class="footer-links">
-      <li><a href="./">Home</a></li>
-      <li><a href="map.html">Map</a></li>
-    </ul>
+  <!--
+    One footer, identical on every page that has one, and asserted identical by
+    test/pages.test.mjs. The values below are the fallback; lib/site-footer.js
+    replaces them from config.js so a fork changes its name in one file.
+  -->
+  <div class="wrap">
+    <div class="footer-main">
+      <p><b data-site="name">Halfstop</b><br>
+        <span data-site="tagline">A field atlas for photographers.</span></p>
+      <p class="footer-fine">Basemap and overlay tiles are served by USGS, Esri and the
+        OpenStreetMap community under their own terms.</p>
+      <p class="footer-fine">&copy; <span data-site="year">2026</span>
+        <span data-site="holder">Halfstop, LLC</span>. All rights reserved.</p>
+    </div>
+    <nav class="footer-menu" aria-label="Site">
+      <ul>
+        <li><a href="./">Home</a></li>
+        <li><a href="map.html">Map</a></li>
+        <li><a href="about.html">About</a></li>
+      </ul>
+      <ul>
+        <li><a href="faq.html">Help &amp; FAQ</a></li>
+        <li><a href="index.html#roadmap">Roadmap</a></li>
+        <li><a href="index.html#costs">What it costs</a></li>
+        <li><a href="terms.html">Terms</a> and <a href="privacy.html">Privacy</a></li>
+      </ul>
+    </nav>
   </div>
 </footer>
 

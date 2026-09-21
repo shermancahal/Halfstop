@@ -331,6 +331,27 @@ pre code { background: none; padding: 0; }
 .site-footer a { color: var(--chrome-ink-2); text-decoration: none; }
 .site-footer a:hover { color: var(--chrome-ink); text-decoration: underline; }
 
+/* The attribution and the copyright. Smaller than the links beside them,
+   because they are read once and the links are used. */
+.footer-fine { font-size: .82rem; margin-top: .8em; }
+
+/* The two columns of links.
+
+   Grid rather than two floats or a flex row, so the second column starts at
+   the same baseline as the first whatever either of them contains - a link
+   that wraps to two lines used to push its neighbour down. They stay two
+   columns at every width: four short labels in one column is a tall footer on
+   a phone, and there is room for two at 320px. */
+.footer-menu { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 32px; flex: 0 1 auto; }
+/* Each column packs to the top. Without this the shorter list is stretched to
+   the taller one's height and its rows are spread to fill, so the two columns
+   sit at visibly different line spacings - three links breathing and four
+   not. */
+.footer-menu > ul { align-content: start; }
+@media (min-width: 720px) {
+  .footer-menu { grid-template-columns: repeat(2, minmax(9rem, auto)); }
+}
+
 /* ---------- landing page ---------- */
 
 .hero { padding: 72px 0 40px; position: relative; overflow: hidden; }

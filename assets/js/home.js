@@ -17,6 +17,7 @@ import { el, escapeHTML, applyStoredTheme, createToaster, formatDate } from './l
 import { mountPageSettings } from './lib/page-settings.js';
 import { formatDistance, formatElevation } from './lib/geo.js';
 import { registerServiceWorker, reloadOntoNewBuild } from './lib/pwa.js';
+import { mountSiteFooter } from './lib/site-footer.js';
 
 const dom = {};
 let catalog = { maps: [] };
@@ -34,21 +35,27 @@ function cacheDom() {
 function applyBranding() {
   const set = (id, value) => { const node = document.getElementById(id); if (node && value) node.textContent = value; };
   set('brand-name', SITE.name);
-  set('footer-name', SITE.name);
-  set('footer-tagline', SITE.tagline);
-  set('footer-holder', SITE.copyrightHolder);
+
+  /*
+   * The footer is the same markup on every page now, so it is filled by the
+   * module that owns it rather than by three more lines here. Those three
+   * lines were the reason only the homepage ever showed the configured name:
+   * no other page runs this function.
+   */
+  mountSiteFooter();
 
   /*
    * Everything that names a parent organisation disappears when there is none.
    *
-   * Three places say it on this page - the line under the brand, the hero's
-   * "A project of ...", and a link in the footer - and each carries the old
-   * name in the markup as a fallback. Writing only when there is a value would
-   * leave all three showing a company that no longer publishes this.
+   * Two places say it on this page - the line under the brand and the hero's
+   * "A project of ..." - and each carries the old name in the markup as a
+   * fallback. Writing only when there is a value would leave both showing a
+   * company that no longer publishes this.
    *
-   * The hero line and the footer link are removed rather than emptied: an
-   * eyebrow reading "A project of" with nothing after it, and a bullet with no
-   * link in it, are worse than their absence.
+   * The hero line is removed rather than emptied: an eyebrow reading "A project
+   * of" with nothing after it is worse than its absence. There was a footer
+   * link here too, until the footer became one shared block with no room for a
+   * parent that config has set to null.
    */
   const parent = SITE.parent?.name || '';
   const brandParent = document.getElementById('brand-parent');
@@ -57,11 +64,6 @@ function applyBranding() {
   if (eyebrow) {
     if (parent) eyebrow.textContent = parent;
     else eyebrow.closest('.eyebrow')?.remove();
-  }
-  const link = document.getElementById('footer-parent-link');
-  if (link) {
-    if (parent && SITE.parent?.url) { link.href = SITE.parent.url; link.textContent = parent; }
-    else link.closest('li')?.remove();
   }
 }
 
