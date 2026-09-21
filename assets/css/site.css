@@ -676,8 +676,18 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 .legal-section li, .about-section li { color: var(--ink-2); line-height: 1.6; }
 .legal-section b, .about-section b { color: var(--ink); }
 
+/* The column contains its own floats.
+
+   Without this the portrait - taller than the few lines of text it sits
+   beside - hung straight out of the bottom of its section and over the
+   footer, with the caption landing on the dark band. `flow-root` makes the
+   column a block formatting context, which is the modern way of saying the
+   float cannot escape it. */
+.about-wrap { display: flow-root; }
+.about-section { display: flow-root; }
+
 /* The portrait. Floated beside the text on a wide screen and full width on a
-   phone, and it removes itself when the file is not there - see about.html. */
+   phone, and it reveals itself only when the file loads - see about.html. */
 .about-portrait { margin: 0 0 18px; }
 .about-portrait img {
   display: block; width: 100%; height: auto;
