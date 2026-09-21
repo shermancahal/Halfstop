@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>About — Halfstop</title>
-<meta name="description" content="Why Halfstop exists: one map that answers the questions a photographer actually asks, instead of six apps and a pile of dropped pins.">
+<meta name="description" content="Sherman Cahal — more than twenty-six years a photographer, documenting the architecture, industry and cultural landscapes of Appalachia.">
 <meta property="og:title" content="About — Halfstop">
-<meta property="og:description" content="Why Halfstop exists: one map that answers the questions a photographer actually asks, instead of six apps and a pile of dropped pins.">
+<meta property="og:description" content="Sherman Cahal — more than twenty-six years a photographer, documenting the architecture, industry and cultural landscapes of Appalachia.">
 <meta property="og:type" content="website">
 <meta name="theme-color" content="#1f2846" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1f2846" media="(prefers-color-scheme: dark)">
@@ -56,97 +56,41 @@
     <div class="wrap">
       <div class="hero-inner">
         <span class="eyebrow">About</span>
-        <h1>It started out of pure selfishness</h1>
-        <p class="lede">I wanted all of it in one place, on a map that actually shows the ground.</p>
+        <h1>Sherman Cahal</h1>
+        <p class="lede">More than twenty-six years a photographer, and a traveler of the back roads.</p>
       </div>
     </div>
   </section>
 
   <section class="about-section">
     <div class="wrap about-wrap">
-      <h2>The routine this replaces</h2>
-      <p>If you shoot on the road you know it. One app for sunrise and sunset. Another for the
-        moon. A website for the Milky Way. A different one for aurora. Weather somewhere else
-        entirely. And then a notes app, or a screenshot folder, or a pile of dropped pins in Google
-        Maps where you sort of keep track of where you have been and where you still want to get
-        to.</p>
-      <p>And we know how unreliable some services can be once they get acquired by larger
-        companies.</p>
-      <p>I have been an avid user of Gaia GPS, onX, Google Maps, The Photographer&rsquo;s Ephemeris,
-        PhotoPills and PlanIt Pro. They all have their strengths and their weaknesses. Halfstop is
-        not an attempt to beat any of them at what they are good at &mdash; it is the one map I
-        wanted that did the whole job in a single place.</p>
-    </div>
-  </section>
-
-  <section class="about-section">
-    <div class="wrap about-wrap">
-      <h2>What you get for a pin</h2>
-      <p>Drop a pin anywhere and you get sunrise, sunset, moonrise, moonset, golden hour and blue
-        hour for that exact spot. Eclipse tracks and aurora forecasts. When the Milky Way core is
-        up, how high it climbs, and whether the sky is going to be dark and clear enough for it to
-        matter. Cloud cover, fog, snow and storm tracks over the ground you are actually driving
-        toward.</p>
-      <h2>And the ground underneath it</h2>
-      <p>I pulled in every free, reliable data source I could get my hands on. USGS topographic
-        quads and aerials. Hillshade and contours. State level maps. Public land overlays so you
-        know whose ground you are standing on. Drone ceilings and advisories.</p>
-    </div>
-  </section>
-
-  <section class="about-section">
-    <div class="wrap about-wrap">
-      <h2>On pricing, because I would rather just tell you</h2>
-      <p>A lot of it is free. Some of it genuinely costs me money every time someone uses it, so
-        that part is not. Place search costs me per lookup and is free anyway; saving the view as a
-        picture costs me nothing, so it is free too. Syncing, weather, offline downloads, routing,
-        photographs on a waypoint, the state detail maps and the extra basemaps are the paid side.
-        <a href="./#costs">The full split is on the homepage</a>, and it is the same list the app
-        itself enforces.</p>
-      <p>There is a free month if you want to try the paid side. You start it yourself from the
-        plan in settings after signing in, it needs no card, and when it runs out it just stops.
-        Nothing to cancel, nothing to forget about. One per account.</p>
-    </div>
-  </section>
-
-  <section class="about-section">
-    <div class="wrap about-wrap">
-      <h2>Where it is right now</h2>
-      <p>The web version is live and works well, including on a phone. Sign in and it syncs between
-        browsers. You can <a href="map.html">start using it today</a>.</p>
-      <p>I am waiting on refreshed Apple Developer credentials, and once those land it goes into
-        TestFlight for real testing. I would like it out before peak fall foliage. An Android port
-        comes after that.</p>
-    </div>
-  </section>
-
-  <section class="about-section">
-    <div class="wrap about-wrap">
       <!--
-        The portrait shows up when its file does.
+        The portrait leads, floated beside the first paragraph.
 
-        Hidden to start and revealed by the image's own load event, rather than
-        shown and removed on error. The two are not equivalent: removing on
-        error is a race, and it lost it once already - at one width the figure
-        was gone and at another an empty caption was still on the page while
-        the 404 was in flight. Starting hidden has no race, because the state
-        before anything loads is the correct one.
+        Hidden until its own load event fires rather than shown and removed on
+        error: removing on error is a race, and it lost it once - at one width
+        the figure was gone and at another an empty caption sat on the page
+        while the 404 was still in flight. Starting hidden has no race, because
+        the state before anything loads is the correct one.
 
-        Drop the file in at assets/img/sherman.jpg and it appears. `loading` is
-        deliberately not lazy: a lazy image inside a hidden figure is never in
-        the viewport, so it is never fetched, so it never loads, so it never
-        reveals itself.
+        `loading` is deliberately not lazy. A lazy image inside a hidden figure
+        is never in the viewport, so it is never fetched, so it never loads,
+        so it never reveals itself.
       -->
       <figure class="about-portrait" hidden>
         <img src="assets/img/sherman.jpg" alt="Sherman Cahal, sitting on a boulder in an autumn hardwood forest."
              width="1066" height="1599" decoding="async"
              onload="this.closest('figure').hidden = false">
-        <figcaption>Sherman Cahal</figcaption>
       </figure>
-      <h2>Tell me what is missing</h2>
-      <p>I built this for how I shoot, which means I have almost certainly overlooked how you
-        shoot. Tear into it. Write to <a href="mailto:support@halfstop.app">support@halfstop.app</a>
-        and it reaches me directly.</p>
+
+      <p>I was born near Ashland, Kentucky, and took an early interest in the built and natural
+        landscapes of Appalachia. My work documents the region&rsquo;s historic architecture, its
+        industrial sites, and the cultural landscapes around them &mdash; through historical
+        research as much as through photography, and usually the two together.</p>
+
+      <p>I am based in Indiana now, and I still approach Appalachia as both a subject of study and
+        a place that is lived in. What I try to bring to it is accuracy, context, and an eye on
+        long-term preservation.</p>
     </div>
   </section>
 

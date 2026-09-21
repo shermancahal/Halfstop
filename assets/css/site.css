@@ -693,9 +693,6 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
   display: block; width: 100%; height: auto;
   border-radius: var(--radius); border: 1px solid var(--line);
 }
-.about-portrait figcaption {
-  margin-top: 7px; font-size: .84rem; color: var(--ink-3);
-}
 @media (min-width: 620px) {
   .about-portrait { float: right; width: 236px; margin: 4px 0 16px 26px; }
 }
