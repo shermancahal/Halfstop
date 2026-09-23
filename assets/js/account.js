@@ -15,6 +15,7 @@ import { mountAccountPage } from './lib/account-page.js';
 import { registerServiceWorker, reloadOntoNewBuild } from './lib/pwa.js';
 import { SITE } from './config.js';
 import { mountSiteFooter } from './lib/site-footer.js';
+import { settleCheckoutReturn } from './lib/checkout-return.js';
 
 applyStoredTheme();
 const toast = createToaster(document.body);
@@ -44,9 +45,17 @@ const where = document.getElementById('account-page');
 if (where) mountAccountPage({ container: where, account, toast });
 
 // Ours to start, since neither mount above owns an account it was handed.
-account.init().catch((error) => {
-  toast(error?.message || 'The account service did not start.', { tone: 'error' });
-});
+account.init()
+  /*
+   * A checkout can be started from this page now, so it can be returned to on
+   * this page - and the thank-you, and the "it has not landed yet", have to
+   * happen wherever the reader actually is. After init rather than beside it:
+   * there is nobody to ask what this account holds until the session is back.
+   */
+  .then(() => settleCheckoutReturn({ account, toast }))
+  .catch((error) => {
+    toast(error?.message || 'The account service did not start.', { tone: 'error' });
+  });
 
 registerServiceWorker({ onUpdate: reloadOntoNewBuild });
 

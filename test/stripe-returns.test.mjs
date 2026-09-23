@@ -83,15 +83,44 @@ test('the landing flag is added without trampling the query string', () => {
   assert.equal(withFlag(SITE).endsWith('subscribed=1'), true);
 });
 
+const read = async (path) => {
+  const { readFile } = await import('node:fs/promises');
+  return readFile(new URL(path, import.meta.url), 'utf8');
+};
+
 test('the app reads the flag this function writes', async () => {
   /*
-   * Two files, one string. The function builds `?subscribed=1` and the viewer
-   * looks for it on load; a rename in either place would break the thank-you
-   * silently, because a checkout that returns with an unrecognised flag looks
+   * Two files, one string, and the string is taken from the writer rather
+   * than typed again here - so this cannot agree with a spelling that the
+   * function stopped using. A rename in either place breaks the thank-you
+   * silently, because a checkout returning with an unrecognised flag looks
    * exactly like a checkout that was abandoned.
    */
-  const { readFile } = await import('node:fs/promises');
-  const viewer = await readFile(new URL('../assets/js/viewer.js', import.meta.url), 'utf8');
-  assert.equal(viewer.includes("params.get('subscribed')"), true,
-    'the viewer no longer reads the flag the checkout sends it back with');
+  const [key] = [...new URL(withFlag(SITE)).searchParams.keys()];
+  assert.equal(key, 'subscribed', 'the flag is not the one the reader looks for');
+
+  const settler = await read('../assets/js/lib/checkout-return.js');
+  assert.ok(settler.includes(`params.get('${key}')`),
+    `nothing reads the ${key} flag the checkout sends back`);
+});
+
+test('a page that can start a checkout can also finish one', async () => {
+  /*
+   * The reader used to live in viewer.js, which is why the purchase buttons
+   * did: whoever owned the return owned the offer, and the account page was
+   * left saying "Free" with nothing to press.
+   *
+   * Now both are shared, and this is the pairing that has to hold. A page that
+   * offers a purchase and does not settle the return shows somebody who has
+   * just paid a free account, waits for no webhook, and says nothing at all -
+   * which is the one moment in this app where silence costs money.
+   */
+  for (const entry of ['../assets/js/viewer.js', '../assets/js/account.js']) {
+    assert.match(await read(entry), /settleCheckoutReturn\(/,
+      `${entry} can reach a checkout and never finishes one`);
+  }
+
+  // And the account page is where the second of those offers it from.
+  assert.match(await read('../assets/js/lib/account-page.js'), /upgradePlanBlock\(/,
+    'the account page stopped offering a way to subscribe');
 });

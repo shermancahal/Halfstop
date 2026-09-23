@@ -61,10 +61,9 @@ import {
 } from './lib/sky.js';
 import { activeAlerts, describeMotion, alertsToGeoJSON } from './lib/storms.js';
 import { fetchRoute, routeGeoJSON } from './lib/route.js';
-import {
-  can, gateReason, planSummary, featureForLayer, describePrice, purchaseRoute, premiumAdds,
-  plansOffered, annualSaving, offersUpgrade, isBillingTester, tierFor, TRIAL_DAYS,
-} from './lib/tiers.js';
+// The purchase panel's half of this list went with it into
+// lib/upgrade-plan.js; what is left is what the map itself asks about a plan.
+import { can, gateReason, planSummary, featureForLayer, tierFor } from './lib/tiers.js';
 import {
   RV_CAVEAT, RV_RANGES, normaliseProfile, isRV, routingFor, profileRows,
   explainFailure, readDimension, showDimension, showWeight, shortTonsToTonnes,
@@ -83,8 +82,9 @@ import { kpNow, auroraChance, describeKp } from './lib/aurora.js';
 import { lunarEclipses, describeEclipse, shadowGeometry } from './lib/eclipse.js';
 import { describeSync } from './lib/sync.js';
 import { registerServiceWorker, applyServiceWorkerUpdate } from './lib/pwa.js';
-import { managePlanBlock } from './lib/manage-plan.js';
 import { mayEdit } from './lib/editors.js';
+import { settleCheckoutReturn } from './lib/checkout-return.js';
+import { upgradePlanBlock } from './lib/upgrade-plan.js';
 import { shareableURL, readSharedPin, pinLinkParts, linkCarriesView } from './lib/share.js';
 import {
   canEdit, isShared, looksLikeEmail, describeShares, describeRole,
@@ -953,7 +953,7 @@ async function main() {
     // After init rather than beside it: a return from Stripe has to ask the
     // server what this account now holds, and there is nobody to ask about
     // until the session has been restored.
-    .then(() => settleCheckoutReturn())
+    .then(() => settleCheckoutReturn({ account: state.account, toast }))
     .catch((error) => console.warn('[account]', error.message));
   // Photos whose pin was deleted linger in IndexedDB; clear them once per load
   // rather than at deletion time, where a shared photo could be lost.
@@ -2979,328 +2979,25 @@ let settingsMenu = null;
 function wireSettingsMenu() {
   /*
    * The rows are the map's own: units and a temperature scale mean nothing on
-   * the help page, so they are passed from here rather than lived in the shared
-   * module. `upgradeBlock` goes the same way - a checkout is begun and returned
-   * to on this page, and this is the only page that knows how to finish one.
+   * the help page, so they are passed from here rather than lived in the
+   * shared module.
+   *
+   * The purchase panel used to be passed the same way and for the same stated
+   * reason - that a checkout is begun and returned to here. It is not the
+   * reason any more: lib/checkout-return.js finishes one on whichever page it
+   * landed on, and the account page offers the same panel. This still passes
+   * it because the map builds its own menu, not because it is the only page
+   * that can.
    */
   settingsMenu = wireSharedSettingsMenu({
     rows: SETTINGS,
     accountPanel: () => accountPanel,
     account: () => state.account || null,
-    planExtra: (plan) => upgradeBlock(plan),
+    planExtra: (plan) => upgradePlanBlock(plan, { account: state.account, toast }),
   });
 }
 
-/**
- * What happens when Stripe sends somebody back after they have paid.
- *
- * Paying and being entitled are not the same instant: the browser comes back
- * the moment the card clears, and the entitlement is written by a webhook that
- * arrives separately. Reading the plan once on landing therefore tells
- * somebody who has just paid that they are on the free tier, which is the
- * worst thing this app could say to them, so it asks again for a while.
- *
- * And it says which of the three things happened - it worked, it has not
- * landed yet, or you are not signed in - because "nothing appears to have
- * changed" is what turns a slow webhook into a support email about a missing
- * charge.
- */
-async function settleCheckoutReturn() {
-  const params = new URLSearchParams(location.search);
-  if (params.get('subscribed') !== '1') return false;
 
-  /*
-   * Out of the address bar first, before anything can go wrong.
-   *
-   * It is a one-time flag on a return trip, and a URL is a thing people
-   * bookmark and send to each other. Left in place it would congratulate the
-   * next person to open the link on a payment they never made, and would do it
-   * again on every reload for the person who did.
-   */
-  params.delete('subscribed');
-  const query = params.toString();
-  history.replaceState(null, '', `${location.pathname}${query ? `?${query}` : ''}${location.hash}`);
-
-  /*
-   * Signed out on the way back, which happens when the checkout is finished in
-   * a different browser from the one it started in. The payment is real and
-   * this device simply cannot see whose it is, so say that rather than
-   * silently showing a free account.
-   */
-  if (!state.account?.user) {
-    toast('Your payment went through. Sign in to the account you paid with and Premium will be there.',
-      { tone: 'info', timeout: 12000 });
-    return false;
-  }
-
-  toast('Thank you. Finishing off your subscription…', { tone: 'info', timeout: 6000 });
-  /*
-   * Waiting for the source rather than the tier. A trial already reads as
-   * premium, so waiting on the tier would congratulate every new account on a
-   * payment the instant they landed, webhook or no webhook.
-   */
-  const settled = await state.account.waitForPlan({ source: 'stripe' });
-  if (settled.ok) {
-    toast('Premium is active on this account.', { tone: 'ok', timeout: 8000 });
-    return true;
-  }
-
-  /*
-   * The honest ending. A webhook that has not arrived in this many seconds
-   * usually still arrives, and occasionally does not - and a person who has
-   * been charged needs to be told the second thing is possible and what to do
-   * about it, not left refreshing.
-   */
-  toast(`Your payment went through and this account has not caught up yet. It usually lands `
-    + `within a minute — reload then. If it is still not here, write to ${SITE.contactEmail} `
-    + `and it will be sorted out by hand.`, { tone: 'error', timeout: 16000 });
-  return false;
-}
-
-/**
- * Whether this account reaches a checkout before billing is live.
- *
- * One function because two copies of this went wrong immediately: the panel
- * knew about the preview and the button's handler did not, so a tester was
- * shown two prices and told "There is nothing to subscribe to yet" when they
- * pressed one. A drawn control that refuses itself is worse than no control.
- *
- * Presentation, and only that. The checkout function refuses anybody not named
- * on its own list while the Stripe key is a test key, and that is the control -
- * this runs on the reader's computer, where they can change it.
- */
-function billingPreview() {
-  const user = state.account?.user;
-  return !BILLING.live && (isBillingTester(user) || mayEdit(user));
-}
-
-/**
- * Begin a subscription: open a Stripe Checkout and hand the browser over.
- *
- * This is the one seam where a purchase plugs in, and it stayed empty for a
- * while on purpose - the last time this app grew a button whose handler had
- * not been written, the handler was simply missing and every press threw a
- * ReferenceError that no test caught, because the tests covered the module
- * around it and nothing ever pressed the button. An honest refusal was better
- * than that.
- *
- * It is Stripe now, and when StoreKit arrives it becomes a second branch on
- * `route.where` rather than a rewrite: the panel already asks where a purchase
- * can be completed instead of assuming, because a browser cannot finish an App
- * Store one. Nothing about a card is ever typed into this app.
- */
-async function startSubscription(button = null, plan = 'month') {
-  const route = purchaseRoute({ preview: billingPreview() });
-  if (!route.available) {
-    toast('There is nothing to subscribe to yet.', { tone: 'info', timeout: 7000 });
-    return false;
-  }
-
-  if (route.where !== 'stripe') {
-    // Only reachable if a third route is added and this is not taught about
-    // it. Said out loud rather than falling through to a silent return.
-    toast('This build does not know how to open that checkout.', { tone: 'error', timeout: 9000 });
-    return false;
-  }
-
-  /*
-   * Disabled while the round trip is in flight.
-   *
-   * Creating a checkout is a network call that takes a moment, and a payment
-   * button that looks idle is a payment button somebody presses twice. The
-   * function is idempotent within the hour for the same person, so a second
-   * press cannot make a second subscription - this is so it does not look
-   * broken in the meantime.
-   */
-  const said = button?.textContent || 'Subscribe';
-  if (button) { button.disabled = true; button.textContent = 'Opening…'; }
-  const result = await state.account.startCheckout({ plan });
-  if (button) { button.disabled = false; button.textContent = said; }
-
-  if (!result.ok) {
-    toast(result.reason, { tone: 'error', timeout: 9000 });
-    return false;
-  }
-
-  // Stripe's own page, on Stripe's domain. Nothing about a card is typed into
-  // this app, which is the whole reason for sending people there.
-  window.location.assign(result.url);
-  return true;
-}
-
-/**
- * Take the free month.
- *
- * Nothing about the length or the dates is sent: public.start_trial() decides
- * those, because a browser that could name its own expiry would name one a
- * long way off. This only presses the button and says what came back.
- */
-async function startTrial(button = null) {
-  const said = button?.textContent || 'Start the free trial';
-  if (button) { button.disabled = true; button.textContent = 'Starting…'; }
-  const result = await state.account.startTrial();
-
-  if (!result.ok) {
-    // Put the button back, because nothing else will: a refusal changes no
-    // plan, so the panel it is sitting in is not redrawn.
-    if (button) { button.disabled = false; button.textContent = said; }
-    toast(result.reason, { tone: 'error', timeout: 9000 });
-    return false;
-  }
-
-  /*
-   * Nothing puts the button back on the way out, and that is right: the plan
-   * changed, so the account's change listener has already repainted the menu
-   * and this button is no longer in the document. What replaced it is the
-   * panel for somebody who now has Premium.
-   */
-  toast(`Premium is on for the next ${TRIAL_DAYS} days. Nothing to cancel — it simply runs out.`,
-    { tone: 'ok', timeout: 9000 });
-  return true;
-}
-
-/**
- * What Premium is and how to get it, for somebody who has not got it.
- *
- * Nothing at all while BILLING.live is false, which is today: every account
- * has everything, so a panel offering to sell it would be describing a
- * restriction that does not exist.
- *
- * When it is live, this says what changes and what it costs, and then tells
- * the truth about whether it can be bought from here. A subscription lives in
- * the App Store and the App Store only exists inside a shipped app, so the
- * browser has nothing to sell and should say so rather than showing a button
- * that cannot work. That is a state to draw, not a state to hide.
- */
-function upgradeBlock(plan) {
-  /*
-   * Whoever runs this can see the purchase panel before billing is live, so a
-   * checkout can be tested with a card that is not a card.
-   *
-   * Presentation only, and worth being clear about: the checkout function
-   * refuses anybody not named as a tester while the Stripe key is a test key.
-   * That is the control. This just means the button is there to press.
-   */
-  /*
-   * Somebody who already subscribes gets the way out, not another offer - and
-   * gets it before any gate, because the gates below are about whether we are
-   * selling. Cancelling has to be as easy as subscribing and must not depend
-   * on a build flag.
-   *
-   * Shared with every other page now: the help page has always said "Manage
-   * subscription in the account menu", which was true here and nowhere else.
-   */
-  if (!offersUpgrade({ ...plan, live: true })) {
-    return managePlanBlock(plan, { account: state.account, toast });
-  }
-
-  const preview = billingPreview();
-  if (!plan.live && !preview) return null;
-
-  const route = purchaseRoute({ preview });
-  const saving = annualSaving();
-
-  /*
-   * The free month, offered rather than assumed.
-   *
-   * Everybody who signed up used to be inside a trial whether they wanted one
-   * or not, because it was worked out from the day the account was made. That
-   * gave Premium to people who had come to look at a map, put a clock on their
-   * account that they had never started, and - the part that actually broke -
-   * left nothing to opt into. Now it is a row, and this button is what writes
-   * it.
-   *
-   * Drawn only when the server says this account may still have one. The
-   * client does not work that out: `trialAvailable` comes from my_plan(),
-   * which holds the record of whether the month has already been spent. A
-   * button drawn on a guess is a button whose only outcome is an error.
-   */
-  const offerTrial = plan.trialAvailable && route.available;
-
-  /*
-   * Somebody on a trial is being asked to keep what they already have, not
-   * sold something new, and the sentence has to say which.
-   */
-  const trialing = plan.source === 'trial';
-  const heading = trialing && plan.line
-    ? `${plan.line.replace(/\.$/, '')}. Keeping it:`
-    : 'Premium adds';
-
-  /*
-   * A button per plan rather than a toggle and one button.
-   *
-   * Two buttons say both prices at once, which is the question somebody
-   * actually has. A toggle hides one of the two numbers behind an interaction
-   * and makes the reader work to compare them, in a menu that is already
-   * small.
-   */
-  const buttons = plansOffered().map((plan) => el('button', {
-    /*
-     * The month is the primary button, unless there is a trial to take -
-     * then that is, and both prices step back to being the other option.
-     * Two primary buttons side by side is two things claiming to be the
-     * obvious one, which is the same as neither being it.
-     */
-    class: `button button-small ${!offerTrial && plan.id === 'month' ? 'button-primary' : 'button-secondary'}`,
-    type: 'button',
-    text: describePrice({ plan: plan.id }),
-    onclick: (event) => startSubscription(event.currentTarget, plan.id),
-  }));
-
-  if (offerTrial) {
-    buttons.unshift(el('button', {
-      class: 'button button-small button-primary',
-      type: 'button',
-      text: `Try it free for ${TRIAL_DAYS} days`,
-      onclick: (event) => startTrial(event.currentTarget),
-    }));
-  }
-
-  return el('div', { class: 'plan-upgrade' }, [
-    el('p', { class: 'plan-upgrade-head', text: heading }),
-    // The list is what a trial is holding open, so it is worth repeating for
-    // somebody deciding whether to keep it.
-    el('ul', { class: 'plan-upgrade-list' }, premiumAdds().map((what) => el('li', { text: what }))),
-    route.available
-      ? el('div', { class: 'plan-upgrade-buttons' }, buttons)
-      : el('p', {
-        class: 'hint', style: 'margin:8px 0 0',
-        text: route.why === 'in-app-only'
-          ? 'Subscriptions are handled by the App Store, so this is in the '
-            + 'iPhone and iPad app rather than here.'
-          : 'There is no way to subscribe yet.',
-      }),
-    /*
-     * The three things somebody weighing up a free trial wants to know, before
-     * they press it rather than after.
-     *
-     * No card is the one that matters: the commonest reason not to start a
-     * free trial is the suspicion that it is a subscription with a delay on
-     * it. This one is not - there is nothing to cancel, because nothing was
-     * started that continues.
-     */
-    offerTrial
-      ? el('p', {
-        class: 'hint', style: 'margin:8px 0 0',
-        text: 'No card, nothing to cancel, and it stops on its own. One to an account.',
-      })
-      : null,
-    // Worked out from the two prices rather than written down, so it cannot
-    // overstate the discount or go stale when one of them moves.
-    route.available && saving
-      ? el('p', { class: 'hint', style: 'margin:8px 0 0', text: `Paying by the year saves ${saving.money}, about ${saving.percent}%.` })
-      : null,
-    // Said plainly, because a preview that looks like the real thing is how
-    // somebody ends up wondering whether they were charged.
-    route.preview
-      ? el('p', {
-        class: 'hint plan-preview', style: 'margin:8px 0 0',
-        text: 'Test mode. Billing is not live: this is here because you run '
-          + 'Halfstop, and no real card is charged.',
-      })
-      : null,
-  ].filter(Boolean));
-}
 
 /**
  * Everything about taking the map away with you, behind one control.

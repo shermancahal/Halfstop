@@ -28,7 +28,7 @@ import { planSummary } from './tiers.js';
 import { Account } from './account.js';
 import { NO_FOLDERS } from './page-settings.js';
 import { createAccountPanel } from './account-panel.js';
-import { managePlanBlock } from './manage-plan.js';
+import { upgradePlanBlock } from './upgrade-plan.js';
 
 /**
  * @param {object}   options
@@ -93,12 +93,22 @@ export function mountAccountPage({ container, toast, account = null }) {
       el('h2', { text: 'Plan' }),
       el('div', { class: 'plan-name', text: summary.name }),
       /*
-       * Managing rather than buying. Starting a subscription is begun and
-       * returned to on the map, because the return path - re-reading the plan
-       * until the webhook lands - lives there. Managing an existing one is a
-       * single redirect out to Stripe and back, with nothing to poll for.
+       * Buying as well as managing, which it did not used to do.
+       *
+       * This said "Plan / Free" and stopped, on the page called Your account,
+       * under a heading that says Plan. The way to subscribe was in the gear
+       * on the map and nowhere else, so the answer to "where do I upgrade"
+       * was a menu on a different page. Asked exactly that way.
+       *
+       * The old reason was that a checkout is begun and returned to on the
+       * map. It is not any more - lib/checkout-return.js finishes one
+       * wherever it lands, and account.js calls it on this page too.
+       *
+       * upgradePlanBlock falls back to the manage button by itself for
+       * somebody who already subscribes, so there is one control here rather
+       * than a branch about which to draw.
        */
-      managePlanBlock(summary, { account: who, toast }),
+      upgradePlanBlock(summary, { account: who, toast }),
     ].filter(Boolean));
 
     /*

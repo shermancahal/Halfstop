@@ -5143,6 +5143,69 @@ await page.waitForTimeout(200);
  * check a feature whose entire behaviour is "what happens when the flag
  * flips".
  */
+/*
+ * The account page offers a way to subscribe, not just a way to cancel.
+ *
+ * It said "Plan / Free" and stopped - on the page called Your account, under
+ * a heading that says Plan - because the purchase panel lived in viewer.js and
+ * the stated reason was that a checkout is begun and returned to on the map.
+ * So the answer to "where do I upgrade?" was a menu on another page. Asked in
+ * exactly those words.
+ *
+ * Both halves are shared now, so this checks the page that did not have it.
+ * Signed in and with billing live, because the panel is drawn for neither
+ * otherwise, and both are injected rather than arranged.
+ */
+console.log('\nThe account page says how to start paying');
+{
+  const REF_BUY = 'smoke';
+  const far = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30;
+  const buyer = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+  await buyer.route(`**://${REF_BUY}.supabase.co/**`, (route) => route.abort());
+  await buyer.addInitScript(([url, key, storageKey, session]) => {
+    window.ABMAP_SUPABASE_URL = url;
+    window.ABMAP_SUPABASE_KEY = key;
+    window.ABMAP_BILLING_LIVE = 'true';
+    window.ABMAP_BILLING_STORE = 'stripe';
+    localStorage.setItem(storageKey, session);
+  }, [`https://${REF_BUY}.supabase.co`, 'smoke-anon-key', `sb-${REF_BUY}-auth-token`, JSON.stringify({
+    access_token: `header.${Buffer.from(JSON.stringify({ sub: 'u-buy', exp: far })).toString('base64url')}.sig`,
+    refresh_token: 'r-1', expires_at: far, expires_in: 60 * 60 * 24 * 30, token_type: 'bearer',
+    user: {
+      id: 'u-buy', aud: 'authenticated', role: 'authenticated', email: 'buyer@example.com',
+      user_metadata: { display_name: 'Buyer' }, app_metadata: {}, created_at: new Date().toISOString(),
+    },
+  })]);
+
+  const shop = await buyer.newPage();
+  await shop.goto(new URL('account.html', MAP_URL).href, { waitUntil: 'domcontentloaded' });
+  await shop.waitForFunction(() => {
+    const plan = document.querySelector('.account-plan');
+    return plan && !plan.hidden;
+  }, null, { timeout: 8000 }).catch(() => {});
+
+  const offered = await shop.evaluate(() => {
+    const plan = document.querySelector('.account-plan');
+    if (!plan || plan.hidden) return { shown: false };
+    return {
+      shown: true,
+      name: plan.querySelector('.plan-name')?.textContent.trim() || null,
+      buttons: [...plan.querySelectorAll('.plan-upgrade-buttons button')].map((b) => b.textContent.trim()),
+      adds: plan.querySelectorAll('.plan-upgrade-list li').length,
+    };
+  });
+
+  check('the plan section is on the page for somebody signed in', offered.shown, true);
+  check('and names the plan they are on', offered.name, 'Free');
+  // Both prices at once rather than a toggle: the question is which is better
+  // value, and a toggle hides one of the two numbers behind an interaction.
+  check('with both prices offered', offered.buttons, ['$4.99 a month', '$49 a year']);
+  check('and what the money buys', offered.adds > 0, true);
+
+  await shop.close();
+  await buyer.close();
+}
+
 console.log('\nMetered basemaps are shown and not offered, once billing is live');
 {
   const paid = await context.newPage();
