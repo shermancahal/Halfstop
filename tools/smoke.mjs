@@ -5111,7 +5111,23 @@ check('and the row says the order was inferred',
  * a compass word in it must not be swallowed as a coordinate.
  */
 await page.fill('#place-search', 'Trail 6 North 40');
-await page.waitForTimeout(900);
+/*
+ * Waited for, not slept through.
+ *
+ * The query just above leaves a Coordinate row on screen and the search
+ * debounces by about 300ms, so a fixed sleep has a window in which it reads
+ * the *previous* query's row and reports it as this one's. That is what it
+ * did: passed three runs, failed the fourth, on a parser that node has
+ * covered by name since it was written - test/coordinate.test.mjs, "a name
+ * whose own letters spell a hemisphere is still a name".
+ *
+ * A timeout here falls through to the assertion rather than throwing, so a
+ * row that genuinely never clears still fails as what it is instead of
+ * killing the run.
+ */
+await page.waitForFunction(() => ![...document.querySelectorAll('.map-search-result')]
+  .some((row) => row.querySelector('.map-search-kind')?.textContent.trim() === 'Coordinate'),
+null, { timeout: 5000 }).catch(() => {});
 const stillAName = await page.evaluate(() => [...document.querySelectorAll('.map-search-result')]
   .map((row) => row.querySelector('.map-search-kind')?.textContent.trim()));
 check('a name whose letters spell a hemisphere is not read as a coordinate',
