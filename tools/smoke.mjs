@@ -2997,6 +2997,66 @@ check('the button is there', snapshot.button, true);
 check('and the map keeps its drawing buffer so it can be read back',
   snapshot.preserved, true);
 
+/*
+ * Edit, on a waypoint's details card, reaches an editor somebody can see.
+ *
+ * Reported as "I click edit on a waypoint and it takes me to a folder
+ * listing", which is exactly what it did. The editor hangs off the pin's row
+ * in the folder list, and a folded folder keeps its rows in the document - it
+ * is the body around them that is hidden. So the row was found, the editor was
+ * inserted into something invisible, and the only thing that happened on
+ * screen was the jump to the Folders tab.
+ *
+ * The store half is covered in test/folders.test.mjs. This is the half that
+ * needs a browser: whether what was built can actually be seen.
+ */
+console.log('\nEdit on a waypoint opens the editor, even from a folded folder');
+{
+  await showTab('folders');
+  await page.waitForTimeout(300);
+  await page.locator('.folder [aria-expanded="true"]').first().click();
+  await page.waitForTimeout(400);
+  check('the folder starts folded', await page.locator('.folder.is-collapsed').count() > 0, true);
+
+  await showTab('waypoints');
+  await page.waitForTimeout(400);
+  await page.locator('.waypoint-card').first().click();
+  await page.waitForTimeout(700);
+  await page.locator('#tab-details button').filter({ hasText: /^Edit$/ }).first()
+    .click()
+    .catch(() => {});
+  await page.waitForTimeout(700);
+
+  const editor = await page.evaluate(() => {
+    const node = document.querySelector('.style-editor');
+    if (!node) return { open: false, onScreen: false, foldedAway: null, heading: null };
+    const body = node.closest('.folder-body');
+    return {
+      open: true,
+      // offsetParent is null for anything inside a display:none ancestor,
+      // which is precisely the failure being guarded: present, and invisible.
+      onScreen: node.offsetParent !== null && node.getBoundingClientRect().height > 0,
+      foldedAway: body ? getComputedStyle(body).display === 'none' : false,
+      heading: node.querySelector('.style-editor-title')?.textContent.trim() || null,
+    };
+  });
+  check('the editor opened', editor.open, true);
+  check('and can be seen rather than sitting in the folded body', editor.onScreen, true);
+  check('because the folder was opened to show it', editor.foldedAway, false);
+  check('and it is the pin that was on screen', /^Style /.test(editor.heading || ''), true);
+
+  /*
+   * Put the panel back as it was for everything below. Folding the branch is
+   * also what drops the editor - it is a sibling of the body, so hiding the
+   * body alone would leave it standing.
+   */
+  await showTab('folders');
+  await page.locator('.folder [aria-expanded="true"]').first().click();
+  await page.waitForTimeout(300);
+  await page.locator('.folder [aria-expanded="false"]').first().click();
+  await page.waitForTimeout(300);
+}
+
 console.log('\nSpace weather reaches the Photography panel');
 await showTab('waypoints');
 await page.waitForTimeout(400);

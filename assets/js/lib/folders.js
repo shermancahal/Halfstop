@@ -1414,6 +1414,36 @@ export class FolderStore {
     return this.ancestorsOf(id).some((entry) => entry.collapsed === true);
   }
 
+  /**
+   * Open a folder, and everything it is filed under, so a row inside it can
+   * actually be seen.
+   *
+   * The whole chain rather than just this folder: a pin in "Lookouts" inside a
+   * folded "Historic" is in a body that is hidden by the parent, and opening
+   * only the inner one leaves it exactly as invisible as it was.
+   *
+   * This exists because Edit on a waypoint's details card jumped to the folder
+   * list and built the editor onto the pin's row without checking whether that
+   * row was inside a folded body. The row is still in the document when a
+   * folder is shut - it is the body that is hidden - so the query found it,
+   * the editor was inserted into something nobody can see, and pressing Edit
+   * read as landing on a plain folder listing for no reason.
+   *
+   * Emits once at the end rather than per folder, so opening three levels is
+   * one save and one redraw instead of three.
+   *
+   * @returns {number} how many folders had to be opened
+   */
+  reveal(id) {
+    const target = this.get(id);
+    if (!target) return 0;
+
+    const shut = [...this.ancestorsOf(id), target].filter((folder) => folder.collapsed === true);
+    for (const folder of shut) folder.collapsed = false;
+    if (shut.length) this.emit(null);
+    return shut.length;
+  }
+
   totals() {
     return this.folders.reduce((sum, folder) => {
       const counts = this.counts(folder);

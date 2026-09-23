@@ -9493,10 +9493,34 @@ function renderPinDetails(folder, item) {
       labelledButton(icons.pencil, 'Edit', {
         title: 'Change the name, note, icon or color',
         onclick: () => {
+          /*
+           * Open the folder before looking for the row in it.
+           *
+           * The editor hangs off the pin's row, and a shut folder still has
+           * its rows in the document - it is the body around them that is
+           * hidden. So the query found the row, the editor was inserted where
+           * nobody could see it, and pressing Edit looked like being dumped on
+           * the folder list for no reason. Reported exactly that way.
+           *
+           * The whole chain is opened, not just this folder: a pin two levels
+           * down is hidden by the outer one whatever the inner one says.
+           */
+          state.folders.reveal(folder.id);
           openTab('folders');
           renderFoldersTab();
+
           const row = dom.folderList.querySelector(`[data-item="${item.id}"]`);
-          if (row) openStyleEditor(folder, [item.id], row);
+          /*
+           * And say so when there is nothing to open, rather than leaving
+           * somebody on a folder list wondering what the button did. The same
+           * silence is what made a dead Delete in the support queue read as a
+           * broken feature rather than a stale build.
+           */
+          if (!row) {
+            toast('That waypoint is no longer in the folder list.', { tone: 'error' });
+            return;
+          }
+          openStyleEditor(folder, [item.id], row);
         },
       }),
       /*

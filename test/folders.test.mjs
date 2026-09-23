@@ -841,6 +841,83 @@ test('folders: a folder can be filed inside another, and knows where it sits', (
  * The two ways a tree stops being a tree: a loop, which cuts a branch loose
  * from the root and loses it, and a branch deeper than the panel can show.
  */
+/*
+ * Opening a folder so something inside it can be reached.
+ *
+ * The bug: Edit on a waypoint's details card jumped to the folder list and
+ * hung the editor off the pin's row without checking whether that row was
+ * inside a folded body. A shut folder keeps its rows in the document - it is
+ * the body around them that is hidden - so the row was found, the editor was
+ * built where nobody could see it, and Edit read as being dumped on a folder
+ * listing for no reason. That is how it was reported.
+ */
+test('folders: revealing a pin opens the folder it is filed in', () => {
+  const { store, top } = tree();
+  store.update(top.id, { collapsed: true });
+  assert.equal(store.get(top.id).collapsed, true);
+
+  assert.equal(store.reveal(top.id), 1, 'one folder had to be opened');
+  assert.equal(store.get(top.id).collapsed, false);
+});
+
+test('folders: it opens the whole branch, not just the folder named', () => {
+  /*
+   * The half-fix that looks right. Opening "Stone" while "Abandoned" above it
+   * is still shut leaves the row exactly as invisible as it was, because the
+   * outer body is what is hidden.
+   */
+  const { store, top, mid, deep } = tree();
+  for (const id of [top.id, mid.id, deep.id]) store.update(id, { collapsed: true });
+
+  assert.equal(store.reveal(deep.id), 3);
+  assert.equal(store.foldedAway(deep.id), false, 'something above it is still shut');
+  for (const id of [top.id, mid.id, deep.id]) {
+    assert.equal(store.get(id).collapsed, false, id);
+  }
+});
+
+test('folders: a folder already open is left alone', () => {
+  // Nothing to change means nothing to save and nothing to redraw. A reveal
+  // that emitted anyway would rebuild the list under an editor that is being
+  // opened onto it.
+  const { store, deep } = tree();
+  let announced = 0;
+  store.onChange(() => { announced += 1; });
+
+  assert.equal(store.reveal(deep.id), 0);
+  assert.equal(announced, 0, 'it announced a change it did not make');
+});
+
+test('folders: opening three levels is one announcement, not three', () => {
+  const { store, top, mid, deep } = tree();
+  for (const id of [top.id, mid.id, deep.id]) store.update(id, { collapsed: true });
+
+  let announced = 0;
+  store.onChange(() => { announced += 1; });
+  store.reveal(deep.id);
+  assert.equal(announced, 1, 'each folder announced separately');
+});
+
+test('folders: revealing something that is not there changes nothing', () => {
+  const { store } = tree();
+  assert.equal(store.reveal('no-such-folder'), 0);
+  assert.equal(store.reveal(undefined), 0);
+  assert.equal(store.reveal(null), 0);
+});
+
+test('folders: an opened folder stays open across a reload', () => {
+  // Folding is remembered, so un-folding has to be too - otherwise the next
+  // load shuts it again and the editor that was opened into it is orphaned.
+  const storage = memoryStorage();
+  const store = new FolderStore({ storage, vault: null });
+  const folder = store.create('Abandoned');
+  store.update(folder.id, { collapsed: true });
+  store.reveal(folder.id);
+
+  const reloaded = new FolderStore({ storage, vault: null });
+  assert.equal(reloaded.get(folder.id).collapsed, false);
+});
+
 test('folders: a folder cannot be filed inside itself or its own branch', () => {
   const { store, top, mid, deep } = tree();
   assert.equal(store.canNestUnder(top.id, top.id), false, 'not itself');
