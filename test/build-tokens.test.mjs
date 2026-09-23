@@ -206,3 +206,44 @@ test('app: an unknown platform is refused by name', () => {
 test('app: a Mac with Capacitor has nothing in the way', () => {
   assert.deepEqual(appMachinePreflight({ platform: 'ios', os: 'darwin', hasCapacitor: true }), []);
 });
+
+/* ------------------------------------------------------ the store build */
+
+const tokenFile = (...lines) => ["window.ABMAP_MAPBOX_TOKEN = 'pk.web';", ...lines].join('\n');
+
+/*
+ * The warning that is a store rejection rather than a bad build.
+ *
+ * `--app` preserves token.js as it is, and docs/payments.md says to turn
+ * billing on with a line in exactly that file - so the setup for testing a
+ * checkout locally is also, unchanged, an app bundle with a Subscribe button
+ * that opens Stripe inside the webview. Apple and Google both require their
+ * own billing for that. Nothing about the build fails; it fails at review.
+ */
+test('app build: a bundle carrying a web checkout says so', () => {
+  const { warnings } = appPreflight(tokenFile("window.ABMAP_BILLING_STORE = 'stripe';"));
+  assert.equal(warnings.filter((line) => /web checkout/.test(line)).length, 1,
+    'an app bundle with a Stripe checkout in it was not flagged');
+});
+
+test('app build: any other store is not flagged', () => {
+  // The warning is about a checkout a webview can complete, not about billing
+  // being configured at all. A build with nothing to sell is quiet.
+  for (const line of ["window.ABMAP_BILLING_STORE = 'appstore';", "window.ABMAP_BILLING_STORE = '';", '']) {
+    const { warnings } = appPreflight(tokenFile(line));
+    assert.equal(warnings.filter((w) => /web checkout/.test(w)).length, 0, line || '(nothing)');
+  }
+});
+
+test('app build: gates closed with nothing to buy is said once, as a note', () => {
+  /*
+   * The honest state of a store build today: billing live means the paid
+   * features are gated, and no in-app purchase exists to open them. Worth
+   * reading in the build output rather than discovering on a phone.
+   */
+  const { notes, warnings } = appPreflight(tokenFile("window.ABMAP_BILLING_LIVE = 'true';"));
+  assert.equal(notes.filter((line) => /no way to buy/.test(line)).length, 1);
+  assert.equal(warnings.filter((line) => /web checkout/.test(line)).length, 0,
+    'there is no web checkout in this bundle to warn about');
+});
+

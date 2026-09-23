@@ -8,19 +8,45 @@
  */
 
 /**
+ * Where a link is useless to whoever receives it.
+ *
+ * Both shells serve the app from the device itself, and they do not agree on
+ * how. iOS uses `capacitor://localhost`, which a scheme check catches. Android
+ * uses `https://localhost` - Capacitor's own default, and the value in
+ * capacitor.config.json - which a scheme check waves straight through, because
+ * it is a perfectly good https URL. It is just a https URL naming the phone it
+ * was copied from.
+ *
+ * So the host is checked as well as the scheme. This was found by asking what
+ * Share would do in an Android build before there was one: it produced
+ * `https://localhost/map.html?...`, which is the exact failure the paragraph
+ * below describes and the exact one the scheme check was written to prevent.
+ */
+const LOOPBACK = /^(localhost|127\.0\.0\.1|\[::1\]|::1)$/i;
+
+function reachable(href) {
+  try {
+    return !LOOPBACK.test(new URL(href).hostname);
+  } catch {
+    // Not a URL this can read is not a URL to build a share link on.
+    return false;
+  }
+}
+
+/**
  * A link somebody else can open, whatever this is running inside.
  *
  * In a browser that is the address bar. In the app it is not: the shell runs
- * at capacitor://localhost, and a link to that opens nothing on anybody's
- * phone - no error, no clue, just a tap that does nothing. So anything not
- * served over http(s) is rebuilt against the site's published URL, keeping the
- * query and the hash, which is where the view actually lives.
+ * on the phone, and a link to that opens nothing on anybody else's - no error,
+ * no clue, just a tap that does nothing. So anything not served from an origin
+ * somebody else can reach is rebuilt against the site's published URL, keeping
+ * the query and the hash, which is where the view actually lives.
  *
  * The running origin is preferred when there is one, so a link copied from a
  * preview build still points at the preview rather than at production.
  */
 export function shareableURL({ href, protocol, site, path = 'map.html', search = '', hash = '' }) {
-  const live = protocol === 'https:' || protocol === 'http:';
+  const live = (protocol === 'https:' || protocol === 'http:') && reachable(href);
   const url = new URL(path, live ? href : site);
   url.search = search || '';
   url.hash = hash || '';

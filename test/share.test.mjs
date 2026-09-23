@@ -14,6 +14,60 @@ import { shareableURL, readSharedPin, pinLinkParts } from '../assets/js/lib/shar
 
 const SITE = 'https://app.halfstop.app/';
 
+/*
+ * The two shells do not agree on how they serve the app, and only one of them
+ * is caught by looking at the scheme.
+ *
+ * iOS runs at capacitor://localhost. Android runs at https://localhost -
+ * Capacitor's own default, and what capacitor.config.json asks for - which is
+ * a perfectly good https URL naming the phone it was copied from. Found by
+ * asking what Share would do in an Android build before there was one.
+ */
+test('share: a link from the Android shell is not a link to the phone', () => {
+  const url = shareableURL({
+    href: 'https://localhost/map.html?b=byways-topo#view=12/38/-79',
+    protocol: 'https:',
+    site: SITE,
+    search: '?b=byways-topo',
+    hash: '#view=12/38/-79',
+  });
+  assert.equal(url, 'https://app.halfstop.app/map.html?b=byways-topo#view=12/38/-79');
+  assert.ok(!url.includes('localhost'), 'the link names the device it was copied from');
+});
+
+test('share: every way of saying this machine is the same answer', () => {
+  // A share link is for somebody else's phone. None of these name anything on
+  // it - including a development server, where the link is just as dead.
+  for (const [href, protocol] of [
+    ['https://localhost/map.html', 'https:'],
+    ['https://localhost:8443/map.html', 'https:'],
+    ['http://127.0.0.1:8080/map.html', 'http:'],
+    ['http://[::1]:8080/map.html', 'http:'],
+  ]) {
+    assert.equal(shareableURL({ href, protocol, site: SITE }), `${SITE}map.html`, href);
+  }
+});
+
+test('share: a hostname that merely contains localhost is somebody else\'s site', () => {
+  /*
+   * The same trap returns.mjs has a test for: a check written as "contains
+   * localhost" would rebuild a perfectly good link, and one written as
+   * "startsWith" would wave through localhost.evil.example.
+   */
+  const url = shareableURL({
+    href: 'https://localhost.halfstop.app/map.html', protocol: 'https:', site: SITE,
+  });
+  assert.equal(url, 'https://localhost.halfstop.app/map.html');
+});
+
+test('share: something that is not a URL falls back rather than throwing', () => {
+  // Nothing should be able to make Share throw: the worst honest answer is a
+  // link to the front page, and the worst dishonest one is a stack trace where
+  // a link was expected.
+  assert.equal(shareableURL({ href: 'not a url', protocol: 'https:', site: SITE }), `${SITE}map.html`);
+  assert.equal(shareableURL({ href: '', protocol: 'https:', site: SITE }), `${SITE}map.html`);
+});
+
 test('share: a link from the app points at the site, not at the shell', () => {
   const url = shareableURL({
     href: 'capacitor://localhost/map.html?b=byways-topo#view=12/38/-79',

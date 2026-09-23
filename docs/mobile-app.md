@@ -363,6 +363,59 @@ Anything that lives in `token.js` is baked into the build at `npm run
 dist:app`, so a tester sees whatever the build had. There is no remote
 config; a rotated Mapbox token means a new build for everyone.
 
+## 6c. The first run on a real Android phone
+
+Cheaper to reach than the iPhone: no yearly fee to build and install, no
+provisioning profiles, and the $25 Play account is only needed to publish.
+
+**What you need.** Android Studio, and a phone with Developer options and USB
+debugging on (Settings → About phone → tap Build number seven times, then
+Settings → System → Developer options → USB debugging).
+
+```sh
+npm install --save-dev @capacitor/cli @capacitor/core @capacitor/android
+npm run app:android
+```
+
+That builds `dist/` with the app token, runs `npx cap add android` the first
+time, copies the bundle in, and opens Android Studio. Read the build's own
+output before you leave the terminal — `appPreflight` prints what the bundle
+will and will not have, and the two lines worth stopping for are below.
+
+Then in Android Studio: pick the device in the toolbar, press Run. The first
+build downloads a Gradle distribution and takes a while; after that it is
+seconds.
+
+**The permissions are not added for you.** Section 5 has the block for
+`android/app/src/main/AndroidManifest.xml`. Without it the map loads and Locate
+does nothing, which looks like a broken button rather than a missing line.
+
+**What to test first, in this order.** Locate (the runtime prompt should
+appear once), a basemap that is not the default (proves the app token works,
+since the webview sends no `Referer`), Share on a waypoint (see below), sign
+in, and then aeroplane mode with a downloaded region.
+
+### The two things that will bite
+
+**Share links.** Android serves the app from `https://localhost` — Capacitor's
+default, and what `capacitor.config.json` asks for. That is a real https URL,
+so a check on the scheme alone waves it through, and every Share produced
+`https://localhost/map.html?…`: a link that opens nothing on anybody else's
+phone, with no error to notice. `shareableURL` checks the host as well now and
+rebuilds against `SITE.url`. It is tested both ways in `test/share.test.mjs`;
+the point here is that iOS never hit it, because `capacitor://` fails a scheme
+check and `https://localhost` passes one.
+
+**Selling anything.** Google requires Play Billing for digital goods sold in an
+app, as Apple requires in-app purchase, and neither is built — see "What is not
+built" in [payments.md](payments.md). `--app` preserves `token.js` as it is,
+and payments.md tells you to turn billing on with a line in exactly that file,
+so the local setup for testing a checkout is also an app bundle with a
+Subscribe button that opens Stripe in the webview. Nothing about that build
+fails; it fails at review. The build now warns when the bundle carries a web
+checkout, and notes the honest alternative: billing live, gates closed, and
+subscribing happens on the website.
+
 ## 7. Things that behave differently inside the shell
 
 **Accounts are their own runbook.** Signing in, registering and every emailed
@@ -375,6 +428,11 @@ pieces of setup across two consoles. They are written out step by step in
   fine: every asset is already local, so the worker had nothing to do there.
   Android uses `https://localhost` and the worker runs normally.
 - **No `Referer`**, hence step 1.
+- **`https://localhost` is a real https origin**, and that is the trap. Any
+  check that asks "is this a live page?" by looking at the scheme answers yes
+  inside the Android app. It caught Share once - see 6c - and it is the first
+  thing to suspect when something works on iOS and on the web but not on
+  Android.
 - **`localStorage` and IndexedDB persist**, so saved folders, pins, photos and
   offline packs survive between launches — but iOS can evict them under storage
   pressure for a webview app. Anything the user would be upset to lose should be

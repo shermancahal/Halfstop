@@ -137,6 +137,7 @@ export function appPreflight(source = '') {
     maxzoom: Boolean(read('ABMAP_PROTOMAPS_MAXZOOM')),
     routing: Boolean(read('ABMAP_ROUTING_URL')),
   };
+  const billing = { store: read('ABMAP_BILLING_STORE'), live: read('ABMAP_BILLING_LIVE') === 'true' };
 
   const warnings = [];
   if (!has.supabaseUrl || !has.supabaseKey) {
@@ -153,7 +154,31 @@ export function appPreflight(source = '') {
       + '"Check a map archive" reports.');
   }
 
+  /*
+   * The one that is a store rejection rather than a bad build.
+   *
+   * `--app` preserves token.js as it is, and docs/payments.md tells you to
+   * turn billing on with a line in exactly that file. So the local setup for
+   * testing a checkout is also, unchanged, an app bundle with a Subscribe
+   * button that opens Stripe inside the webview - which is the thing both
+   * stores require their own billing for. Nothing about the build fails; it
+   * fails at review, after the work of getting there.
+   */
+  if (billing.store === 'stripe') {
+    warnings.push('ABMAP_BILLING_STORE is "stripe", so this bundle carries a web checkout. '
+      + 'Apple and Google both require their own billing for digital goods sold in an app, and '
+      + 'neither in-app purchase is built yet - see "What is not built" in docs/payments.md. '
+      + 'Clear it in assets/js/token.js for a store build.');
+  }
+
   const notes = [];
+  if (billing.live && billing.store !== 'stripe') {
+    // Not a warning: it is the honest state of a store build today, and worth
+    // reading once rather than discovering on a phone.
+    notes.push('Billing is live with no store this app can complete, so the paid features are '
+      + 'gated and there is no way to buy from inside the app. Subscribing happens on the '
+      + 'website until in-app purchase exists.');
+  }
   if (!has.routing) {
     notes.push('Road routing will use the FOSSGIS default. Fine for a test; see docs/routing.md '
       + 'before a store release.');
