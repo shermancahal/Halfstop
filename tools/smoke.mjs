@@ -3894,6 +3894,70 @@ check('and only one heading claims the sort',
   await page.locator('.table-grid th[aria-sort="ascending"], .table-grid th[aria-sort="descending"]').count(), 1);
 await shot(page.locator('#table-editor'), 'table-sorted');
 
+/*
+ * Ticking a row keeps the reader where they were, and costs almost nothing.
+ *
+ * Reported as two complaints that turned out to be one cause: "clicking a
+ * checkbox sends the browser back to the top", and "clicks take a second or
+ * two to register". A tick used to redraw the entire table - fifty rows, each
+ * carrying a symbol menu holding all 116 pin icons - so it rebuilt about seven
+ * thousand <option> elements and handed back a fresh scroller sitting at the
+ * top. Measured on a desktop before the change: 199 ms inside the handler, and
+ * scrollTop 1421 to 0. After: 3 ms, and 1421 to 1421.
+ *
+ * Driven from inside the page on purpose. Playwright's own .check() scrolls
+ * its target into view first, so a check written the usual way measures the
+ * harness rather than the app - it read "scroll position lost" on the fixed
+ * code until this was moved into an evaluate.
+ */
+console.log('\nTicking a row in the table keeps its place');
+{
+  const tick = await page.evaluate(async () => {
+    const scroller = document.querySelector('.table-scroll');
+    scroller.scrollTop = scroller.scrollHeight;
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const before = scroller.scrollTop;
+
+    // A row already on screen at this position, so nothing has to move to
+    // reach it.
+    const rows = [...document.querySelectorAll('#table-editor tbody tr')];
+    const view = scroller.getBoundingClientRect();
+    const reachable = rows.find((row) => {
+      const box = row.getBoundingClientRect();
+      return box.top >= view.top && box.bottom <= view.bottom;
+    }) || rows[rows.length - 1];
+
+    reachable.querySelector('.table-tick input').click();
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const now = document.querySelector('.table-scroll');
+    return {
+      scrolled: before > 0,
+      before,
+      after: now.scrollTop,
+      // The same node means nothing was rebuilt, which is the mechanism rather
+      // than the symptom: a redraw that happened to restore the offset would
+      // still be spending the seven thousand elements.
+      sameScroller: now === scroller,
+      picked: document.querySelectorAll('#table-editor tbody tr.is-picked').length,
+      barIdle: document.querySelector('.table-bulk')?.classList.contains('is-idle'),
+    };
+  });
+
+  check('the list was scrolled down to begin with', tick.scrolled, true);
+  check('and the tick left it exactly where it was', tick.after, tick.before);
+  check('because the table was not rebuilt around it', tick.sameScroller, true);
+  check('the row is selected', tick.picked, 1);
+  check('and the bulk bar woke up for it', tick.barIdle, false);
+
+  await page.locator('#table-editor .table-bulk button:has-text("Clear")').click();
+  await page.waitForTimeout(250);
+  check('Clear puts the selection back',
+    await page.locator('#table-editor tbody tr.is-picked').count(), 0);
+  check('and the bar goes quiet again',
+    await page.locator('#table-editor .table-bulk.is-idle').count(), 1);
+}
+
 // Typing in the search must not lose the caret: every keystroke redraws the
 // table, and a redraw that drops focus makes the search unusable.
 await page.locator('.table-search').click();

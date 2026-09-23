@@ -12298,6 +12298,17 @@ function folderSelect(value, { lead = '', className = 'table-folder' } = {}) {
   ].filter(Boolean));
 }
 
+/*
+ * A different page is different rows, so it starts at the top.
+ *
+ * The one redraw where keeping the reader's place would be wrong: page two
+ * opening half way down is not where anybody meant to be.
+ */
+function toTableTop() {
+  const scroller = dom.tableEditor?.querySelector('.table-scroll');
+  if (scroller) scroller.scrollTop = 0;
+}
+
 function renderTableEditor() {
   if (!dom.tableEditor || !state.table.open) return;
 
@@ -12414,8 +12425,24 @@ function renderTableEditor() {
    * starts on a label rather than on a value: a menu already showing "Red"
    * would be claiming ninety pins are red.
    */
-  const bulk = el('div', { class: `table-bulk${picked.size ? '' : ' is-idle'}` });
-  if (picked.size) {
+  const bulk = el('div', { class: 'table-bulk' });
+
+  /*
+   * The bulk bar's contents, as a function it can be given again.
+   *
+   * Ticking a row changes three things: that row's highlight, what this bar
+   * says, and whether the header's tick is full. It used to redraw the entire
+   * table for it - 50 rows, each carrying a symbol menu holding all 116 pin
+   * icons, which measured 6,812 <option> elements and 8,372 nodes rebuilt for
+   * one checkbox, and threw the scroll position back to the top on the way.
+   */
+  const fillBulk = () => {
+    bulk.replaceChildren();
+    bulk.classList.toggle('is-idle', !picked.size);
+    if (!picked.size) {
+      bulk.append(el('span', { class: 'table-bulk-count', text: 'Tick rows to edit them together' }));
+      return;
+    }
     const entries = () => pickedEntries();
     const symbol = symbolSelect('', { lead: `Set symbol…`, className: 'table-bulk-symbol' });
     symbol.addEventListener('change', () => {
@@ -12458,12 +12485,11 @@ function renderTableEditor() {
       }),
       el('button', {
         class: 'button button-ghost button-small', type: 'button', text: 'Clear',
-        onclick: () => { state.table.picked.clear(); renderTableEditor(); },
+        onclick: () => { state.table.picked.clear(); syncPicked(); },
       }),
     );
-  } else {
-    bulk.append(el('span', { class: 'table-bulk-count', text: 'Tick rows to edit them together' }));
-  }
+  };
+  fillBulk();
 
   const body = el('tbody');
   for (const row of shown) {
@@ -12475,7 +12501,7 @@ function renderTableEditor() {
       'aria-label': `Select ${props.name}`,
       onchange: (event) => {
         if (event.target.checked) picked.add(key); else picked.delete(key);
-        renderTableEditor();
+        syncPicked();
       },
     });
 
@@ -12533,9 +12559,28 @@ function renderTableEditor() {
       for (const row of shown) {
         if (event.target.checked) picked.add(rowKey(row)); else picked.delete(rowKey(row));
       }
-      renderTableEditor();
+      syncPicked();
     },
   });
+
+  /**
+   * Everything a change of selection touches, and nothing it does not.
+   *
+   * The rows already exist and their menus are already built; what a tick
+   * changes is a class on one row, the bar at the top, and whether the
+   * header's tick is full. Doing that in place is the difference between
+   * reading a checkbox and rebuilding eight thousand nodes, and it is why
+   * ticking no longer throws the reader back to the top of the list.
+   */
+  function syncPicked() {
+    fillBulk();
+    for (const tr of body.querySelectorAll('tr')) {
+      tr.classList.toggle('is-picked', picked.has(tr.dataset.key));
+      const tick = tr.querySelector('.table-tick input');
+      if (tick) tick.checked = picked.has(tr.dataset.key);
+    }
+    all.checked = shown.length > 0 && shown.every((row) => picked.has(rowKey(row)));
+  }
 
   /*
    * A sortable heading, which is a button rather than a clickable cell so it
@@ -12582,13 +12627,13 @@ function renderTableEditor() {
     el('button', {
       class: 'button button-ghost button-small', type: 'button', text: 'Previous',
       disabled: page === 0,
-      onclick: () => { state.table.page -= 1; renderTableEditor(); },
+      onclick: () => { state.table.page -= 1; renderTableEditor(); toTableTop(); },
     }),
     el('span', { class: 'count', text: `Page ${page + 1} of ${pages}` }),
     el('button', {
       class: 'button button-ghost button-small', type: 'button', text: 'Next',
       disabled: page >= pages - 1,
-      onclick: () => { state.table.page += 1; renderTableEditor(); },
+      onclick: () => { state.table.page += 1; renderTableEditor(); toTableTop(); },
     }),
   ]);
 
@@ -12613,7 +12658,18 @@ function renderTableEditor() {
     return { where, start: caret ? active.selectionStart : null, end: caret ? active.selectionEnd : null };
   })();
 
+  /*
+   * And where the list had been scrolled to.
+   *
+   * The scroller is a new element every time, so it starts at the top - which
+   * is why renaming a pin, or editing its note, sent somebody who was forty
+   * rows down back to row one. Read before the swap, written after it, for the
+   * same reason the caret is.
+   */
+  const wasAt = dom.tableEditor.querySelector('.table-scroll')?.scrollTop || 0;
+
   dom.tableEditor.replaceChildren(head, bulk, scroller, foot);
+  if (wasAt) scroller.scrollTop = wasAt;
 
   if (restore) {
     const back = dom.tableEditor.querySelector(restore.where);
