@@ -261,6 +261,29 @@ export function withSupportedProguard(appBuildGradle) {
   return { text: fixed, changed: fixed !== text };
 }
 
+/**
+ * The Gradle project's name, so Android Studio says Halfstop rather than
+ * "android".
+ *
+ * Capacitor's settings.gradle names no root project, so Gradle takes the
+ * folder's name - and the folder has to be called `android`, because that is
+ * where Capacitor looks. The name people see on the phone is a different
+ * thing, `app_name`, which `cap add` already writes from capacitor.config.json;
+ * this is only what the IDE calls the project in its window and its Project
+ * pane. The module stays `app` for the same reason the folder stays `android`.
+ *
+ * Replaces an existing name rather than adding a second one, so a project
+ * somebody renamed by hand ends up with the same name as everybody else's.
+ */
+export function withProjectName(settingsGradle, name) {
+  const text = String(settingsGradle || '');
+  if (!name) return { text, changed: false };
+  const line = `rootProject.name = '${String(name).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+  const existing = /^\s*rootProject\.name\s*=.*$/m;
+  const fixed = existing.test(text) ? text.replace(existing, line) : `${line}\n${text}`;
+  return { text: fixed, changed: fixed !== text };
+}
+
 /** Whether `npx cap` will find anything. Local install only, on purpose. */
 function capacitorInstalled() {
   return existsSync(path.join(ROOT, 'node_modules', '@capacitor', 'cli'));
@@ -326,6 +349,13 @@ function main() {
     // error names a proguard file rather than the upgrade that caused it.
     const drift = agpDrift(readFileSync(path.join(ROOT, 'android', 'build.gradle'), 'utf8'));
     if (drift) console.warn(`\n  WARNING: ${drift}`);
+
+    const settingsPath = path.join(ROOT, 'android', 'settings.gradle');
+    const named = withProjectName(readFileSync(settingsPath, 'utf8'), capacitorConfig().appName);
+    if (named.changed) {
+      writeFileSync(settingsPath, named.text);
+      console.log(`\n>> settings.gradle: the project is called ${capacitorConfig().appName} in Android Studio now`);
+    }
 
     const appGradlePath = path.join(ROOT, 'android', 'app', 'build.gradle');
     const proguard = withSupportedProguard(readFileSync(appGradlePath, 'utf8'));

@@ -5,7 +5,7 @@ import { chooseToken, appTokenFile, webTokenFile, appPreflight } from '../tools/
 import {
   preflight as appMachinePreflight, withAndroidPermissions, ANDROID_PERMISSIONS,
   CAPACITOR_INSTALL, afterOpening, agpMajor, agpDrift, AGP_SUPPORTED_MAJOR,
-  withSupportedProguard, withDeepLink, APP_PLUGINS,
+  withSupportedProguard, withDeepLink, APP_PLUGINS, withProjectName,
 } from '../tools/app.mjs';
 import { APP_SCHEME } from '../assets/js/lib/native-shell.js';
 
@@ -551,4 +551,47 @@ test('app tool: the docs carry the install line the tool asks for, whole', async
   const { readFile } = await import('node:fs/promises');
   const docs = await readFile(new URL('../docs/mobile-app.md', import.meta.url), 'utf8');
   assert.ok(docs.includes(CAPACITOR_INSTALL), 'docs/mobile-app.md does not give the current install line');
+});
+
+/* ------------------------------------------------ the project's own name */
+
+/* What `cap add android` wrote to settings.gradle, as of Capacitor 8.5.2. */
+const GENERATED_SETTINGS = `include ':app'
+include ':capacitor-cordova-android-plugins'
+project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
+
+apply from: 'capacitor.settings.gradle'`;
+
+test('android: Android Studio calls the project Halfstop, not the folder it is in', () => {
+  const { text, changed } = withProjectName(GENERATED_SETTINGS, 'Halfstop');
+  assert.equal(changed, true);
+  assert.equal(text, `rootProject.name = 'Halfstop'\n${GENERATED_SETTINGS}`);
+  // Everything Capacitor wrote is still there, untouched: the module and
+  // the plugin wiring are how the build finds anything at all.
+  assert.ok(text.endsWith(GENERATED_SETTINGS));
+});
+
+test('android: naming it again changes nothing, and a hand-made name is replaced, not doubled', () => {
+  const once = withProjectName(GENERATED_SETTINGS, 'Halfstop').text;
+  assert.deepEqual(withProjectName(once, 'Halfstop'), { text: once, changed: false });
+
+  const renamed = `rootProject.name = "android"\n${GENERATED_SETTINGS}`;
+  const fixed = withProjectName(renamed, 'Halfstop').text;
+  assert.equal(fixed.match(/rootProject\.name/g).length, 1);
+  assert.match(fixed, /^rootProject\.name = 'Halfstop'$/m);
+});
+
+test('android: a name with a quote in it is still one Groovy string', () => {
+  assert.match(withProjectName('', "Sherman's Map").text, /^rootProject\.name = 'Sherman\\'s Map'$/m);
+  assert.equal(withProjectName(GENERATED_SETTINGS, '').changed, false);
+});
+
+test('app: the project is named from capacitor.config.json, as the phone\'s label is', async () => {
+  // cap add writes appName into app_name; this uses the same value, so the
+  // IDE and the home screen cannot disagree.
+  const { readFile } = await import('node:fs/promises');
+  const config = JSON.parse(await readFile(new URL('../capacitor.config.json', import.meta.url), 'utf8'));
+  assert.equal(config.appName, 'Halfstop');
+  const source = await readFile(new URL('../tools/app.mjs', import.meta.url), 'utf8');
+  assert.match(source, /withProjectName\(.*capacitorConfig\(\)\.appName\)/);
 });

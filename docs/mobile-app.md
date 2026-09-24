@@ -465,6 +465,15 @@ email and the return from Google come back into the app rather than into
 Chrome. It prints `>> AndroidManifest.xml now opens com.halfstop.app:// links`
 the first time. See [app-auth.md](app-auth.md).
 
+**And the project's name.** Android Studio calls a Gradle project after its
+folder, which has to be `android` because that is where Capacitor looks. Each
+run writes `rootProject.name = 'Halfstop'` into `android/settings.gradle`
+instead, so the window and the Project pane say Halfstop after the next Gradle
+sync (reopen the project if the title bar lags behind). The name on the phone's
+home screen was already Halfstop - `cap add` takes it from `appName` in
+`capacitor.config.json`. Do not rename the `android` folder or the `app`
+module to get the same effect; Capacitor finds the project by those names.
+
 **The location permissions are added for you.** `npm run app:android`
 declares them in `android/app/src/main/AndroidManifest.xml` on every run -
 every run rather than only when the project is created, so an `android/` made
