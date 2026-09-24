@@ -413,12 +413,19 @@ opened:
 1. **Build → Generate Signed App Bundle or APK…** → **Android App Bundle** →
    Next.
 2. Module `app`. Under *Key store path*, **Create new…**:
-   - Path: somewhere **outside the clone**, such as
-     `~/Keys/halfstop-upload.jks`. Not in `android/`: that folder is
-     gitignored and regenerated, and `rm -rf android` is a step these docs
-     give for fixing Gradle trouble - it would take the key with it.
-   - A password for the store and one for the key (they can be the same),
-     alias `upload`, validity 25 years, and your name and Halfstop, LLC for
+   - Path: somewhere **outside the clone**, in a folder that already
+     exists. Not in `android/`: that folder is gitignored and regenerated,
+     and `rm -rf android` is a step these docs give for fixing Gradle
+     trouble - it would take the key with it. Make the folder first
+     (`mkdir -p ~/Keys` in a terminal), then pick it with the folder button
+     at the end of the path box and type `halfstop-upload.jks` as the name.
+     **Do not type `~` into the box**: Android Studio does not expand it, and
+     the dialog answers only *Failed to create keystore*, which is how the
+     first attempt here ended.
+   - One password, used for both the store and the key, at least six
+     characters. The file is a PKCS12 key store, which has only one password
+     in practice - a different key password is ignored, or refused.
+   - Alias `upload`, validity 25 years, and your name and Halfstop, LLC for
      the certificate.
    - Save both passwords in your password manager, and back the `.jks` file
      up somewhere that is not this repository. It is a secret, like Apple's
