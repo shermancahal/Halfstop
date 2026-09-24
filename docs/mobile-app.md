@@ -461,9 +461,16 @@ if offered. Capacitor 8 generates AGP 8.13 and is built against it; the upgrade
 moves the project to AGP 9, adds seven `android.*=false` compatibility options
 to `gradle.properties`, and then fails the build on the `proguard-android.txt`
 line in Capacitor's own template - an error that names a proguard file and
-nothing about the upgrade that caused it. If it has already happened:
-`rm -rf android` and `npm run app:android` again. The build now warns on any
-later run when `android/` has been moved past AGP 8.
+nothing about the upgrade that caused it.
+
+Declining did not hold on the first real build - it came back on AGP 9 anyway.
+So `npm run app:android` now rewrites that one line to
+`proguard-android-optimize.txt`, which both plugin versions accept, and prints
+`>> app/build.gradle: proguard-android.txt -> proguard-android-optimize.txt`
+when it does. It changes nothing about the app: the template sets
+`minifyEnabled false`, so neither file is ever read. The build also warns when
+`android/` is on a plugin past AGP 8, because that is the first suspect if
+something else Gradle-shaped breaks.
 
 **What to test first, in this order.** Locate (the runtime prompt should
 appear once), a basemap that is not the default (proves the app token works,

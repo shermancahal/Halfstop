@@ -5,6 +5,7 @@ import { chooseToken, appTokenFile, webTokenFile, appPreflight } from '../tools/
 import {
   preflight as appMachinePreflight, withAndroidPermissions, ANDROID_PERMISSIONS,
   CAPACITOR_INSTALL, afterOpening, agpMajor, agpDrift, AGP_SUPPORTED_MAJOR,
+  withSupportedProguard,
 } from '../tools/app.mjs';
 
 const FILE = `
@@ -424,5 +425,53 @@ test('android: a project moved past the supported plugin says so, and how to und
 test('android: a missing build file is no answer rather than a wrong one', () => {
   assert.equal(agpDrift(undefined), null);
   assert.equal(agpDrift('not gradle at all'), null);
+});
+
+/* --------------------------------------------------- the proguard line */
+
+// The release block Capacitor 8.5.2 writes into app/build.gradle, verbatim.
+const TEMPLATE_RELEASE = `    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }`;
+
+/*
+ * The line AGP 9 refuses. Declining Android Studio's upgrade was the first
+ * answer and it did not hold: the first real build came back from a fresh
+ * project still on AGP 9, failing on exactly this. So the tool rewrites it to
+ * the name both plugins accept - inert, because minifyEnabled is false.
+ */
+test('android: the template proguard line is rewritten to one AGP 9 accepts', () => {
+  const { text, changed } = withSupportedProguard(TEMPLATE_RELEASE);
+  assert.equal(changed, true);
+  assert.match(text, /getDefaultProguardFile\('proguard-android-optimize\.txt'\)/);
+  assert.doesNotMatch(text, /'proguard-android\.txt'/);
+});
+
+test('android: nothing else in the file is touched', () => {
+  /*
+   * Compared whole, not by spot checks. Checking that proguard-rules.pro and
+   * minifyEnabled survived passed a version that also slipped an extra
+   * argument into the line - both strings were still there. The only
+   * acceptable difference is the one file name.
+   */
+  const { text } = withSupportedProguard(TEMPLATE_RELEASE);
+  assert.equal(text, TEMPLATE_RELEASE.replace("'proguard-android.txt'", "'proguard-android-optimize.txt'"));
+});
+
+test('android: double quotes are rewritten too', () => {
+  // Groovy takes either, and a hand edit or a later template may use these.
+  const { text, changed } = withSupportedProguard('getDefaultProguardFile("proguard-android.txt")');
+  assert.equal(changed, true);
+  assert.equal(text, 'getDefaultProguardFile("proguard-android-optimize.txt")');
+});
+
+test('android: a file already fixed is left exactly as it is', () => {
+  const once = withSupportedProguard(TEMPLATE_RELEASE).text;
+  const twice = withSupportedProguard(once);
+  assert.equal(twice.changed, false);
+  assert.equal(twice.text, once);
 });
 

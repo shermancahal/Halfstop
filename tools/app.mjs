@@ -166,10 +166,31 @@ export function agpMajor(buildGradle) {
 export function agpDrift(buildGradle) {
   const major = agpMajor(buildGradle);
   if (major === null || major <= AGP_SUPPORTED_MAJOR) return null;
-  return `android/ has been moved to Android Gradle Plugin ${major} - Android Studio's upgrade, not `
-    + `Capacitor's. Capacitor 8 is built against AGP ${AGP_SUPPORTED_MAJOR}, and AGP ${major} refuses `
-    + 'the proguard line its template writes. Undo it: rm -rf android, run this again, and dismiss '
-    + 'Android Studio\'s "Upgrade Android Gradle Plugin" notification when it appears.';
+  return `android/ is on Android Gradle Plugin ${major} - Android Studio's upgrade, not Capacitor's. `
+    + `Capacitor 8 is built against AGP ${AGP_SUPPORTED_MAJOR}. The one line known to break is fixed below; `
+    + 'if the build still fails on something that names Gradle rather than Halfstop, this is the first '
+    + 'suspect: rm -rf android, run this again, and dismiss the "Upgrade Android Gradle Plugin" notification.';
+}
+
+/**
+ * The proguard line in Capacitor's template, in the form both plugins accept.
+ *
+ * `cap add android` writes `getDefaultProguardFile('proguard-android.txt')`.
+ * AGP 8 accepts it; AGP 9 refuses it outright, because that file carries
+ * `-dontoptimize`. Declining Android Studio's upgrade to AGP 9 was the first
+ * answer, and it did not hold - the first real build came back from a fresh
+ * project still on AGP 9, still failing on this line.
+ *
+ * So the line is rewritten to `proguard-android-optimize.txt`, which both
+ * accept. It changes nothing about the app: the template sets
+ * `minifyEnabled false`, so neither file is ever read. The plugin only
+ * refuses to parse the old name, used or not.
+ */
+export function withSupportedProguard(appBuildGradle) {
+  const text = String(appBuildGradle || '');
+  const fixed = text.replace(/getDefaultProguardFile\((['"])proguard-android\.txt\1\)/g,
+    (_, quote) => `getDefaultProguardFile(${quote}proguard-android-optimize.txt${quote})`);
+  return { text: fixed, changed: fixed !== text };
 }
 
 /** Whether `npx cap` will find anything. Local install only, on purpose. */
@@ -225,6 +246,13 @@ function main() {
     // error names a proguard file rather than the upgrade that caused it.
     const drift = agpDrift(readFileSync(path.join(ROOT, 'android', 'build.gradle'), 'utf8'));
     if (drift) console.warn(`\n  WARNING: ${drift}`);
+
+    const appGradlePath = path.join(ROOT, 'android', 'app', 'build.gradle');
+    const proguard = withSupportedProguard(readFileSync(appGradlePath, 'utf8'));
+    if (proguard.changed) {
+      writeFileSync(appGradlePath, proguard.text);
+      console.log('\n>> app/build.gradle: proguard-android.txt -> proguard-android-optimize.txt (AGP 9 refuses the old name)');
+    }
 
     const manifestPath = path.join(ROOT, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
     const { manifest, added } = withAndroidPermissions(readFileSync(manifestPath, 'utf8'));
