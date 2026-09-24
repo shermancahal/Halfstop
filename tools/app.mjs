@@ -31,6 +31,19 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PLATFORMS = ['ios', 'android'];
 
 /**
+ * How to install Capacitor without making it a dependency of this repository.
+ *
+ * `--no-save` rather than `--save-dev`, and the difference is not cosmetic.
+ * The header above says Capacitor is deliberately not a dependency, and every
+ * instruction used to say `--save-dev` - which writes it into package.json and
+ * package-lock.json, both tracked. On the first real run on a Mac that left
+ * two modified files in the clone, and the next `git pull` touching either
+ * would have refused to run. `--no-save` puts it in node_modules and nowhere
+ * else, which is all `npx cap` needs.
+ */
+export const CAPACITOR_INSTALL = 'npm install --no-save @capacitor/cli @capacitor/core @capacitor/ios @capacitor/android';
+
+/**
  * What stands between this machine and a build, before anything is spent.
  *
  * Pure over its inputs so the tests can ask it about a machine that does not
@@ -58,7 +71,7 @@ export function preflight({ platform, os = process.platform, hasCapacitor, hasPl
   if (!hasCapacitor) {
     problems.push({
       what: 'Capacitor is not installed here.',
-      fix: 'npm install --save-dev @capacitor/cli @capacitor/core @capacitor/ios @capacitor/android',
+      fix: CAPACITOR_INSTALL,
     });
   }
 
@@ -99,6 +112,29 @@ export function withAndroidPermissions(manifest, wanted = ANDROID_PERMISSIONS) {
 
   const lines = missing.map((name) => `    <uses-permission android:name="${name}" />`).join('\n');
   return { manifest: `${manifest.slice(0, at)}${lines}\n${manifest.slice(at)}`, added: missing };
+}
+
+/**
+ * What to do once the IDE is open, for the IDE that actually opened.
+ *
+ * This used to print one pair of lines for both, and they were Xcode's: "pick
+ * your team under Signing", and a pointer to section 6a, which is the first
+ * run on an iPhone. The first real Android run ended on exactly those lines.
+ * Android Studio has no team to pick for a debug build, and 6a is the wrong
+ * checklist - so the lines are chosen, not shared.
+ */
+export function afterOpening(platform) {
+  if (platform === 'android') {
+    return [
+      '\nIn Android Studio: let the first Gradle sync finish (it is slow once), plug the phone in',
+      'with USB debugging on, pick it in the device menu, and press Run. No signing needed to test.',
+      'Checklist for the first run on a real phone: docs/mobile-app.md section 6c.',
+    ];
+  }
+  return [
+    '\nIn Xcode: pick your device, pick your team under Signing, press Run.',
+    'Checklist for the first run on a real phone: docs/mobile-app.md section 6a.',
+  ];
 }
 
 /** Whether `npx cap` will find anything. Local install only, on purpose. */
@@ -163,8 +199,7 @@ function main() {
   // 4. The IDE.
   run(`Open ${platform === 'ios' ? 'Xcode' : 'Android Studio'}`, 'npx', ['cap', 'open', platform]);
 
-  console.log('\nIn the IDE: pick your device, pick your team under Signing, press Run.');
-  console.log('Checklist for the first run on a real phone: docs/mobile-app.md section 6a.');
+  for (const line of afterOpening(platform)) console.log(line);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) main();

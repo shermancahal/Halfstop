@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { chooseToken, appTokenFile, webTokenFile, appPreflight } from '../tools/build-dist.mjs';
 import {
   preflight as appMachinePreflight, withAndroidPermissions, ANDROID_PERMISSIONS,
+  CAPACITOR_INSTALL, afterOpening,
 } from '../tools/app.mjs';
 
 const FILE = `
@@ -197,7 +198,8 @@ test('app: android does not need a Mac', () => {
 test('app: a missing Capacitor names the install command', () => {
   const problems = appMachinePreflight({ platform: 'ios', os: 'darwin', hasCapacitor: false });
   assert.equal(problems.length, 1);
-  assert.match(problems[0].fix, /npm install --save-dev @capacitor\/cli/);
+  // --no-save: the repository keeps Capacitor out of package.json on purpose.
+  assert.match(problems[0].fix, /npm install --no-save @capacitor\/cli/);
 });
 
 test('app: an unknown platform is refused by name', () => {
@@ -323,5 +325,53 @@ test('android: one already declared by hand is not declared twice', () => {
 
 test('android: a file that is not a manifest is refused, not guessed at', () => {
   assert.throws(() => withAndroidPermissions('<resources></resources>'), /no <\/manifest>/);
+});
+
+/* ------------------------------------------- installing, and after opening */
+
+/*
+ * The repository says Capacitor is deliberately not a dependency, and every
+ * install instruction used to say --save-dev - which writes it into two
+ * tracked files. The first real run on a Mac left both modified, and the next
+ * `git pull` touching either would have refused.
+ */
+test('app tool: the install it recommends does not touch tracked files', () => {
+  assert.match(CAPACITOR_INSTALL, /--no-save/);
+  assert.doesNotMatch(CAPACITOR_INSTALL, /--save-dev|--save\b|-D\b/);
+  for (const name of ['@capacitor/cli', '@capacitor/core', '@capacitor/ios', '@capacitor/android']) {
+    assert.ok(CAPACITOR_INSTALL.includes(name), `the install line leaves out ${name}`);
+  }
+});
+
+test('app tool: a machine without Capacitor is told that line, not another', () => {
+  const problems = appMachinePreflight({ platform: 'android', os: 'darwin', hasCapacitor: false });
+  assert.ok(problems.some((problem) => problem.fix === CAPACITOR_INSTALL),
+    'the preflight recommends a different install from the one the tool stands behind');
+});
+
+test('app tool: the docs agree with the tool about how to install', async () => {
+  // Four places in the docs said --save-dev. A doc that disagrees with the
+  // tool is the one somebody copies from.
+  const { readFile } = await import('node:fs/promises');
+  const docs = await readFile(new URL('../docs/mobile-app.md', import.meta.url), 'utf8');
+  assert.doesNotMatch(docs, /npm install --save-dev @capacitor/,
+    'docs/mobile-app.md still installs Capacitor into package.json');
+});
+
+/*
+ * The first Android run ended on Xcode's instructions: "pick your team under
+ * Signing", and a pointer to the iPhone checklist. Android Studio has no team
+ * to pick for a debug build.
+ */
+test('app tool: Android is told what Android Studio wants', () => {
+  const lines = afterOpening('android').join('\n');
+  assert.match(lines, /section 6c/);
+  assert.doesNotMatch(lines, /team|Signing|6a/, 'Android was given the Xcode instructions');
+});
+
+test('app tool: iOS keeps its own', () => {
+  const lines = afterOpening('ios').join('\n');
+  assert.match(lines, /Signing/);
+  assert.match(lines, /section 6a/);
 });
 

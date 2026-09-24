@@ -76,9 +76,24 @@ installed and that is worth keeping; these are only needed on a machine that
 builds the native app.
 
 ```sh
-npm install --save-dev @capacitor/cli @capacitor/core @capacitor/assets
-npm install --save-dev @capacitor/ios @capacitor/android
+npm install --no-save @capacitor/cli @capacitor/core @capacitor/assets
+npm install --no-save @capacitor/ios @capacitor/android
 ```
+
+`--no-save` puts them in `node_modules` and nowhere else. `--save-dev`, which
+these lines used to say, writes them into `package.json` and
+`package-lock.json` - both tracked, so a clone that followed the old
+instruction has two modified files and a `git pull` that refuses the moment
+either changes upstream. If that is your clone:
+
+```sh
+git checkout -- package.json package-lock.json
+```
+
+That puts both files back and leaves `node_modules` alone, so the build still
+works. One thing `--no-save` does cost: a later plain `npm install` removes
+them again. The build notices before it spends anything, and prints the line to
+run.
 
 You also need, per platform:
 
@@ -217,7 +232,7 @@ to look at once it is running.
 ### On the Mac
 
 ```sh
-npm install --save-dev @capacitor/cli @capacitor/core @capacitor/ios
+npm install --no-save @capacitor/cli @capacitor/core @capacitor/ios
 npm run app:ios
 ```
 
@@ -377,7 +392,7 @@ Settings → System → Developer options → USB debugging).
 ```sh
 cd ~/path/to/Halfstop          # the clone, not your home directory
 git pull
-npm install --save-dev @capacitor/cli @capacitor/core @capacitor/ios @capacitor/android
+npm install --no-save @capacitor/cli @capacitor/core @capacitor/ios @capacitor/android
 npm run app:android
 ```
 
@@ -394,6 +409,21 @@ will and will not have, and the two lines worth stopping for are below.
 Then in Android Studio: pick the device in the toolbar, press Run. The first
 build downloads a Gradle distribution and takes a while; after that it is
 seconds.
+
+**If Gradle says "SDK location not found".** The SDK lives at
+`~/Library/Android/sdk` on a Mac unless you moved it (Android Studio →
+Settings → Languages & Frameworks → Android SDK shows the real path). Tell the
+project where it is, from inside the clone, then File → Sync Project with
+Gradle Files:
+
+```sh
+echo "sdk.dir=$HOME/Library/Android/sdk" > android/local.properties
+```
+
+`android/` is gitignored, so that file stays on your machine. If the folder
+does not exist at all, the SDK was never downloaded: in that same settings
+page, tick the platform for API 36 - what the generated project targets - and
+apply.
 
 **The location permissions are added for you.** `npm run app:android`
 declares them in `android/app/src/main/AndroidManifest.xml` on every run -
