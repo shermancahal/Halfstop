@@ -302,14 +302,15 @@ create table if not exists public.entitlements (
   tier        text not null default 'premium',
 
   -- Where it came from, so a subscription that lapses is distinguishable from
-  -- something given by hand and never meant to end. 'appstore' and 'stripe'
-  -- are the two that can sell: the App Store only inside a shipped app, and
-  -- Stripe for anybody using Halfstop in a browser, who otherwise has no way
-  -- to pay at all.
+  -- something given by hand and never meant to end. 'appstore', 'play' and
+  -- 'stripe' are the ones that sell: the App Store and Google Play only
+  -- inside the apps, and Stripe for anybody using Halfstop in a browser, who
+  -- otherwise has no way to pay at all.
   source      text not null default 'granted',
 
   -- Whose subscription this is, in the provider's own words: a Stripe
-  -- subscription id, or an App Store original transaction id. Kept so a later
+  -- subscription id, a Google Play purchase token, or an App Store original
+  -- transaction id. Kept so a later
   -- event can be matched to the row it belongs to, and so a row can be audited
   -- against the provider without guessing. Null for a grant made by hand.
   external_ref text,
@@ -340,7 +341,7 @@ alter table public.entitlements add constraint entitlements_tier_check
   check (tier in ('free', 'premium'));
 alter table public.entitlements drop constraint if exists entitlements_source_check;
 alter table public.entitlements add constraint entitlements_source_check
-  check (source in ('granted', 'appstore', 'stripe', 'comp', 'trial'));
+  check (source in ('granted', 'appstore', 'play', 'stripe', 'comp', 'trial'));
 alter table public.entitlements add column if not exists external_ref text;
 -- Added after the table shipped; see the column comment above.
 alter table public.entitlements add column if not exists renews boolean not null default true;

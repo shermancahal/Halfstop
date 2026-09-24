@@ -45,6 +45,7 @@
  */
 
 import { BILLING } from '../config.js';
+import { appShell } from './native-shell.js';
 
 /**
  * The things a plan could be about.
@@ -157,7 +158,7 @@ export const TRIAL_DAYS = 30;
  * which is visible and harmless, while the other way round means a free
  * account that is silently never shown a way to pay.
  */
-const SETTLED = new Set(['granted', 'stripe', 'appstore', 'comp']);
+const SETTLED = new Set(['granted', 'stripe', 'appstore', 'play', 'comp']);
 
 /**
  * The tier a reader is on.
@@ -191,7 +192,7 @@ export function tierFor(account = null, { billing = BILLING } = {}) {
 }
 
 /** Sources that bill again when the period ends, rather than simply running out. */
-const RENEWING = new Set(['stripe', 'appstore']);
+const RENEWING = new Set(['stripe', 'appstore', 'play']);
 
 /**
  * The date on the plan, and what that date means.
@@ -353,12 +354,13 @@ export function offersUpgrade(summary) {
 /**
  * How somebody would get Premium, if they could.
  *
- * Three answers and they are genuinely different, so the interface should not
- * have to guess from a boolean: nothing is for sale, it is sold through the
- * App Store, or this build does not know. Returned as a shape rather than a
+ * The answers are genuinely different, so the interface should not have to
+ * guess from a boolean: nothing is for sale; it is sold here, by Stripe in a
+ * browser or by Google Play in the Android app; it is sold only in the App
+ * Store; or this build does not know. Returned as a shape rather than a
  * sentence so the panel can decide what to draw.
  */
-export function purchaseRoute({ billing = BILLING, preview = false } = {}) {
+export function purchaseRoute({ billing = BILLING, preview = false, shell = appShell() } = {}) {
   /*
    * `preview` is how the people who run this reach a checkout before billing
    * is live, to test one with a card that is not a card.
@@ -370,6 +372,26 @@ export function purchaseRoute({ billing = BILLING, preview = false } = {}) {
    * ever draws the button.
    */
   if (!billing.live && !preview) return { available: false, why: 'not-live' };
+
+  /*
+   * Inside the app, where it is running decides, and the build flag does not.
+   *
+   * Both stores require their own billing for a digital subscription sold in
+   * an app, and `store` is the website's setting - a local token.js set to
+   * 'stripe' for testing a checkout was, unchanged, an app bundle offering a
+   * card form inside the web view. Asking the platform removes that trap
+   * rather than warning about it.
+   *
+   * Android sells through Google Play. The iPhone app sells nothing yet:
+   * StoreKit is not built, and "subscribe on the website" is the one sentence
+   * Apple does not allow an app to say, so it says there is no way to
+   * subscribe here - which is true.
+   */
+  if (shell.native) {
+    if (shell.platform !== 'android') return { available: false, why: 'no-store' };
+    return billing.live ? { available: true, where: 'play' } : { available: true, where: 'play', preview: true };
+  }
+
   // Stripe is the only route a browser can complete, so it is the one a
   // preview means. There is nothing to test about sending somebody to Apple.
   if (!billing.live && preview) return { available: true, where: 'stripe', preview: true };
@@ -508,7 +530,7 @@ export function planSummary(account = null, { billing = BILLING } = {}) {
      */
     name: plan?.source === 'trial' ? 'Trial' : tier.name,
     note: tier.note,
-    /* Where the entitlement came from: 'trial', 'granted', 'appstore', 'none'. */
+    /* Where the entitlement came from: 'trial', 'granted', 'stripe', 'play', 'appstore', 'none'. */
     source: plan?.source || 'none',
     until: plan?.until || null,
     /*

@@ -26,6 +26,8 @@
 import { el } from './ui.js';
 import { mayEdit } from './editors.js';
 import { managePlanBlock } from './manage-plan.js';
+import { appShell } from './native-shell.js';
+import { PLAY_PLUGIN, buyOnPlay, playOffer, playOffers, playPriceLabel, playSaving } from './play-billing.js';
 import { BILLING } from '../config.js';
 import {
   offersUpgrade, purchaseRoute, annualSaving, plansOffered, describePrice,
@@ -70,8 +72,10 @@ async function startSubscription(account, toast, button = null, plan = 'month') 
     return false;
   }
 
+  if (route.where === 'play') return startPlaySubscription(account, toast, button, plan);
+
   if (route.where !== 'stripe') {
-    // Only reachable if a third route is added and this is not taught about
+    // Only reachable if another route is added and this is not taught about
     // it. Said out loud rather than falling through to a silent return.
     toast('This build does not know how to open that checkout.', { tone: 'error', timeout: 9000 });
     return false;
@@ -100,6 +104,61 @@ async function startSubscription(account, toast, button = null, plan = 'month') 
   // this app, which is the whole reason for sending people there.
   window.location.assign(result.url);
   return true;
+}
+
+/**
+ * The same, through Google Play, in the Android app.
+ *
+ * Google draws the purchase sheet and takes the payment; the server asks
+ * Google what was bought before anything is recorded. See ./play-billing.js.
+ * Closing the sheet is somebody changing their mind, and gets no message.
+ */
+async function startPlaySubscription(account, toast, button, plan) {
+  const said = button?.textContent || 'Subscribe';
+  if (button) { button.disabled = true; button.textContent = 'Opening Google Play…'; }
+  const result = await buyOnPlay({ account, planId: plan, plugin: appShell().plugin(PLAY_PLUGIN) });
+  if (button?.isConnected) { button.disabled = false; button.textContent = said; }
+
+  if (result.cancelled) return false;
+  if (!result.ok) {
+    toast(result.reason, { tone: result.pending ? 'info' : 'error', timeout: 12000 });
+    return false;
+  }
+  toast('Premium is active on this account.', { tone: 'ok', timeout: 8000 });
+  return true;
+}
+
+/**
+ * Put Google Play's prices on the buttons, once it says what they are.
+ *
+ * The buttons are drawn at once with the prices in config, so the panel is
+ * never empty while Play is asked; then relabelled with Play's own figure for
+ * this country, which is the one on the sheet somebody agrees to. If Play
+ * does not answer, the buttons keep the list price and the sheet still shows
+ * the real one before anybody pays.
+ */
+async function showPlayPrices(buttons, saving) {
+  const plugin = appShell().plugin(PLAY_PLUGIN);
+  if (!plugin?.getProducts) return;
+  let offers;
+  try {
+    offers = await playOffers(plugin);
+  } catch {
+    return;
+  }
+  const found = {};
+  for (const button of buttons) {
+    const planId = button.dataset.plan;
+    if (!planId) continue;
+    found[planId] = playOffer(offers, { planId });
+    const label = playPriceLabel(found[planId], { planId });
+    if (label) button.textContent = label;
+  }
+  const saved = playSaving(found.month, found.year);
+  if (saving && saved) {
+    saving.textContent = `Paying by the year saves ${saved.money}, about ${saved.percent}%.`;
+    saving.hidden = false;
+  }
 }
 
 /**
@@ -217,6 +276,7 @@ export function upgradePlanBlock(plan, { account, toast }) {
      */
     class: `button button-small ${!offerTrial && plan.id === 'month' ? 'button-primary' : 'button-secondary'}`,
     type: 'button',
+    'data-plan': plan.id,
     text: describePrice({ plan: plan.id }),
     onclick: (event) => startSubscription(account, toast, event.currentTarget, plan.id),
   }));
@@ -229,6 +289,22 @@ export function upgradePlanBlock(plan, { account, toast }) {
       onclick: (event) => startTrial(account, toast, event.currentTarget),
     }));
   }
+
+  /*
+   * The saving, worked out from the prices on the buttons. In a browser those
+   * are ours, in dollars. Through Google Play they are Play's, in whatever
+   * currency it charges here, and not known until it answers - so the line
+   * waits for them rather than stating a dollar saving over euro prices.
+   */
+  const playing = route.where === 'play';
+  const savingLine = route.available && saving
+    ? el('p', {
+      class: 'hint', style: 'margin:8px 0 0',
+      text: playing ? '' : `Paying by the year saves ${saving.money}, about ${saving.percent}%.`,
+    })
+    : null;
+  if (savingLine && playing) savingLine.hidden = true;
+  if (playing) showPlayPrices(buttons, savingLine);
 
   return el('div', { class: 'plan-upgrade' }, [
     el('p', { class: 'plan-upgrade-head', text: heading }),
@@ -261,16 +337,24 @@ export function upgradePlanBlock(plan, { account, toast }) {
       : null,
     // Worked out from the two prices rather than written down, so it cannot
     // overstate the discount or go stale when one of them moves.
-    route.available && saving
-      ? el('p', { class: 'hint', style: 'margin:8px 0 0', text: `Paying by the year saves ${saving.money}, about ${saving.percent}%.` })
-      : null,
+    savingLine,
     // Said plainly, because a preview that looks like the real thing is how
     // somebody ends up wondering whether they were charged.
     route.preview
       ? el('p', {
         class: 'hint plan-preview', style: 'margin:8px 0 0',
-        text: 'Test mode. Billing is not live: this is here because you run '
-          + 'Halfstop, and no real card is charged.',
+        /*
+         * Not the same promise in both places. A Stripe preview runs against
+         * test keys, where no card is real. Google Play has no test keys:
+         * whether a card is charged depends on whether this Google account is
+         * a licence tester in Play Console, which nothing here can see - so
+         * it says where to check rather than promising.
+         */
+        text: playing
+          ? 'Test mode. Billing is not live: this is here because you run Halfstop. Google Play charges '
+            + 'nothing only for accounts listed as licence testers in Play Console.'
+          : 'Test mode. Billing is not live: this is here because you run '
+            + 'Halfstop, and no real card is charged.',
       })
       : null,
   ].filter(Boolean));

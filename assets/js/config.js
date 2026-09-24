@@ -272,14 +272,33 @@ export const BILLING = {
   currency: 'USD',
 
   /*
-   * Where a purchase would happen, when there is one.
+   * Where a purchase happens in a browser: 'stripe', or 'none'.
    *
-   * 'none' today, and it is not a placeholder: in-app purchase exists only
-   * inside a shipped native app, and there is not one. The plan panel reads
-   * this to decide whether to offer a way to buy or to say plainly that there
-   * is not one yet. 'appstore' when that changes.
+   * The website's setting only. Inside the apps the platform decides - Google
+   * Play on Android, nothing yet on an iPhone - because a store app may sell
+   * through nothing but its store, and this value arrives from a token.js that
+   * `--app` copies as it is. See purchaseRoute in ./lib/tiers.js.
    */
   store: readGlobal('ABMAP_BILLING_STORE') || 'none',
+
+  /*
+   * The subscription as Google Play knows it: one product, a base plan for
+   * each of the plans above.
+   *
+   * Not secrets, and not prices. Play holds the price for every country, and
+   * the purchase sheet it draws is what somebody actually agrees to, so the
+   * buttons are relabelled with Play's own figures once it answers. What
+   * matters here is that the names match Play Console exactly - they are
+   * permanent there, and a product id can never be reused once created.
+   *
+   * Only the Android app reads this. Which store a page sells through is
+   * decided by where it is running, not by `store` above: see purchaseRoute
+   * in ./lib/tiers.js.
+   */
+  play: {
+    product: 'premium',
+    plans: { month: 'monthly', year: 'yearly' },
+  },
 
   /*
    * Who sees the purchase panel before billing is live, so a checkout can be

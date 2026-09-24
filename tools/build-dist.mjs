@@ -155,29 +155,22 @@ export function appPreflight(source = '') {
   }
 
   /*
-   * The one that is a store rejection rather than a bad build.
+   * Where the app sells, said once.
    *
-   * `--app` preserves token.js as it is, and docs/payments.md tells you to
-   * turn billing on with a line in exactly that file. So the local setup for
-   * testing a checkout is also, unchanged, an app bundle with a Subscribe
-   * button that opens Stripe inside the webview - which is the thing both
-   * stores require their own billing for. Nothing about the build fails; it
-   * fails at review, after the work of getting there.
+   * This used to warn when ABMAP_BILLING_STORE was 'stripe': `--app` keeps
+   * token.js as it is, so the local setup for testing the website's checkout
+   * was, unchanged, an app bundle with a card form in it - a store rejection
+   * rather than a bad build. The app no longer reads that setting. Which store
+   * a page sells through is decided by where it is running (purchaseRoute in
+   * assets/js/lib/tiers.js): Google Play on Android, nothing yet on an iPhone.
+   * So the setting is harmless here, and what is worth saying is what the app
+   * will actually do.
    */
-  if (billing.store === 'stripe') {
-    warnings.push('ABMAP_BILLING_STORE is "stripe", so this bundle carries a web checkout. '
-      + 'Apple and Google both require their own billing for digital goods sold in an app, and '
-      + 'neither in-app purchase is built yet - see "What is not built" in docs/payments.md. '
-      + 'Clear it in assets/js/token.js for a store build.');
-  }
-
   const notes = [];
-  if (billing.live && billing.store !== 'stripe') {
-    // Not a warning: it is the honest state of a store build today, and worth
-    // reading once rather than discovering on a phone.
-    notes.push('Billing is live with no store this app can complete, so the paid features are '
-      + 'gated and there is no way to buy from inside the app. Subscribing happens on the '
-      + 'website until in-app purchase exists.');
+  if (billing.live) {
+    notes.push('Billing is live, so the paid features are gated. The Android app sells through Google '
+      + 'Play, which needs the product, the service account and the notifications set up first - see '
+      + '"Google Play" in docs/payments.md. The iPhone app has no way to buy yet.');
   }
   if (!has.routing) {
     notes.push('Road routing will use the FOSSGIS default. Fine for a test; see docs/routing.md '

@@ -160,7 +160,8 @@ export function readRequest(body, { caller = '' } = {}) {
  * Only the ones granted by hand. A Stripe row is a mirror of a subscription
  * that is still running: revoking it here takes access away while the customer
  * keeps paying, and granting over it would be overwritten by the next webhook
- * anyway. The same goes for the App Store, which nothing here can cancel.
+ * anyway. The same goes for the App Store and Google Play, which nothing here
+ * can cancel.
  */
 export function mayChange(source) {
   return !source || source === 'granted' || source === 'comp' || source === 'trial';
@@ -221,6 +222,7 @@ export function planRow(plan, { until = null, now = Date.now(), by = '' } = {}) 
 export function whyNot(source) {
   if (source === 'stripe') return 'That account subscribes through Stripe. Cancel it in Stripe, not here.';
   if (source === 'appstore') return 'That account subscribes through the App Store. Only Apple can end it.';
+  if (source === 'play') return 'That account subscribes through Google Play. Only Google can end it.';
   return `That entitlement came from ${source}, so it is not this tool's to change.`;
 }
 

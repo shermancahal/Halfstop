@@ -31,6 +31,92 @@ secrets for your Apple account.
 
 ---
 
+## Where this stands
+
+**Android: built.** The code half of section 1 is in, for both email links and
+Google:
+
+- `npm run app:android` writes the intent filter that opens
+  `com.halfstop.app://` links (Step B, Android half) - `withDeepLink` in
+  `tools/app.mjs`, run on every build.
+- `emailReturn()` answers `com.halfstop.app://account` inside the app
+  (Step C).
+- `assets/js/lib/native-shell.js` catches the link, both while the app is
+  running (`appUrlOpen`) and when the link started it (`getLaunchUrl`) - Step
+  D, done differently from the sketch below. Rather than a second
+  implementation of the fragment handling with `setSession`, the app
+  *navigates* to the page the website would have landed on, fragment and all:
+  `account.html#access_token=…`. supabase-js then reads it exactly as it does
+  on the website, and the recovery form, the "that link did not work" message
+  and the already-used check all come along for free. That is also why
+  `PASSWORD_RECOVERY` needs no special case.
+- Continue with Google opens in a Chrome Custom Tab through
+  `@capacitor/browser` and comes back the same way (Step E).
+
+Tested in `test/native-shell.test.mjs`; the device itself is the part that
+cannot be tested from here.
+
+**iOS: the same JavaScript, not yet the native half.** The URL type in
+`Info.plist` (Step B, iOS half) and Sign in with Apple (section 2) are still to
+do.
+
+**Still yours, in dashboards** - Step A and Google's side, below. Until Step A
+is done, every link the app sends silently lands on the website instead.
+
+### Google sign-in, in order
+
+The app signs in with Google through the browser, the same way the website
+does, so it needs only a **Web** OAuth client - no Android client and no SHA-1
+fingerprint.
+
+1. [Google Cloud console](https://console.cloud.google.com) → pick or create a
+   project (the Play billing service account can live in the same one) →
+   **Google Auth Platform**, which older guides call the *OAuth consent
+   screen*.
+2. **Branding.** App name *Halfstop*, a support email, and under App domain:
+   home page `https://app.halfstop.app/`, privacy policy
+   `https://app.halfstop.app/privacy.html`, terms
+   `https://app.halfstop.app/terms.html`. Authorized domain `halfstop.app`.
+   Leave the logo off for now: adding one sends the app for brand verification
+   before the logo is shown.
+3. **Audience.** User type *External*, then **Publish app** so the status reads
+   *In production*. In *Testing*, only the listed test users can sign in and
+   everybody else is told *Access blocked*. Supabase asks only for `openid`,
+   `email` and `profile`, which do not need Google's verification.
+4. **Clients** → Create client → **Web application**. Name it
+   *Halfstop (Supabase)*. Under Authorized redirect URIs add both:
+   ```
+   https://auth.halfstop.app/auth/v1/callback
+   https://gqemcvuushtfbbbxypvf.supabase.co/auth/v1/callback
+   ```
+   Create, and copy the Client ID and the Client secret. The secret is shown
+   in the console again later if you lose it, but treat it as one.
+5. [Supabase → Authentication → Sign In / Providers → Google](https://supabase.com/dashboard/project/gqemcvuushtfbbbxypvf/auth/providers):
+   enable, paste the Client ID and secret, save.
+6. **Step A.** Supabase → Authentication → URL Configuration → Redirect URLs →
+   add `com.halfstop.app://**`. Do not touch Site URL.
+
+Then check it in this order:
+
+- **The website first**, on a computer. Its sign-in panel now shows *Continue
+  with Google* by itself - the panel asks Supabase which providers are on. That
+  round trip proves steps 1 to 5 without the phone.
+- **Then the app.** *Continue with Google* opens a Chrome tab, you pick an
+  account, and it comes back into Halfstop signed in, on the page you pressed it
+  from. If it lands on app.halfstop.app in Chrome instead, step 6 is missing.
+- **Then an email link.** Sign out, *Email me a link*, open the email on the
+  phone. It opens the app, not Chrome. A link asked for in the app and opened
+  on a computer cannot work - the computer has no app to open - so open it on
+  the phone.
+
+Google's own sign-in sheet (Credential Manager, the account picker that slides
+up without leaving the app) is the nicer version of this and a later step: it
+needs an Android OAuth client with the SHA-1 of every signing key, a native
+plugin, and a nonce handed to Supabase. The browser round trip works first and
+works everywhere.
+
+---
+
 ## Why any of this is needed
 
 Inside the Capacitor shell the web view is not this website. On iOS it loads

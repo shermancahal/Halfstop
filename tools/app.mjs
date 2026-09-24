@@ -41,7 +41,30 @@ const PLATFORMS = ['ios', 'android'];
  * would have refused to run. `--no-save` puts it in node_modules and nowhere
  * else, which is all `npx cap` needs.
  */
-export const CAPACITOR_INSTALL = 'npm install --no-save @capacitor/cli @capacitor/core @capacitor/ios @capacitor/android';
+export const CAPACITOR_INSTALL = 'npm install --no-save @capacitor/cli @capacitor/core @capacitor/ios @capacitor/android '
+  + '@capacitor/app @capacitor/browser @capgo/native-purchases';
+
+/**
+ * The plugins compiled into the app, and why each is there.
+ *
+ *   @capacitor/app            the app being opened by one of its own links -
+ *                             an emailed sign-in, or the return from Google
+ *   @capacitor/browser        the system browser, because Google refuses to
+ *                             sign anybody in inside an embedded web view
+ *   @capgo/native-purchases   Google Play Billing (and StoreKit, later)
+ *
+ * Named in capacitor.config.json as `includePlugins`, and that is not
+ * optional here. `cap sync` finds plugins by reading package.json, and
+ * `--no-save` keeps them out of package.json on purpose - so without the list,
+ * sync would find none of them and build an app with no way back from Google
+ * and no way to pay. A test keeps the two lists the same.
+ *
+ * And checked for before anything runs, because `cap sync` skips a listed
+ * plugin it cannot find without saying so: it catches its own "Unable to
+ * find" and carries on. The app still builds, and the button that needed the
+ * plugin tells somebody to update an app that is already the newest one.
+ */
+export const APP_PLUGINS = ['@capacitor/app', '@capacitor/browser', '@capgo/native-purchases'];
 
 /**
  * What stands between this machine and a build, before anything is spent.
@@ -50,7 +73,7 @@ export const CAPACITOR_INSTALL = 'npm install --no-save @capacitor/cli @capacito
  * exist. Each problem carries the fix, because the person reading it is
  * standing at a terminal wanting the next command, not a diagnosis.
  */
-export function preflight({ platform, os = process.platform, hasCapacitor, hasPlatformDir } = {}) {
+export function preflight({ platform, os = process.platform, hasCapacitor, hasPlatformDir, missingPlugins = [] } = {}) {
   const problems = [];
 
   if (!PLATFORMS.includes(platform)) {
@@ -71,6 +94,14 @@ export function preflight({ platform, os = process.platform, hasCapacitor, hasPl
   if (!hasCapacitor) {
     problems.push({
       what: 'Capacitor is not installed here.',
+      fix: CAPACITOR_INSTALL,
+    });
+  } else if (missingPlugins.length) {
+    // The whole line rather than only the missing names: a partial install
+    // over `--no-save` packages is what removes the ones already there.
+    problems.push({
+      what: `Not installed: ${missingPlugins.join(', ')}. The app would build without `
+        + 'sign-in through Google or a way to pay, and nothing would say so.',
       fix: CAPACITOR_INSTALL,
     });
   }
@@ -112,6 +143,43 @@ export function withAndroidPermissions(manifest, wanted = ANDROID_PERMISSIONS) {
 
   const lines = missing.map((name) => `    <uses-permission android:name="${name}" />`).join('\n');
   return { manifest: `${manifest.slice(0, at)}${lines}\n${manifest.slice(at)}`, added: missing };
+}
+
+/**
+ * The intent filter that lets the app be opened by its own links.
+ *
+ * Without it, `com.halfstop.app://account` is an address nothing answers to:
+ * the confirmation email, the password reset and the return from Google all
+ * end on a browser page saying the address could not be opened, and the app
+ * never hears about any of them. Supabase has done its part by then, so the
+ * link is also spent.
+ *
+ * Inside the activity that launches, beside its LAUNCHER filter. That activity
+ * is `singleTask`, which is what makes a link bring the running app forward
+ * rather than start a second copy of it on top.
+ */
+export function withDeepLink(manifest, scheme) {
+  if (!scheme) throw new Error('No URL scheme to register - capacitor.config.json has no appId.');
+  if (manifest.includes(`android:scheme="${scheme}"`)) return { manifest, added: false };
+
+  const launcher = manifest.indexOf('android.intent.category.LAUNCHER');
+  const close = launcher === -1 ? -1 : manifest.indexOf('</intent-filter>', launcher);
+  if (close === -1) {
+    throw new Error('AndroidManifest.xml has no launcher intent filter - not a file this knows how to edit.');
+  }
+
+  const at = close + '</intent-filter>'.length;
+  const filter = [
+    '',
+    '',
+    '            <intent-filter>',
+    '                <action android:name="android.intent.action.VIEW" />',
+    '                <category android:name="android.intent.category.DEFAULT" />',
+    '                <category android:name="android.intent.category.BROWSABLE" />',
+    `                <data android:scheme="${scheme}" />`,
+    '            </intent-filter>',
+  ].join('\n');
+  return { manifest: `${manifest.slice(0, at)}${filter}${manifest.slice(at)}`, added: true };
 }
 
 /**
@@ -198,6 +266,16 @@ function capacitorInstalled() {
   return existsSync(path.join(ROOT, 'node_modules', '@capacitor', 'cli'));
 }
 
+/** The app's plugins that node_modules does not have. */
+function pluginsMissing() {
+  return APP_PLUGINS.filter((name) => !existsSync(path.join(ROOT, 'node_modules', ...name.split('/'), 'package.json')));
+}
+
+/** capacitor.config.json, which names the app and therefore its URL scheme. */
+function capacitorConfig() {
+  return JSON.parse(readFileSync(path.join(ROOT, 'capacitor.config.json'), 'utf8'));
+}
+
 function run(label, command, args) {
   console.log(`\n>> ${label}\n  $ ${[command, ...args].join(' ')}\n`);
   const result = spawnSync(command, args, { cwd: ROOT, stdio: 'inherit' });
@@ -213,6 +291,7 @@ function main() {
     platform,
     hasCapacitor: capacitorInstalled(),
     hasPlatformDir: platform ? existsSync(path.join(ROOT, platform)) : false,
+    missingPlugins: pluginsMissing(),
   });
 
   if (problems.length) {
@@ -238,8 +317,9 @@ function main() {
     }
   }
 
-  // 2a. Android's permissions, every run rather than only on creation, so a
-  //     project made before this step existed is brought up to date too.
+  // 2a. Android's permissions and its link handling, every run rather than
+  //     only on creation, so a project made before these steps existed is
+  //     brought up to date too.
   if (platform === 'android') {
     // Before anything is copied in: a project Android Studio has moved to a
     // plugin Capacitor does not support will fail in the IDE, and the IDE's
@@ -255,11 +335,15 @@ function main() {
     }
 
     const manifestPath = path.join(ROOT, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
-    const { manifest, added } = withAndroidPermissions(readFileSync(manifestPath, 'utf8'));
+    const before = readFileSync(manifestPath, 'utf8');
+    const { manifest: permitted, added } = withAndroidPermissions(before);
     if (added.length) {
-      writeFileSync(manifestPath, manifest);
       console.log(`\n>> Declared in AndroidManifest.xml: ${added.map((name) => name.split('.').pop()).join(', ')}`);
     }
+    const scheme = capacitorConfig().appId;
+    const linked = withDeepLink(permitted, scheme);
+    if (linked.added) console.log(`\n>> AndroidManifest.xml now opens ${scheme}:// links (sign-in emails, the return from Google)`);
+    if (linked.manifest !== before) writeFileSync(manifestPath, linked.manifest);
   }
 
   // 3. The copy. This is the step people forget.

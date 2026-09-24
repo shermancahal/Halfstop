@@ -5222,6 +5222,132 @@ console.log('\nThe account page says how to start paying');
   await buyer.close();
 }
 
+/*
+ * The same page inside the Android app, where the only way to pay is Google
+ * Play.
+ *
+ * No browser here has Capacitor, so the shell is faked the way its native
+ * bridge presents itself: window.Capacitor with the platform, and the
+ * NativePurchases plugin on Plugins. What is checked is the part that is
+ * ours. The website's store setting is ignored. The buttons end up carrying
+ * Play's price for the reader's country rather than ours in dollars. Pressing
+ * one buys the base plan it names, for this account, unacknowledged, and hands
+ * only the token to the server - whose answer is what turns Premium on, and
+ * after which the way out is Google's, not Stripe's.
+ */
+console.log('\nInside the Android app, the account page sells through Google Play');
+{
+  const REF_PLAY = 'smokeplay';
+  const far = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30;
+  const android = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+  const recorded = { verify: [] };
+  let paid = false;
+  const cors = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  };
+  await android.route(`**://${REF_PLAY}.supabase.co/**`, async (route) => {
+    const request = route.request();
+    if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+    const url = request.url();
+    if (url.includes('/functions/v1/play-billing')) {
+      recorded.verify.push(JSON.parse(request.postData() || '{}'));
+      paid = true;
+      return route.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+    }
+    if (url.includes('/rest/v1/rpc/my_plan') && paid) {
+      return route.fulfill({
+        status: 200, headers: cors, contentType: 'application/json',
+        body: JSON.stringify({ tier: 'premium', source: 'play', until: new Date(far * 1000).toISOString(), renews: true, trialAvailable: false }),
+      });
+    }
+    return route.abort();
+  });
+  await android.addInitScript(([url, key, storageKey, session]) => {
+    window.ABMAP_SUPABASE_URL = url;
+    window.ABMAP_SUPABASE_KEY = key;
+    window.ABMAP_BILLING_LIVE = 'true';
+    // The website's setting, as a local token.js carries it. The app must not
+    // turn it into a card form.
+    window.ABMAP_BILLING_STORE = 'stripe';
+    localStorage.setItem(storageKey, session);
+    const calls = [];
+    window.__playCalls = calls;
+    window.Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'android',
+      Plugins: {
+        App: { addListener: () => Promise.resolve({ remove() {} }), getLaunchUrl: () => Promise.resolve(undefined) },
+        NativePurchases: {
+          async getProducts(options) {
+            calls.push(['getProducts', options]);
+            return {
+              products: [
+                { identifier: 'premium', planIdentifier: 'monthly', offerId: null, offerToken: 'tok-m', priceString: '5,49 \u20ac', price: 5.49, currencyCode: 'EUR' },
+                { identifier: 'premium', planIdentifier: 'yearly', offerId: null, offerToken: 'tok-y', priceString: '54,99 \u20ac', price: 54.99, currencyCode: 'EUR' },
+              ],
+            };
+          },
+          async purchaseProduct(options) {
+            calls.push(['purchaseProduct', options]);
+            return { purchaseToken: 'play-token-1', productIdentifier: 'premium' };
+          },
+        },
+      },
+    };
+  }, [`https://${REF_PLAY}.supabase.co`, 'smoke-anon-key', `sb-${REF_PLAY}-auth-token`, JSON.stringify({
+    access_token: `header.${Buffer.from(JSON.stringify({ sub: 'u-play', exp: far })).toString('base64url')}.sig`,
+    refresh_token: 'r-1', expires_at: far, expires_in: 60 * 60 * 24 * 30, token_type: 'bearer',
+    user: {
+      id: 'u-play', aud: 'authenticated', role: 'authenticated', email: 'android@example.com',
+      user_metadata: { display_name: 'Android' }, app_metadata: {}, created_at: new Date().toISOString(),
+    },
+  })]);
+
+  const store = await android.newPage();
+  await store.goto(new URL('account.html', MAP_URL).href, { waitUntil: 'domcontentloaded' });
+  await store.waitForFunction(() => [...document.querySelectorAll('.plan-upgrade-buttons button')]
+    .some((button) => button.textContent.includes('\u20ac')), null, { timeout: 8000 }).catch(() => {});
+
+  const offered = await store.evaluate(() => {
+    const plan = document.querySelector('.account-plan');
+    const saving = [...(plan?.querySelectorAll('.plan-upgrade .hint') || [])]
+      .find((line) => /saves/.test(line.textContent) && !line.hidden);
+    return {
+      buttons: [...(plan?.querySelectorAll('.plan-upgrade-buttons button') || [])].map((b) => b.textContent.trim()),
+      saving: saving ? saving.textContent.trim() : null,
+    };
+  });
+  check('the buttons carry Play\'s prices for this country, not ours in dollars',
+    offered.buttons, ['5,49 \u20ac a month', '54,99 \u20ac a year']);
+  check('and the yearly saving is worked out in the currency Play charges',
+    offered.saving, 'Paying by the year saves \u20ac10.89, about 17%.');
+
+  await store.locator('.plan-upgrade-buttons button', { hasText: 'a year' }).click();
+  await store.waitForFunction(() => !!document.querySelector('.account-plan a[href*="play.google.com"]'),
+    null, { timeout: 8000 }).catch(() => {});
+
+  const bought = await store.evaluate(() => window.__playCalls.find(([name]) => name === 'purchaseProduct')?.[1] || null);
+  check('pressing a price buys that base plan, for this account, left for the server to acknowledge', bought && {
+    product: bought.productIdentifier, plan: bought.planIdentifier, offer: bought.offerToken,
+    account: bought.appAccountToken, acknowledge: bought.autoAcknowledgePurchases,
+  }, { product: 'premium', plan: 'yearly', offer: 'tok-y', account: 'u-play', acknowledge: false });
+  check('and only the purchase token goes to the server', recorded.verify, [{ purchaseToken: 'play-token-1' }]);
+
+  const manage = await store.evaluate(() => {
+    const link = document.querySelector('.account-plan a[href*="play.google.com"]');
+    return link ? { text: link.textContent.trim(), href: link.getAttribute('href') } : null;
+  });
+  check('once the server says so, the way out is Google\'s subscriptions page, for this app', manage, {
+    text: 'Manage subscription',
+    href: 'https://play.google.com/store/account/subscriptions?sku=premium&package=com.halfstop.app',
+  });
+
+  await store.close();
+  await android.close();
+}
+
 console.log('\nMetered basemaps are shown and not offered, once billing is live');
 {
   const paid = await context.newPage();

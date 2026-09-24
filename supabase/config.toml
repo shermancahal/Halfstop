@@ -50,3 +50,12 @@ verify_jwt = true
 # unset ADMIN_EMAILS is nobody rather than everybody; see actions.mjs.
 [functions.admin-accounts]
 verify_jwt = true
+
+# Google Play subscriptions. Off at the gateway because one of its two callers
+# is Google Cloud Pub/Sub, which has no Supabase session. The other is the
+# Android app, and that path checks the caller itself with auth.getUser(), the
+# way every function here reads who is asking. Neither caller is believed
+# about anything but which purchase token to look up: what it bought and for
+# whom is asked of Google. See play-billing/decide.mjs.
+[functions.play-billing]
+verify_jwt = false

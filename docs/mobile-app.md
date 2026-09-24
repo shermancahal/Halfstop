@@ -78,7 +78,17 @@ builds the native app.
 ```sh
 npm install --no-save @capacitor/cli @capacitor/core @capacitor/assets
 npm install --no-save @capacitor/ios @capacitor/android
+npm install --no-save @capacitor/app @capacitor/browser @capgo/native-purchases
 ```
+
+The third line is the app's plugins: `@capacitor/app` for the app being opened
+by its own links (a sign-in email, the return from Google), `@capacitor/browser`
+for Google sign-in, which Google refuses inside an embedded web view, and
+`@capgo/native-purchases` for Google Play Billing. They are named again in
+`capacitor.config.json` under `includePlugins`, because `cap sync` finds
+plugins by reading `package.json` and `--no-save` keeps them out of it - so
+without that list sync would quietly build an app with none of them.
+`npm run app:android` refuses to start when one is missing.
 
 `--no-save` puts them in `node_modules` and nowhere else. `--save-dev`, which
 these lines used to say, writes them into `package.json` and
@@ -390,11 +400,15 @@ debugging on (Settings → About phone → tap Build number seven times, then
 Settings → System → Developer options → USB debugging).
 
 ```sh
-cd ~/path/to/Halfstop          # the clone, not your home directory
+cd ~/Halfstop          # wherever you cloned it - not your home directory
 git pull
-npm install --no-save @capacitor/cli @capacitor/core @capacitor/ios @capacitor/android
+npm install --no-save @capacitor/cli @capacitor/core @capacitor/ios @capacitor/android @capacitor/app @capacitor/browser @capgo/native-purchases
 npm run app:android
 ```
+
+Run the install line again even if Capacitor is already installed: it now
+carries the three plugins as well, and installing them alone over `--no-save`
+packages can remove the ones already there.
 
 Run from inside the clone. From anywhere else npm finds a different
 `package.json`, or none, and says `Missing script: "app:android"` - which reads
@@ -445,6 +459,12 @@ does not use a newer one in its place. Both can be installed side by side. Do
 not move the project up to 37 instead - 36 is what Capacitor 8 is built and
 tested against, and it is recent enough for Play's target-level requirement.
 
+**The link filter is added for you too.** Every run also makes sure
+`AndroidManifest.xml` opens `com.halfstop.app://` links, which is how a sign-in
+email and the return from Google come back into the app rather than into
+Chrome. It prints `>> AndroidManifest.xml now opens com.halfstop.app:// links`
+the first time. See [app-auth.md](app-auth.md).
+
 **The location permissions are added for you.** `npm run app:android`
 declares them in `android/app/src/main/AndroidManifest.xml` on every run -
 every run rather than only when the project is created, so an `android/` made
@@ -489,14 +509,13 @@ the point here is that iOS never hit it, because `capacitor://` fails a scheme
 check and `https://localhost` passes one.
 
 **Selling anything.** Google requires Play Billing for digital goods sold in an
-app, as Apple requires in-app purchase, and neither is built — see "What is not
-built" in [payments.md](payments.md). `--app` preserves `token.js` as it is,
-and payments.md tells you to turn billing on with a line in exactly that file,
-so the local setup for testing a checkout is also an app bundle with a
-Subscribe button that opens Stripe in the webview. Nothing about that build
-fails; it fails at review. The build now warns when the bundle carries a web
-checkout, and notes the honest alternative: billing live, gates closed, and
-subscribing happens on the website.
+app, as Apple requires in-app purchase. The Android app now sells through Google
+Play and only through Google Play: `purchaseRoute` in `assets/js/lib/tiers.js`
+asks where the page is running, so the `ABMAP_BILLING_STORE = 'stripe'` a local
+`token.js` carries for testing the website cannot turn into a card form inside
+the app. What has to be set up in Play Console, Google Cloud and Supabase before
+a purchase works is in the Google Play section of [payments.md](payments.md). The
+iPhone app still sells nothing; StoreKit is not built.
 
 ## 7. Things that behave differently inside the shell
 

@@ -23,6 +23,10 @@
  */
 
 import { el } from './ui.js';
+import { BILLING } from '../config.js';
+
+/** The Android app, as Google Play knows it: appId in capacitor.config.json. */
+export const PLAY_PACKAGE = 'com.halfstop.app';
 
 /**
  * @param {object}   summary        from planSummary()
@@ -91,6 +95,26 @@ export function managePlanBlock(summary, { account, toast }) {
       el('a', {
         class: 'button button-secondary button-small',
         href: 'https://apps.apple.com/account/subscriptions',
+        target: '_blank', rel: 'noopener',
+        text: 'Manage subscription',
+      }),
+    ]);
+  }
+
+  /*
+   * Google Play's, which only Google can end, and which Google gives a direct
+   * address for: the subscriptions screen of the Play Store app on Android,
+   * and the same list in a browser anywhere else. Named down to the product
+   * so it opens on Halfstop rather than on every subscription somebody has.
+   */
+  if (summary?.source === 'play') {
+    const where = new URL('https://play.google.com/store/account/subscriptions');
+    where.searchParams.set('sku', BILLING.play.product);
+    where.searchParams.set('package', PLAY_PACKAGE);
+    return el('div', { class: 'plan-upgrade' }, [
+      el('a', {
+        class: 'button button-secondary button-small',
+        href: where.href,
         target: '_blank', rel: 'noopener',
         text: 'Manage subscription',
       }),

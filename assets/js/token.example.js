@@ -104,8 +104,10 @@ window.ABMAP_ROUTING_URL = '';
  * Billing, which is off unless these say otherwise.
  *
  * `LIVE` closes the feature gates — Premium features stop working for accounts
- * that do not have Premium. `STORE` is what offers a way to buy: 'stripe' in a
- * browser, 'appstore' once there is a native app, 'none' or empty for neither.
+ * that do not have Premium. `STORE` is what offers a way to buy in a browser:
+ * 'stripe', or 'none' or empty for nothing. The apps ignore it - Android sells
+ * through Google Play whatever this says, because a store app may not sell
+ * through anything else.
  * They are separate on purpose, so the gates can be proven with nothing for
  * sale, and a store can be wired up while everything is still free.
  *

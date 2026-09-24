@@ -2,6 +2,11 @@
   "appId": "com.halfstop.app",
   "appName": "Halfstop",
   "webDir": "dist",
+  "includePlugins": [
+    "@capacitor/app",
+    "@capacitor/browser",
+    "@capgo/native-purchases"
+  ],
   "server": {
     "androidScheme": "https"
   },

@@ -14,6 +14,9 @@ import { mergeFolders, rowToFolder, folderToRow, missingColumn } from './sync.js
 import { canEdit, markShared, normaliseEmail, readRole } from './shares.js';
 import { safeStorage } from './folders.js';
 import { can, gateReason, tierFor } from './tiers.js';
+import {
+  appShell, APP_RETURN, rememberReturn, sessionStore as tabStore, watchAppLinks,
+} from './native-shell.js';
 
 const SUPABASE_VERSION = '2.45.4';
 
@@ -47,6 +50,9 @@ const CHECKOUT_FUNCTION = 'stripe-checkout';
 
 /** And the one that opens Stripe's billing portal, where a subscription ends. */
 const PORTAL_FUNCTION = 'stripe-portal';
+
+/** The one that asks Google what a Play purchase token bought, and records it. */
+const PLAY_FUNCTION = 'play-billing';
 
 /**
  * The one that manages other people's accounts.
@@ -206,6 +212,14 @@ function returnTo() {
  * Site URL and every one of these links goes somewhere else.
  */
 function emailReturn() {
+  /*
+   * Inside the app the page's own address is `https://localhost/...`, which
+   * is the phone's own web view and nowhere a mail client can reach. The app
+   * answers to its scheme instead; ./native-shell.js turns the arrival back
+   * into an ordinary visit to the account page, so everything below this
+   * line about what happens there still holds.
+   */
+  if (appShell().native) return APP_RETURN;
   return new URL('account.html', window.location.href).href;
 }
 
@@ -388,8 +402,14 @@ export class Account extends EventTarget {
    * passes anything.
    */
   constructor(folders, { client = getClient, configured = isConfigured, syncs = true,
-    owner = folderOwnerStore() } = {}) {
+    owner = folderOwnerStore(), shell = appShell } = {}) {
     super();
+    /*
+     * Whether this page is inside the app. A function rather than the answer,
+     * so a test can say "the app" without defining a global the rest of the
+     * suite would then also see.
+     */
+    this.shell = shell;
     this.folders = folders;
     // Which account this device's folders belong to; see OWNER_KEY.
     this.owner = owner;
@@ -478,6 +498,15 @@ export class Account extends EventTarget {
   /** Restore an existing session and start watching for auth changes. */
   async init() {
     if (!this.isConfigured()) return;
+
+    /*
+     * In the app, an emailed link or a finished Google sign-in arrives as an
+     * event rather than as this page's URL. Listening turns it into a visit to
+     * the page the website would have landed on, fragment and all - so it
+     * comes through the lines below exactly as a link does on the website.
+     * Nothing, in a browser.
+     */
+    watchAppLinks({ shell: this.shell() });
 
     /*
      * Read before Supabase eats it.
@@ -734,14 +763,37 @@ export class Account extends EventTarget {
    * opened on a different device - and none of those apply to a provider
    * round trip that comes straight back.
    *
-   * Two things it does not solve, said here so they are not discovered later:
-   * the redirect still has to be in the project's allow list, exactly as the
-   * email one does; and inside the app the return address is the web view's
-   * own origin rather than this site, which needs a deep link set up before it
-   * will work there. On the web it works as soon as the provider is enabled.
+   * The redirect still has to be in the project's allow list, exactly as the
+   * email one does. On the web it works as soon as the provider is enabled.
+   *
+   * IN THE APP
+   *
+   * Google refuses to sign anybody in inside an embedded web view - it answers
+   * `disallowed_useragent` - and the app is one. So the round trip goes out
+   * through the system browser (a Custom Tab on Android), and comes back to
+   * the app's own scheme, where ./native-shell.js picks it up.
+   * `skipBrowserRedirect` is what hands the URL back here instead of
+   * navigating this web view to it.
    */
   async signInWithProvider(provider) {
     const client = await this.getClient();
+    const shell = this.shell();
+    if (shell.native) {
+      const browser = shell.plugin('Browser');
+      if (!browser?.open) {
+        throw new Error('This version of the app cannot open that sign-in. Update it, '
+          + 'or sign in with your email address instead.');
+      }
+      const { data, error } = await client.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo: APP_RETURN, skipBrowserRedirect: true },
+      });
+      if (error) throw new Error(error.message);
+      if (!data?.url) throw new Error('The sign-in page did not open. Try again.');
+      rememberReturn(tabStore());
+      await browser.open({ url: data.url });
+      return true;
+    }
     const { error } = await client.auth.signInWithOAuth({
       provider,
       options: { redirectTo: returnTo() },
@@ -1070,6 +1122,34 @@ export class Account extends EventTarget {
       if (attempt < tries) await sleep(wait);
     }
     return { ok: false, plan, attempts: tries };
+  }
+
+  /**
+   * Hand a Google Play purchase to the server, which asks Google about it.
+   *
+   * Only the token travels. Which product it bought, which account it was
+   * bought for and when it runs out are all read by play-billing from Google,
+   * with credentials this app never holds - a body that said "premium until
+   * 2099" would be a body anybody could write.
+   *
+   * The plan is re-read afterwards rather than taken from the answer, so what
+   * the panel shows is what my_plan() says, the same as after a Stripe
+   * checkout.
+   */
+  async confirmPlayPurchase({ purchaseToken = '' } = {}) {
+    if (!this.user) return { ok: false, reason: 'Sign in first.' };
+    if (!purchaseToken) return { ok: false, reason: 'There was no purchase to record.' };
+    const client = await this.getClient();
+    if (!client) return { ok: false, reason: 'Accounts are not configured here.' };
+
+    const { data, error } = await client.functions.invoke(PLAY_FUNCTION, { body: { purchaseToken } });
+    if (error) {
+      const said = await readFunctionError(error);
+      return { ok: false, reason: said || error.message };
+    }
+    if (!data?.ok) return { ok: false, reason: data?.error || 'Google Play\'s answer could not be recorded.', pending: Boolean(data?.pending) };
+    await this.refreshPlan();
+    return { ok: true };
   }
 
   /**

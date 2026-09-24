@@ -127,7 +127,7 @@ Deno.serve(async (req: Request) => {
   /*
    * Somebody who already subscribes is not sold a second one.
    *
-   * The App Store and Stripe do not know about each other, and the
+   * The App Store, Google Play and Stripe do not know about each other, and the
    * entitlements row is one per account, so a second purchase would overwrite
    * the first: two charges a month, only one of them visible, and cancelling
    * the visible one takes away access that the invisible one is still paying
@@ -156,10 +156,10 @@ Deno.serve(async (req: Request) => {
    * Backwards. The month exists to decide whether to subscribe, and the
    * decision has to be actionable while it is being made.
    *
-   * The refusal was always about not being charged twice, and only Stripe and
-   * the App Store can charge. A trial cannot, and neither can something an
-   * administrator handed out - so those are cases where starting to pay is a
-   * choice somebody is allowed to make. It writes over the row they had,
+   * The refusal was always about not being charged twice, and only Stripe,
+   * Google Play and the App Store can charge. A trial cannot, and neither can
+   * something an administrator handed out - so those are cases where starting
+   * to pay is a choice somebody is allowed to make. It writes over the row they had,
    * which is what starting to pay means.
    */
   const BILLS: Record<string, string> = {
@@ -167,6 +167,8 @@ Deno.serve(async (req: Request) => {
       + 'from Manage subscription in the account menu, and you can start a new one straight after.',
     appstore: 'You already subscribe through the App Store. Cancel it there first '
       + '(Settings, your name, Subscriptions on an iPhone), and it will stay active until the period you have paid for runs out.',
+    play: 'You already subscribe through Google Play. Cancel it there first '
+      + '(Play Store, your profile picture, Payments and subscriptions), and it will stay active until the period you have paid for runs out.',
   };
   const stillRunning = held && (!held.expires_at || new Date(held.expires_at) > new Date());
   if (stillRunning && Object.hasOwn(BILLS, held.source)) {

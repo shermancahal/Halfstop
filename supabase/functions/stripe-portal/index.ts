@@ -125,6 +125,13 @@ Deno.serve(async (req: Request) => {
       where: 'appstore',
     });
   }
+  if (held?.source === 'play') {
+    return reply(409, {
+      error: 'This subscription is through Google Play, so it is cancelled there: '
+        + 'Play Store, your profile picture, Payments and subscriptions.',
+      where: 'play',
+    });
+  }
   if (held?.source !== 'stripe' || !held.external_ref) {
     return reply(404, { error: 'There is no subscription on this account to manage.' });
   }

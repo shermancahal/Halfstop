@@ -5,8 +5,9 @@ import { chooseToken, appTokenFile, webTokenFile, appPreflight } from '../tools/
 import {
   preflight as appMachinePreflight, withAndroidPermissions, ANDROID_PERMISSIONS,
   CAPACITOR_INSTALL, afterOpening, agpMajor, agpDrift, AGP_SUPPORTED_MAJOR,
-  withSupportedProguard,
+  withSupportedProguard, withDeepLink, APP_PLUGINS,
 } from '../tools/app.mjs';
+import { APP_SCHEME } from '../assets/js/lib/native-shell.js';
 
 const FILE = `
 window.ABMAP_MAPBOX_TOKEN = 'pk.website';
@@ -217,39 +218,27 @@ test('app: a Mac with Capacitor has nothing in the way', () => {
 const tokenFile = (...lines) => ["window.ABMAP_MAPBOX_TOKEN = 'pk.web';", ...lines].join('\n');
 
 /*
- * The warning that is a store rejection rather than a bad build.
- *
- * `--app` preserves token.js as it is, and docs/payments.md says to turn
- * billing on with a line in exactly that file - so the setup for testing a
- * checkout locally is also, unchanged, an app bundle with a Subscribe button
- * that opens Stripe inside the webview. Apple and Google both require their
- * own billing for that. Nothing about the build fails; it fails at review.
+ * The store build used to warn about ABMAP_BILLING_STORE = 'stripe', because
+ * `--app` keeps token.js as it is and that line turned the website's test
+ * checkout into a card form inside the app. The app no longer reads it - the
+ * platform decides (see the purchaseRoute tests) - so there is nothing left to
+ * warn about, and a warning about nothing is how real ones stop being read.
  */
-test('app build: a bundle carrying a web checkout says so', () => {
-  const { warnings } = appPreflight(tokenFile("window.ABMAP_BILLING_STORE = 'stripe';"));
-  assert.equal(warnings.filter((line) => /web checkout/.test(line)).length, 1,
-    'an app bundle with a Stripe checkout in it was not flagged');
-});
-
-test('app build: any other store is not flagged', () => {
-  // The warning is about a checkout a webview can complete, not about billing
-  // being configured at all. A build with nothing to sell is quiet.
-  for (const line of ["window.ABMAP_BILLING_STORE = 'appstore';", "window.ABMAP_BILLING_STORE = '';", '']) {
+test('app build: the website\'s store setting is not a warning in the app', () => {
+  for (const line of ["window.ABMAP_BILLING_STORE = 'stripe';", "window.ABMAP_BILLING_STORE = 'appstore';", '']) {
     const { warnings } = appPreflight(tokenFile(line));
-    assert.equal(warnings.filter((w) => /web checkout/.test(w)).length, 0, line || '(nothing)');
+    assert.equal(warnings.filter((w) => /checkout|BILLING_STORE/.test(w)).length, 0, line || '(nothing)');
   }
 });
 
-test('app build: gates closed with nothing to buy is said once, as a note', () => {
-  /*
-   * The honest state of a store build today: billing live means the paid
-   * features are gated, and no in-app purchase exists to open them. Worth
-   * reading in the build output rather than discovering on a phone.
-   */
-  const { notes, warnings } = appPreflight(tokenFile("window.ABMAP_BILLING_LIVE = 'true';"));
-  assert.equal(notes.filter((line) => /no way to buy/.test(line)).length, 1);
-  assert.equal(warnings.filter((line) => /web checkout/.test(line)).length, 0,
-    'there is no web checkout in this bundle to warn about');
+test('app build: billing live says where the app sells, once', () => {
+  const { notes } = appPreflight(tokenFile("window.ABMAP_BILLING_LIVE = 'true';"));
+  const said = notes.filter((line) => /Google Play/.test(line));
+  assert.equal(said.length, 1);
+  assert.match(said[0], /docs\/payments\.md/);
+  assert.match(said[0], /iPhone app has no way to buy/);
+  // And nothing about selling when nothing is for sale.
+  assert.equal(appPreflight(tokenFile('')).notes.filter((line) => /Google Play/.test(line)).length, 0);
 });
 
 /* ------------------------------------------------- Android permissions */
@@ -475,3 +464,91 @@ test('android: a file already fixed is left exactly as it is', () => {
   assert.equal(twice.text, once);
 });
 
+
+/* ------------------------------------------------ links back into the app */
+
+/*
+ * Without the filter, com.halfstop.app://account is an address nothing
+ * answers to: the confirmation email, the reset and the return from Google
+ * all end on a browser page that cannot open it, with the link already spent.
+ */
+test('android: the launching activity learns to open the app\'s own links', () => {
+  const { manifest, added } = withDeepLink(GENERATED_MANIFEST, 'com.halfstop.app');
+  assert.equal(added, true);
+  assert.ok(manifest.includes('<data android:scheme="com.halfstop.app" />'));
+  for (const line of ['android.intent.action.VIEW', 'android.intent.category.DEFAULT', 'android.intent.category.BROWSABLE']) {
+    assert.ok(manifest.includes(line), line);
+  }
+  // Inside the activity, after the launcher filter - an intent filter
+  // anywhere else is ignored, or refused by the merger.
+  const scheme = manifest.indexOf('android:scheme');
+  assert.ok(scheme > manifest.indexOf('category.LAUNCHER'));
+  assert.ok(scheme < manifest.indexOf('</activity>'));
+  // And the launcher filter is still whole: the app must still have an icon.
+  assert.match(manifest, /<action android:name="android.intent.action.MAIN" \/>\s*<category android:name="android.intent.category.LAUNCHER" \/>\s*<\/intent-filter>/);
+});
+
+test('android: the link filter is added once, however often the tool runs', () => {
+  const once = withDeepLink(GENERATED_MANIFEST, 'com.halfstop.app').manifest;
+  const twice = withDeepLink(once, 'com.halfstop.app');
+  assert.equal(twice.added, false);
+  assert.equal(twice.manifest, once);
+});
+
+test('android: links and permissions together leave nothing else changed', () => {
+  // The two edits run back to back on the same file. Taking both out again
+  // must give back exactly what cap add wrote.
+  const permitted = withAndroidPermissions(GENERATED_MANIFEST).manifest;
+  const both = withDeepLink(permitted, 'com.halfstop.app').manifest;
+  const unlinked = both.replace(/\n\n\s*<intent-filter>\s*<action android:name="android.intent.action.VIEW" \/>[\s\S]*?<\/intent-filter>/, '');
+  const unpermitted = unlinked.replace(/ {4}<uses-permission android:name="android.permission.ACCESS_(FINE|COARSE)_LOCATION" \/>\n/g, '');
+  assert.equal(unpermitted, GENERATED_MANIFEST);
+});
+
+test('android: a manifest with no launcher, or no scheme to register, is refused', () => {
+  assert.throws(() => withDeepLink('<manifest></manifest>', 'com.halfstop.app'), /no launcher intent filter/);
+  assert.throws(() => withDeepLink(GENERATED_MANIFEST, ''), /no appId/);
+});
+
+test('app: the scheme the page returns to is the one Android is told to open', async () => {
+  // The manifest is written from capacitor.config.json; the return address
+  // from native-shell.js. Two names for one thing drift, and when they do
+  // every sign-in link opens nothing.
+  const { readFile } = await import('node:fs/promises');
+  const config = JSON.parse(await readFile(new URL('../capacitor.config.json', import.meta.url), 'utf8'));
+  assert.equal(config.appId, APP_SCHEME);
+});
+
+/*
+ * `cap sync` finds plugins by reading package.json, and --no-save keeps them
+ * out of it. includePlugins is what makes sync see them at all.
+ */
+test('app: every plugin installed is one the config tells cap sync to include', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const config = JSON.parse(await readFile(new URL('../capacitor.config.json', import.meta.url), 'utf8'));
+  assert.deepEqual([...config.includePlugins].sort(), [...APP_PLUGINS].sort());
+  for (const name of APP_PLUGINS) {
+    assert.ok(CAPACITOR_INSTALL.split(/\s+/).includes(name), `the install line leaves out ${name}`);
+  }
+});
+
+test('app tool: a missing plugin stops the build, with the whole install line', () => {
+  // cap sync skips a listed plugin it cannot find, silently. The build that
+  // follows works, and has no way back from Google and no way to pay.
+  const problems = appMachinePreflight({
+    platform: 'android', os: 'darwin', hasCapacitor: true, missingPlugins: ['@capgo/native-purchases'],
+  });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0].what, /@capgo\/native-purchases/);
+  assert.equal(problems[0].fix, CAPACITOR_INSTALL);
+
+  assert.deepEqual(appMachinePreflight({ platform: 'android', os: 'darwin', hasCapacitor: true, missingPlugins: [] }), []);
+});
+
+test('app tool: the docs carry the install line the tool asks for, whole', async () => {
+  // Somebody who installed from the docs before the plugins existed has the
+  // four packages and not the three. The docs are what they will copy again.
+  const { readFile } = await import('node:fs/promises');
+  const docs = await readFile(new URL('../docs/mobile-app.md', import.meta.url), 'utf8');
+  assert.ok(docs.includes(CAPACITOR_INSTALL), 'docs/mobile-app.md does not give the current install line');
+});

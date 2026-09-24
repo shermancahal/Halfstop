@@ -6,6 +6,7 @@ import {
   can, gateReason, planSummary, describePlan,
   daysLeft, featureForLayer, describePrice, purchaseRoute,
   premiumAdds, annualSaving, plansOffered, offersUpgrade, isBillingTester, TRIAL_DAYS,
+  describeRenewal,
 } from '../assets/js/lib/tiers.js';
 
 const FREE = { live: false };
@@ -564,8 +565,55 @@ test('tiers: an entitlement source nobody taught this about still gets a button'
    * withholding it from somebody who is not ends in a free account that is
    * never shown a way to pay and never says why.
    */
-  assert.equal(offersUpgrade({ live: true, source: 'play' }), true);
+  // 'play' was the example here until Google Play became a real source.
+  assert.equal(offersUpgrade({ live: true, source: 'amazon' }), true);
   assert.equal(offersUpgrade({ live: true }), true);
+});
+
+/* ------------------------------------------------------------ Google Play */
+
+test('tiers: a Google Play subscriber is not sold another, and is told it renews', () => {
+  // Settled, like Stripe: a second offer to somebody paying through Play is
+  // two subscriptions, one of them invisible from where they would cancel.
+  assert.equal(offersUpgrade({ live: true, source: 'play' }), false);
+  const ends = '2026-10-13T12:00:00Z';
+  assert.equal(describeRenewal({ tier: 'premium', source: 'play', until: ends },
+    { billing: { live: true }, timeZone: 'UTC' }), 'Renews October 13, 2026.');
+  assert.equal(describeRenewal({ tier: 'premium', source: 'play', until: ends, renews: false },
+    { billing: { live: true }, timeZone: 'UTC' }), 'Ends October 13, 2026.');
+});
+
+const ANDROID = { native: true, platform: 'android', plugin: () => null };
+const IPHONE = { native: true, platform: 'ios', plugin: () => null };
+const BROWSER = { native: false, platform: 'web', plugin: () => null };
+
+test('tiers: the Android app sells through Google Play, whatever the website sells through', () => {
+  // A local token.js set to 'stripe' for testing a checkout used to become an
+  // app bundle offering a card form - the one thing both stores refuse.
+  for (const store of ['stripe', 'none', 'appstore', '']) {
+    assert.deepEqual(purchaseRoute({ billing: { live: true, store }, shell: ANDROID }),
+      { available: true, where: 'play' }, `store '${store}'`);
+  }
+  // And the browser is unchanged.
+  assert.deepEqual(purchaseRoute({ billing: { live: true, store: 'stripe' }, shell: BROWSER }),
+    { available: true, where: 'stripe' });
+});
+
+test('tiers: the Android app is quiet until billing is live, except for whoever tests it', () => {
+  const off = { live: false, store: 'stripe' };
+  assert.deepEqual(purchaseRoute({ billing: off, shell: ANDROID }), { available: false, why: 'not-live' });
+  assert.deepEqual(purchaseRoute({ billing: off, preview: true, shell: ANDROID }),
+    { available: true, where: 'play', preview: true });
+});
+
+test('tiers: the iPhone app offers nothing it cannot complete, and never the website', () => {
+  // StoreKit is not built. A Stripe button inside an iOS app is a rejection,
+  // and "subscribe on the website" is the sentence Apple does not allow.
+  for (const billing of [{ live: true, store: 'stripe' }, { live: false, store: 'stripe' }]) {
+    const route = purchaseRoute({ billing, preview: true, shell: IPHONE });
+    assert.equal(route.available, false);
+    assert.notEqual(route.where, 'stripe');
+  }
 });
 
 test('tiers: a preview offers the web checkout before billing is live', () => {

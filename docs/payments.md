@@ -1,15 +1,17 @@
 # Taking money: what has to be set outside this repository
 
-Nothing here is switched on. `BILLING.live` is false and `BILLING.store` is
-`'none'`, so every account has every feature and the plan panel draws no
-buttons. This file is what to do when that changes.
+What has to be set in dashboards for Halfstop to take money: Stripe for the
+website, Google Play for the Android app. Both switches (`ABMAP_BILLING_LIVE`,
+`ABMAP_BILLING_STORE`) are read from injected globals rather than committed, so
+a checkout never goes live because somebody pushed a file.
 
-Two providers, one row. `public.entitlements` has a `source` column for
-exactly this reason: the App Store can only sell inside a shipped app, and
-anybody using Halfstop in a browser has no way to pay through it. Stripe is
-that way, and Apple permits it — a subscription bought elsewhere may be
-honoured in the app, as long as the app does not send people out to buy it and
-does not advertise the outside price.
+Several providers, one row. `public.entitlements` has a `source` column for
+exactly this reason: a store can only sell inside its own app, and anybody
+using Halfstop in a browser has no way to pay through one. Stripe is that way,
+and both stores permit it — a subscription bought elsewhere may be honoured in
+the app, as long as the app does not send people out to buy it and does not
+advertise the outside price. Google Play is the Android app's way; see
+[Google Play](#google-play-for-the-android-app) below.
 
 ---
 
@@ -357,6 +359,202 @@ immediate performance *and* acknowledges losing the right. That is wording in
 
 ---
 
+## Google Play, for the Android app
+
+Google requires Play Billing for a digital subscription sold in an Android app,
+the way Apple requires in-app purchase, so the Android app sells through Play
+and through nothing else. That is decided by where the page is running, not by
+a setting: `purchaseRoute` in `assets/js/lib/tiers.js` answers `play` inside the
+Android app whatever `ABMAP_BILLING_STORE` says.
+
+### How it fits together
+
+1. **The phone buys.** `assets/js/lib/play-billing.js` asks Play for the
+   offers, checks the base plan the button names really exists (the plugin
+   otherwise falls back to whichever plan it finds first), and buys it with
+   the signed-in account's id attached as the purchase's *obfuscated account
+   id*. It does not acknowledge the purchase.
+2. **The server asks Google.** The app sends only the purchase token to the
+   `play-billing` function. The function asks Google's Android Publisher API,
+   as a service account, what that token is: which product, for which account,
+   in which state, until when. It writes the `entitlements` row with source
+   `play`, and only then acknowledges the purchase. Google refunds anything not
+   acknowledged within three days, so a purchase this project failed to record
+   is returned without anybody having to notice.
+3. **Google keeps it current.** Real-time developer notifications arrive
+   through Pub/Sub at `play-billing/notify` - renewed, cancelled, in grace, on
+   hold, refunded, expired - and each one makes the function ask Google again.
+   Nothing in a notification is believed except which token to ask about.
+
+The rules about what gets written are in `supabase/functions/play-billing/decide.mjs`
+and tested in `test/play-server.test.mjs`: a token presented by an account
+other than the one it was bought for is refused; a running Stripe subscription
+is never written over (the Play purchase is left unacknowledged and Google
+refunds it); an old subscription's expiry cannot end the one that replaced it
+when somebody switches between monthly and yearly; `CANCELED` in Google's
+vocabulary means runs to the end of the period, not revoked.
+
+**Already done:** the `play-billing` function is deployed, and the database
+accepts `play` as a source. Everything below is in Google's consoles and
+Supabase's.
+
+### 1. Play Console: a build on a testing track
+
+Play will not sell a subscription in an app it has never seen.
+
+- Create the app in Play Console if it is not there yet. Package name
+  `com.halfstop.app` - it is permanent.
+- If Play asks for a **payments profile** (merchant account) before it lets you
+  create a subscription, set one up under Settings → Payments profile. That is
+  where Google pays you from.
+- Upload one signed release (`.aab`) to **Testing → Internal testing**. In
+  Android Studio: Build → Generate Signed App Bundle, with a new upload key,
+  and let Play manage the app signing key when it offers. The upload key file
+  is a secret and never goes in this repository, the same as Apple's `.p8`.
+
+After that, a build run from Android Studio with the same package name can
+usually buy with a licence-tester account. If Play says the item is
+unavailable, install the app from the internal testing link instead.
+
+### 2. The subscription
+
+Monetize with Play → Products → **Subscriptions** → Create subscription.
+
+| Field | Value |
+| --- | --- |
+| Product ID | `premium` - exactly, and it can never be reused |
+| Name | Halfstop Premium |
+
+Then two **base plans** on that one subscription, each auto-renewing:
+
+| Base plan ID | Billing period | Price |
+| --- | --- | --- |
+| `monthly` | 1 month | $4.99 |
+| `yearly` | 1 year | $49.00 |
+
+Set the US price and let Play fill in the other countries; it rounds each to a
+local price point, and the app's buttons show Play's price for the reader's
+country rather than ours. **Activate** both plans - a base plan in draft is one
+the app is told does not exist. The ids are the ones in `BILLING.play` in
+`assets/js/config.js`; if you pick different ones, change them there too.
+
+Two things that differ from Stripe. Google is the merchant of record for Play
+sales, so it works out and collects sales tax and VAT itself - there is no
+equivalent of the Stripe Tax setup. And Google keeps a service fee, 15% on
+subscriptions.
+
+### 3. Licence testers
+
+Play Console → Settings → **License testing**: add the Google accounts you will
+test with (your own, at least), licence response *RESPOND_NORMALLY*. Add the
+same accounts to the internal testing track's testers and accept the opt-in
+link on the phone.
+
+A licence tester's purchase is charged to a test card ("Test card, always
+approves") and costs nothing. Test subscriptions renew fast - a monthly plan
+every five minutes - and stop after six renewals.
+
+That speed matters for the order you do this in: every renewal arrives as a
+notification (step 6), and without notifications the row written at purchase
+simply runs out five minutes later. Set up step 6 before testing, or a working
+purchase looks like one that expired.
+
+### 4. Google Cloud: the API and a service account
+
+The function asks Google as a *service account* - a robot user with a key.
+
+1. [Google Cloud console](https://console.cloud.google.com) → pick a project
+   (the one with the Google sign-in client is fine) or create one.
+2. APIs & Services → Library → **Google Play Android Developer API** → Enable.
+3. IAM & Admin → **Service accounts** → Create service account. Name it
+   `play-billing`. It needs no roles in the Cloud project; skip that step.
+4. Open it → **Keys** → Add key → Create new key → **JSON**. A file downloads.
+   It is a secret: it goes into Supabase in step 5 and nowhere else, and the
+   download should be deleted once it is there.
+5. Back in Play Console → **Users and permissions** → Invite new users → the
+   service account's email (it ends `iam.gserviceaccount.com`) → App
+   permissions → add Halfstop, and tick:
+   - *View financial data, orders, and cancellation survey responses*
+   - *Manage orders and subscriptions*
+
+   Invite. Google can take a while - hours, occasionally a day - to let the new
+   account use the API. Until it does, the function's log says *insufficient
+   permissions*, which is this and not a bug.
+
+### 5. The secrets, in Supabase
+
+Edge Functions → Secrets:
+
+| Name | Value |
+| --- | --- |
+| `PLAY_SERVICE_ACCOUNT` | the whole content of the JSON file from step 4 |
+| `PLAY_NOTIFY_TOKEN` | a long random string: `openssl rand -hex 32` in a terminal |
+
+`PLAY_SERVICE_ACCOUNT` is pasted as the whole file, braces and all. If the
+dashboard field mangles it, paste it base64-encoded instead
+(`base64 -i key.json` on a Mac) - the function reads either. Until it is set
+the function answers the app with *Google Play payments are not configured on
+this project yet*.
+
+### 6. Real-time developer notifications
+
+In the Google Cloud console, same project:
+
+1. Pub/Sub → **Topics** → Create topic. ID `play-billing`; untick *Add a
+   default subscription*.
+2. Open the topic → **Permissions** (the info panel) → Add principal
+   `google-play-developer-notifications@system.gserviceaccount.com`, role
+   **Pub/Sub Publisher**. That is Google Play's own account, and without it
+   Play Console refuses the topic.
+3. Pub/Sub → **Subscriptions** → Create subscription. ID `play-billing-push`,
+   the topic above, delivery type **Push**, endpoint:
+
+   ```
+   https://gqemcvuushtfbbbxypvf.supabase.co/functions/v1/play-billing/notify?token=PASTE_PLAY_NOTIFY_TOKEN_HERE
+   ```
+
+   with the value of `PLAY_NOTIFY_TOKEN` in place of the capitals. Leave
+   *Enable authentication* off; the token is the check. Retry policy:
+   exponential backoff.
+4. Play Console → Monetize with Play → **Monetization setup** → Real-time
+   developer notifications: topic name `projects/YOUR-PROJECT-ID/topics/play-billing`
+   (the project id is on the Cloud console's dashboard), and choose to be
+   notified about subscriptions and voided purchases. Save, then **Send test
+   notification**.
+5. Supabase → Edge Functions → `play-billing` → Logs should say
+   `test notification from Play Console received`. A 401 there means the token
+   in the push URL does not match the secret.
+
+The token in that URL is a secret like the others, but a weak one on purpose:
+anybody holding it can make the function ask Google about a purchase token,
+and nothing more. What a purchase grants is always Google's answer.
+
+### 7. Buy something
+
+1. On the Mac, re-run the install line in `docs/mobile-app.md` section 6c (it
+   now includes the billing plugin), then `npm run app:android`.
+2. The purchase panel appears when `ABMAP_BILLING_LIVE = 'true'` is in your
+   local `token.js`, or without it for an address in `SITE.editors`, labelled
+   *Test mode*.
+3. On a phone (or an emulator with the **Play Store** in it, signed in) using a
+   licence-tester Google account: sign in to Halfstop, open Account. The two
+   buttons carry Play's prices. Press one; Google's sheet appears with the test
+   card.
+4. *Premium is active on this account.* Then, in the SQL editor:
+
+   ```sql
+   select source, expires_at, renews, note from public.entitlements where source = 'play';
+   ```
+
+   One row, note *Google Play active, monthly, test purchase*, and an
+   `expires_at` that moves forward every five minutes as the test renewals
+   arrive.
+5. Cancel it in the Play Store (profile picture → Payments and subscriptions).
+   Within a minute the notification lands, `renews` turns false and the app
+   says *Ends* rather than *Renews*.
+
+---
+
 ## Cancelling
 
 `stripe-portal` opens Stripe's own billing pages for whoever is signed in,
@@ -374,8 +572,10 @@ The customer is looked up from the subscription id on the entitlements row
 rather than stored separately: one id instead of two means they cannot
 disagree, at the cost of one request on a page somebody opens rarely.
 
-**An App Store subscription cannot be cancelled from here**, and the function
-says so rather than failing. Only Apple can end one.
+**An App Store or Google Play subscription cannot be cancelled from here**,
+and the function says so rather than failing. Only Apple or Google can end
+one. For Play, **Manage subscription** is a link straight to the Play Store's
+subscriptions screen, named down to Halfstop's product.
 
 **Cancelling is not a cancellation event.** Stripe keeps the subscription
 `active` with `cancel_at_period_end` set, and the only thing that arrives is an
@@ -405,13 +605,17 @@ matters or somebody carries on paying for an account that is not there.
 
 ## What is not built
 
-**The App Store side.** In-app purchase exists only inside a shipped native
-app, and there is not one — see `docs/mobile-app.md`. The server half, an
-endpoint receiving App Store Server Notifications and writing an `entitlements`
-row with `source = 'appstore'`, is deliberately not written yet either: it
-could not be exercised until there is an app and a product to exercise it with,
+**The App Store side.** StoreKit is not built into the iPhone app, and the
+server half, an endpoint receiving App Store Server Notifications and writing an
+`entitlements` row with `source = 'appstore'`, is deliberately not written yet
+either: it could not be exercised until there is a product to exercise it with,
 and untested signature verification sitting deployed on a path that grants
 entitlements is the exact thing the Stripe tests exist to avoid.
+
+Google Play did not have that problem, which is why it went first. Nothing
+Google sends is trusted on its signature: every notification only names a
+purchase token, and the function asks Google's API about it directly, with
+its own credentials. A forged notification can at most make it ask.
 
 **One person, two subscriptions** — decided, and closed. A checkout is refused
 outright for an account that already has a running subscription, with a 409 and
