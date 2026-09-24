@@ -144,7 +144,9 @@ if the native project declares why.
 <string>Saves a map snapshot to your photo library.</string>
 ```
 
-**Android** — `android/app/src/main/AndroidManifest.xml`:
+**Android** — nothing to do by hand. `npm run app:android` declares these in
+`android/app/src/main/AndroidManifest.xml` on every run (`withAndroidPermissions`
+in `tools/app.mjs`), and `cap add` writes `INTERNET` itself:
 
 ```xml
 <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -373,9 +375,16 @@ debugging on (Settings → About phone → tap Build number seven times, then
 Settings → System → Developer options → USB debugging).
 
 ```sh
-npm install --save-dev @capacitor/cli @capacitor/core @capacitor/android
+cd ~/path/to/Halfstop          # the clone, not your home directory
+git pull
+npm install --save-dev @capacitor/cli @capacitor/core @capacitor/ios @capacitor/android
 npm run app:android
 ```
+
+Run from inside the clone. From anywhere else npm finds a different
+`package.json`, or none, and says `Missing script: "app:android"` - which reads
+like the script is missing from the repository when it is the directory that is
+wrong.
 
 That builds `dist/` with the app token, runs `npx cap add android` the first
 time, copies the bundle in, and opens Android Studio. Read the build's own
@@ -386,9 +395,14 @@ Then in Android Studio: pick the device in the toolbar, press Run. The first
 build downloads a Gradle distribution and takes a while; after that it is
 seconds.
 
-**The permissions are not added for you.** Section 5 has the block for
-`android/app/src/main/AndroidManifest.xml`. Without it the map loads and Locate
-does nothing, which looks like a broken button rather than a missing line.
+**The location permissions are added for you.** `npm run app:android`
+declares them in `android/app/src/main/AndroidManifest.xml` on every run -
+every run rather than only when the project is created, so an `android/` made
+before this step existed is brought up to date too. They used to be a step in
+section 5 to do by hand, and forgetting it is silent: the map loads, Locate is
+pressed, and nothing happens. The build prints
+`>> Declared in AndroidManifest.xml: …` when it adds them, and says nothing
+when they are already there.
 
 **What to test first, in this order.** Locate (the runtime prompt should
 appear once), a basemap that is not the default (proves the app token works,

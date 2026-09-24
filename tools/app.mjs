@@ -22,7 +22,7 @@
  * the wrong machine, which is cheaper than failing three steps in.
  */
 
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -65,6 +65,42 @@ export function preflight({ platform, os = process.platform, hasCapacitor, hasPl
   return problems;
 }
 
+/**
+ * The permissions Android needs declared before the webview will ask for them.
+ *
+ * docs/mobile-app.md section 5 has always said to add these to the manifest by
+ * hand, and `cap add` has always printed a line pointing at it. But android/
+ * is gitignored and regenerated, so "by hand" means every fresh project, and
+ * the failure when it is forgotten is quiet: the map loads, Locate is pressed,
+ * nothing happens, and there is no prompt and no error to explain why. A step
+ * with that failure mode belongs in the tool, not in a checklist.
+ *
+ * INTERNET is not listed because `cap add` writes it.
+ */
+export const ANDROID_PERMISSIONS = [
+  'android.permission.ACCESS_FINE_LOCATION',
+  'android.permission.ACCESS_COARSE_LOCATION',
+];
+
+/**
+ * The manifest with every permission in `wanted` declared, and which were new.
+ *
+ * Pure and idempotent: it runs on every build, so an android/ made before this
+ * existed gets the lines too, and running it twice changes nothing the second
+ * time. Refuses a manifest with no closing tag rather than guessing where a
+ * line goes in a file it does not recognise.
+ */
+export function withAndroidPermissions(manifest, wanted = ANDROID_PERMISSIONS) {
+  const missing = wanted.filter((name) => !manifest.includes(`android:name="${name}"`));
+  if (!missing.length) return { manifest, added: [] };
+
+  const at = manifest.lastIndexOf('</manifest>');
+  if (at === -1) throw new Error('AndroidManifest.xml has no </manifest> - not a file this knows how to edit.');
+
+  const lines = missing.map((name) => `    <uses-permission android:name="${name}" />`).join('\n');
+  return { manifest: `${manifest.slice(0, at)}${lines}\n${manifest.slice(at)}`, added: missing };
+}
+
 /** Whether `npx cap` will find anything. Local install only, on purpose. */
 function capacitorInstalled() {
   return existsSync(path.join(ROOT, 'node_modules', '@capacitor', 'cli'));
@@ -105,7 +141,20 @@ function main() {
   //    this is the one step that is conditional.
   if (!existsSync(path.join(ROOT, platform))) {
     run(`Create the ${platform} project`, 'npx', ['cap', 'add', platform]);
-    console.log(`\n${platform}/ is new and gitignored. Permissions still need adding - see docs/mobile-app.md section 5.`);
+    if (platform === 'ios') {
+      console.log('\nios/ is new and gitignored. Info.plist permissions still need adding - see docs/mobile-app.md section 5.');
+    }
+  }
+
+  // 2a. Android's permissions, every run rather than only on creation, so a
+  //     project made before this step existed is brought up to date too.
+  if (platform === 'android') {
+    const manifestPath = path.join(ROOT, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
+    const { manifest, added } = withAndroidPermissions(readFileSync(manifestPath, 'utf8'));
+    if (added.length) {
+      writeFileSync(manifestPath, manifest);
+      console.log(`\n>> Declared in AndroidManifest.xml: ${added.map((name) => name.split('.').pop()).join(', ')}`);
+    }
   }
 
   // 3. The copy. This is the step people forget.

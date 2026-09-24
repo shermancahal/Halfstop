@@ -690,7 +690,10 @@ async function main() {
     console.log(`  road routing      ${flight.has.routing ? 'your own server' : 'FOSSGIS default'}`);
     for (const line of flight.warnings) console.log(`\n  WARNING: ${line}`);
     for (const line of flight.notes) console.log(`\n  note: ${line}`);
-    console.log('\nNext: npx cap sync ios && npx cap open ios   (or: npm run app:ios)');
+    // Both platforms: the build does not know which one it is for, and a hint
+    // naming only iOS reads as "this is not the Android command" to somebody
+    // building Android.
+    console.log('\nNext: npm run app:android   or   npm run app:ios');
     return;
   }
 

@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { chooseToken, appTokenFile, webTokenFile, appPreflight } from '../tools/build-dist.mjs';
-import { preflight as appMachinePreflight } from '../tools/app.mjs';
+import {
+  preflight as appMachinePreflight, withAndroidPermissions, ANDROID_PERMISSIONS,
+} from '../tools/app.mjs';
 
 const FILE = `
 window.ABMAP_MAPBOX_TOKEN = 'pk.website';
@@ -245,5 +247,81 @@ test('app build: gates closed with nothing to buy is said once, as a note', () =
   assert.equal(notes.filter((line) => /no way to buy/.test(line)).length, 1);
   assert.equal(warnings.filter((line) => /web checkout/.test(line)).length, 0,
     'there is no web checkout in this bundle to warn about');
+});
+
+/* ------------------------------------------------- Android permissions */
+
+/*
+ * What `npx cap add android` wrote, as of Capacitor 8.5.2 - taken from a real
+ * run rather than written from memory, so the edit is tested against the file
+ * it will actually meet.
+ */
+const GENERATED_MANIFEST = `<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:allowBackup="true"
+        android:label="@string/app_name">
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+    <!-- Permissions -->
+
+    <uses-permission android:name="android.permission.INTERNET" />
+</manifest>
+`;
+
+/*
+ * The step the docs said to do by hand, done by the tool that makes the file.
+ *
+ * android/ is gitignored and regenerated, so "add these by hand" meant every
+ * fresh project, and forgetting is silent: the map loads, Locate is pressed,
+ * and nothing happens - no prompt, no error.
+ */
+test('android: a fresh manifest gets the location permissions', () => {
+  const { manifest, added } = withAndroidPermissions(GENERATED_MANIFEST);
+  assert.deepEqual(added, ANDROID_PERMISSIONS);
+  for (const name of ANDROID_PERMISSIONS) {
+    assert.ok(manifest.includes(`<uses-permission android:name="${name}" />`), name);
+  }
+  // And INTERNET, which cap add wrote, is still there exactly once.
+  assert.equal(manifest.split('android.permission.INTERNET').length - 1, 1);
+});
+
+test('android: they land inside the manifest, not after it', () => {
+  // A line after </manifest> is a file Gradle refuses to merge.
+  const { manifest } = withAndroidPermissions(GENERATED_MANIFEST);
+  const end = manifest.lastIndexOf('</manifest>');
+  for (const name of ANDROID_PERMISSIONS) {
+    assert.ok(manifest.indexOf(name) < end, `${name} is outside <manifest>`);
+  }
+  assert.ok(manifest.trimEnd().endsWith('</manifest>'));
+});
+
+test('android: running it again changes nothing', () => {
+  // It runs on every build, so the second run is the common case.
+  const once = withAndroidPermissions(GENERATED_MANIFEST).manifest;
+  const twice = withAndroidPermissions(once);
+  assert.deepEqual(twice.added, []);
+  assert.equal(twice.manifest, once);
+});
+
+test('android: one already declared by hand is not declared twice', () => {
+  // Somebody who followed the old instructions has a manifest with these in
+  // it already. A duplicate is a Gradle merge warning at best.
+  const halfway = GENERATED_MANIFEST.replace('</manifest>',
+    '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n</manifest>');
+  const { manifest, added } = withAndroidPermissions(halfway);
+  assert.deepEqual(added, ['android.permission.ACCESS_COARSE_LOCATION']);
+  assert.equal(manifest.split('ACCESS_FINE_LOCATION').length - 1, 1);
+});
+
+test('android: a file that is not a manifest is refused, not guessed at', () => {
+  assert.throws(() => withAndroidPermissions('<resources></resources>'), /no <\/manifest>/);
 });
 
