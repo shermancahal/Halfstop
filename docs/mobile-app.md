@@ -411,19 +411,26 @@ build downloads a Gradle distribution and takes a while; after that it is
 seconds.
 
 **If Gradle says "SDK location not found".** The SDK lives at
-`~/Library/Android/sdk` on a Mac unless you moved it (Android Studio →
-Settings → Languages & Frameworks → Android SDK shows the real path). Tell the
-project where it is, from inside the clone, then File → Sync Project with
-Gradle Files:
+`~/Library/Android/sdk` on a Mac unless you moved it. Three ways to see the
+real path, most direct first - the settings menu has moved between Android
+Studio versions, so the first two do not depend on it:
+
+- `cat android/local.properties` from inside the clone. Android Studio writes
+  a `sdk.dir=` line there when it opens the project.
+- **Tools → SDK Manager** (from the Welcome screen: **More Actions → SDK
+  Manager**). The path is at the top, as *Android SDK Location*.
+- Settings (⌘,) and type `Android SDK` into its search box.
+
+Then tell the project where it is, from inside the clone, and File → Sync
+Project with Gradle Files:
 
 ```sh
 echo "sdk.dir=$HOME/Library/Android/sdk" > android/local.properties
 ```
 
 `android/` is gitignored, so that file stays on your machine. If the folder
-does not exist at all, the SDK was never downloaded: in that same settings
-page, tick the platform for API 36 - what the generated project targets - and
-apply.
+does not exist at all, the SDK was never downloaded: in the SDK Manager, tick
+the platform for API 36 - what the generated project targets - and apply.
 
 **The location permissions are added for you.** `npm run app:android`
 declares them in `android/app/src/main/AndroidManifest.xml` on every run -
