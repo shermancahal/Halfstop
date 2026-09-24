@@ -137,6 +137,41 @@ export function afterOpening(platform) {
   ];
 }
 
+/**
+ * The Android Gradle Plugin a Capacitor 8 project is generated with, and what
+ * it looks like when Android Studio has moved it on.
+ *
+ * `cap add android` writes AGP 8.13.0. Android Studio then offers - and, if
+ * the notification is accepted, performs - an upgrade to AGP 9, whose upgrade
+ * assistant adds seven `android.*=false` compatibility options to
+ * gradle.properties and leaves Capacitor's `proguard-android.txt` line in
+ * place, which AGP 9 refuses outright. The first real Android build failed
+ * exactly that way, reported as "are we sure Halfstop is even loaded?",
+ * because the only line in red named a proguard file.
+ *
+ * Capacitor 8 is built and tested against AGP 8. Rather than patch its
+ * template to survive a plugin version it does not support, this notices the
+ * drift and says how to undo it. android/ is gitignored and regenerated, so
+ * undoing it costs one command.
+ */
+export const AGP_SUPPORTED_MAJOR = 8;
+
+/** The major version of the Android Gradle Plugin a build.gradle asks for, or null. */
+export function agpMajor(buildGradle) {
+  const match = /com\.android\.tools\.build:gradle:(\d+)\./.exec(String(buildGradle || ''));
+  return match ? Number(match[1]) : null;
+}
+
+/** A warning when the project has left the plugin Capacitor supports, or null. */
+export function agpDrift(buildGradle) {
+  const major = agpMajor(buildGradle);
+  if (major === null || major <= AGP_SUPPORTED_MAJOR) return null;
+  return `android/ has been moved to Android Gradle Plugin ${major} - Android Studio's upgrade, not `
+    + `Capacitor's. Capacitor 8 is built against AGP ${AGP_SUPPORTED_MAJOR}, and AGP ${major} refuses `
+    + 'the proguard line its template writes. Undo it: rm -rf android, run this again, and dismiss '
+    + 'Android Studio\'s "Upgrade Android Gradle Plugin" notification when it appears.';
+}
+
 /** Whether `npx cap` will find anything. Local install only, on purpose. */
 function capacitorInstalled() {
   return existsSync(path.join(ROOT, 'node_modules', '@capacitor', 'cli'));
@@ -185,6 +220,12 @@ function main() {
   // 2a. Android's permissions, every run rather than only on creation, so a
   //     project made before this step existed is brought up to date too.
   if (platform === 'android') {
+    // Before anything is copied in: a project Android Studio has moved to a
+    // plugin Capacitor does not support will fail in the IDE, and the IDE's
+    // error names a proguard file rather than the upgrade that caused it.
+    const drift = agpDrift(readFileSync(path.join(ROOT, 'android', 'build.gradle'), 'utf8'));
+    if (drift) console.warn(`\n  WARNING: ${drift}`);
+
     const manifestPath = path.join(ROOT, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
     const { manifest, added } = withAndroidPermissions(readFileSync(manifestPath, 'utf8'));
     if (added.length) {

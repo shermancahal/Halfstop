@@ -454,6 +454,17 @@ pressed, and nothing happens. The build prints
 `>> Declared in AndroidManifest.xml: …` when it adds them, and says nothing
 when they are already there.
 
+**Decline the Android Gradle Plugin upgrade.** Once the project is open,
+Android Studio offers a "Project update recommended" / "Upgrade Android Gradle
+Plugin" notification. Dismiss it, and choose *Don't ask again for this project*
+if offered. Capacitor 8 generates AGP 8.13 and is built against it; the upgrade
+moves the project to AGP 9, adds seven `android.*=false` compatibility options
+to `gradle.properties`, and then fails the build on the `proguard-android.txt`
+line in Capacitor's own template - an error that names a proguard file and
+nothing about the upgrade that caused it. If it has already happened:
+`rm -rf android` and `npm run app:android` again. The build now warns on any
+later run when `android/` has been moved past AGP 8.
+
 **What to test first, in this order.** Locate (the runtime prompt should
 appear once), a basemap that is not the default (proves the app token works,
 since the webview sends no `Referer`), Share on a waypoint (see below), sign

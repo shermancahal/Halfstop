@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { chooseToken, appTokenFile, webTokenFile, appPreflight } from '../tools/build-dist.mjs';
 import {
   preflight as appMachinePreflight, withAndroidPermissions, ANDROID_PERMISSIONS,
-  CAPACITOR_INSTALL, afterOpening,
+  CAPACITOR_INSTALL, afterOpening, agpMajor, agpDrift, AGP_SUPPORTED_MAJOR,
 } from '../tools/app.mjs';
 
 const FILE = `
@@ -373,5 +373,56 @@ test('app tool: iOS keeps its own', () => {
   const lines = afterOpening('ios').join('\n');
   assert.match(lines, /Signing/);
   assert.match(lines, /section 6a/);
+});
+
+/* ------------------------------------------ Android Gradle Plugin drift */
+
+/*
+ * The top of the build.gradle Capacitor 8.5.2 actually writes, from a real
+ * `cap add android` - including the google-services line, which also says
+ * "classpath ... gradle" and is not the plugin being asked about.
+ */
+const GENERATED_ROOT_GRADLE = `buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.13.0'
+        classpath 'com.google.gms:google-services:4.4.4'
+    }
+}
+`;
+
+test('android: the plugin version is read from the plugin line', () => {
+  assert.equal(agpMajor(GENERATED_ROOT_GRADLE), 8);
+  assert.equal(agpMajor(GENERATED_ROOT_GRADLE.replace('gradle:8.13.0', 'gradle:9.1.2')), 9);
+  // google-services 4.4.4 is not an Android Gradle Plugin at major version 4.
+  assert.equal(agpMajor("classpath 'com.google.gms:google-services:4.4.4'"), null);
+  assert.equal(agpMajor(''), null);
+});
+
+test('android: a freshly generated project is not flagged', () => {
+  assert.equal(agpDrift(GENERATED_ROOT_GRADLE), null);
+});
+
+/*
+ * The first real build failed in Android Studio on a proguard line, and the
+ * cause was two steps back: the IDE had upgraded the plugin to 9, which
+ * refuses a line Capacitor's template writes. Reported as "are we sure
+ * Halfstop is even loaded?" - which is the question a red proguard error
+ * with no mention of an upgrade makes a person ask.
+ */
+test('android: a project moved past the supported plugin says so, and how to undo it', () => {
+  const warning = agpDrift(GENERATED_ROOT_GRADLE.replace('gradle:8.13.0', 'gradle:9.0.0'));
+  assert.ok(warning, 'an upgraded project was not flagged');
+  assert.match(warning, /Android Gradle Plugin 9/);
+  assert.match(warning, /rm -rf android/);
+  assert.match(warning, new RegExp(`AGP ${AGP_SUPPORTED_MAJOR}`));
+});
+
+test('android: a missing build file is no answer rather than a wrong one', () => {
+  assert.equal(agpDrift(undefined), null);
+  assert.equal(agpDrift('not gradle at all'), null);
 });
 
