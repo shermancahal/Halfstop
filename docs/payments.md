@@ -400,17 +400,58 @@ Supabase's.
 
 ### 1. Play Console: a build on a testing track
 
-Play will not sell a subscription in an app it has never seen.
+Play will not sell a subscription in an app it has never seen - and it will
+not even let you *create* one until it has seen a build that contains the
+billing library. So this build has to come from after `npm run app:android`
+with the plugins installed (`docs/mobile-app.md` section 6c); an older one
+has no billing in it, and Play Console says the app has no in-app products
+support.
 
-- Create the app in Play Console if it is not there yet. Package name
-  `com.halfstop.app` - it is permanent.
-- If Play asks for a **payments profile** (merchant account) before it lets you
-  create a subscription, set one up under Settings → Payments profile. That is
-  where Google pays you from.
-- Upload one signed release (`.aab`) to **Testing → Internal testing**. In
-  Android Studio: Build → Generate Signed App Bundle, with a new upload key,
-  and let Play manage the app signing key when it offers. The upload key file
-  is a secret and never goes in this repository, the same as Apple's `.p8`.
+**Make the file** - in Android Studio, with the project `npm run app:android`
+opened:
+
+1. **Build → Generate Signed App Bundle or APK…** → **Android App Bundle** →
+   Next.
+2. Module `app`. Under *Key store path*, **Create new…**:
+   - Path: somewhere **outside the clone**, such as
+     `~/Keys/halfstop-upload.jks`. Not in `android/`: that folder is
+     gitignored and regenerated, and `rm -rf android` is a step these docs
+     give for fixing Gradle trouble - it would take the key with it.
+   - A password for the store and one for the key (they can be the same),
+     alias `upload`, validity 25 years, and your name and Halfstop, LLC for
+     the certificate.
+   - Save both passwords in your password manager, and back the `.jks` file
+     up somewhere that is not this repository. It is a secret, like Apple's
+     `.p8`. Losing it is recoverable - with Play App Signing, Google can
+     register a new upload key - but it takes a support request and days.
+3. Next → build variant **release** → **Create**. The file lands at
+   `android/app/release/app-release.aab`; the notification that says it
+   finished has a *locate* link.
+
+The version is `versionCode 1` in `android/app/build.gradle`. Play refuses a
+second upload with the same number, so each later upload needs it raised by
+one first.
+
+**Upload it** - [Play Console](https://play.google.com/console):
+
+1. **Create app** if Halfstop is not listed yet: name *Halfstop*, *App*, and
+   **Free** - the download is free and the subscription is sold inside it.
+   Paid-to-download cannot be undone later. Accept the two declarations.
+2. The app → **Test and release → Testing → Internal testing** → **Testers**
+   tab: create an email list with your own Google account on it, save, and
+   copy the **opt-in link**.
+3. **Releases** tab → **Create new release**. If asked about app signing,
+   choose **Use Google-generated key** (Play App Signing) - Google keeps the
+   key that signs what users download, and yours is only for uploading.
+4. Drop `app-release.aab` in, give the release a name (`1.0 (1)` is fine),
+   **Next**, then **Save and publish** / **Start rollout to Internal
+   testing**. If Play lists setup items it wants first, the app's Dashboard
+   says which.
+5. On the phone, open the opt-in link, accept, and install Halfstop from the
+   Play Store link it shows.
+
+The first upload also fixes the app's package name in Play for good. It comes
+from `appId` in `capacitor.config.json`, `com.halfstop.app`.
 
 After that, a build run from Android Studio with the same package name can
 usually buy with a licence-tester account. If Play says the item is
