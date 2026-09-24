@@ -428,9 +428,22 @@ Project with Gradle Files:
 echo "sdk.dir=$HOME/Library/Android/sdk" > android/local.properties
 ```
 
-`android/` is gitignored, so that file stays on your machine. If the folder
-does not exist at all, the SDK was never downloaded: in the SDK Manager, tick
-the platform for API 36 - what the generated project targets - and apply.
+`android/` is gitignored, so that file stays on your machine.
+
+**If `~/Library/Android/sdk` does not exist at all**, the SDK was never
+downloaded. Installing Android Studio does not include it: a setup wizard on
+first launch does, and it is easy to skip - which is exactly how the first real
+build got here. In the SDK Manager, *Android SDK Location* will be empty. Press
+**Edit** beside it, keep the default location, and go **Next** through the
+download. Then run the `echo` line above.
+
+**Then tick API 36 specifically**, under SDK Platforms - Android 16.0, API
+Level 36. The list will offer the newest platform first (it was Android 17, API
+37, at the time of writing), and having that is not enough: the project
+Capacitor generates compiles against 36 exactly, so Gradle looks for 36 and
+does not use a newer one in its place. Both can be installed side by side. Do
+not move the project up to 37 instead - 36 is what Capacitor 8 is built and
+tested against, and it is recent enough for Play's target-level requirement.
 
 **The location permissions are added for you.** `npm run app:android`
 declares them in `android/app/src/main/AndroidManifest.xml` on every run -
