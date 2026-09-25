@@ -407,30 +407,38 @@ with the plugins installed (`docs/mobile-app.md` section 6c); an older one
 has no billing in it, and Play Console says the app has no in-app products
 support.
 
+**Make the upload key** - in a terminal, not in Android Studio's *New Key
+Store* dialog. The dialog failed twice on the first run here and said only
+*Failed to create keystore*; `keytool` is the same tool underneath, it ships
+inside Android Studio, and it says what went wrong.
+
+```sh
+mkdir -p ~/Documents/Claude/Keys
+"/Applications/Android Studio.app/Contents/jbr/Contents/Home/bin/keytool" -genkeypair -v \
+  -keystore ~/Documents/Claude/Keys/halfstop-upload.jks \
+  -alias upload -keyalg RSA -keysize 2048 -validity 10000 \
+  -dname "CN=Your Name, O=Halfstop LLC, L=Indianapolis, ST=Indiana, C=US"
+```
+
+- It asks for a password twice, and shows nothing while you type. At least
+  six characters; if it asks for a separate key password, press Return to
+  reuse the same one.
+- Keep the key **outside every clone**. Not in `android/` either: that folder
+  is gitignored and regenerated, and `rm -rf android` is a step these docs give
+  for fixing Gradle trouble. `.gitignore` also ignores `*.jks` as a net, but
+  the rule is the folder.
+- If Documents is synced by iCloud, the key is backed up there, which is
+  fine. Keep a second copy of the file and its password in a password manager
+  as well. Losing it is recoverable - with Play App Signing, Google can
+  register a new upload key - but it takes a support request and days.
+
 **Make the file** - in Android Studio, with the project `npm run app:android`
 opened:
 
 1. **Build → Generate Signed App Bundle or APK…** → **Android App Bundle** →
    Next.
-2. Module `app`. Under *Key store path*, **Create new…**:
-   - Path: somewhere **outside the clone**, in a folder that already
-     exists. Not in `android/`: that folder is gitignored and regenerated,
-     and `rm -rf android` is a step these docs give for fixing Gradle
-     trouble - it would take the key with it. Make the folder first
-     (`mkdir -p ~/Keys` in a terminal), then pick it with the folder button
-     at the end of the path box and type `halfstop-upload.jks` as the name.
-     **Do not type `~` into the box**: Android Studio does not expand it, and
-     the dialog answers only *Failed to create keystore*, which is how the
-     first attempt here ended.
-   - One password, used for both the store and the key, at least six
-     characters. The file is a PKCS12 key store, which has only one password
-     in practice - a different key password is ignored, or refused.
-   - Alias `upload`, validity 25 years, and your name and Halfstop, LLC for
-     the certificate.
-   - Save both passwords in your password manager, and back the `.jks` file
-     up somewhere that is not this repository. It is a secret, like Apple's
-     `.p8`. Losing it is recoverable - with Play App Signing, Google can
-     register a new upload key - but it takes a support request and days.
+2. Module `app`. **Choose existing…** and pick the `.jks` file. Key store
+   password as set, alias `upload`, key password the same.
 3. Next → build variant **release** → **Create**. The file lands at
    `android/app/release/app-release.aab`; the notification that says it
    finished has a *locate* link.
