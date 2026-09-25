@@ -22,10 +22,13 @@
  * the wrong machine, which is cheaper than failing three steps in.
  */
 
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { androidResources, REPLACED, withSplashBackground } from './android-icons.mjs';
+import { readMaster } from './build-app-icons.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PLATFORMS = ['ios', 'android'];
@@ -308,7 +311,41 @@ function run(label, command, args) {
   }
 }
 
-function main() {
+/**
+ * Put the Halfstop mark into res/, replacing Capacitor's logo.
+ *
+ * Every run, like the manifest and Gradle edits: android/ is regenerated, and
+ * an icon is exactly the kind of thing that is fixed by hand once and quietly
+ * lost with the folder. Writes only what differs, so a run that changes
+ * nothing says nothing. See tools/android-icons.mjs for what each file is.
+ */
+export async function writeAndroidIcons(res = path.join(ROOT, 'android', 'app', 'src', 'main', 'res'), { master = null } = {}) {
+  const files = androidResources(master || await readMaster());
+  let written = 0;
+  for (const [relative, contents] of files) {
+    const target = path.join(res, relative);
+    const bytes = typeof contents === 'string' ? Buffer.from(contents) : Buffer.from(contents);
+    if (existsSync(target) && readFileSync(target).equals(bytes)) continue;
+    mkdirSync(path.dirname(target), { recursive: true });
+    writeFileSync(target, bytes);
+    written += 1;
+  }
+  let removed = 0;
+  for (const relative of REPLACED) {
+    const target = path.join(res, relative);
+    if (!existsSync(target)) continue;
+    rmSync(target);
+    removed += 1;
+  }
+  const stylesPath = path.join(res, 'values', 'styles.xml');
+  if (existsSync(stylesPath)) {
+    const styled = withSplashBackground(readFileSync(stylesPath, 'utf8'));
+    if (styled.changed) { writeFileSync(stylesPath, styled.text); written += 1; }
+  }
+  return { written, removed };
+}
+
+async function main() {
   const platform = process.argv[2];
   const problems = preflight({
     platform,
@@ -370,6 +407,11 @@ function main() {
     if (added.length) {
       console.log(`\n>> Declared in AndroidManifest.xml: ${added.map((name) => name.split('.').pop()).join(', ')}`);
     }
+    const icons = await writeAndroidIcons();
+    if (icons.written || icons.removed) {
+      console.log(`\n>> The Halfstop icon and splash are in res/ (${icons.written} written, ${icons.removed} of Capacitor's removed)`);
+    }
+
     const scheme = capacitorConfig().appId;
     const linked = withDeepLink(permitted, scheme);
     if (linked.added) console.log(`\n>> AndroidManifest.xml now opens ${scheme}:// links (sign-in emails, the return from Google)`);
@@ -385,4 +427,4 @@ function main() {
   for (const line of afterOpening(platform)) console.log(line);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+if (import.meta.url === `file://${process.argv[1]}`) await main();

@@ -131,8 +131,22 @@ signing setup worth committing.
 
 ## 4. Icons and splash screens
 
-`assets/img/icon-1024.png` is the master. Capacitor's asset generator slices
-every native size from it:
+**Android: automatic.** `npm run app:android` renders the launcher icon (square,
+round, and both layers of the adaptive icon) and the splash from
+`assets/img/mark-master.png` on every run and writes them into
+`android/app/src/main/res`, replacing Capacitor's logo - see
+`tools/android-icons.mjs`. The medallion sits inside the middle 66dp of the
+adaptive icon, the part no launcher's mask cuts, on `#1f2846`, the site's header
+colour. The splash is that colour with the medallion unscaled in the middle,
+rather than Capacitor's PNGs, which are stretched to the window and would turn
+a round mark into an oval on most phones. Android 12 and later draw their own
+splash from the icon on the same colour.
+
+**For the Play Store listing**, the 512px icon Play Console asks for is
+`assets/img/icon-512.png`.
+
+**iOS: by hand, for now.** `assets/img/icon-1024.png` is the master.
+Capacitor's asset generator slices every native size from it:
 
 ```sh
 mkdir -p assets-src
