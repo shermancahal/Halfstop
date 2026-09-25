@@ -14,3 +14,14 @@ assets-src/
 
 # The CLI drops a version stamp here when it runs.
 supabase/.temp/
+
+# Signing keys and signed builds, which never belong in a public repository.
+# The upload key for Google Play (.jks/.keystore) and Apple's .p8 should live
+# outside every clone - see docs/payments.md - and these lines are only the
+# net under that rule, for the day one is saved in the wrong folder.
+*.jks
+*.keystore
+*.p8
+*.p12
+*.aab
+*.apk
