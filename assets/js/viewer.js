@@ -8683,6 +8683,20 @@ async function handleFiles(files) {
       const isBinary = /\.kmz$/i.test(file.name);
       const payload = isBinary ? await file.arrayBuffer() : await file.text();
       const doc = await parseMapFile(payload, file.name);
+      /*
+       * Google Takeout exports some saved places with no position. They are
+       * left out rather than drawn off the coast of Africa, and said by name,
+       * because a place that silently fails to arrive is a place somebody
+       * only misses on the road.
+       */
+      const unplaced = doc.unplaced || [];
+      if (unplaced.length) {
+        const named = unplaced.slice(0, 3).map((place) => `“${place.name}”`).join(', ');
+        const more = unplaced.length > 3 ? ` and ${unplaced.length - 3} more` : '';
+        toast(`${unplaced.length} place${unplaced.length === 1 ? '' : 's'} in “${file.name}” came from Google `
+          + `with no location and ${unplaced.length === 1 ? 'was' : 'were'} left out: ${named}${more}.`,
+        { tone: 'info', timeout: 12000 });
+      }
       if (!doc.geojson.features.length) {
         toast(`“${file.name}” contained no mappable features.`, { tone: 'error' });
         continue;

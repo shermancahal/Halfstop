@@ -264,7 +264,9 @@ function adoptForeignProperties(props) {
 
   if (!props.name) props.name = text(props.title, props.Name, props.label) || 'Untitled feature';
   if (!props.description) {
-    const found = text(props.notes, props.desc, props.Description, props.comment, props.cmt);
+    // An address last: Google's Labeled places carry one and nothing else to
+    // say, and a pin that knows its street is better than a blank note.
+    const found = text(props.notes, props.desc, props.Description, props.comment, props.cmt, props.address);
     if (found) props.description = found;
   }
   if (!props.color) {
@@ -295,6 +297,95 @@ function adoptForeignProperties(props) {
   }
 }
 
+/**
+ * Google Maps' saved places, as Google Takeout exports them.
+ *
+ * Google Maps has no export button, but Takeout's "Maps (your places)" writes
+ * `Saved Places.json` (starred places) and `Labeled places.json`, both
+ * GeoJSON - just not GeoJSON this reader understood. The name and address sit
+ * inside a nested `location`, the link is `google_maps_url`, and the date is
+ * `date`, so every starred place came in as "Untitled feature" with its note,
+ * address and link left behind in the file.
+ *
+ * Two shapes, because Google changed it once: the current lower-case one, and
+ * the older one with `Title`, `Google Maps URL` and a `Location` carrying
+ * `Business Name`, `Address` and `Geo Coordinates`.
+ */
+function looksLikeGoogleSaved(props) {
+  return Boolean(props && (props.google_maps_url || props['Google Maps URL']
+    || (props.location && typeof props.location === 'object')
+    || (props.Location && typeof props.Location === 'object')));
+}
+
+/**
+ * A position written into a Google Maps link, or null.
+ *
+ * Takeout exports some places at [0, 0] - a known Google fault, and a place
+ * that lands in the Gulf of Guinea is worse than one that does not land. The
+ * link sometimes carries the real position (`?q=lat,lng`, `query=`, `@lat,lng`
+ * or `!3dlat!4dlng`); a `?cid=` link does not, and nothing here pretends
+ * otherwise.
+ */
+export function positionInGoogleLink(url) {
+  const text = decodeURIComponent(String(url || ''));
+  const patterns = [
+    /!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/,
+    /[?&](?:q|query|ll|daddr|destination)=(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/,
+    /@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/,
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(text);
+    if (!match) continue;
+    const lat = Number(match[1]);
+    const lon = Number(match[2]);
+    if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180 && !(lat === 0 && lon === 0)) return [lon, lat];
+  }
+  return null;
+}
+
+/** Nowhere, as Google writes it for a place it could not export. */
+function isNullIsland(coordinates) {
+  return Array.isArray(coordinates) && Number(coordinates[0]) === 0 && Number(coordinates[1]) === 0;
+}
+
+/**
+ * One Google Takeout place, read into this app's names - or false for a place
+ * with no usable position, which the caller leaves out and reports.
+ */
+function adoptGoogleSaved(feature) {
+  const props = feature.properties;
+  const location = props.location || {};
+  const legacy = props.Location || {};
+  const pick = (...values) => values.find((value) => typeof value === 'string' && value.trim())?.trim() || '';
+
+  const address = pick(location.address, legacy.Address);
+  const name = pick(location.name, legacy['Business Name'], props.Title, props.title, props.name, address);
+  const link = pick(props.google_maps_url, props['Google Maps URL']);
+  const comment = pick(props.Comment, props.comment, props.Note, props.note);
+
+  if (name) props.name = name;
+  if (link && !props.link) props.link = link;
+  // The note is what somebody wrote; the address follows it, so a place saved
+  // for a reason keeps the reason first.
+  const note = [comment, address && address !== name ? address : ''].filter(Boolean).join('\n\n');
+  if (note && !props.description) props.description = note;
+  const stamp = Date.parse(pick(props.date, props.Published, props.Updated));
+  if (Number.isFinite(stamp)) props.time = stamp;
+  if (address) props.address = address;
+
+  const geometry = feature.geometry;
+  if (geometry?.type !== 'Point') return Boolean(geometry);
+  if (!isNullIsland(geometry.coordinates)) return true;
+
+  const coords = legacy['Geo Coordinates'];
+  const fromLegacy = coords && [Number(coords.Longitude), Number(coords.Latitude)];
+  const found = fromLegacy && fromLegacy.every(Number.isFinite) && !isNullIsland(fromLegacy)
+    ? fromLegacy : positionInGoogleLink(link);
+  if (!found) return false;
+  geometry.coordinates = found;
+  return true;
+}
+
 /** Normalize a plain GeoJSON file into the same document shape as GPX/KML. */
 function fromGeoJSON(text) {
   const parsed = JSON.parse(text);
@@ -302,6 +393,21 @@ function fromGeoJSON(text) {
     : parsed.type === 'Feature' ? [parsed]
       : parsed.type ? [{ type: 'Feature', geometry: parsed, properties: {} }]
         : [];
+
+  /*
+   * Google Takeout places with no position are left out rather than drawn at
+   * 0,0, and named on the document so the import can say which they were.
+   */
+  const unplaced = [];
+  const kept = features.filter((feature) => {
+    if (!looksLikeGoogleSaved(feature?.properties)) return true;
+    if (adoptGoogleSaved(feature)) return true;
+    const props = feature.properties;
+    unplaced.push({ name: props.name || 'Unnamed place', address: props.address || '', link: props.link || '' });
+    return false;
+  });
+  features.length = 0;
+  features.push(...kept);
 
   const bounds = emptyBounds();
   features.forEach((feature, index) => {
@@ -329,6 +435,7 @@ function fromGeoJSON(text) {
     time: null,
     geojson: { type: 'FeatureCollection', features },
     bbox: bounds,
+    unplaced,
   };
 }
 
