@@ -443,9 +443,13 @@ opened:
    `android/app/release/app-release.aab`; the notification that says it
    finished has a *locate* link.
 
-The version is `versionCode 1` in `android/app/build.gradle`. Play refuses a
-second upload with the same number, so each later upload needs it raised by
-one first.
+The version is set for you. Play refuses an upload whose `versionCode` it has
+seen before, so `npm run app:android` writes this clone's commit count there on
+every run - it only grows as the code changes - and prints
+`>> Version 0.1.0 (185)`. The name, `0.1.0`, is `version` in `package.json`;
+raise that for a release worth naming. Two builds of the same commit are the
+same version, so a rebuild after a fix needs the fix committed and pulled
+first, which it would anyway.
 
 **Upload it** - [Play Console](https://play.google.com/console):
 

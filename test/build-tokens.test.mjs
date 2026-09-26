@@ -5,7 +5,7 @@ import { chooseToken, appTokenFile, webTokenFile, appPreflight } from '../tools/
 import {
   preflight as appMachinePreflight, withAndroidPermissions, ANDROID_PERMISSIONS,
   CAPACITOR_INSTALL, afterOpening, agpMajor, agpDrift, AGP_SUPPORTED_MAJOR,
-  withSupportedProguard, withDeepLink, APP_PLUGINS, withProjectName,
+  withSupportedProguard, withDeepLink, APP_PLUGINS, withProjectName, versionFor, withVersion,
 } from '../tools/app.mjs';
 import { APP_SCHEME } from '../assets/js/lib/native-shell.js';
 
@@ -594,4 +594,45 @@ test('app: the project is named from capacitor.config.json, as the phone\'s labe
   assert.equal(config.appName, 'Halfstop');
   const source = await readFile(new URL('../tools/app.mjs', import.meta.url), 'utf8');
   assert.match(source, /withProjectName\(.*capacitorConfig\(\)\.appName\)/);
+});
+
+/* ------------------------------------------------------ the version number */
+
+/* The defaultConfig `cap add android` writes, as of Capacitor 8.5.2. */
+const GENERATED_DEFAULT_CONFIG = `    defaultConfig {
+        applicationId "com.halfstop.app"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }`;
+
+test('app version: the code is the commit count, the name is package.json\'s', () => {
+  assert.deepEqual(versionFor({ commits: '185\n', packageVersion: '0.1.0' }), { code: 185, name: '0.1.0' });
+  const { text, changed } = withVersion(GENERATED_DEFAULT_CONFIG, { code: 185, name: '0.1.0' });
+  assert.equal(changed, true);
+  assert.match(text, /^\s+versionCode 185$/m);
+  assert.match(text, /^\s+versionName "0\.1\.0"$/m);
+  // Nothing else in the block moves.
+  assert.equal(text.replace('versionCode 185', 'versionCode 1').replace('"0.1.0"', '"1.0"'), GENERATED_DEFAULT_CONFIG);
+});
+
+test('app version: a later commit is a larger code, and a rebuild is the same one', () => {
+  // Play refuses a code it has seen. More commits is always a bigger number;
+  // the same commit is the same build.
+  assert.ok(versionFor({ commits: '186' }).code > versionFor({ commits: '185' }).code);
+  const once = withVersion(GENERATED_DEFAULT_CONFIG, { code: 186, name: '0.1.0' }).text;
+  assert.deepEqual(withVersion(once, { code: 186, name: '0.1.0' }), { text: once, changed: false });
+});
+
+test('app version: when git cannot say, the build is left alone rather than guessed at', () => {
+  // A shallow clone counts only what it fetched, which can be smaller than a
+  // code Play has already accepted.
+  assert.equal(versionFor({ commits: '12', shallow: true }), null);
+  assert.equal(versionFor({ commits: '' }), null);
+  assert.equal(versionFor({ commits: 'fatal: not a git repository' }), null);
+  assert.deepEqual(withVersion(GENERATED_DEFAULT_CONFIG, null), { text: GENERATED_DEFAULT_CONFIG, changed: false });
+  // And a version with no name still has one.
+  assert.equal(versionFor({ commits: '3' }).name, '1.0');
 });

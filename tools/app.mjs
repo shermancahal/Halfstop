@@ -287,6 +287,52 @@ export function withProjectName(settingsGradle, name) {
   return { text: fixed, changed: fixed !== text };
 }
 
+/**
+ * The version Play and the App Store see, from this repository.
+ *
+ * Play refuses an upload whose versionCode it has seen before, and
+ * `cap add android` writes 1 - so the second upload failed until somebody
+ * remembered to edit a file in a gitignored folder. The code is the number
+ * of commits on HEAD instead: it only ever grows as the app changes, needs
+ * nobody to remember it, and two builds of the same commit are the same
+ * build, which Play is right to treat as one.
+ *
+ * The name people see is package.json's version. Raise that for a release
+ * worth naming; the code looks after itself.
+ *
+ * @returns {{ code: number, name: string } | null} null when git cannot say
+ */
+export function versionFor({ commits, shallow = false, packageVersion = '' } = {}) {
+  const code = Number.parseInt(String(commits ?? '').trim(), 10);
+  // A shallow clone counts only what it fetched, which can be fewer commits
+  // than an upload Play has already seen. Refusing to guess is better than a
+  // build Play rejects at the end of an upload.
+  if (!Number.isInteger(code) || code < 1 || shallow) return null;
+  return { code, name: String(packageVersion || '').trim() || '1.0' };
+}
+
+/** app/build.gradle with the version set, and whether that changed it. */
+export function withVersion(appBuildGradle, version) {
+  const text = String(appBuildGradle || '');
+  if (!version) return { text, changed: false };
+  const fixed = text
+    .replace(/(\bversionCode\s+)\d+/, `$1${version.code}`)
+    .replace(/(\bversionName\s+)"[^"]*"/, `$1"${version.name.replace(/"/g, '')}"`);
+  return { text: fixed, changed: fixed !== text };
+}
+
+/** Commits on HEAD, and whether this clone has all of them. */
+function gitVersion() {
+  const count = spawnSync('git', ['rev-list', '--count', 'HEAD'], { cwd: ROOT, encoding: 'utf8' });
+  const shallow = spawnSync('git', ['rev-parse', '--is-shallow-repository'], { cwd: ROOT, encoding: 'utf8' });
+  const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  return versionFor({
+    commits: count.status === 0 ? count.stdout : '',
+    shallow: shallow.status === 0 && shallow.stdout.trim() === 'true',
+    packageVersion: pkg.version,
+  });
+}
+
 /** Whether `npx cap` will find anything. Local install only, on purpose. */
 function capacitorInstalled() {
   return existsSync(path.join(ROOT, 'node_modules', '@capacitor', 'cli'));
@@ -399,6 +445,16 @@ async function main() {
     if (proguard.changed) {
       writeFileSync(appGradlePath, proguard.text);
       console.log('\n>> app/build.gradle: proguard-android.txt -> proguard-android-optimize.txt (AGP 9 refuses the old name)');
+    }
+
+    const version = gitVersion();
+    if (!version) {
+      console.warn('\n  WARNING: could not count this clone\'s commits (not a git clone, or a shallow one), so the '
+        + 'version was left as it is. Play refuses an upload with a versionCode it has already seen.');
+    } else {
+      const versioned = withVersion(readFileSync(appGradlePath, 'utf8'), version);
+      if (versioned.changed) writeFileSync(appGradlePath, versioned.text);
+      console.log(`\n>> Version ${version.name} (${version.code}) - the code is this clone's commit count`);
     }
 
     const manifestPath = path.join(ROOT, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
