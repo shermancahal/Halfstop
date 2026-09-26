@@ -29,6 +29,7 @@ import { fileURLToPath } from 'node:url';
 
 import { androidResources, REPLACED, withSplashBackground } from './android-icons.mjs';
 import { readMaster } from './build-app-icons.mjs';
+import { iosImages, withIosPlist, withIosVersion } from './ios-native.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PLATFORMS = ['ios', 'android'];
@@ -391,6 +392,42 @@ export async function writeAndroidIcons(res = path.join(ROOT, 'android', 'app', 
   return { written, removed };
 }
 
+/**
+ * Everything tools/ios-native.mjs knows the iPhone project needs, written in.
+ * Only what differs is written, and each change is said once.
+ */
+export async function patchIos(appDir = path.join(ROOT, 'ios', 'App'), { master = null, version = undefined } = {}) {
+  const plistPath = path.join(appDir, 'App', 'Info.plist');
+  const plist = withIosPlist(readFileSync(plistPath, 'utf8'), { scheme: capacitorConfig().appId });
+  if (plist.added.length) {
+    writeFileSync(plistPath, plist.text);
+    console.log(`\n>> Info.plist: added ${plist.added.join(', ')}`);
+  }
+  for (const line of plist.warnings) console.warn(`\n  WARNING: ${line}`);
+
+  let written = 0;
+  for (const [relative, bytes] of iosImages(master || await readMaster())) {
+    const target = path.join(appDir, 'App', relative);
+    const buffer = Buffer.from(bytes);
+    if (existsSync(target) && readFileSync(target).equals(buffer)) continue;
+    mkdirSync(path.dirname(target), { recursive: true });
+    writeFileSync(target, buffer);
+    written += 1;
+  }
+  if (written) console.log(`\n>> The Halfstop icon and launch image are in Assets.xcassets (${written} written)`);
+
+  const pbxPath = path.join(appDir, 'App.xcodeproj', 'project.pbxproj');
+  const chosen = version === undefined ? gitVersion() : version;
+  if (!chosen) {
+    console.warn('\n  WARNING: could not count this clone\'s commits, so the build number was left as it is.');
+  } else if (existsSync(pbxPath)) {
+    const versioned = withIosVersion(readFileSync(pbxPath, 'utf8'), chosen);
+    if (versioned.changed) writeFileSync(pbxPath, versioned.text);
+    console.log(`\n>> Version ${chosen.name} (${chosen.code})`);
+  }
+  return { added: plist.added, warnings: plist.warnings, written };
+}
+
 async function main() {
   const platform = process.argv[2];
   const problems = preflight({
@@ -418,9 +455,6 @@ async function main() {
   //    this is the one step that is conditional.
   if (!existsSync(path.join(ROOT, platform))) {
     run(`Create the ${platform} project`, 'npx', ['cap', 'add', platform]);
-    if (platform === 'ios') {
-      console.log('\nios/ is new and gitignored. Info.plist permissions still need adding - see docs/mobile-app.md section 5.');
-    }
   }
 
   // 2a. Android's permissions and its link handling, every run rather than
@@ -473,6 +507,10 @@ async function main() {
     if (linked.added) console.log(`\n>> AndroidManifest.xml now opens ${scheme}:// links (sign-in emails, the return from Google)`);
     if (linked.manifest !== before) writeFileSync(manifestPath, linked.manifest);
   }
+
+  // 2b. The iPhone project's link handling, permission strings, icon, launch
+  //     image and version - every run, for the same reason as 2a.
+  if (platform === 'ios') await patchIos();
 
   // 3. The copy. This is the step people forget.
   run(`Copy dist/ into ${platform}/`, 'npx', ['cap', 'sync', platform]);

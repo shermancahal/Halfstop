@@ -56,9 +56,10 @@ Google:
 Tested in `test/native-shell.test.mjs`; the device itself is the part that
 cannot be tested from here.
 
-**iOS: the same JavaScript, not yet the native half.** The URL type in
-`Info.plist` (Step B, iOS half) and Sign in with Apple (section 2) are still to
-do.
+**iOS: the same JavaScript, and now the URL scheme.** `npm run app:ios` writes
+the URL type into `Info.plist` on every run (Step B, iOS half -
+`tools/ios-native.mjs`). Sign in with Apple (section 2) is still to do, and
+needs the Apple developer account.
 
 **Still yours, in dashboards** - Step A and Google's side, below. Until Step A
 is done, every link the app sends silently lands on the website instead.
@@ -188,9 +189,8 @@ next time somebody starts from a clean checkout - and silently, because the
 build still succeeds and only the deep link stops working. The same is true of
 the two permission strings in section 5 of `docs/mobile-app.md`.
 
-So: a `tools/app-native.mjs` that patches `Info.plist` after `cap add`, run as
-step 2a of `tools/app.mjs`. Until that exists, treat any `ios/` on your Mac as
-disposable and expect to redo the edits.
+So it is scripted: `tools/ios-native.mjs` patches `Info.plist` on every run of
+`npm run app:ios`, as step 2b of `tools/app.mjs`.
 
 Android is the equivalent `intent-filter` in `AndroidManifest.xml`, with
 `android:scheme="com.halfstop.app"`.

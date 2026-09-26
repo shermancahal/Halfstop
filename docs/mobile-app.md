@@ -145,8 +145,13 @@ splash from the icon on the same colour.
 **For the Play Store listing**, the 512px icon Play Console asks for is
 `assets/img/icon-512.png`.
 
-**iOS: by hand, for now.** `assets/img/icon-1024.png` is the master.
-Capacitor's asset generator slices every native size from it:
+**iOS: automatic too.** `npm run app:ios` writes the 1024px icon (full bleed,
+no alpha channel - Apple rounds it and rejects transparency) and a launch image
+of the same colour with the medallion in the middle into
+`ios/App/App/Assets.xcassets` on every run - see `tools/ios-native.mjs`.
+
+For reference, the manual route this replaced: `assets/img/icon-1024.png` is
+the master, and Capacitor's asset generator slices every native size from it:
 
 ```sh
 mkdir -p assets-src
@@ -174,14 +179,24 @@ quietly come back.
 The app uses the web Geolocation API, which works in both webviews — but only
 if the native project declares why.
 
-**iOS** — `ios/App/App/Info.plist`:
+**iOS** — nothing to do by hand either. `npm run app:ios` adds these to
+`ios/App/App/Info.plist` on every run when they are missing (`withIosPlist` in
+`tools/ios-native.mjs`), and leaves any you have reworded alone:
 
 ```xml
 <key>NSLocationWhenInUseUsageDescription</key>
 <string>Shows where you are on the map and centres it on your position.</string>
+<key>NSCameraUsageDescription</key>
+<string>Takes a photo to keep with a place you have saved.</string>
 <key>NSPhotoLibraryAddUsageDescription</key>
 <string>Saves a map snapshot to your photo library.</string>
 ```
+
+The camera line is not optional. The waypoint photo picker offers *Take
+Photo*, and iOS closes an app that opens the camera without declaring why - no
+prompt, no error, just gone. The same run registers the `com.halfstop.app` URL
+scheme, so sign-in links come back to the app (see `docs/app-auth.md`), and sets
+the build number from the clone's commit count, as on Android.
 
 **Android** — nothing to do by hand. `npm run app:android` declares these in
 `android/app/src/main/AndroidManifest.xml` on every run (`withAndroidPermissions`
