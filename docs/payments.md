@@ -351,11 +351,14 @@ Direct Debit is the one that matters for EU recurring, with iDEAL and
 Bancontact able to set up a SEPA mandate. SCA and 3D Secure are handled by
 Checkout with nothing to configure.
 
-**The 14-day right of withdrawal** is not a Stripe setting and is not written
-anywhere in this repository yet. An EU consumer buying at a distance has one;
-digital services are exempt, but only where the customer expressly consents to
-immediate performance *and* acknowledges losing the right. That is wording in
-`terms.html`, and it is not there.
+**The 14-day right of withdrawal.** An EU consumer buying at a distance has
+one; digital services are exempt, but only where the customer expressly
+consents to immediate performance *and* acknowledges losing the right, before
+paying. `terms.html` says subscribing is that request, and Checkout says it
+above the pay button (`custom_text[submit][message]`, from
+`stripe-checkout/consent.mjs`, tested against Stripe's 1200-character limit -
+one character over refuses every Session). Google Play shows its own
+withdrawal wording in its purchase sheet.
 
 ---
 

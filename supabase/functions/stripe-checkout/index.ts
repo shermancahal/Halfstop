@@ -22,6 +22,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { allowedReturn, withFlag } from './returns.mjs';
 import { taxFields } from './tax.mjs';
+import { consentFields } from './consent.mjs';
 
 /** Trimmed, because a value pasted into a dashboard field brings whitespace. */
 function env(name: string): string {
@@ -252,6 +253,12 @@ Deno.serve(async (req: Request) => {
        * going out untaxed a month later.
        */
       ...taxFields(env('STRIPE_AUTOMATIC_TAX')),
+      /*
+       * Above the pay button: starting now ends the EU's fourteen-day right
+       * of withdrawal, and that has to be agreed before paying, not found in
+       * the terms afterwards. See consent.mjs.
+       */
+      ...consentFields(),
     }),
   });
 
