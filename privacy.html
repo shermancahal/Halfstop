@@ -63,7 +63,7 @@
   </section>
 
   <div class="wrap legal-wrap">
-    <p class="legal-date">In effect from 8 September 2026. Last changed 8 September 2026.</p>
+    <p class="legal-date">In effect from 8 September 2026. Last changed 26 September 2026 - see <a href="#changes">what changed</a>.</p>
 
     <section class="legal-section">
       <h2>The short version</h2>
@@ -73,8 +73,9 @@
         you make in it — your pins, your folders, your photographs, your
         downloaded maps — is stored on your own device and never leaves it. If
         you make an account, your folders and pins are also kept on a server so
-        they can reach your other devices. That is the whole of it, and the rest
-        of this page is the detail.
+        they can reach your other devices. If you subscribe, Stripe or Google
+        Play takes the payment, and we never see your card. The rest of this
+        page is the detail.
       </p>
     </section>
 
@@ -111,17 +112,50 @@
       <p>An account is optional. Halfstop works without one. If you make one, we hold:</p>
       <ul>
         <li><b>Your email address</b>, so you can sign in and so we can send you a sign-in link.</li>
+        <li><b>A display name</b>, if you set one. If you sign in with Google, Google also gives us your name and the address of your profile picture; we keep them with the account, and use your own display name first.</li>
         <li><b>Your folders and what is in them</b> — the name and color of each folder, and for every pin its coordinates, name, notes, icon and color. Coordinates of places you have saved are location data about places you care about, so we treat them as personal to you.</li>
+        <li><b>Who you have shared a folder with</b> — the email address you invited, and whether they can view or edit.</li>
+        <li><b>Your plan</b> — whether you have Premium, where it came from (the free month, a subscription, or a grant from us), when it renews or ends, and, for a subscription, the payment provider's reference for it. Whether you have used your free month, so it is only taken once.</li>
+        <li><b>Messages you send us</b> at support@halfstop.app, kept in our support inbox so we can answer them.</li>
+        <li><b>Your signed-in sessions</b> — for each device you are signed in on, the time, the IP address and the browser or app it came from. The sign-in service keeps these to keep the account secure, and a session's record goes when you sign out of it.</li>
       </ul>
       <p>
         That is all. We do not store your device's live position, a history of
-        where you have been, your IP address as a record, or anything about how
-        you use the app.
+        where you have been, or anything about how you use the app.
       </p>
       <p>
         Accounts and folder storage run on <b>Supabase</b>, which hosts the
         database on our behalf. Rules on the database restrict every row to the
         account that created it.
+      </p>
+    </section>
+
+    <section class="legal-section">
+      <h2>Signing in with Google</h2>
+      <p>
+        If you choose <b>Continue with Google</b>, Google confirms who you are
+        and tells us your email address, your name and the address of your
+        profile picture. We do not receive your Google password, your contacts,
+        your mail or anything else in your Google account, and Google is not
+        told what you do in Halfstop. If an account with the same email address
+        already exists, Google becomes another way into that account rather than
+        a second one.
+      </p>
+    </section>
+
+    <section class="legal-section">
+      <h2>Paying for Premium</h2>
+      <p>
+        We never see or store your card details. The payment is taken by
+        whichever service you subscribe through, under its own privacy policy:
+      </p>
+      <ul>
+        <li><b>Stripe</b>, when you subscribe on this website. Stripe collects your card details and a billing address, which it needs to work out sales tax or VAT. We receive your subscription's status, its renewal date and Stripe's reference for it, and we send Stripe your email address so the receipt reaches you.</li>
+        <li><b>Google Play</b>, when you subscribe in the Android app. Google handles the payment and your Google account. We receive the subscription's status, its renewal date and Google's reference for the purchase. To connect the purchase to your Halfstop account, the app gives Google your account's random identifier — not your email address.</li>
+      </ul>
+      <p>
+        We use that information to switch Premium on and off, and for nothing
+        else.
       </p>
     </section>
 
@@ -160,6 +194,9 @@
         <li><b>A Valhalla routing server</b> — only when you ask a trip to draw its road route.</li>
         <li><b>GitHub</b> — hosts the website itself.</li>
         <li><b>Supabase</b> — accounts and folder sync, as above.</li>
+        <li><b>Resend</b> — sends the email Halfstop sends you (confirmation and sign-in links, folder invitations, notice of a changed password) and receives mail sent to support@halfstop.app.</li>
+        <li><b>Google</b> — signing in with Google, if you choose it, and Google Play billing in the Android app.</li>
+        <li><b>Stripe</b> — subscriptions bought on this website.</li>
       </ul>
       <p>
         Each has its own privacy policy, and we do not control what they do with
@@ -223,12 +260,21 @@
       </p>
     </section>
 
-    <section class="legal-section">
+    <section class="legal-section" id="changes">
       <h2>Changes to this policy</h2>
       <p>
         If this changes, the date at the top changes with it. If a change means
         we start collecting something we did not collect before, we will say so
         plainly rather than quietly editing a paragraph.
+      </p>
+      <p>
+        <b>26 September 2026.</b> This page now covers signing in with Google,
+        subscriptions through Stripe and Google Play, the email service we use,
+        messages to support, folder invitations, your plan and your signed-in
+        sessions. Some of these were already in use before this page described
+        them, and it should have said so sooner. It also said we did not keep IP
+        addresses; the record of each signed-in session does, and it now says
+        so. Nothing about what stays on your device has changed.
       </p>
     </section>
   </div>

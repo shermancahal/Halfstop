@@ -739,3 +739,24 @@ test('pages: taking a new build waits while an auth link is being read', async (
     'the check has to come before the hand-over, or the reload has already happened',
   );
 });
+
+/*
+ * The prices the website states, against the prices config charges.
+ *
+ * The home page and the terms both name them, and they were written by hand.
+ * They went stale once already in the other direction - both still said
+ * "free today, nothing to buy" for days after the live site started selling.
+ */
+test('pages: the home page and the terms state the prices config charges', async () => {
+  const { describePrice } = await import('../assets/js/lib/tiers.js');
+  const { BILLING } = await import('../assets/js/config.js');
+  for (const page of ['index.html', 'terms.html']) {
+    const text = (await read(page)).replace(/\s+/g, ' ');
+    for (const plan of Object.keys(BILLING.plans)) {
+      const [amount] = describePrice({ plan }).split(' ');
+      assert.ok(text.includes(amount), `${page} does not say ${amount}`);
+    }
+    assert.doesNotMatch(text, /Halfstop is free today|nothing to buy|free while it is being built|When a paid tier starts/i,
+      `${page} still says there is nothing to buy`);
+  }
+});
