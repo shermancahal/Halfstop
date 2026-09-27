@@ -639,6 +639,36 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 .faq-answer { padding: 0 0 6px; }
 .faq-answer > p:first-child { margin-top: 0; }
 
+/*
+ * A link to one answer or one section, to copy and send.
+ *
+ * Quiet until the row is pointed at: thirty link marks at full strength would
+ * be the loudest thing on a page of questions. On a touch screen there is no
+ * pointing, so there they stay at the quieter strength rather than vanishing.
+ */
+.faq-anchor {
+  flex: none; align-self: center;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; margin: -6px 0;
+  border-radius: var(--radius-sm);
+  color: var(--ink-3); opacity: .45;
+  text-decoration: none;
+  transition: opacity .15s ease, background-color .15s ease;
+}
+.faq-anchor svg { width: 16px; height: 16px; }
+.faq-item > summary:hover .faq-anchor,
+.faq-section > h2:hover .faq-anchor { opacity: .85; }
+.faq-anchor:hover, .faq-anchor:focus-visible {
+  opacity: 1; color: var(--clay-2); background: var(--paper-2);
+}
+.faq-anchor:focus-visible { outline: 2px solid var(--clay); outline-offset: 1px; }
+.faq-section > h2 .faq-anchor { margin: -4px 0 0 6px; vertical-align: middle; }
+@media (hover: none) { .faq-anchor { opacity: .6; } }
+
+/* Landed on from a link: clear of the sticky header, and marked for a moment. */
+.faq-item, .faq-section { scroll-margin-top: calc(var(--header-h) + var(--safe-top) + 12px); }
+.faq-item:target > summary { background: var(--paper-2); }
+
 /* Where the sections are, before any of them is opened. */
 .faq-index {
   display: flex; flex-wrap: wrap; gap: 8px;

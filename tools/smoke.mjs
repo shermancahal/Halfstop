@@ -2722,6 +2722,58 @@ if (!external) {
    * Four states, because the interesting failures are at the edges: the wrong
    * person offered it, and the right person offered it after they sign out.
    */
+  /*
+   * A link to one answer on the help page.
+   *
+   * The ids are in the markup and test/faq-anchors.test.mjs reads them; what
+   * only a browser can show is the button: that there is one per question and
+   * section, that clicking it copies the address and opens the answer, and -
+   * the easy thing to get wrong inside a <summary> - that it never folds the
+   * answer shut.
+   */
+  console.log('\nA link to one answer on the help page');
+  {
+    const linking = await browser.newContext({
+      viewport: { width: 1280, height: 900 }, permissions: ['clipboard-read', 'clipboard-write'],
+    });
+    await linking.route(`**://${REF}.supabase.co/**`, (route) => route.abort());
+    const faq = await linking.newPage();
+    await faq.goto(new URL('faq.html', MAP_URL).href, { waitUntil: 'domcontentloaded' });
+    await faq.waitForSelector('.faq-anchor', { timeout: 8000 }).catch(() => {});
+    const counts = await faq.evaluate(() => ({
+      anchors: document.querySelectorAll('.faq-anchor').length,
+      targets: document.querySelectorAll('.faq-item[id], .faq-section[id]').length,
+    }));
+    check('every question and section has a link to it', counts.anchors === counts.targets && counts.anchors > 30, true);
+
+    await faq.click('#syncing .faq-anchor');
+    await faq.waitForTimeout(300);
+    const linked = await faq.evaluate(async () => ({
+      open: document.querySelector('#syncing').open,
+      hash: location.hash,
+      copied: await navigator.clipboard.readText().catch(() => null),
+    }));
+    check('clicking it opens the answer', linked.open, true);
+    check('puts the answer in the address bar', linked.hash, '#syncing');
+    check('and copies the link to it', /faq\.html#syncing$/.test(linked.copied || ''), true);
+    await faq.click('#syncing .faq-anchor');
+    await faq.waitForTimeout(200);
+    check('a second click leaves the answer open', await faq.evaluate(() => document.querySelector('#syncing').open), true);
+
+    // Arriving by the link opens it too, below the sticky header.
+    await faq.goto(new URL('faq.html#work-together', MAP_URL).href, { waitUntil: 'domcontentloaded' });
+    await faq.waitForTimeout(400);
+    const landed = await faq.evaluate(() => {
+      const item = document.querySelector('#work-together');
+      const header = document.querySelector('.site-header')?.getBoundingClientRect().bottom || 0;
+      return { open: item.open, clear: item.getBoundingClientRect().top >= header - 1 };
+    });
+    check('a link to an answer opens it', landed.open, true);
+    check('clear of the header', landed.clear, true);
+    await faq.close();
+    await linking.close();
+  }
+
   console.log('\nThe way in to the admin page');
   {
     const asAdmin = await browser.newContext({ viewport: { width: 1280, height: 900 } });
