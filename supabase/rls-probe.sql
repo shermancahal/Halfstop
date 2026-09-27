@@ -17,7 +17,7 @@
 -- second must be an address that has signed in, because the policy matches on
 -- the email in the session rather than on the user id. The first must hold
 -- Premium: an edit to a shared folder is refused while its owner does not,
--- and "invited to edit" would then stop with 42501 - see the last block.
+-- and "invited to edit" would then stop with 42501.
 --
 -- Expected, and the whole point of running it:
 --
@@ -151,59 +151,51 @@ rollback;
 -- rollback;
 
 -- ---------------------------------------------------------------------------
--- And whether syncing asks for the plan.
+-- And how much a free account syncs.
 --
 -- Two real accounts: PAID holds Premium, FREE holds nothing. Run as one
 -- statement. It ends by raising an exception on purpose - that is what rolls
--- all of it back, including the moment in the middle where PAID's
--- entitlement is deleted to see what a lapsed owner can still do - and the
--- report is the exception's message.
+-- all of it back, including the moments where FREE is given Premium to put it
+-- over the allowance and has it taken away again - and the report is the
+-- exception's message. A block this size can outlast the SQL editor's
+-- connection; split it in two if it does.
 --
 -- Expected, as it came back on the live project on 2026-09-27:
 --
---   A free insert own             refused 42501
---   B free update own             refused 42501   an error, not 0 rows
---   C free read own               1 row
---   D paid insert own             1 row
---   E paid update own             1 row
---   F free editor, paid owner     1 row           the collaborator needs no plan
---   G free editor, lapsed owner   refused 42501   the owner does
---   H lapsed update own           refused 42501
---   I lapsed read own             every row       nothing is taken away
---   J invitee read, lapsed owner  1 row
---   K lapsed delete own           1 row
---   L free delete own             1 row
+--   A free adds a folder of 3           1 row
+--   B free adds 98 more (101)           refused HSLIM
+--   C free adds 97 instead (100)        1 row           exactly the allowance fits
+--   D free grows that folder to 101     refused HSLIM
+--   E free renames at 100               1 row           no growth, no refusal
+--   F free trims to 53                  1 row
+--   G one statement, two folders of 30  refused HSLIM   counted row by row
+--   H1 free to 100 folders              100 rows
+--   H2 the 101st folder                 refused HSLIM
+--   I  a tombstone at the limit         1 row           and a new folder then fits
+--   J1 lapsed at 300, rename            1 row           over the allowance, not stuck
+--   J2 lapsed at 300, add one           refused HSLIM
+--   J3 lapsed, reads its own            1 row
+--   J4 lapsed, empties the folder       1 row
+--   K  paid adds a folder of 500        1 row
+--   L  free editor, paid owner          1 row           the collaborator needs no plan
+--
+-- One case, to copy for the others:
 --
 -- do $probe$
 -- declare
---   paid uuid := (select id from auth.users where email = 'PAID@example.com');
 --   free uuid := (select id from auth.users where email = 'FREE@example.com');
---   paid_claims text := json_build_object('sub', paid, 'email', 'PAID@example.com', 'role', 'authenticated')::text;
 --   free_claims text := json_build_object('sub', free, 'email', 'FREE@example.com', 'role', 'authenticated')::text;
 --   report text := E'\n';
 --   n int;
 -- begin
---   perform set_config('request.jwt.claims', free_claims, true);
---   insert into public.folders (user_id, client_id, name) values (free, 'rls-probe-free', 'Probe');
---   perform set_config('request.jwt.claims', paid_claims, true);
---   insert into public.folders (user_id, client_id, name) values (paid, 'rls-probe-paid', 'Probe');
---   insert into public.folder_shares (owner_id, client_id, invited_email, role)
---     values (paid, 'rls-probe-paid', 'FREE@example.com', 'editor');
---
---   -- One of these per case; the rest follow the same shape with the
---   -- statement from the table above. A refusal is caught, which undoes only
---   -- that case, and the SET LOCAL ROLE goes with it.
 --   begin
 --     perform set_config('request.jwt.claims', free_claims, true);
 --     set local role authenticated;
---     insert into public.folders (user_id, client_id, name) values (free, 'rls-probe-free-2', 'x');
+--     insert into public.folders (user_id, client_id, name, items)
+--     values (free, 'p-b', 'B', (select jsonb_agg(jsonb_build_object('id', g)) from generate_series(1, 98) g));
 --     get diagnostics n = row_count; reset role;
---     report := report || 'A free insert own: ' || n || E' row\n';
---   exception when others then report := report || 'A free insert own: refused ' || sqlstate || E'\n'; end;
---
---   -- ... B to F, then:
---   delete from public.entitlements where user_id = paid;
---   -- ... G to L.
+--     report := report || 'B free adds 98: ' || n || E' row\n';
+--   exception when others then report := report || 'B free adds 98: refused ' || sqlstate || E'\n'; end;
 --
 --   raise exception 'PROBE RESULT (rolled back):%', report;
 -- end

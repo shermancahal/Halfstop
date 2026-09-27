@@ -1,14 +1,14 @@
 /**
- * Folder sync is Premium, and the database is what says so.
+ * How much syncs on which plan, and that the database is what says so.
  *
- * tiers.js has always claimed folder sync was "enforced by the row-level
- * policy on the Supabase table". For as long as that policy was ownership
- * only, it was not: the app's gate was the whole rule, and a gate in the
- * browser is one devtools edit away from open. The policies now ask for the
- * plan, and these tests read schema.sql for the shape of that rule - the
- * part that is easy to undo in good faith, by merging four policies back into
- * one FOR ALL, or by moving a check from WITH CHECK into USING where a refusal
- * turns into a silent zero rows.
+ * A free account syncs up to FREE_SYNC; Premium syncs any amount; sharing is
+ * Premium, and it is the owner's plan that counts. For as long as the folders
+ * policy was ownership only, none of that was true: the app's gate was the
+ * whole rule, and a gate in the browser is one devtools edit away from open.
+ * A trigger now counts, and these tests read schema.sql for the shape of the
+ * rule - the parts easy to undo in good faith: the two copies of the numbers
+ * drifting apart, a trigger that fires before the owner is stamped, a check
+ * that refuses shrinking and so traps an account over the allowance.
  *
  * What the database actually does with them was checked on the live project,
  * as each account, inside a rolled-back transaction; supabase/rls-probe.sql
@@ -19,6 +19,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 import { Account, refusalFor } from '../assets/js/lib/account.js';
+import { FREE_SYNC, syncLoad, allowanceNote, TIERS } from '../assets/js/lib/tiers.js';
 
 const schema = await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8');
 const invite = await readFile(new URL('../supabase/functions/invite-to-folder/index.ts', import.meta.url), 'utf8');
@@ -54,18 +55,76 @@ test('sync plan: no policy on folders covers every command at once', () => {
   assert.doesNotMatch(schema, /create policy "folders are private to their owner"/);
 });
 
-test('sync plan: an owner writes a folder only with Premium, and the check is on the new row', () => {
+test('sync plan: an owner\u2019s own policies are about ownership, and the plan is counted by a trigger', () => {
   const policies = folderPolicies(schema);
   for (const command of ['insert', 'update']) {
-    const own = policies.filter((policy) => policy.command === command && /auth\.uid\(\)\)\s*=\s*user_id/.test(policy.using + policy.check)
-      && !/folder_shares/.test(policy.using + policy.check));
+    const own = policies.filter((policy) => policy.command === command && !/folder_shares/.test(policy.using + policy.check));
     assert.equal(own.length, 1, `expected one owner ${command} policy`);
-    assert.match(own[0].check, /private\.holds_premium\(\(select auth\.uid\(\)\)\)/,
-      `the owner ${command} policy does not ask for the plan in WITH CHECK`);
-    // In USING the refusal would be zero rows updated, which supabase-js
-    // reports as success and the app would take for a save.
-    assert.doesNotMatch(own[0].using, /holds_premium/, `the owner ${command} policy asks for the plan in USING`);
+    assert.match(own[0].check, /\(select auth\.uid\(\)\) = user_id/);
+    // A plan in the policy is all or nothing, which is what shut free
+    // accounts out of syncing altogether for a day. How much is a count, and
+    // counting is the trigger's.
+    assert.doesNotMatch(own[0].using + own[0].check, /holds_premium/, `the owner ${command} policy asks for a plan`);
   }
+  assert.match(schema, /create trigger folders_within_allowance_trigger\s+before insert or update on public\.folders\s+for each row execute function private\.folders_within_allowance\(\);/);
+});
+
+/** The body of private.folders_within_allowance, from schema.sql. */
+function allowanceFunction() {
+  const start = schema.indexOf('create or replace function private.folders_within_allowance()');
+  assert.ok(start > -1, 'the allowance trigger function is not defined');
+  return schema.slice(start, schema.indexOf('$$;', start));
+}
+
+test('sync plan: the database and the app hold the same free allowance', () => {
+  /*
+   * Two copies of two numbers, on purpose: the trigger is the rule and
+   * FREE_SYNC is what the app says and checks before sending. If they drift,
+   * the app either promises room the server refuses, or holds folders back
+   * that would have been accepted.
+   */
+  const body = allowanceFunction();
+  const folders = Number(body.match(/folder_limit constant integer := (\d+);/)?.[1]);
+  const items = Number(body.match(/item_limit constant integer := (\d+);/)?.[1]);
+  assert.equal(folders, FREE_SYNC.folders, 'the folder allowance differs between schema.sql and tiers.js');
+  assert.equal(items, FREE_SYNC.waypoints, 'the waypoint allowance differs between schema.sql and tiers.js');
+});
+
+test('sync plan: the trigger asks the owner\u2019s plan, counts the owner\u2019s rows, and refuses only growth', () => {
+  const body = allowanceFunction();
+  // The folder's owner, not whoever is writing: a collaborator's edit to a
+  // shared folder lands in the owner's collection.
+  assert.match(body, /private\.holds_premium\(new\.user_id\)/);
+  assert.match(body, /where f\.user_id = new\.user_id/);
+  assert.match(body, /security definer/);
+  assert.match(body, /set search_path = ''/);
+  // Tombstones are not things anybody is keeping.
+  assert.match(body, /and not f\.deleted/);
+  // Growth only: an account over the allowance must always be able to trim.
+  assert.match(body, /now_folders > folder_limit and now_folders > was_folders/);
+  assert.match(body, /now_items > item_limit and now_items > was_items/);
+  // Its own SQLSTATE, which refusalFor recognises.
+  assert.match(body, /errcode = 'HSLIM'/);
+  // Triggers on one event fire in name order, and this one must count the
+  // owner that folders_set_owner_trigger has already stamped.
+  assert.ok('folders_within_allowance_trigger' > 'folders_set_owner_trigger');
+  assert.match(schema, /create trigger folders_set_owner_trigger/);
+});
+
+test('sync plan: the app counts a collection the way the trigger does', () => {
+  const folder = (items, extra = {}) => ({ id: String(Math.random()), items: Array.from({ length: items }, (_, i) => ({ id: i })), ...extra });
+  const load = syncLoad([
+    folder(40), folder(60),
+    folder(500, { deleted: true }),
+    folder(300, { sharedFrom: { ownerId: 'someone', role: 'editor' } }),
+  ]);
+  assert.deepEqual(load, { folders: 2, waypoints: 100 });
+  assert.equal(allowanceNote(load), '', 'exactly the allowance fits');
+  assert.match(allowanceNote({ folders: 2, waypoints: 101 }), /up to 100 folders and 100 waypoints.*101 waypoints in 2 folders/);
+  assert.match(allowanceNote({ folders: 101, waypoints: 0 }), /0 waypoints in 101 folders/);
+  // Premium's grants include folderSync, which is what means "no allowance".
+  assert.ok(TIERS.premium.grants.includes('folderSync'));
+  assert.ok(!TIERS.free.grants.includes('folderSync'));
 });
 
 test('sync plan: reading and removing your own folders never asks for a plan', () => {
@@ -145,25 +204,30 @@ test('sync plan: an invitation asks for the owner’s plan before it records or 
   assert.match(invite, /plan\?\.tier !== 'premium'/);
 });
 
-test('sync plan: a refusal from the policy is said in words, anything else as it came', () => {
+test('sync plan: a refusal about the plan is said in words, anything else as it came', () => {
+  const limit = { code: 'HSLIM', message: 'A free account syncs up to 100 folders and 100 waypoints.' };
+  assert.match(refusalFor(limit), /free account syncs up to 100 folders and 100 waypoints/);
+  assert.match(refusalFor(limit), /stays on this device/);
+
   const policy = { code: '42501', message: 'new row violates row-level security policy for table "folders"' };
-  assert.match(refusalFor(policy), /Premium/);
-  assert.doesNotMatch(refusalFor(policy), /row-level/);
-  assert.match(refusalFor(policy, { shared: true }), /owner of this folder/);
+  assert.match(refusalFor(policy, { shared: true }), /owner of this folder no longer has Premium/);
   // Recognised by the words too, for a client that drops the code.
-  assert.match(refusalFor({ message: 'new row violates row-level security policy' }), /Premium/);
-  // Not every failure is the plan, and must not be explained as one.
+  assert.match(refusalFor({ message: 'new row violates row-level security policy' }, { shared: true }), /owner/);
+  // On your own folder a policy refusal is not about any plan any more, and
+  // must not be explained as one.
+  assert.equal(refusalFor(policy), policy.message);
   assert.equal(refusalFor({ code: '23505', message: 'duplicate key' }), 'duplicate key');
   assert.equal(refusalFor(null), '');
 });
 
 function refusingClient() {
-  const refused = { code: '42501', message: 'new row violates row-level security policy for table "folders"' };
+  const overAllowance = { code: 'HSLIM', message: 'A free account syncs up to 100 folders and 100 waypoints.' };
+  const ownerLapsed = { code: '42501', message: 'new row violates row-level security policy for table "folders"' };
   return {
     from() {
       return {
-        async upsert() { return { error: refused }; },
-        update() { return { eq() { return { async eq() { return { error: refused }; } }; } }; },
+        async upsert() { return { error: overAllowance }; },
+        update() { return { eq() { return { async eq() { return { error: ownerLapsed }; } }; } }; },
       };
     },
   };
@@ -176,7 +240,7 @@ test('sync plan: an edit the server refuses says why, for your folder and for on
   account.user = { id: 'me' };
 
   await account.pushFolder({ id: 'mine', name: 'Mine', items: [] });
-  assert.match(account.message, /^Not saved to your account: syncing is part of Premium/);
+  assert.match(account.message, /^Not saved to your account: a free account syncs up to 100 folders and 100 waypoints/);
 
   await account.pushFolder({ id: 'theirs', name: 'Theirs', items: [], sharedFrom: { ownerId: 'them', role: 'editor' } });
   assert.match(account.message, /^Not saved to your account: the owner of this folder no longer has Premium/);

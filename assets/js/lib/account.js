@@ -13,7 +13,7 @@ import { SUPABASE_URL, SUPABASE_KEY } from '../config.js';
 import { mergeFolders, rowToFolder, folderToRow, missingColumn } from './sync.js';
 import { canEdit, markShared, normaliseEmail, readRole } from './shares.js';
 import { safeStorage } from './folders.js';
-import { can, gateReason, tierFor } from './tiers.js';
+import { can, tierFor, FREE_SYNC, syncLoad, allowanceNote } from './tiers.js';
 import {
   appShell, APP_RETURN, rememberReturn, sessionStore as tabStore, watchAppLinks,
 } from './native-shell.js';
@@ -243,23 +243,28 @@ async function readFunctionError(error) {
 /**
  * What to say when the server refuses a folder.
  *
- * 42501 is Postgres's "insufficient privilege", which is what a row-level
- * policy raises when the row it was handed fails its check - and since sync
- * became Premium on the server, that check is the plan: this account's own,
- * for its own folders, or the owner's, for a folder shared to edit. Passed
- * through, it reads 'new row violates row-level security policy for table
- * "folders"', which is accurate and tells nobody what happened to their edit.
+ * Two refusals are about the plan. HSLIM is the allowance trigger saying a
+ * free account would grow past FREE_SYNC. 42501 is Postgres's "insufficient
+ * privilege", which a row-level policy raises when the row it was handed
+ * fails its check - on a shared folder, that is the owner's Premium having
+ * ended. Passed through, they read like database errors, which is accurate
+ * and tells nobody what happened to their edit.
  *
  * Anything else is passed through as it came: a refusal that is not about the
  * plan should not be explained as one.
  */
 export function refusalFor(error, { shared = false } = {}) {
   const message = String(error?.message || '');
+  // The allowance trigger's own SQLSTATE; see folders_within_allowance.
+  if (error?.code === 'HSLIM') {
+    return `a free account syncs up to ${FREE_SYNC.folders} folders and ${FREE_SYNC.waypoints} waypoints, `
+      + 'so this stays on this device. Premium syncs any number.';
+  }
   const refused = error?.code === '42501' || /row-level security/i.test(message);
-  if (!refused) return message;
-  return shared
-    ? 'the owner of this folder no longer has Premium, so changes to it stay on this device.'
-    : 'syncing is part of Premium, so this stays on this device.';
+  if (refused && shared) {
+    return 'the owner of this folder no longer has Premium, so changes to it stay on this device.';
+  }
+  return message;
 }
 
 /**
@@ -869,10 +874,10 @@ export class Account extends EventTarget {
      * device holds the only copy; the pins that point at them come back with
      * the folders on the next sign-in, ids and all.
      */
-    // Asked before the plan is forgotten below. Folders that do not travel on
-    // this account's plan have no copy on the server to come back from, so
+    // Asked before the plan is forgotten below. Folders held back by the free
+    // allowance have no up-to-date copy on the server to come back from, so
     // they stay - and the sentence should say that, not blame a sync.
-    const travels = can('folderSync', { tier: tierFor(this) });
+    const heldBack = this.heldBack();
     const saved = sync && this.user ? await this.sync() : null;
 
     try {
@@ -896,11 +901,10 @@ export class Account extends EventTarget {
         'Signed out. Your folders are on your account and come back when you sign in.');
       return;
     }
-    this.setStatus('signed-out', travels
-      ? 'Signed out. The last sync did not go through, so your folders are still on this '
-        + 'device rather than lost.'
-      : 'Signed out. Your folders stay on this device, because syncing them to your account '
-        + 'is part of Premium.');
+    this.setStatus('signed-out', heldBack
+      ? `Signed out. ${heldBack}`
+      : 'Signed out. The last sync did not go through, so your folders are still on this '
+        + 'device rather than lost.');
   }
 
   /**
@@ -1370,6 +1374,19 @@ export class Account extends EventTarget {
   }
 
   /**
+   * Why this account's own folders are not travelling, or '' when they are.
+   *
+   * Premium carries any number; a free account carries FREE_SYNC, counted
+   * the way the trigger in schema.sql counts. Read off the folders on this
+   * device, which is what a sync would send.
+   */
+  heldBack() {
+    if (can('folderSync', { tier: tierFor(this) })) return '';
+    const own = typeof this.folders?.snapshot === 'function' ? this.folders.snapshot() : [];
+    return allowanceNote(syncLoad(own));
+  }
+
+  /**
    * Two-way sync of every folder.
    *
    * Pulls the server's rows, merges by last-write-wins per folder, applies the
@@ -1384,22 +1401,24 @@ export class Account extends EventTarget {
       const client = await this.getClient();
 
       /*
-       * Carrying your own folders between devices is the metered part.
+       * Carrying your own folders between devices is the metered part, and a
+       * free account carries a small collection of them - FREE_SYNC.
        *
-       * A folder somebody shared with you is not: sharing is not on the
-       * Premium list, and a folder you were invited to read should not vanish
-       * because your own collection has stopped travelling. So the shared ones
-       * are still fetched, and only the account's own folders wait.
+       * Past that, the account's own folders wait on this device. A folder
+       * somebody shared with you is not part of the count: a folder you were
+       * invited to should not vanish because your own collection has grown.
+       * So the shared ones are still fetched.
        *
        * Said out loud rather than done quietly. Folders that stop syncing
        * without a word look exactly like folders that were lost.
        *
        * This is presentation, like everything else in tiers.js. The rule is
-       * the row policy in schema.sql, which refuses a write to an account's
-       * own folders without Premium; this only saves making requests it is
+       * the trigger in schema.sql, which refuses a write that grows a free
+       * account past the allowance; this only saves making requests it is
        * certain to refuse, and says why nothing moved.
        */
-      if (!can('folderSync', { tier: tierFor(this) })) {
+      const heldBack = this.heldBack();
+      if (heldBack) {
         const onlyShared = await this.pullShared(client);
         if (onlyShared !== null) {
           const held = this.folders.snapshot().filter((folder) => !folder.sharedFrom);
@@ -1407,7 +1426,7 @@ export class Account extends EventTarget {
         }
         this.lastSyncAt = Date.now();
         this.syncing = false;
-        this.setStatus('signed-in', gateReason('folderSync', { tier: tierFor(this) }));
+        this.setStatus('signed-in', heldBack);
         return null;
       }
 
@@ -1689,9 +1708,12 @@ export class Account extends EventTarget {
     // Looking at somebody's folder is not editing it, and a push that the
     // policy is certain to refuse is worth not making.
     if (folder?.sharedFrom && !canEdit(folder)) return;
-    // Your own folders travel on the plan that carries them. A folder somebody
-    // shared for editing is not yours and is not that.
-    if (!folder?.sharedFrom && !can('folderSync', { tier: tierFor(this) })) return;
+    // Your own folders travel within the plan's allowance. A folder somebody
+    // shared for editing is not yours and does not count against it.
+    if (!folder?.sharedFrom) {
+      const heldBack = this.heldBack();
+      if (heldBack) { this.setStatus('signed-in', heldBack); return; }
+    }
     try {
       const client = await this.getClient();
       const { error } = folder?.sharedFrom

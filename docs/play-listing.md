@@ -47,13 +47,16 @@ KNOW THE GROUND
 
 PIN IT
 • Save waypoints into folders by trip, by season, or by the light they need
-• Search for a place by name
+• Search for a place by name, from OpenStreetMap
 • Open GPX, KML, KMZ and GeoJSON files - including your Google Maps starred places, from Google Takeout
 • Export any folder as GPX or GeoJSON whenever you like, free, with or without an account
+• Sync up to 100 folders and 100 waypoints between your phone and your computer, free
 
 PREMIUM
 For the parts that cost us money every time they are used:
-• Syncing your folders between your phone and your computer
+• Syncing any number of folders between your phone and your computer
+• Inviting others to view a folder or work on it with you
+• Search that also finds businesses and street addresses, from Mapbox
 • Offline map downloads, for when the bars run out
 • Weather layers: cloud cover, fog, snow and storm tracks
 • Trip planning with road routing

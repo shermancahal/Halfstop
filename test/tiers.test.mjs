@@ -6,7 +6,7 @@ import {
   can, gateReason, planSummary, describePlan,
   daysLeft, featureForLayer, describePrice, purchaseRoute,
   premiumAdds, annualSaving, plansOffered, offersUpgrade, isBillingTester, TRIAL_DAYS,
-  describeRenewal,
+  describeRenewal, FREE_SYNC,
 } from '../assets/js/lib/tiers.js';
 
 const FREE = { live: false };
@@ -133,7 +133,10 @@ test('tiers: the plan summary says both what you have and whether it is real yet
   // Everything, because that is what an account gets while billing is off -
   // not the empty list Free grants for the day it is on.
   assert.equal(summary.includes.length, Object.keys(FEATURES).length);
-  assert.match(summary.note, /free while Halfstop is being built/);
+  // The free plan's note states the allowance it actually has, from the same
+  // numbers the database enforces - not the "everything is free" of before
+  // billing went live.
+  assert.ok(summary.note.includes(`${FREE_SYNC.folders} folders and ${FREE_SYNC.waypoints} waypoints`), summary.note);
 
   // And once it is real, the plan the server answered with is what decides.
   const paying = planSummary({ plan: { tier: 'premium', source: 'granted' } }, { billing: LIVE });

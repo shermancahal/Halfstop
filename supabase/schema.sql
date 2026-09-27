@@ -73,19 +73,21 @@ alter table public.folders enable row level security;
 -- statement and reused. The value cannot change mid-statement, so this is the
 -- same rule enforced the same way, and only the row count stops mattering.
 
--- Whether an account holds Premium today, for the policies below.
+-- Whether an account holds Premium today, for the rules below.
 --
 -- Syncing is the part of Halfstop that is paid for, because it is the part
 -- that is stored and served every time: every row here is database space and
--- every sync is bandwidth. So writing a folder to the server asks for the
--- same thing my_plan() calls premium - a premium row that has not run out.
+-- every sync is bandwidth. A free account syncs a small collection - see
+-- folders_within_allowance, further down - and Premium syncs any amount. Both
+-- ask this for the same thing my_plan() calls premium: a premium row that has
+-- not run out.
 --
--- A function rather than the subquery written out, for the co-editing policy
--- further down. That one has to ask about the folder's owner, and an
--- invitee cannot read the owner's entitlement: the entitlements policy shows
--- each account its own row and nobody else's, which is right, and which a
--- subquery inside a policy is held to like any other query. SECURITY DEFINER
--- is what lets it look, and all it hands back is one boolean.
+-- A function rather than the subquery written out, because the questions are
+-- about the folder's owner, and whoever is writing cannot always read the
+-- owner's entitlement: the entitlements policy shows each account its own row
+-- and nobody else's, which is right, and which a subquery inside a policy is
+-- held to like any other query. SECURITY DEFINER is what lets it look, and
+-- all it hands back is one boolean.
 --
 -- In a schema of its own, which PostgREST does not serve. In public it would
 -- be /rest/v1/rpc/holds_premium, and anybody signed in could ask whether any
@@ -121,28 +123,21 @@ $$;
 revoke execute on function private.holds_premium(uuid) from public;
 grant execute on function private.holds_premium(uuid) to authenticated;
 
--- An owner's folders: always theirs to read and remove, only on Premium to
--- write.
+-- An owner's folders, one policy per command.
 --
--- This was one FOR ALL policy, ownership only. It is four now because the
--- plan belongs on two of them and not the others:
+-- This was one FOR ALL policy. It is four so each can say what it means, and
+-- so a rule about one command cannot land on the others by accident: for a
+-- day, insert and update asked for Premium here, and a free account could not
+-- sync at all. The plan is now a question of how much, which a policy cannot
+-- count, so it lives in the folders_within_allowance trigger below and these
+-- are about ownership alone.
 --
---   read    no plan asked. A subscription that lapses stops the syncing, not
---           the owning - the FAQ promises nothing is deleted and that getting
---           your own data out is free, and a folder the server holds but will
---           not show its owner would break both.
---   delete  no plan asked, for the same reason, and because removing data
---           costs nothing to store.
---   insert  Premium, and this is the rule the app's own gate was standing in
---           for. tiers.js said folder sync was enforced here; until this it
---           was not, and anybody could push by editing their tier in devtools.
---   update  Premium, on the new row. Written into WITH CHECK rather than USING
---           so a refused write says so - error 42501 - instead of quietly
---           matching no rows, which the app would take for success.
---
--- The plan check is wrapped in a scalar subquery for the same reason
--- auth.uid() is: it is the same answer for every row of the statement.
+-- Reading and removing never ask about a plan. A subscription that lapses
+-- stops the syncing past the free allowance, not the owning: the FAQ promises
+-- nothing is deleted and that getting your own data out is free.
 drop policy if exists "folders are private to their owner" on public.folders;
+drop policy if exists "an owner on Premium adds folders" on public.folders;
+drop policy if exists "an owner on Premium changes their folders" on public.folders;
 
 drop policy if exists "an owner reads their own folders" on public.folders;
 create policy "an owner reads their own folders"
@@ -158,26 +153,105 @@ create policy "an owner removes their own folders"
   to authenticated
   using ((select auth.uid()) = user_id);
 
-drop policy if exists "an owner on Premium adds folders" on public.folders;
-create policy "an owner on Premium adds folders"
+drop policy if exists "an owner adds folders" on public.folders;
+create policy "an owner adds folders"
   on public.folders
   for insert
   to authenticated
-  with check (
-    (select auth.uid()) = user_id
-    and (select private.holds_premium((select auth.uid())))
-  );
+  with check ((select auth.uid()) = user_id);
 
-drop policy if exists "an owner on Premium changes their folders" on public.folders;
-create policy "an owner on Premium changes their folders"
+drop policy if exists "an owner changes their folders" on public.folders;
+create policy "an owner changes their folders"
   on public.folders
   for update
   to authenticated
   using ((select auth.uid()) = user_id)
-  with check (
-    (select auth.uid()) = user_id
-    and (select private.holds_premium((select auth.uid())))
-  );
+  with check ((select auth.uid()) = user_id);
+
+-- How much a free account syncs: 100 folders and 100 waypoints.
+--
+-- Every item in a folder counts as one - a waypoint, and a track too, however
+-- many points it has. Folders and items marked deleted do not count; they are
+-- tombstones kept so a deletion can travel, not things anybody is keeping.
+-- The same two numbers are FREE_SYNC in assets/js/lib/tiers.js, which is what
+-- the app says and checks before it sends anything; test/sync-plan.test.mjs
+-- fails if the two copies disagree.
+--
+-- A trigger, because a policy sees one row and this is a question about all
+-- of an account's rows. SECURITY DEFINER because a collaborator writing to a
+-- shared folder can see only that folder, and the count is of the owner's.
+--
+-- Only growth is refused. A write that leaves the account over the allowance
+-- but no further over - removing waypoints, deleting a folder, renaming one -
+-- goes through, so an account whose Premium has ended can always trim back
+-- down, and nothing it already holds is ever what stops it.
+--
+-- The refusal carries its own SQLSTATE, HSLIM, so the app can tell "over the
+-- free allowance" from every other refusal and say which it was.
+create or replace function private.folders_within_allowance()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  folder_limit constant integer := 100;
+  item_limit constant integer := 100;
+  other_folders integer;
+  other_items integer;
+  was_folders integer;
+  was_items integer;
+  now_folders integer;
+  now_items integer;
+begin
+  -- The service key and migrations carry no session, so there is no plan to
+  -- ask about. Nothing signed in reaches here without one: the policies on
+  -- this table are all `to authenticated`.
+  if auth.uid() is null then return new; end if;
+  if private.holds_premium(new.user_id) then return new; end if;
+
+  -- Everything else the owner holds. Rows written earlier in the same
+  -- statement are visible here, so a sync that sends every folder in one
+  -- request is counted as it goes, not as if each row were the only one.
+  select count(*), coalesce(sum(jsonb_array_length(f.items)), 0)
+    into other_folders, other_items
+  from public.folders f
+  where f.user_id = new.user_id
+    and f.client_id <> new.client_id
+    and not f.deleted;
+
+  now_folders := other_folders + case when new.deleted then 0 else 1 end;
+  now_items := other_items + case when new.deleted then 0 else jsonb_array_length(new.items) end;
+
+  if tg_op = 'UPDATE' and not old.deleted then
+    was_folders := other_folders + 1;
+    was_items := other_items + jsonb_array_length(old.items);
+  else
+    was_folders := other_folders;
+    was_items := other_items;
+  end if;
+
+  if (now_folders > folder_limit and now_folders > was_folders)
+    or (now_items > item_limit and now_items > was_items) then
+    raise exception using
+      errcode = 'HSLIM',
+      message = format('A free account syncs up to %s folders and %s waypoints.', folder_limit, item_limit),
+      detail = format('This would make %s folders and %s waypoints.', now_folders, now_items),
+      hint = 'Premium syncs any number.';
+  end if;
+  return new;
+end;
+$$;
+
+revoke execute on function private.folders_within_allowance() from public;
+
+-- Named to sort after folders_set_owner_trigger. Triggers on the same event
+-- fire in name order, and this has to count against the owner that trigger
+-- has already stamped on an insert, not whatever the request claimed.
+drop trigger if exists folders_within_allowance_trigger on public.folders;
+create trigger folders_within_allowance_trigger
+  before insert or update on public.folders
+  for each row execute function private.folders_within_allowance();
 
 -- Belt and braces on insert: even if a client sends someone else's user_id,
 -- stamp the row with the authenticated user. The policy above would reject it
@@ -349,14 +423,13 @@ create policy "a shared folder is readable by whoever it names"
 -- owner, so a collaborator can change what is in a folder and cannot create
 -- one in somebody else's name or remove theirs.
 --
--- The folder is stored on its owner's plan, so it is the owner who has to hold
--- Premium for it to change - not the collaborator, who may be on a free
--- account, which is what "sharing is not on the Premium list" means. Without
--- the owner's half this was a way round the sync rule above: a free month, a
--- folder shared with a second free account as editor, and that folder then
--- syncs on the second account for ever. When the owner's plan lapses the
--- folder stays readable to everybody it was shared with and stops changing,
--- which is the same thing that happens to the owner's own copy.
+-- Sharing is Premium, and it is the owner's Premium that counts - not the
+-- collaborator's, who may be on a free account. Inviting somebody needs it
+-- (invite-to-folder asks), and so does their editing: without the owner's
+-- half, a free month was a way to set up a folder that a second free account
+-- then edits for ever. When the owner's plan lapses the folder stays readable
+-- to everybody it was shared with and stops changing for them; the owner can
+-- still change it within the free allowance, like any of their own folders.
 drop policy if exists "a co-edited folder is writable by whoever it names" on public.folders;
 create policy "a co-edited folder is writable by whoever it names"
   on public.folders

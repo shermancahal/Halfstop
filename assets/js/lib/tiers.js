@@ -10,9 +10,9 @@
  * Anything that actually costs money has to be enforced where the money is
  * spent, which is somewhere this code cannot reach:
  *
- *   - Folder sync is enforced by the row-level policies on the Supabase
- *     table, which ask private.holds_premium() - the same "premium, and not
- *     run out" that my_plan() reports - before any folder is written. See
+ *   - Folder sync is enforced on the Supabase table: a trigger holds a free
+ *     account to FREE_SYNC, below, and lets Premium - the same "premium, and
+ *     not run out" that my_plan() reports - write any amount. See
  *     supabase/schema.sql and test/sync-plan.test.mjs.
  *   - Road routing and RV routing will be enforced at whatever proxy ends up
  *     in front of Valhalla, because that is the thing with a bill attached.
@@ -58,7 +58,9 @@ import { appShell } from './native-shell.js';
  */
 export const FEATURES = {
   placeSearch: 'Searching for a place by name',
-  folderSync: 'Syncing between devices',
+  addressSearch: 'Search that also finds businesses and street addresses',
+  folderSync: 'Syncing any number of folders between devices',
+  folderSharing: 'Inviting somebody to a folder',
   weatherLayers: 'Weather layers',
   offlineDownloads: 'Offline downloads',
   tripRouting: 'Trip routing',
@@ -105,16 +107,18 @@ export const TIERS = {
     id: 'free',
     name: 'Free',
     /*
-     * Place search is metered and free anyway, deliberately.
+     * Place search is free, deliberately, and it is OpenStreetMap's.
      *
      * It is the first thing anybody does with a map, and a map you cannot
-     * search is a map you have to already know. At this size the bill for it
-     * is small enough to carry, and meeting somebody with a locked search box
-     * in their first minute costs more than the requests do.
+     * search is a map you have to already know. So a free account searches
+     * through Photon, which answers from OpenStreetMap and costs us nothing
+     * per request. What Premium adds is Mapbox's search, which knows far more
+     * businesses and street addresses and is billed for every one - that is
+     * addressSearch, and lib/place.js is where the two are chosen between.
      */
     grants: ['placeSearch'],
-    note: 'Everything is free while Halfstop is being built. '
-      + 'If that ever changes, it will change here first and it will say so.',
+    note: 'The map, the public land, the sky, search from OpenStreetMap, and up to '
+      + '100 folders and 100 waypoints synced between devices.',
   },
   premium: {
     id: 'premium',
@@ -126,6 +130,49 @@ export const TIERS = {
 };
 
 export const DEFAULT_TIER = 'free';
+
+/**
+ * How much a free account syncs: 100 folders and 100 waypoints.
+ *
+ * Every item in a folder counts as a waypoint here, a track included, however
+ * long it is; folders and items marked deleted do not count, and neither do
+ * folders somebody else shared. Premium has no allowance - it is what
+ * `folderSync` grants.
+ *
+ * The rule is a trigger in supabase/schema.sql, which holds the same two
+ * numbers and refuses a write that would grow an account past either. This
+ * copy is what the app says, and what it checks before sending anything it
+ * knows will be refused. test/sync-plan.test.mjs reads both and fails if they
+ * part company.
+ */
+export const FREE_SYNC = Object.freeze({ folders: 100, waypoints: 100 });
+
+/** What an account's own folders would put on the server, counted the way the trigger counts. */
+export function syncLoad(folders) {
+  let count = 0;
+  let waypoints = 0;
+  for (const folder of folders || []) {
+    if (!folder || folder.deleted === true || folder.sharedFrom) continue;
+    count += 1;
+    waypoints += Array.isArray(folder.items) ? folder.items.length : 0;
+  }
+  return { folders: count, waypoints };
+}
+
+/**
+ * Why a free account's folders are not travelling, or '' when they fit.
+ *
+ * Says the numbers on both sides, because "over the limit" with nothing to
+ * compare it against leaves somebody guessing how much to delete.
+ */
+export function allowanceNote(load, allowance = FREE_SYNC) {
+  const over = load.folders > allowance.folders || load.waypoints > allowance.waypoints;
+  if (!over) return '';
+  const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+  return `A free account syncs up to ${allowance.folders} folders and ${allowance.waypoints} waypoints. `
+    + `This one has ${plural(load.waypoints, 'waypoint')} in ${plural(load.folders, 'folder')}, `
+    + 'so they stay on this device. Premium syncs any number.';
+}
 
 /**
  * How long a trial runs, for the sentence that offers one.

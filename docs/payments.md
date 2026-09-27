@@ -697,15 +697,21 @@ to *draw*. What actually costs money has to be refused where the bill is — the
 row policy for sync, whatever proxy ends up in front of Valhalla for routing,
 whoever serves the tiles for downloads.
 
-Sync is the one that does. The folders policies in `supabase/schema.sql` refuse
-a write to an account's own folders without a current Premium row, and refuse a
-collaborator's edit unless the *owner* holds one; reading and deleting your own
-folders never asks for a plan, so a lapsed subscriber keeps everything they
-made. `invite-to-folder` asks the same question before it records or emails an
-invitation. `private.holds_premium()` is the one definition, kept out of the
-API schema; `test/sync-plan.test.mjs` holds the shape and `supabase/rls-probe.sql`
-has the cases to run against a real project. Routing and tile downloads still
-read no plan.
+Sync is the one that does. A trigger on the folders table,
+`private.folders_within_allowance`, holds a free account to 100 folders and 100
+waypoints (`FREE_SYNC` in `tiers.js` is the app's copy, and a test fails if they
+differ) and refuses only growth, so an account over the allowance can always
+trim. Premium writes any amount. A collaborator's edit needs the *owner* to hold
+Premium, and so does sending an invitation (`invite-to-folder` asks). Reading
+and deleting your own folders never ask about a plan. `private.holds_premium()`
+is the one definition of Premium, kept out of the API schema;
+`test/sync-plan.test.mjs` holds the shape and `supabase/rls-probe.sql` has the
+cases to run against a real project.
+
+Place search is split by plan too, though only in the app: free accounts ask
+Photon (OpenStreetMap), Premium asks Mapbox. The Mapbox token is public, so
+this is a cost choice rather than a boundary; closing it would mean a proxy
+function holding the token. Routing and tile downloads still read no plan.
 
 ## Before turning `ABMAP_BILLING_LIVE` on
 

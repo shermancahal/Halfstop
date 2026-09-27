@@ -148,21 +148,19 @@ Deno.serve(async (req: Request) => {
   }
 
   /*
-   * Sharing a folder is sharing something the server keeps, so the owner has
-   * to be on the plan that keeps it.
+   * Inviting somebody is Premium, and it is the owner's Premium that counts.
    *
-   * The same rule as the folders policies in schema.sql, asked through the
+   * The same rule as the co-editing policy in schema.sql, asked through the
    * caller's own session with my_plan(), so the answer is the one the app is
    * drawn from. The person invited needs no plan; the person whose folder it
-   * is does. Without this an account whose plan had lapsed could go on
-   * sending invitations - an email each - to folders that can no longer
-   * change.
+   * is does: every invitation is an email, and every edit it allows is
+   * storage and bandwidth on the owner's account.
    */
   const { data: plan, error: planError } = await asCaller.rpc('my_plan');
   if (planError) return reply(500, { error: `Could not check your plan: ${planError.message}` });
   if (plan?.tier !== 'premium') {
     return reply(403, {
-      error: 'Sharing a folder is part of Premium, because the folder has to sync to your account first.',
+      error: 'Inviting somebody to a folder is part of Premium. The person you invite only needs a free account.',
     });
   }
 

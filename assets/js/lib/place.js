@@ -1,7 +1,8 @@
 /**
  * Everything the details panel needs to say about a single point:
- * coordinate formats, UTM, sun times, distance and bearing, and — when a
- * Mapbox token is configured — the nearest town and a street address.
+ * coordinate formats, UTM, sun times, distance and bearing, and — from
+ * OpenStreetMap or, on Premium, Mapbox — the nearest town and a street
+ * address.
  *
  * All of it except the geocoder is offline arithmetic, which matters: the
  * details panel is most useful exactly where there is no signal.
@@ -386,22 +387,65 @@ export function sunTimes([lon, lat], date = new Date()) {
 
 /* ------------------------------------------------------------------ geocoding */
 
+/*
+ * Two places a lookup can be answered from, chosen by plan.
+ *
+ * Mapbox is billed for every search and every nearest-town name, and knows a
+ * great many businesses and street addresses. Photon is komoot's free
+ * geocoder over OpenStreetMap data: towns, peaks, lakes, parks, trailheads
+ * and roads it finds well, businesses and house numbers less reliably. A free
+ * account is answered by Photon and Premium by Mapbox - the `addressSearch`
+ * feature in tiers.js. Both come back in the same shapes, so nothing past
+ * this module knows which one answered.
+ *
+ * Photon rather than Nominatim, OpenStreetMap's own geocoder, because the
+ * search box searches as you type, and Nominatim's usage policy forbids
+ * exactly that on its public server. Photon is built for it.
+ */
+export const PHOTON_URL = 'https://photon.komoot.io';
+
+/**
+ * Which service to ask: Mapbox when the plan includes it and there is a token
+ * to ask with, OpenStreetMap otherwise.
+ *
+ * A missing token used to mean no search at all. It now means OpenStreetMap,
+ * which needs no key.
+ */
+export function lookupProvider({ premium = false, token = MAPBOX_TOKEN } = {}) {
+  return premium && token ? 'mapbox' : 'osm';
+}
+
+/** Every state's two-letter code by name, for a Photon answer that only names it. */
+const US_STATES = {
+  alabama: 'AL', alaska: 'AK', arizona: 'AZ', arkansas: 'AR', california: 'CA', colorado: 'CO',
+  connecticut: 'CT', delaware: 'DE', 'district of columbia': 'DC', florida: 'FL', georgia: 'GA',
+  hawaii: 'HI', idaho: 'ID', illinois: 'IL', indiana: 'IN', iowa: 'IA', kansas: 'KS', kentucky: 'KY',
+  louisiana: 'LA', maine: 'ME', maryland: 'MD', massachusetts: 'MA', michigan: 'MI', minnesota: 'MN',
+  mississippi: 'MS', missouri: 'MO', montana: 'MT', nebraska: 'NE', nevada: 'NV', 'new hampshire': 'NH',
+  'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND',
+  ohio: 'OH', oklahoma: 'OK', oregon: 'OR', pennsylvania: 'PA', 'rhode island': 'RI',
+  'south carolina': 'SC', 'south dakota': 'SD', tennessee: 'TN', texas: 'TX', utah: 'UT', vermont: 'VT',
+  virginia: 'VA', washington: 'WA', 'west virginia': 'WV', wisconsin: 'WI', wyoming: 'WY',
+};
+
 const geocodeCache = new Map();
 
 /**
- * Nearest place and street address, via the Mapbox geocoder.
+ * Nearest place and street address, via the Mapbox geocoder - or Photon,
+ * when `provider` says so.
  *
- * Needs a token and a connection, so it is strictly an enhancement: everything
- * else in this module works with neither. Results are cached per rounded
+ * Needs a connection, and Mapbox a token, so it is strictly an enhancement:
+ * everything else in this module works with neither. Results are cached per rounded
  * coordinate, since panning around one pin should not spend a request each time.
  *
  * @returns {Promise<{place: string, address: string, context: string, regionCode: string,
  *   regionName: string}|null>}
  */
-export async function reverseGeocode([lon, lat]) {
+export async function reverseGeocode([lon, lat], { provider = lookupProvider() } = {}) {
+  if (provider !== 'mapbox') return reverseGeocodeOSM([lon, lat]);
   if (!MAPBOX_TOKEN) return null;
 
-  const key = `${lat.toFixed(4)},${lon.toFixed(4)}`;
+  const key = `mapbox:${lat.toFixed(4)},${lon.toFixed(4)}`;
   if (geocodeCache.has(key)) return geocodeCache.get(key);
 
   /*
@@ -458,10 +502,10 @@ export async function reverseGeocode([lon, lat]) {
  *
  * @returns {Promise<{ok: boolean, reason: string, results: Array}>}
  */
-export async function searchPlaces(query, { near = null, limit = 6, signal = null } = {}) {
+export async function searchPlaces(query, { near = null, limit = 6, signal = null, provider = lookupProvider() } = {}) {
   const text = String(query || '').trim();
-  if (!text) return { ok: true, reason: '', results: [] };
-  if (!MAPBOX_TOKEN) return { ok: false, reason: 'Search needs a Mapbox token.', results: [] };
+  if (!text) return { ok: true, reason: '', results: [], provider };
+  if (provider !== 'mapbox' || !MAPBOX_TOKEN) return searchPlacesOSM(text, { near, limit, signal });
 
   const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(text)}.json`
     + `?access_token=${encodeURIComponent(MAPBOX_TOKEN)}`
@@ -471,13 +515,145 @@ export async function searchPlaces(query, { near = null, limit = 6, signal = nul
   try {
     const response = await fetch(url, signal ? { signal } : undefined);
     if (!response.ok) {
-      return { ok: false, reason: `The geocoder answered ${response.status}.`, results: [] };
+      return { ok: false, reason: `The geocoder answered ${response.status}.`, results: [], provider: 'mapbox' };
     }
-    return { ok: true, reason: '', results: parseSearch(await response.json()) };
+    return { ok: true, reason: '', results: parseSearch(await response.json()), provider: 'mapbox' };
   } catch (error) {
     if (error?.name === 'AbortError') throw error;
-    return { ok: false, reason: 'No answer — you may be offline.', results: [] };
+    return { ok: false, reason: 'No answer — you may be offline.', results: [], provider: 'mapbox' };
   }
+}
+
+/* ------------------------------------------------------ OpenStreetMap (Photon) */
+
+/**
+ * Places matching a typed query, from OpenStreetMap through Photon.
+ *
+ * Asks for more than it shows and keeps the ones in the United States, which
+ * is what the Mapbox search does with `country=us`: Photon has no country
+ * filter, and "Springfield" answered from four continents is not a list
+ * anybody on this map wanted.
+ */
+export async function searchPlacesOSM(text, { near = null, limit = 6, signal = null } = {}) {
+  const url = `${PHOTON_URL}/api/?q=${encodeURIComponent(text)}`
+    + `&limit=${Math.min(limit * 3, 15)}&lang=en`
+    + (near ? `&lat=${near[1].toFixed(3)}&lon=${near[0].toFixed(3)}` : '');
+  try {
+    const response = await fetch(url, signal ? { signal } : undefined);
+    if (response.status === 429) {
+      return { ok: false, reason: 'OpenStreetMap search is busy. Try again in a moment.', results: [], provider: 'osm' };
+    }
+    if (!response.ok) {
+      return { ok: false, reason: `OpenStreetMap search answered ${response.status}.`, results: [], provider: 'osm' };
+    }
+    return { ok: true, reason: '', results: parsePhotonSearch(await response.json()).slice(0, limit), provider: 'osm' };
+  } catch (error) {
+    if (error?.name === 'AbortError') throw error;
+    return { ok: false, reason: 'No answer — you may be offline.', results: [], provider: 'osm' };
+  }
+}
+
+/**
+ * Nearest place and street address from Photon, in parsePlace's shape.
+ *
+ * Asked with a 10 km radius, because the default is so tight that a pin in
+ * open country finds nothing - and the state it finds is what decides which
+ * route markers the whole map draws. If Photon ever refuses the parameter, it
+ * is asked again without it rather than giving up.
+ */
+export async function reverseGeocodeOSM([lon, lat]) {
+  const key = `osm:${lat.toFixed(4)},${lon.toFixed(4)}`;
+  if (geocodeCache.has(key)) return geocodeCache.get(key);
+
+  const base = `${PHOTON_URL}/reverse?lon=${lon.toFixed(6)}&lat=${lat.toFixed(6)}&lang=en`;
+  try {
+    let response = await fetch(`${base}&radius=10`);
+    if (response.status === 400) response = await fetch(base);
+    if (!response.ok) {
+      warnOnce(`[place] OpenStreetMap lookup refused the request: ${response.status} ${response.statusText}.`);
+      return null;
+    }
+    const result = parsePhotonPlace(await response.json());
+    geocodeCache.set(key, result);
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+/* What OpenStreetMap calls a thing, in the words the result list uses. */
+const OSM_KINDS = {
+  city: 'Town', town: 'Town', village: 'Town', hamlet: 'Town',
+  peak: 'Peak', volcano: 'Peak', saddle: 'Pass', mountain_pass: 'Pass',
+  camp_site: 'Campground', caravan_site: 'Campground', viewpoint: 'Viewpoint',
+  trailhead: 'Trailhead', parking: 'Parking', waterfall: 'Waterfall',
+  lake: 'Lake', reservoir: 'Lake', water: 'Water', river: 'River', stream: 'Stream',
+  park: 'Park', nature_reserve: 'Reserve', protected_area: 'Protected area',
+  national_park: 'National park', beach: 'Beach', glacier: 'Glacier', spring: 'Spring',
+};
+const PHOTON_TYPES = {
+  house: 'Address', street: 'Street', city: 'Town', district: 'Neighbourhood',
+  locality: 'Locality', county: 'County', state: 'State', country: 'Country',
+};
+
+const titleCase = (value) => {
+  const words = String(value || '').replace(/_/g, ' ').trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : '';
+};
+
+/**
+ * Photon search results, in parseSearch's shape.
+ *
+ * Photon's `extent` is [west, north, east, south] - not the [west, south,
+ * east, north] of a GeoJSON bbox - so it is reordered here rather than handed
+ * on to fitBounds upside down.
+ */
+export function parsePhotonSearch(data, { country = 'US' } = {}) {
+  return (data?.features || [])
+    .filter((feature) => !country
+      || String(feature?.properties?.countrycode || '').toUpperCase() === country)
+    .map((feature) => {
+      const props = feature.properties || {};
+      const street = [props.housenumber, props.street].filter(Boolean).join(' ');
+      const name = props.name || street || '';
+      const context = [props.city, props.state]
+        .filter((part) => part && part !== name)
+        .join(', ') || props.county || '';
+      const extent = Array.isArray(props.extent) && props.extent.length === 4 ? props.extent : null;
+      return {
+        id: `${props.osm_type || ''}${props.osm_id || ''}` || name,
+        name,
+        context,
+        kind: OSM_KINDS[props.osm_value] || PHOTON_TYPES[props.type] || titleCase(props.osm_value) || 'Place',
+        center: feature.geometry?.coordinates || null,
+        bbox: extent ? [extent[0], extent[3], extent[2], extent[1]] : null,
+      };
+    })
+    .filter((entry) => entry.name && Array.isArray(entry.center) && entry.center.length === 2);
+}
+
+/**
+ * A Photon reverse answer, in parsePlace's shape.
+ *
+ * Photon names the state rather than coding it, so the code comes from the
+ * table above - and only inside the United States, where route markers are
+ * drawn per state. Anywhere else it is empty, which draws the generic ones.
+ */
+export function parsePhotonPlace(data) {
+  const props = data?.features?.[0]?.properties;
+  if (!props) return { address: '', place: '', context: '', regionCode: '', regionName: '' };
+  const us = String(props.countrycode || '').toUpperCase() === 'US';
+  const townTypes = ['city', 'locality', 'district'];
+  const place = props.city || (townTypes.includes(props.type) ? props.name : '') || props.locality || props.district || '';
+  const address = props.housenumber && props.street ? `${props.housenumber} ${props.street}` : '';
+  const regionName = props.state || '';
+  return {
+    address,
+    place,
+    context: [place, regionName].filter(Boolean).join(', '),
+    regionCode: us ? US_STATES[regionName.toLowerCase()] || '' : '',
+    regionName,
+  };
 }
 
 /**

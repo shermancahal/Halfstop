@@ -52,7 +52,7 @@ import { createAccountPanel } from './lib/account-panel.js';
 import { wireSettingsMenu as wireSharedSettingsMenu } from './lib/settings-menu.js';
 import {
   formatDD, formatDMS, formatDDM, toUTM, distanceBearing, compassPoint, reverseGeocode, searchPlaces,
-  parseCoordinate,
+  parseCoordinate, lookupProvider,
 } from './lib/place.js';
 import {
   sunTimes, sunPosition, moonTimes, moonPosition, moonIllumination,
@@ -440,6 +440,12 @@ function whenStyleReady(run) {
 const planTier = () => tierFor(state.account);
 const allowed = (feature) => can(feature, { tier: planTier() });
 const lockedBecause = (feature) => gateReason(feature, { tier: planTier() });
+/*
+ * Which service answers a place lookup: Mapbox on Premium, OpenStreetMap on a
+ * free account. Asked at the moment of each lookup, so signing in or
+ * subscribing changes the next search without a reload.
+ */
+const lookup = () => lookupProvider({ premium: allowed('addressSearch') });
 
 const availableBasemaps = () => BASEMAPS.filter((basemap) => {
   if (basemap.requiresToken && !hasMapboxToken()) return false;
@@ -1382,6 +1388,7 @@ function wirePlaceSearch() {
       answer = await searchPlaces(query, {
         near: centre ? [centre.lng, centre.lat] : null,
         signal: controller.signal,
+        provider: lookup(),
       });
     } catch {
       return;   // aborted; a newer query is already running
@@ -1398,6 +1405,18 @@ function wirePlaceSearch() {
     // Said under the results rather than instead of them: your own places
     // still answered, and the reason the rest did not is worth one line.
     if (!answer.ok) results.append(el('p', { class: 'map-search-note', text: answer.reason }));
+    /*
+     * OpenStreetMap's data comes with a condition, which is saying so. And on
+     * a free account, the one line that says what Premium's search would add -
+     * the reason somebody searching for a restaurant's address found nothing.
+     */
+    if (answer.ok && answer.provider === 'osm' && answer.results.length) {
+      const more = allowed('addressSearch') ? '' : ' Premium search also finds businesses and street addresses.';
+      results.append(el('p', {
+        class: 'map-search-note',
+        text: `Places © OpenStreetMap contributors, found by Photon.${more}`,
+      }));
+    }
   };
 
   const show = (places) => {
@@ -2122,7 +2141,9 @@ async function renderBuildStamp() {
 function exposeShieldInspector() {
   globalThis.abmapShields = async () => {
     const centre = state.map?.getCenter?.();
-    const place = centre ? await reverseGeocode([centre.lng, centre.lat]).catch((error) => ({ error })) : null;
+    const place = centre
+      ? await reverseGeocode([centre.lng, centre.lat], { provider: lookup() }).catch((error) => ({ error }))
+      : null;
 
     const design = stateDesign(state.shieldState);
     const wanted = [2, 3, 4].map((length) => shieldImageId(design, length));
@@ -2526,7 +2547,16 @@ function applyShieldState(code = state.shieldState) {
 /** One pass: where are we, and do the markers match it? */
 async function refreshShieldState() {
   const centre = state.map.getCenter();
-  const place = await reverseGeocode([centre.lng, centre.lat]).catch(() => null);
+  /*
+   * Asked about the middle of a cell about five kilometres across, not about
+   * the exact centre. The geocoder's cache is keyed to ten metres, so every pan
+   * used to be a fresh request - billed, on Mapbox, and on Photon a service
+   * that asks to be used fairly - for an answer ("which state") that changes
+   * only at a border. A border is already where this is allowed to be wrong.
+   */
+  const cell = (degrees) => Math.round(degrees * 20) / 20;
+  const place = await reverseGeocode([cell(centre.lng), cell(centre.lat)], { provider: lookup() })
+    .catch(() => null);
   const code = place?.regionCode || '';
   if (!code) return;
 
@@ -9405,7 +9435,7 @@ function renderPinDetails(folder, item) {
   }, { icon: icons.pin });
   dom.details.append(placeSection);
 
-  reverseGeocode([lon, lat]).then((place) => {
+  reverseGeocode([lon, lat], { provider: lookup() }).then((place) => {
     if (!place) {
       placeSection.remove();
       return;
@@ -12846,15 +12876,15 @@ function folderNameRow(folder) {
  */
 function folderShareRow(folder) {
   /*
-   * An invitation is to a folder the server keeps, and keeping it is the
-   * Premium part - invite-to-folder refuses without it. Said here instead of
+   * Inviting somebody is Premium - invite-to-folder refuses without it, and
+   * the co-editing policy asks for the owner's plan. Said here instead of
    * offering a field that can only be refused.
    */
-  if (!allowed('folderSync')) {
+  if (!allowed('folderSharing')) {
     return el('div', { class: 'editor-share' }, [
       el('p', {
         class: 'hint', style: 'margin:6px 0 0',
-        text: 'Inviting somebody to a folder is part of Premium, because the folder has to sync to your account first.',
+        text: 'Inviting somebody to a folder is part of Premium. The person you invite only needs a free account.',
       }),
     ]);
   }
