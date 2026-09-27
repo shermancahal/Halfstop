@@ -15,7 +15,9 @@
 --
 -- Set the two accounts below to real ones on this project before running. The
 -- second must be an address that has signed in, because the policy matches on
--- the email in the session rather than on the user id.
+-- the email in the session rather than on the user id. The first must hold
+-- Premium: an edit to a shared folder is refused while its owner does not,
+-- and "invited to edit" would then stop with 42501 - see the last block.
 --
 -- Expected, and the whole point of running it:
 --
@@ -147,3 +149,62 @@ rollback;
 -- insert into public.trials (user_id, ends_at)
 -- values ('INVITED-USER-ID', now() + interval '3650 days');
 -- rollback;
+
+-- ---------------------------------------------------------------------------
+-- And whether syncing asks for the plan.
+--
+-- Two real accounts: PAID holds Premium, FREE holds nothing. Run as one
+-- statement. It ends by raising an exception on purpose - that is what rolls
+-- all of it back, including the moment in the middle where PAID's
+-- entitlement is deleted to see what a lapsed owner can still do - and the
+-- report is the exception's message.
+--
+-- Expected, as it came back on the live project on 2026-09-27:
+--
+--   A free insert own             refused 42501
+--   B free update own             refused 42501   an error, not 0 rows
+--   C free read own               1 row
+--   D paid insert own             1 row
+--   E paid update own             1 row
+--   F free editor, paid owner     1 row           the collaborator needs no plan
+--   G free editor, lapsed owner   refused 42501   the owner does
+--   H lapsed update own           refused 42501
+--   I lapsed read own             every row       nothing is taken away
+--   J invitee read, lapsed owner  1 row
+--   K lapsed delete own           1 row
+--   L free delete own             1 row
+--
+-- do $probe$
+-- declare
+--   paid uuid := (select id from auth.users where email = 'PAID@example.com');
+--   free uuid := (select id from auth.users where email = 'FREE@example.com');
+--   paid_claims text := json_build_object('sub', paid, 'email', 'PAID@example.com', 'role', 'authenticated')::text;
+--   free_claims text := json_build_object('sub', free, 'email', 'FREE@example.com', 'role', 'authenticated')::text;
+--   report text := E'\n';
+--   n int;
+-- begin
+--   perform set_config('request.jwt.claims', free_claims, true);
+--   insert into public.folders (user_id, client_id, name) values (free, 'rls-probe-free', 'Probe');
+--   perform set_config('request.jwt.claims', paid_claims, true);
+--   insert into public.folders (user_id, client_id, name) values (paid, 'rls-probe-paid', 'Probe');
+--   insert into public.folder_shares (owner_id, client_id, invited_email, role)
+--     values (paid, 'rls-probe-paid', 'FREE@example.com', 'editor');
+--
+--   -- One of these per case; the rest follow the same shape with the
+--   -- statement from the table above. A refusal is caught, which undoes only
+--   -- that case, and the SET LOCAL ROLE goes with it.
+--   begin
+--     perform set_config('request.jwt.claims', free_claims, true);
+--     set local role authenticated;
+--     insert into public.folders (user_id, client_id, name) values (free, 'rls-probe-free-2', 'x');
+--     get diagnostics n = row_count; reset role;
+--     report := report || 'A free insert own: ' || n || E' row\n';
+--   exception when others then report := report || 'A free insert own: refused ' || sqlstate || E'\n'; end;
+--
+--   -- ... B to F, then:
+--   delete from public.entitlements where user_id = paid;
+--   -- ... G to L.
+--
+--   raise exception 'PROBE RESULT (rolled back):%', report;
+-- end
+-- $probe$;

@@ -147,6 +147,25 @@ Deno.serve(async (req: Request) => {
     return reply(400, { error: 'That is your own address, so you already have this folder.' });
   }
 
+  /*
+   * Sharing a folder is sharing something the server keeps, so the owner has
+   * to be on the plan that keeps it.
+   *
+   * The same rule as the folders policies in schema.sql, asked through the
+   * caller's own session with my_plan(), so the answer is the one the app is
+   * drawn from. The person invited needs no plan; the person whose folder it
+   * is does. Without this an account whose plan had lapsed could go on
+   * sending invitations - an email each - to folders that can no longer
+   * change.
+   */
+  const { data: plan, error: planError } = await asCaller.rpc('my_plan');
+  if (planError) return reply(500, { error: `Could not check your plan: ${planError.message}` });
+  if (plan?.tier !== 'premium') {
+    return reply(403, {
+      error: 'Sharing a folder is part of Premium, because the folder has to sync to your account first.',
+    });
+  }
+
   const admin = createClient(url, secret, { auth: { persistSession: false } });
 
   /*

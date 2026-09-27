@@ -695,7 +695,17 @@ account.
 **Server-side enforcement.** Everything in `assets/js/lib/tiers.js` decides what
 to *draw*. What actually costs money has to be refused where the bill is — the
 row policy for sync, whatever proxy ends up in front of Valhalla for routing,
-whoever serves the tiles for downloads — and none of those read a plan yet.
+whoever serves the tiles for downloads.
+
+Sync is the one that does. The folders policies in `supabase/schema.sql` refuse
+a write to an account's own folders without a current Premium row, and refuse a
+collaborator's edit unless the *owner* holds one; reading and deleting your own
+folders never asks for a plan, so a lapsed subscriber keeps everything they
+made. `invite-to-folder` asks the same question before it records or emails an
+invitation. `private.holds_premium()` is the one definition, kept out of the
+API schema; `test/sync-plan.test.mjs` holds the shape and `supabase/rls-probe.sql`
+has the cases to run against a real project. Routing and tile downloads still
+read no plan.
 
 ## Before turning `ABMAP_BILLING_LIVE` on
 

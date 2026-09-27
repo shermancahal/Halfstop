@@ -347,7 +347,8 @@ test('tiers: the shipped default really is everything-free', async () => {
  * assigns to it.
  *
  * It does not check that the gate works, only that one exists. Whether it
- * holds is the server's job, and the server does not read a plan yet.
+ * holds is the server's job: for folder sync, the row policies that
+ * test/sync-plan.test.mjs reads; for the rest, nothing yet.
  */
 test('tiers: every feature the free tier does not grant is gated somewhere', async () => {
   const { readFile } = await import('node:fs/promises');

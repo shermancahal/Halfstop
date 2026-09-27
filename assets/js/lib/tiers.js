@@ -10,8 +10,10 @@
  * Anything that actually costs money has to be enforced where the money is
  * spent, which is somewhere this code cannot reach:
  *
- *   - Folder sync is enforced by the row-level policy on the Supabase table,
- *     which reads the signed-in user's own claim server-side.
+ *   - Folder sync is enforced by the row-level policies on the Supabase
+ *     table, which ask private.holds_premium() - the same "premium, and not
+ *     run out" that my_plan() reports - before any folder is written. See
+ *     supabase/schema.sql and test/sync-plan.test.mjs.
  *   - Road routing and RV routing will be enforced at whatever proxy ends up
  *     in front of Valhalla, because that is the thing with a bill attached.
  *     Today they go straight to a public community server under its own rate

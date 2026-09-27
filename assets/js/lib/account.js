@@ -241,6 +241,28 @@ async function readFunctionError(error) {
 }
 
 /**
+ * What to say when the server refuses a folder.
+ *
+ * 42501 is Postgres's "insufficient privilege", which is what a row-level
+ * policy raises when the row it was handed fails its check - and since sync
+ * became Premium on the server, that check is the plan: this account's own,
+ * for its own folders, or the owner's, for a folder shared to edit. Passed
+ * through, it reads 'new row violates row-level security policy for table
+ * "folders"', which is accurate and tells nobody what happened to their edit.
+ *
+ * Anything else is passed through as it came: a refusal that is not about the
+ * plan should not be explained as one.
+ */
+export function refusalFor(error, { shared = false } = {}) {
+  const message = String(error?.message || '');
+  const refused = error?.code === '42501' || /row-level security/i.test(message);
+  if (!refused) return message;
+  return shared
+    ? 'the owner of this folder no longer has Premium, so changes to it stay on this device.'
+    : 'syncing is part of Premium, so this stays on this device.';
+}
+
+/**
  * What to call somebody.
  *
  * The name they typed into the profile first; failing that, whatever Apple or
@@ -847,6 +869,10 @@ export class Account extends EventTarget {
      * device holds the only copy; the pins that point at them come back with
      * the folders on the next sign-in, ids and all.
      */
+    // Asked before the plan is forgotten below. Folders that do not travel on
+    // this account's plan have no copy on the server to come back from, so
+    // they stay - and the sentence should say that, not blame a sync.
+    const travels = can('folderSync', { tier: tierFor(this) });
     const saved = sync && this.user ? await this.sync() : null;
 
     try {
@@ -870,9 +896,11 @@ export class Account extends EventTarget {
         'Signed out. Your folders are on your account and come back when you sign in.');
       return;
     }
-    this.setStatus('signed-out',
-      'Signed out. The last sync did not go through, so your folders are still on this '
-      + 'device rather than lost.');
+    this.setStatus('signed-out', travels
+      ? 'Signed out. The last sync did not go through, so your folders are still on this '
+        + 'device rather than lost.'
+      : 'Signed out. Your folders stay on this device, because syncing them to your account '
+        + 'is part of Premium.');
   }
 
   /**
@@ -1008,7 +1036,10 @@ export class Account extends EventTarget {
       // too - but so that a typo asks for less rather than for more.
       body: { clientId, email: normaliseEmail(email), folderName, role: readRole(role) },
     });
-    if (error) return { ok: false, reason: error.message };
+    if (error) {
+      const said = await readFunctionError(error);
+      return { ok: false, reason: said || error.message };
+    }
     if (!data?.ok) return { ok: false, reason: data?.error || 'The invitation was not accepted.' };
     return { ok: true, emailed: Boolean(data.emailed), reason: data.reason || '' };
   }
@@ -1363,9 +1394,10 @@ export class Account extends EventTarget {
        * Said out loud rather than done quietly. Folders that stop syncing
        * without a word look exactly like folders that were lost.
        *
-       * This is presentation, like everything else in tiers.js. What actually
-       * costs money is the row policy and the bandwidth behind it, and neither
-       * of those reads a plan yet.
+       * This is presentation, like everything else in tiers.js. The rule is
+       * the row policy in schema.sql, which refuses a write to an account's
+       * own folders without Premium; this only saves making requests it is
+       * certain to refuse, and says why nothing moved.
        */
       if (!can('folderSync', { tier: tierFor(this) })) {
         const onlyShared = await this.pullShared(client);
@@ -1470,12 +1502,12 @@ export class Account extends EventTarget {
 
       if (result.toPush.length) {
         const { error: upsertError } = await this.upsertFolders(client, result.toPush);
-        if (upsertError) throw new Error(upsertError.message);
+        if (upsertError) throw new Error(refusalFor(upsertError));
       }
 
       if (result.toPushShared?.length) {
         const { error: sharedError } = await this.updateShared(client, result.toPushShared);
-        if (sharedError) throw new Error(sharedError.message);
+        if (sharedError) throw new Error(refusalFor(sharedError, { shared: true }));
       }
 
       // Stamped only now, after the push went out. A stamp written before
@@ -1668,7 +1700,10 @@ export class Account extends EventTarget {
       // A network error is left quiet - the next full sync carries it, and
       // interrupting an edit to say the wifi dropped helps nobody. Anything
       // the server actively refused is a different thing and has to be said.
-      if (error) this.setStatus('signed-in', `Not saved to your account: ${error.message}`);
+      if (error) {
+        this.setStatus('signed-in',
+          `Not saved to your account: ${refusalFor(error, { shared: Boolean(folder?.sharedFrom) })}`);
+      }
     } catch {
       // Offline, or the client could not be built. The next sync carries it.
     }

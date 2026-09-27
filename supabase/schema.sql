@@ -72,13 +72,112 @@ alter table public.folders enable row level security;
 -- `(select ...)` the planner makes it an InitPlan, evaluated once for the
 -- statement and reused. The value cannot change mid-statement, so this is the
 -- same rule enforced the same way, and only the row count stops mattering.
+
+-- Whether an account holds Premium today, for the policies below.
+--
+-- Syncing is the part of Halfstop that is paid for, because it is the part
+-- that is stored and served every time: every row here is database space and
+-- every sync is bandwidth. So writing a folder to the server asks for the
+-- same thing my_plan() calls premium - a premium row that has not run out.
+--
+-- A function rather than the subquery written out, for the co-editing policy
+-- further down. That one has to ask about the folder's owner, and an
+-- invitee cannot read the owner's entitlement: the entitlements policy shows
+-- each account its own row and nobody else's, which is right, and which a
+-- subquery inside a policy is held to like any other query. SECURITY DEFINER
+-- is what lets it look, and all it hands back is one boolean.
+--
+-- In a schema of its own, which PostgREST does not serve. In public it would
+-- be /rest/v1/rpc/holds_premium, and anybody signed in could ask whether any
+-- account id pays. authenticated needs USAGE and EXECUTE only so the policies
+-- can call it - a policy runs as the account making the request.
+create schema if not exists private;
+revoke all on schema private from public;
+grant usage on schema private to authenticated;
+
+--
+-- plpgsql rather than sql only so this file still runs top to bottom on an
+-- empty database: a sql function's body is checked when it is created, and
+-- public.entitlements is created further down. plpgsql looks the table up
+-- when it is called, by which time it is there.
+create or replace function private.holds_premium(account uuid)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  return exists (
+    select 1
+    from public.entitlements e
+    where e.user_id = account
+      and e.tier = 'premium'
+      and (e.expires_at is null or e.expires_at > now())
+  );
+end;
+$$;
+
+revoke execute on function private.holds_premium(uuid) from public;
+grant execute on function private.holds_premium(uuid) to authenticated;
+
+-- An owner's folders: always theirs to read and remove, only on Premium to
+-- write.
+--
+-- This was one FOR ALL policy, ownership only. It is four now because the
+-- plan belongs on two of them and not the others:
+--
+--   read    no plan asked. A subscription that lapses stops the syncing, not
+--           the owning - the FAQ promises nothing is deleted and that getting
+--           your own data out is free, and a folder the server holds but will
+--           not show its owner would break both.
+--   delete  no plan asked, for the same reason, and because removing data
+--           costs nothing to store.
+--   insert  Premium, and this is the rule the app's own gate was standing in
+--           for. tiers.js said folder sync was enforced here; until this it
+--           was not, and anybody could push by editing their tier in devtools.
+--   update  Premium, on the new row. Written into WITH CHECK rather than USING
+--           so a refused write says so - error 42501 - instead of quietly
+--           matching no rows, which the app would take for success.
+--
+-- The plan check is wrapped in a scalar subquery for the same reason
+-- auth.uid() is: it is the same answer for every row of the statement.
 drop policy if exists "folders are private to their owner" on public.folders;
-create policy "folders are private to their owner"
+
+drop policy if exists "an owner reads their own folders" on public.folders;
+create policy "an owner reads their own folders"
   on public.folders
-  for all
+  for select
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+drop policy if exists "an owner removes their own folders" on public.folders;
+create policy "an owner removes their own folders"
+  on public.folders
+  for delete
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+drop policy if exists "an owner on Premium adds folders" on public.folders;
+create policy "an owner on Premium adds folders"
+  on public.folders
+  for insert
+  to authenticated
+  with check (
+    (select auth.uid()) = user_id
+    and (select private.holds_premium((select auth.uid())))
+  );
+
+drop policy if exists "an owner on Premium changes their folders" on public.folders;
+create policy "an owner on Premium changes their folders"
+  on public.folders
+  for update
   to authenticated
   using ((select auth.uid()) = user_id)
-  with check ((select auth.uid()) = user_id);
+  with check (
+    (select auth.uid()) = user_id
+    and (select private.holds_premium((select auth.uid())))
+  );
 
 -- Belt and braces on insert: even if a client sends someone else's user_id,
 -- stamp the row with the authenticated user. The policy above would reject it
@@ -249,6 +348,15 @@ create policy "a shared folder is readable by whoever it names"
 -- exactly what it granted before this existed. Insert and delete stay with the
 -- owner, so a collaborator can change what is in a folder and cannot create
 -- one in somebody else's name or remove theirs.
+--
+-- The folder is stored on its owner's plan, so it is the owner who has to hold
+-- Premium for it to change - not the collaborator, who may be on a free
+-- account, which is what "sharing is not on the Premium list" means. Without
+-- the owner's half this was a way round the sync rule above: a free month, a
+-- folder shared with a second free account as editor, and that folder then
+-- syncs on the second account for ever. When the owner's plan lapses the
+-- folder stays readable to everybody it was shared with and stops changing,
+-- which is the same thing that happens to the owner's own copy.
 drop policy if exists "a co-edited folder is writable by whoever it names" on public.folders;
 create policy "a co-edited folder is writable by whoever it names"
   on public.folders
@@ -275,6 +383,7 @@ create policy "a co-edited folder is writable by whoever it names"
         and s.role = 'editor'
         and lower(s.invited_email) = lower((select auth.jwt()) ->> 'email')
     )
+    and private.holds_premium(folders.user_id)
   );
 
 -- ----------------------------------------------------------- entitlements

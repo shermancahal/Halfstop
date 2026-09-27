@@ -12845,6 +12845,20 @@ function folderNameRow(folder) {
  * writing extra code to avoid.
  */
 function folderShareRow(folder) {
+  /*
+   * An invitation is to a folder the server keeps, and keeping it is the
+   * Premium part - invite-to-folder refuses without it. Said here instead of
+   * offering a field that can only be refused.
+   */
+  if (!allowed('folderSync')) {
+    return el('div', { class: 'editor-share' }, [
+      el('p', {
+        class: 'hint', style: 'margin:6px 0 0',
+        text: 'Inviting somebody to a folder is part of Premium, because the folder has to sync to your account first.',
+      }),
+    ]);
+  }
+
   const row = el('div', { class: 'editor-share' });
   const status = el('p', { class: 'hint', style: 'margin:6px 0 0', text: '' });
 
