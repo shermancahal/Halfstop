@@ -48,7 +48,7 @@ KNOW THE GROUND
 PIN IT
 • Save waypoints into folders by trip, by season, or by the light they need
 • Search for a place by name, from OpenStreetMap
-• Open GPX, KML, KMZ and GeoJSON files - including your Google Maps starred places, from Google Takeout
+• Open GPX, KML, KMZ and GeoJSON files - including your Google Maps starred places and saved lists, from Google Takeout
 • Export any folder as GPX or GeoJSON whenever you like, free, with or without an account
 • Sync up to 100 folders and 100 waypoints between your phone and your computer, free
 

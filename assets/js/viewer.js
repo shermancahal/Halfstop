@@ -21,6 +21,7 @@ import {
 } from './lib/engine.js';
 import { loadCatalog, findMap } from './lib/catalog.js';
 import { parseMapFile, linePositions, findLinkSpans } from './lib/parse.js';
+import { looksLikeGoogleList, readGoogleList, lookupPlaces, listDocument, placedAt } from './lib/google-list.js';
 import {
   boundsAreValid, cumulativeDistances, formatDistance, formatDuration, formatElevation,
   formatTemperature, formatTemperatureDelta, geojsonBounds, mergeBounds, padBounds, zoomForAccuracy,
@@ -8698,7 +8699,237 @@ function wireDropzone() {
   });
 }
 
+/* ---------------- Google Maps saved lists ---------------- */
+
+/** Each list in turn, so one review card is on screen at a time. */
+async function reviewGoogleLists(files) {
+  for (const file of files) {
+    let text = '';
+    try {
+      text = await file.text();
+    } catch (error) {
+      toast(`${file.name}: ${error.message}`, { tone: 'error' });
+      continue;
+    }
+    if (!looksLikeGoogleList(text)) {
+      toast(`“${file.name}” is not a Google Maps saved list. A CSV is read only when it comes `
+        + 'from the Saved folder of a Google Takeout export.', { tone: 'error', timeout: 9000 });
+      continue;
+    }
+    await reviewGoogleList(file.name, text);
+  }
+}
+
+/**
+ * A Google Maps saved list, placed and checked before it becomes waypoints.
+ *
+ * Takeout leaves the positions out of a list, so each place is either read
+ * from its link or looked up by name - OpenStreetMap on a free account,
+ * Mapbox on Premium - and then shown, every one, with what it matched and a
+ * choice where there was more than one. A place name is not a place, and a
+ * list somebody built over years is not something to guess at quietly. What
+ * is kept becomes a document like any opened file, and the usual question of
+ * which folder it goes in follows.
+ *
+ * Resolves when the card is closed, whichever way.
+ */
+function reviewGoogleList(filename, text) {
+  return new Promise((resolve) => {
+    let list;
+    try {
+      list = readGoogleList(text, filename);
+    } catch (error) {
+      toast(`${filename}: ${error.message}`, { tone: 'error' });
+      resolve();
+      return;
+    }
+    const { places } = list;
+    if (!places.length || !dom.importAsk) {
+      toast(`“${filename}” has no places in it.`, { tone: 'error' });
+      resolve();
+      return;
+    }
+
+    const provider = lookup();
+    const service = provider === 'mapbox' ? 'Mapbox' : 'OpenStreetMap';
+    const fromLinks = places.filter((place) => place.position).length;
+    const toFind = places.length - fromLinks;
+    const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+    let stop = false;
+
+    const heading = el('h2', { class: 'import-ask-title', text: `${plural(places.length, 'place')} from “${list.name}”` });
+    const said = el('p', { class: 'import-ask-text' });
+    const progress = el('progress', { class: 'import-review-progress', max: String(Math.max(toFind, 1)), value: '0' });
+    const body = el('div', { class: 'import-review-body' });
+    const actions = el('div', { class: 'import-ask-actions' });
+
+    // Guarded: an import must not depend on the map having loaded - offline
+    // on a first launch, the library may not have.
+    const close = () => {
+      stop = true;
+      if (state.map) setProbeMark(null);
+      dom.importAsk.hidden = true;
+      dom.importAsk.classList.remove('is-review');
+      dom.importAsk.replaceChildren();
+      resolve();
+    };
+
+    const preview = (center) => {
+      if (!center || !state.map) return;
+      state.map.flyTo({ center, zoom: Math.max(state.map.getZoom() || 0, 13), duration: 700 });
+      setProbeMark(center);
+    };
+
+    const keep = async () => {
+      const doc = listDocument(list.name, places);
+      const count = doc.geojson.features.length;
+      close();
+      if (!count) { toast('Nothing was kept from that list.', { tone: 'info' }); return; }
+      const entry = await addDocument({ name: list.name, doc, origin: 'local', fit: false });
+      if (doc.bbox) fitTo(doc.bbox);
+      const filed = fileOpenedDocument(entry);
+      if (filed) {
+        toast(`Filed ${plural(filed.added, 'place')} into “${filed.folder.name}”.`, { tone: 'ok' });
+      } else {
+        askWhereToFile([entry]);
+      }
+    };
+
+    /* The list, once every lookup has answered or been stopped. */
+    const review = ({ mapboxRefused, stoppedEarly }) => {
+      const matched = places.filter((place) => !place.position && place.candidates.length).length;
+      const missing = places.filter((place) => !place.position && !place.candidates.length);
+      const kept = () => places.filter((place) => place.include && placedAt(place)).length;
+
+      const lines = [];
+      if (fromLinks) lines.push(`${plural(fromLinks, 'place')} placed from ${fromLinks === 1 ? 'its' : 'their'} Google link.`);
+      if (matched) lines.push(`${plural(matched, 'place')} matched by name — check ${matched === 1 ? 'it' : 'these'}; a name can match somewhere else.`);
+      if (missing.length) lines.push(`${plural(missing.length, 'place')} not found, and left out unless you add ${missing.length === 1 ? 'it' : 'them'} by hand.`);
+      if (stoppedEarly) lines.push('Looking up was stopped, so some places were not tried.');
+      if (mapboxRefused) lines.push('Mapbox could not be asked, so these were looked up in OpenStreetMap instead.');
+      said.textContent = lines.join(' ');
+      progress.remove();
+
+      const button = el('button', { class: 'button button-primary button-small', type: 'button', onclick: keep });
+      const count = () => { button.textContent = `Add ${plural(kept(), 'place')}`; button.disabled = !kept(); };
+
+      const rows = places.map((place) => {
+        const tick = el('input', {
+          type: 'checkbox', checked: place.include && Boolean(placedAt(place)),
+          disabled: !placedAt(place),
+          'aria-label': `Keep ${place.name}`,
+          onchange: (event) => { place.include = event.target.checked; count(); },
+        });
+        let detail;
+        if (place.position) {
+          detail = el('span', { class: 'import-review-where', text: 'From the Google link' });
+        } else if (place.candidates.length) {
+          detail = el('select', {
+            class: 'import-review-choice', 'aria-label': `Which ${place.name}`,
+            onchange: (event) => {
+              place.choice = Number(event.target.value);
+              place.include = true;
+              tick.checked = true;
+              count();
+              preview(placedAt(place)?.center);
+            },
+          }, place.candidates.map((candidate, index) => el('option', {
+            value: String(index),
+            text: [candidate.name, candidate.kind, candidate.context].filter(Boolean).join(' · '),
+          })));
+          detail.value = String(Math.max(place.choice, 0));
+        } else {
+          detail = el('span', { class: 'import-review-where is-missing', text: 'Not found' });
+        }
+        return el('li', { class: 'import-review-row' }, [
+          tick,
+          el('div', { class: 'import-review-place' }, [
+            el('button', {
+              class: 'import-review-name', type: 'button', text: place.name,
+              title: placedAt(place) ? 'Show it on the map' : '',
+              disabled: !placedAt(place),
+              onclick: () => preview(placedAt(place)?.center),
+            }),
+            detail,
+          ]),
+        ]);
+      });
+
+      const credits = [...new Set(places.flatMap((place) => place.candidates.map((candidate) => candidate.provider)))];
+      // Filtered, not passed as null: replaceChildren writes a null out as
+      // the word "null".
+      body.replaceChildren(...[
+        el('ul', { class: 'import-review-list' }, rows),
+        credits.includes('osm')
+          ? el('p', { class: 'import-review-credit', text: 'Matches © OpenStreetMap contributors, found by Photon.' })
+          : null,
+        credits.includes('mapbox')
+          ? el('p', { class: 'import-review-credit', text: 'Matches found by Mapbox.' })
+          : null,
+      ].filter(Boolean));
+      actions.replaceChildren(
+        button,
+        el('button', { class: 'button button-ghost button-small', type: 'button', text: 'Cancel', onclick: close }),
+      );
+      count();
+    };
+
+    dom.importAsk.classList.add('is-review');
+    dom.importAsk.replaceChildren(el('div', { class: 'import-ask-card import-review-card' }, [heading, said, progress, body, actions]));
+    dom.importAsk.hidden = false;
+
+    if (!toFind) {
+      review({ mapboxRefused: false, stoppedEarly: false });
+      return;
+    }
+
+    said.textContent = `${fromLinks ? `${plural(fromLinks, 'place')} ${fromLinks === 1 ? 'has' : 'have'} a position in ${fromLinks === 1 ? 'its' : 'their'} Google link. ` : ''}`
+      + `Google left the rest out, so ${toFind === 1 ? 'it is' : `these ${toFind} are`} being looked up by name in ${service}`
+      + `${provider === 'osm' ? ', two a second to be fair to a free service' : ''}.`;
+    actions.replaceChildren(
+      el('button', {
+        class: 'button button-secondary button-small', type: 'button', text: 'Stop and review',
+        onclick: () => { stop = true; },
+      }),
+      el('button', { class: 'button button-ghost button-small', type: 'button', text: 'Cancel', onclick: close }),
+    );
+
+    lookupPlaces(places, {
+      search: searchPlaces,
+      provider,
+      stopped: () => stop,
+      onProgress: (done, total) => {
+        progress.value = String(done);
+        progress.max = String(Math.max(total, 1));
+        progress.textContent = `${done} of ${total}`;
+        heading.textContent = `Looking up ${done} of ${plural(total, 'place')} from “${list.name}”`;
+      },
+    }).then((outcome) => {
+      if (dom.importAsk.hidden) return;   // cancelled while it ran
+      heading.textContent = `${plural(places.length, 'place')} from “${list.name}”`;
+      review(outcome);
+    }).catch((error) => {
+      toast(`Looking up “${list.name}” failed: ${error.message}`, { tone: 'error' });
+      close();
+    });
+  });
+}
+
 async function handleFiles(files) {
+  /*
+   * A Google Maps saved list comes as a CSV and needs its places found and
+   * checked before it is anything, so it goes its own way: one review at a
+   * time, after the ordinary files are open.
+   */
+  const lists = files.filter((file) => /\.csv$/i.test(file.name));
+  files = files.filter((file) => !/\.csv$/i.test(file.name));
+  if (lists.length) {
+    // Not awaited: the review waits on somebody reading it, and the files
+    // opened alongside should not wait with it.
+    reviewGoogleLists(lists);
+    if (!files.length) return;
+  }
+
   const accepted = files.filter((file) => /\.(gpx|kml|kmz|geojson|json)$/i.test(file.name));
   const rejected = files.length - accepted.length;
   if (rejected) toast(`Skipped ${rejected} unsupported file${rejected > 1 ? 's' : ''}.`, { tone: 'error' });

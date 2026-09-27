@@ -1957,6 +1957,43 @@ html, body { height: 100%; overflow: hidden; }
   .import-ask-actions .button { flex: 1 1 auto; }
 }
 
+/*
+ * A Google Maps list under review: the same card, grown to hold a list that
+ * can run to hundreds of places. Its own scroll, so the buttons stay put.
+ */
+.import-ask.is-review { width: min(560px, calc(100% - 32px)); }
+.import-review-card { display: flex; flex-direction: column; max-height: min(70vh, 640px); }
+.import-review-card .import-ask-title { white-space: normal; }
+.import-review-progress { width: 100%; height: 6px; margin: 2px 0 10px; accent-color: var(--clay); }
+.import-review-body { min-height: 0; overflow-y: auto; margin: 0 -4px 10px; padding: 0 4px; }
+.import-review-list { list-style: none; margin: 0; padding: 0; }
+.import-review-row {
+  display: flex; align-items: flex-start; gap: 9px;
+  padding: 7px 0; border-top: 1px solid var(--line);
+}
+.import-review-row:first-child { border-top: 0; }
+.import-review-row input[type="checkbox"] { margin-top: 3px; flex: none; accent-color: var(--clay); }
+.import-review-place { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.import-review-name {
+  all: unset; cursor: pointer; font-size: .86rem; font-weight: 600; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.import-review-name:hover:not(:disabled) { text-decoration: underline; }
+.import-review-name:focus-visible { outline: 2px solid var(--clay); outline-offset: 2px; border-radius: 2px; }
+.import-review-name:disabled { cursor: default; color: var(--ink-3); }
+.import-review-where { font-size: .78rem; color: var(--ink-3); }
+.import-review-where.is-missing { color: var(--clay-2); }
+.import-review-choice {
+  max-width: 100%; padding: 3px 6px; font: inherit; font-size: .78rem;
+  color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 5px;
+}
+.import-review-credit { margin: 8px 0 0; font-size: .72rem; color: var(--ink-3); }
+
+@media (max-width: 560px) {
+  .import-ask.is-review { width: auto; }
+  .import-review-card { max-height: 72vh; }
+}
+
 /* Whose numbers are these? A file's totals are not a folder's. */
 .detail-scope {
   display: flex; align-items: center; gap: 6px; margin-bottom: 5px;

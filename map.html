@@ -84,6 +84,7 @@
 <link rel="modulepreload" href="assets/js/lib/nps-draw.js">
 <link rel="modulepreload" href="assets/js/lib/offline.js">
 <link rel="modulepreload" href="assets/js/lib/parse.js">
+<link rel="modulepreload" href="assets/js/lib/google-list.js">
 <link rel="modulepreload" href="assets/js/lib/photos.js">
 <link rel="modulepreload" href="assets/js/lib/photo-encode.js">
 <link rel="modulepreload" href="assets/js/lib/pin-icons.js">
@@ -268,9 +269,9 @@
               <div class="dropzone" id="dropzone" role="button" tabindex="0">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
                 <b>Drop a file here, or click to choose</b>
-                GPX · KML · KMZ · GeoJSON
+                GPX · KML · KMZ · GeoJSON · Google Maps lists
               </div>
-              <input type="file" id="file-input" multiple accept=".gpx,.kml,.kmz,.geojson,.json" hidden>
+              <input type="file" id="file-input" multiple accept=".gpx,.kml,.kmz,.geojson,.json,.csv" hidden>
               <label class="drop-target-label" for="drop-target">When a file opens</label>
               <select id="drop-target" class="drop-target"></select>
               <div id="loaded-list"></div>

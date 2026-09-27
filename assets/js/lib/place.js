@@ -502,20 +502,32 @@ export async function reverseGeocode([lon, lat], { provider = lookupProvider() }
  *
  * @returns {Promise<{ok: boolean, reason: string, results: Array}>}
  */
-export async function searchPlaces(query, { near = null, limit = 6, signal = null, provider = lookupProvider() } = {}) {
+export async function searchPlaces(query, {
+  near = null, limit = 6, signal = null, provider = lookupProvider(), anywhere = false, permanent = false,
+} = {}) {
   const text = String(query || '').trim();
   if (!text) return { ok: true, reason: '', results: [], provider };
-  if (provider !== 'mapbox' || !MAPBOX_TOKEN) return searchPlacesOSM(text, { near, limit, signal });
+  if (provider !== 'mapbox' || !MAPBOX_TOKEN) return searchPlacesOSM(text, { near, limit, signal, anywhere });
 
-  const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(text)}.json`
+  /*
+   * `permanent` for an answer that will be kept - an imported list, saved as
+   * waypoints. Mapbox's terms allow storing only what its permanent geocoding
+   * returns, which is a separate endpoint, billed separately and enabled per
+   * account; the everyday one is for looking at and moving on. Autocomplete is
+   * off for it, since nobody is typing.
+   */
+  const endpoint = permanent ? 'mapbox.places-permanent' : 'mapbox.places';
+  const url = `https://api.mapbox.com/geocoding/v5/${endpoint}/${encodeURIComponent(text)}.json`
     + `?access_token=${encodeURIComponent(MAPBOX_TOKEN)}`
-    + `&limit=${limit}&country=us&autocomplete=true`
+    + `&limit=${limit}${anywhere ? '' : '&country=us'}${permanent ? '' : '&autocomplete=true'}`
     + (near ? `&proximity=${near[0].toFixed(3)},${near[1].toFixed(3)}` : '');
 
   try {
     const response = await fetch(url, signal ? { signal } : undefined);
     if (!response.ok) {
-      return { ok: false, reason: `The geocoder answered ${response.status}.`, results: [], provider: 'mapbox' };
+      return {
+        ok: false, status: response.status, reason: `The geocoder answered ${response.status}.`, results: [], provider: 'mapbox',
+      };
     }
     return { ok: true, reason: '', results: parseSearch(await response.json()), provider: 'mapbox' };
   } catch (error) {
@@ -532,21 +544,27 @@ export async function searchPlaces(query, { near = null, limit = 6, signal = nul
  * Asks for more than it shows and keeps the ones in the United States, which
  * is what the Mapbox search does with `country=us`: Photon has no country
  * filter, and "Springfield" answered from four continents is not a list
- * anybody on this map wanted.
+ * anybody on this map wanted. `anywhere` lifts that, for an imported list,
+ * which holds whatever its owner saved, wherever it is.
  */
-export async function searchPlacesOSM(text, { near = null, limit = 6, signal = null } = {}) {
+export async function searchPlacesOSM(text, { near = null, limit = 6, signal = null, anywhere = false } = {}) {
   const url = `${PHOTON_URL}/api/?q=${encodeURIComponent(text)}`
     + `&limit=${Math.min(limit * 3, 15)}&lang=en`
     + (near ? `&lat=${near[1].toFixed(3)}&lon=${near[0].toFixed(3)}` : '');
   try {
     const response = await fetch(url, signal ? { signal } : undefined);
     if (response.status === 429) {
-      return { ok: false, reason: 'OpenStreetMap search is busy. Try again in a moment.', results: [], provider: 'osm' };
+      return {
+        ok: false, status: 429, reason: 'OpenStreetMap search is busy. Try again in a moment.', results: [], provider: 'osm',
+      };
     }
     if (!response.ok) {
-      return { ok: false, reason: `OpenStreetMap search answered ${response.status}.`, results: [], provider: 'osm' };
+      return {
+        ok: false, status: response.status, reason: `OpenStreetMap search answered ${response.status}.`, results: [], provider: 'osm',
+      };
     }
-    return { ok: true, reason: '', results: parsePhotonSearch(await response.json()).slice(0, limit), provider: 'osm' };
+    const results = parsePhotonSearch(await response.json(), { country: anywhere ? '' : 'US' });
+    return { ok: true, reason: '', results: results.slice(0, limit), provider: 'osm' };
   } catch (error) {
     if (error?.name === 'AbortError') throw error;
     return { ok: false, reason: 'No answer — you may be offline.', results: [], provider: 'osm' };

@@ -2774,6 +2774,101 @@ if (!external) {
     await linking.close();
   }
 
+  /*
+   * A Google Maps saved list, from its Takeout CSV to waypoints in a folder.
+   *
+   * In a context of its own, so the folder it makes cannot change a count any
+   * other check depends on. Photon answers from a fixture; Mapbox's permanent
+   * geocoding refuses, as it does on an account without it enabled, so the
+   * fall back to OpenStreetMap is what is exercised - and said.
+   */
+  console.log('\nA Google Maps saved list is placed, checked, then filed');
+  {
+    const listing = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' });
+    // The same stand-in for the map library every other context here uses.
+    await listing.route('**/mapbox-gl.js*', (route) => route.fulfill({
+      status: 200, contentType: 'application/javascript', body: GL,
+    }));
+    await listing.route('**://api.mapbox.com/geocoding/v5/mapbox.places-permanent/**',
+      (route) => route.fulfill({ status: 403, contentType: 'application/json', body: '{"message":"Forbidden"}' }));
+    const photonAsked = [];
+    await listing.route('**://photon.komoot.io/api/**', (route) => {
+      const query = new URL(route.request().url()).searchParams.get('q') || '';
+      photonAsked.push(query);
+      const features = query === 'Mesa Arch' ? [{
+        type: 'Feature', geometry: { type: 'Point', coordinates: [-109.8681, 38.3892] },
+        properties: { osm_type: 'N', osm_id: 1, osm_value: 'arch', type: 'other', name: 'Mesa Arch', state: 'Utah', countrycode: 'US' },
+      }] : [];
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ type: 'FeatureCollection', features }) });
+    });
+    const lists = await listing.newPage();
+    lists.on('dialog', (dialog) => dialog.accept('Want to go'));
+    await lists.goto(MAP_URL, { waitUntil: 'domcontentloaded' });
+    await lists.waitForSelector('#file-input', { state: 'attached', timeout: 20000 });
+    await lists.waitForTimeout(1500);
+
+    const csv = 'Title,Note,URL,Tags,Comment\r\n,,,,\r\n'
+      + 'Mesa Arch,Sunrise,https://www.google.com/maps/place/Mesa+Arch/data=!4m2!3m1!1s0x87:0x8c,,\r\n'
+      + 'Dropped pin,,"https://www.google.com/maps/search/38.3890,-109.8680",,\r\n'
+      + 'Nowhere Cafe,,https://www.google.com/maps/place/Nowhere+Cafe/data=!4m2,,\r\n';
+    await lists.setInputFiles('#file-input', { name: 'Want to go.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+    await lists.waitForSelector('.import-review-list', { timeout: 15000 }).catch(() => {});
+    const reviewed = await lists.evaluate(() => {
+      const card = document.querySelector('#import-ask .import-review-card');
+      const rows = [...document.querySelectorAll('.import-review-row')];
+      return {
+        rows: rows.length,
+        linked: rows.filter((row) => /From the Google link/.test(row.textContent)).length,
+        choices: [...document.querySelectorAll('.import-review-choice option')].map((option) => option.textContent),
+        missing: rows.filter((row) => /Not found/.test(row.textContent)).length,
+        ticked: rows.filter((row) => row.querySelector('input[type="checkbox"]').checked).length,
+        add: card?.querySelector('.button-primary')?.textContent || null,
+        said: card?.querySelector('.import-ask-text')?.textContent || '',
+        credit: card?.querySelector('.import-review-credit')?.textContent || '',
+        stray: /\b(null|undefined)\b/.test(card?.textContent || ''),
+      };
+    });
+    check('the list is shown place by place', reviewed.rows, 3);
+    check('a place with coordinates in its link is placed from it', reviewed.linked, 1);
+    check('a place found by name offers its match to check', reviewed.choices.some((text) => /Mesa Arch/.test(text)), true);
+    check('a place not found is said and left unticked', reviewed.missing, 1);
+    check('only placed places are ticked', reviewed.ticked, 2);
+    check('the button counts what will be kept', reviewed.add, 'Add 2 places');
+    check('the linked place was never looked up', photonAsked.includes('Dropped pin'), false);
+    check('a refusing Mapbox is said, and OpenStreetMap answered', /Mapbox could not be asked/.test(reviewed.said), true);
+    check('and OpenStreetMap is credited', /OpenStreetMap contributors/.test(reviewed.credit), true);
+    check('with no stray null or undefined on the card', reviewed.stray, false);
+
+    await lists.click('#import-ask .import-review-card .button-primary');
+    await lists.waitForTimeout(600);
+    await lists.click('#import-ask button:has-text("New folder"), #import-ask button:has-text("Save to a new folder")')
+      .catch(() => {});
+    await lists.waitForTimeout(800);
+    // Read from the folder store itself - this context runs the real map
+    // library rather than the stand-in, so there is no __map to ask.
+    const kept = await lists.evaluate(() => new Promise((resolve) => {
+      const open = indexedDB.open('ab-maps-folders', 1);
+      open.onerror = () => resolve(null);
+      open.onsuccess = () => {
+        const db = open.result;
+        if (!db.objectStoreNames.contains('state')) { resolve(null); return; }
+        const request = db.transaction('state', 'readonly').objectStore('state').get('ab-maps-folders-v1');
+        request.onerror = () => resolve(null);
+        request.onsuccess = () => {
+          const folders = request.result?.folders || [];
+          resolve({
+            folders: folders.map((folder) => folder.name),
+            names: folders.flatMap((folder) => (folder.items || []).map((item) => item.feature?.properties?.name)).sort(),
+          });
+        };
+      };
+    }));
+    check('what was kept is filed as waypoints', kept?.names, ['Dropped pin', 'Mesa Arch']);
+    check('in a folder named for the list', kept?.folders?.includes('Want to go'), true);
+    await lists.close();
+    await listing.close();
+  }
+
   console.log('\nThe way in to the admin page');
   {
     const asAdmin = await browser.newContext({ viewport: { width: 1280, height: 900 } });

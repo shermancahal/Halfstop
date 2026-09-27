@@ -331,6 +331,8 @@ export function positionInGoogleLink(url) {
   const patterns = [
     /!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/,
     /[?&](?:q|query|ll|daddr|destination)=(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/,
+    // A dropped pin saved to a list: /maps/search/38.389,+-109.868
+    /\/maps\/search\/(-?\d+(?:\.\d+)?),[\s+]*(-?\d+(?:\.\d+)?)/,
     /@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/,
   ];
   for (const pattern of patterns) {
