@@ -13,7 +13,17 @@
  */
 
 import { shareableURL } from './share.js';
-import { icons } from './icons.js';
+
+/*
+ * The link mark, drawn here rather than borrowed from lib/icons.js. That file
+ * is fetched without a version stamp, and a browser holding the previous build
+ * of it would hand this an icon that does not exist yet - a link that says
+ * "undefined". One path, owned by the one thing that draws it.
+ */
+const LINK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
+  + 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+  + '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>'
+  + '<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
 
 /**
  * The address to hand over for an id on the help page.
@@ -32,7 +42,8 @@ export function answerLink({ id, href, protocol, site }) {
  * An <a href="#id"> rather than a <button>, so it is also a plain link: a
  * right click copies it, a middle click opens it, and it still means
  * something to a screen reader listing the page's links. Clicking it copies
- * the whole address, opens the answer and puts the id in the address bar.
+ * the whole address, opens the answer and puts the id in the address bar -
+ * which opening an answer any other way does as well.
  *
  * Inside a <summary> the click must not also fold the answer shut. A link is
  * its own activation target, so browsers do not toggle for it, but the event
@@ -58,7 +69,7 @@ export function mountFaqAnchors(root, { site, toast = () => {}, location = globa
     link.href = `#${id}`;
     link.title = 'Copy a link to this';
     link.setAttribute('aria-label', `Copy a link to “${label.trim()}”`);
-    link.innerHTML = icons.link;
+    link.innerHTML = LINK_ICON;
 
     link.addEventListener('click', async (event) => {
       event.preventDefault();
@@ -91,6 +102,23 @@ export function mountFaqAnchors(root, { site, toast = () => {}, location = globa
     const question = holder.querySelector('h3');
     if (question) question.after(link);
     else holder.append(link);
+
+    /*
+     * Opening an answer puts its link in the address bar, so the link exists
+     * the moment the answer does - for anybody who copies from the address
+     * bar and never notices the button. Closing it takes the link back off,
+     * if it is still the one showing.
+     */
+    if (item) {
+      item.addEventListener('toggle', () => {
+        const here = `#${id}`;
+        if (item.open && location.hash !== here) {
+          history?.replaceState?.(null, '', here);
+        } else if (!item.open && location.hash === here) {
+          history?.replaceState?.(null, '', `${location.pathname}${location.search}`);
+        }
+      });
+    }
   }
   return targets.length;
 }

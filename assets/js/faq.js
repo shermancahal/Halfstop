@@ -20,6 +20,18 @@ import { SITE } from './config.js';
  */
 applyStoredTheme();
 const toast = createToaster(document.body);
+
+/*
+ * A link to every answer and every section, for sending somebody to exactly
+ * the part that answers them. The ids are in the markup; this adds the
+ * buttons that copy them. See lib/faq-anchors.js.
+ *
+ * First, before anything to do with accounts: the links are this page's own
+ * content and need nothing else, so nothing else going wrong should be able
+ * to take them with it.
+ */
+mountFaqAnchors(document, { site: SITE.url, toast });
+
 const { account } = mountPageSettings({ toast });
 
 /*
@@ -57,12 +69,6 @@ function openTargetedAnswer() {
 openTargetedAnswer();
 window.addEventListener('hashchange', openTargetedAnswer);
 
-/*
- * A link to every answer and every section, for sending somebody to exactly
- * the part that answers them. The ids are in the markup; this adds the
- * buttons that copy them. See lib/faq-anchors.js.
- */
-mountFaqAnchors(document, { site: SITE.url, toast });
 
 /*
  * This page serves itself, terms and privacy, and never registered a worker.

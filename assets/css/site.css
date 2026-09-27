@@ -642,16 +642,17 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 /*
  * A link to one answer or one section, to copy and send.
  *
- * Quiet until the row is pointed at: thirty link marks at full strength would
- * be the loudest thing on a page of questions. On a touch screen there is no
- * pointing, so there they stay at the quieter strength rather than vanishing.
+ * Quieter than the question until the row is pointed at: thirty link marks at
+ * full strength would be the loudest thing on a page of questions. Not so
+ * quiet it goes unseen, which the first version was. On a touch screen there
+ * is no pointing, so there they sit a little stronger.
  */
 .faq-anchor {
   flex: none; align-self: center;
   display: inline-flex; align-items: center; justify-content: center;
   width: 30px; height: 30px; margin: -6px 0;
   border-radius: var(--radius-sm);
-  color: var(--ink-3); opacity: .45;
+  color: var(--ink-3); opacity: .6;
   text-decoration: none;
   transition: opacity .15s ease, background-color .15s ease;
 }
@@ -663,7 +664,7 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 }
 .faq-anchor:focus-visible { outline: 2px solid var(--clay); outline-offset: 1px; }
 .faq-section > h2 .faq-anchor { margin: -4px 0 0 6px; vertical-align: middle; }
-@media (hover: none) { .faq-anchor { opacity: .6; } }
+@media (hover: none) { .faq-anchor { opacity: .75; } }
 
 /* Landed on from a link: clear of the sticky header, and marked for a moment. */
 .faq-item, .faq-section { scroll-margin-top: calc(var(--header-h) + var(--safe-top) + 12px); }

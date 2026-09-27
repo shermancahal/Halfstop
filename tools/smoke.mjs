@@ -2760,6 +2760,15 @@ if (!external) {
     await faq.waitForTimeout(200);
     check('a second click leaves the answer open', await faq.evaluate(() => document.querySelector('#syncing').open), true);
 
+    // Opening an answer the ordinary way gives it a link too, and closing it
+    // takes the link back off.
+    await faq.click('#exporting > summary h3');
+    await faq.waitForTimeout(200);
+    check('opening an answer puts its link in the address bar', await faq.evaluate(() => location.hash), '#exporting');
+    await faq.click('#exporting > summary h3');
+    await faq.waitForTimeout(200);
+    check('and closing it takes the link off', await faq.evaluate(() => location.hash), '');
+
     // Arriving by the link opens it too, below the sticky header.
     await faq.goto(new URL('faq.html#work-together', MAP_URL).href, { waitUntil: 'domcontentloaded' });
     await faq.waitForTimeout(400);
@@ -2885,6 +2894,9 @@ if (!external) {
     await boss.waitForSelector('.footer-admin a', { timeout: 8000 }).catch(() => {});
     const offered = await boss.evaluate(() => document.querySelector('.footer-admin a')?.getAttribute('href') || null);
     check('an administrator is offered the admin page', offered, 'admin.html');
+    // Signed in, the help page still carries its answer links - they mount
+    // before anything to do with the account, so nothing there can stop them.
+    check('and the help page links its answers, signed in', await boss.evaluate(() => document.querySelectorAll('.faq-anchor').length > 30), true);
 
     /*
      * Followed rather than read. A link with the right href in a footer that
