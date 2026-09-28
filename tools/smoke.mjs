@@ -2878,6 +2878,93 @@ if (!external) {
     await listing.close();
   }
 
+  /*
+   * A download region set by hand: round the middle of the map at a chosen
+   * reach, previewed, saved, then one edge typed over and one refused.
+   *
+   * Its own context, so the region it saves cannot move a count the main
+   * page's offline checks depend on.
+   */
+  console.log('\nA download region set by hand');
+  {
+    const byHand = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' });
+    await byHand.route('**/mapbox-gl.js*', (route) => route.fulfill({
+      status: 200, contentType: 'application/javascript', body: GL,
+    }));
+    const hand = await byHand.newPage();
+    await hand.goto(MAP_URL, { waitUntil: 'domcontentloaded' });
+    await hand.waitForFunction(() => window.__map?.loaded?.(), null, { timeout: 20000 }).catch(() => {});
+    await hand.waitForTimeout(800);
+    await hand.click('#offline-trigger');
+    await hand.waitForTimeout(200);
+    await hand.click('#region-hand-button');
+    await hand.waitForTimeout(200);
+
+    const drafted = await hand.evaluate(() => {
+      const form = document.querySelector('.region-hand');
+      const regions = window.__map.getSource('offline-regions')?._d?.features || [];
+      return {
+        form: Boolean(form),
+        around: form?.querySelector('.region-hand-around')?.value || null,
+        said: form?.querySelector('.region-hand-said')?.textContent || '',
+        draft: regions.some((feature) => feature.properties?.id === 'draft'),
+      };
+    });
+    check('Set by hand opens a form over the list', drafted.form, true);
+    check('round the middle of the map by default', drafted.around, 'centre');
+    check('saying the reach and what it will weigh', /round the middle of the map\. [\d,]+ km\u00b2, about/.test(drafted.said), true);
+    check('previewed on the map before it is saved', drafted.draft, true);
+
+    // A coordinate that is not one is said, and nothing is previewed.
+    await hand.selectOption('.region-hand-around', 'coordinate');
+    await hand.fill('.region-hand-coordinate', 'not a place');
+    await hand.dispatchEvent('.region-hand-coordinate', 'change');
+    await hand.waitForTimeout(150);
+    const refused = await hand.evaluate(() => ({
+      said: document.querySelector('.region-hand-said')?.textContent || '',
+      saveable: !document.querySelector('.region-hand .button-primary')?.disabled,
+    }));
+    check('a coordinate it cannot read is said', /could not be read as a coordinate/.test(refused.said), true);
+    check('and cannot be saved', refused.saveable, false);
+
+    await hand.fill('.region-hand-coordinate', '38.3892, -109.8681');
+    await hand.dispatchEvent('.region-hand-coordinate', 'change');
+    await hand.selectOption('.region-hand-reach', '5');
+    await hand.waitForTimeout(150);
+    await hand.click('.region-hand .button-primary');
+    await hand.waitForTimeout(300);
+    const stored = () => hand.evaluate(() => JSON.parse(localStorage.getItem('ab-maps-offline-v1') || '[]'));
+    const saved = await stored();
+    check('saving makes a region', saved.length, 1);
+    const [region] = saved;
+    const middle = region ? [(region.bounds.west + region.bounds.east) / 2, (region.bounds.south + region.bounds.north) / 2] : [0, 0];
+    check('round the coordinate typed', Math.abs(middle[0] + 109.8681) < 0.001 && Math.abs(middle[1] - 38.3892) < 0.001, true);
+    // Five miles north and five south: 8.05 km of latitude is 0.0723 degrees.
+    check('reaching five miles each way', Math.abs((region?.bounds.north - region?.bounds.south) / 2 - 0.0723) < 0.001, true);
+    check('named for where it is', /^Round 38\.389200, -109\.868100$/.test(region?.name || ''), true);
+    check('and the form closes', await hand.evaluate(() => Boolean(document.querySelector('.region-hand'))), false);
+
+    // One edge typed over.
+    await hand.click('.region-edges > summary');
+    await hand.fill('.region-edge input[aria-label^="North"]', '38.6');
+    await hand.dispatchEvent('.region-edge input[aria-label^="North"]', 'change');
+    await hand.waitForTimeout(250);
+    check('an edge typed in moves the region', (await stored())[0]?.bounds.north, 38.6);
+    check('and the edges stay open to adjust the next', await hand.evaluate(() => document.querySelector('.region-edges')?.open), true);
+
+    // One refused: north below south, and a screen too big to be a region.
+    await hand.fill('.region-edge input[aria-label^="North"]', '30');
+    await hand.dispatchEvent('.region-edge input[aria-label^="North"]', 'change');
+    await hand.waitForTimeout(250);
+    check('an edge that would turn it inside out is refused', (await stored())[0]?.bounds.north, 38.6);
+    check('and the field goes back to what it was', await hand.inputValue('.region-edge input[aria-label^="North"]'), '38.6000');
+    await hand.click('.region-edges button:has-text("Use what is on screen")');
+    await hand.waitForTimeout(250);
+    check('a screen over the size cap is not taken', (await stored())[0]?.bounds.north, 38.6);
+    await hand.close();
+    await byHand.close();
+  }
+
   console.log('\nThe way in to the admin page');
   {
     const asAdmin = await browser.newContext({ viewport: { width: 1280, height: 900 } });

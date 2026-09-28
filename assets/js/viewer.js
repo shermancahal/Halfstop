@@ -95,6 +95,7 @@ import {
   mayCacheTiles, tileURLsFor, downloadTiles, clearTiles, tileKeysFor, downloadArchiveTiles,
   regionTileKeys,
   measureRegion, regionsToGeoJSON, formatBytes as formatTileBytes, regionSizeProblem,
+  REACH_CHOICES, reachKm, padBoundsKm, boundsAround, withEdge, normalizeBounds,
 } from './lib/offline.js';
 import {
   putPhoto, photoURL, deletePhoto, pruneUnreferenced, fetchLinkedPhoto, formatBytes, PHOTO_TYPES,
@@ -3047,6 +3048,13 @@ function wireOfflineMenu() {
   const setOpen = (open) => {
     drop.hidden = !open;
     trigger.setAttribute('aria-expanded', String(open));
+    // A region being set by hand is previewed on the map; shutting the panel
+    // is leaving it, and the outline must not stay behind looking saved.
+    if (!open && state.regionHand) {
+      state.regionHand = false;
+      state.regionDraft = null;
+      refreshRegionData();
+    }
     // Rendered on open rather than kept live: the region list is the only
     // thing in here that changes, and nobody is watching it while it is shut.
     if (open) renderOfflineTab();
@@ -5334,6 +5342,152 @@ function startRegionDraw() {
   document.addEventListener('keydown', key);
 }
 
+/**
+ * A region set by hand, rather than by what the screen shows or a drag.
+ *
+ * Round the middle of the map, round a typed coordinate - off a permit, a
+ * guidebook or a text message - or round every place in a folder, reaching a
+ * chosen distance past them. The last is the one a trip wants: the ground
+ * under all its pins and the roads between, without dragging a box that
+ * misses the one at the edge.
+ *
+ * Previewed on the map as it is set, drawn like the region it is about to
+ * be, and saved through saveRegionFrom like every other region, so the size
+ * cap and the plan check are the same ones.
+ */
+function regionByHandForm() {
+  const form = state.regionHandForm || (state.regionHandForm = { around: 'centre', coordinate: '', reach: 0, name: '' });
+  const units = state.units === 'metric' ? 'metric' : 'imperial';
+  const unit = units === 'metric' ? 'km' : 'mi';
+  const choices = REACH_CHOICES[units];
+  if (!choices.includes(form.reach)) form.reach = choices[3];
+  const folders = sortedFolders().filter((folder) => (folder.items || []).length);
+  if (form.around.startsWith('folder:') && !folders.some((folder) => `folder:${folder.id}` === form.around)) {
+    form.around = 'centre';
+  }
+
+  const around = el('select', { class: 'region-hand-around', 'aria-label': 'Round what' }, [
+    el('option', { value: 'centre', text: 'The middle of the map' }),
+    el('option', { value: 'coordinate', text: 'A coordinate' }),
+    ...folders.map((folder) => el('option', {
+      value: `folder:${folder.id}`, text: `The places in “${folder.name}”`,
+    })),
+  ]);
+  around.value = form.around;
+  const coordinate = el('input', {
+    class: 'region-hand-coordinate', type: 'text', value: form.coordinate,
+    placeholder: '38.3892, -109.8681', 'aria-label': 'Coordinate', autocomplete: 'off',
+  });
+  const reach = el('select', { class: 'region-hand-reach', 'aria-label': 'How far' },
+    choices.map((value) => el('option', { value: String(value), text: `${value} ${unit}` })));
+  reach.value = String(form.reach);
+  const name = el('input', {
+    class: 'region-name', type: 'text', value: form.name, placeholder: 'Name (optional)', 'aria-label': 'Region name',
+  });
+  const said = el('p', { class: 'source-note region-hand-said', text: '' });
+  const save = el('button', { class: 'button button-primary button-small', type: 'button', text: 'Save region' });
+
+  /* Where the settings say the region is, or why they say nothing yet. */
+  const settle = () => {
+    const km = reachKm(form.reach, units);
+    const far = `${form.reach} ${unit}`;
+    if (form.around === 'coordinate') {
+      if (!form.coordinate.trim()) return { problem: 'Type a coordinate, in any of the forms the details panel shows.' };
+      const point = parseCoordinate(form.coordinate);
+      if (!point) return { problem: 'That could not be read as a coordinate.' };
+      return {
+        bounds: boundsAround([point.lon, point.lat], km),
+        label: `${far} round ${formatDD([point.lon, point.lat])}`,
+        named: `Round ${formatDD([point.lon, point.lat])}`,
+      };
+    }
+    if (form.around.startsWith('folder:')) {
+      const folder = state.folders.get(form.around.slice('folder:'.length));
+      const box = folder ? geojsonBounds(state.folders.folderGeoJSON(folder.id)) : null;
+      if (!folder || !boundsAreValid(box)) return { problem: 'That folder has nothing with a position in it.' };
+      return {
+        bounds: padBoundsKm({ west: box[0], south: box[1], east: box[2], north: box[3] }, km),
+        label: `Every place in “${folder.name}” and ${far} beyond`,
+        named: folder.name,
+      };
+    }
+    const centre = state.map.getCenter();
+    return {
+      bounds: boundsAround([centre.lng, centre.lat], km),
+      label: `${far} round the middle of the map`,
+      named: `Round ${formatDD([centre.lng, centre.lat])}`,
+    };
+  };
+
+  let current = null;
+  const update = ({ fit = true } = {}) => {
+    form.around = around.value;
+    form.coordinate = coordinate.value;
+    form.reach = Number(reach.value);
+    form.name = name.value;
+    coordinate.hidden = form.around !== 'coordinate';
+
+    current = settle();
+    const problem = current.problem || (current.bounds ? regionSizeProblem(current.bounds) : 'That is not an area.');
+    state.regionDraft = problem ? null : current.bounds;
+    refreshRegionData();
+    said.classList.toggle('region-warning', Boolean(problem));
+    save.disabled = Boolean(problem);
+    if (problem) { said.textContent = problem; return; }
+
+    const deepest = deepestUsefulZoom();
+    const cost = measureRegion({ bounds: current.bounds, minZoom: Math.max(0, deepest - 6), maxZoom: deepest }, currentTileKind());
+    said.textContent = `${current.label}. ${Math.round(cost.area).toLocaleString()} km², about ${formatTileBytes(cost.bytes)}.`;
+    if (fit && state.map) {
+      const { west, south, east, north } = current.bounds;
+      state.map.fitBounds([[west, south], [east, north]], { padding: 40, duration: 500 });
+    }
+  };
+
+  for (const control of [around, reach]) control.addEventListener('change', () => update());
+  coordinate.addEventListener('change', () => update());
+  name.addEventListener('input', () => { form.name = name.value; });
+
+  save.addEventListener('click', () => {
+    if (!current?.bounds) return;
+    const region = saveRegionFrom(current.bounds, { name: form.name.trim() || current.named });
+    if (!region) return;
+    state.regionHand = false;
+    state.regionDraft = null;
+    state.regionHandForm = null;
+    refreshRegionData();
+    renderOfflineTab();
+  });
+
+  const box = el('div', { class: 'region-hand' }, [
+    el('div', { class: 'region-hand-row' }, [
+      el('label', { class: 'region-hand-label', text: 'Round' }), around,
+    ]),
+    coordinate,
+    el('div', { class: 'region-hand-row' }, [
+      el('label', { class: 'region-hand-label', text: 'Reaching' }), reach,
+    ]),
+    name,
+    said,
+    el('div', { class: 'folder-actions offline-actions' }, [
+      save,
+      el('button', {
+        class: 'button button-ghost button-small', type: 'button', text: 'Cancel',
+        onclick: () => {
+          state.regionHand = false;
+          state.regionDraft = null;
+          refreshRegionData();
+          renderOfflineTab();
+        },
+      }),
+    ]),
+  ]);
+  // Previewed straight away, without moving the map: round the middle of the
+  // map is round what is already on screen.
+  update({ fit: false });
+  return box;
+}
+
 function renderOfflineTab() {
   if (!dom.offline) return;
   const regions = state.offline.list();
@@ -5426,6 +5580,15 @@ function renderOfflineTab() {
         title: 'Drag a rectangle on the map to mark the ground you want',
         onclick: startRegionDraw,
       }, 'region-draw-button'),
+      labelledButton(icons.compass, 'Set by hand', {
+        tone: 'ghost',
+        title: 'A region round a place, a coordinate or a folder, reaching as far as you choose',
+        onclick: () => {
+          state.regionHand = !state.regionHand;
+          if (!state.regionHand) { state.regionDraft = null; refreshRegionData(); }
+          renderOfflineTab();
+        },
+      }, 'region-hand-button'),
       /*
        * "Export for the app" is gone, and it never worked.
        *
@@ -5441,6 +5604,8 @@ function renderOfflineTab() {
        */
     ]),
   );
+
+  if (state.regionHand) dom.offline.append(regionByHandForm());
 
   if (!regions.length) {
     dom.offline.append(el('p', {
@@ -5551,6 +5716,71 @@ function deepestUsefulZoom(region) {
   return fromArchive ? PROTOMAPS_MAXZOOM : OFFLINE_MAX_ZOOM;
 }
 
+/**
+ * A saved region's four edges, to type over - or the screen, to take instead.
+ *
+ * A region is usually nearly right: the drawn box stops short of the pin at
+ * the edge, or the permit gives a boundary to the hundredth of a degree. So
+ * the edges are there to correct rather than only to start again, each one
+ * checked the way a drawn region is - north above south, inside the map,
+ * under the size cap - before anything moves.
+ *
+ * Kept open across the re-render a change causes, since the row is rebuilt
+ * whenever the store says a region changed.
+ */
+function regionEdges(region) {
+  const moved = (bounds) => {
+    state.regionEdgesOpen = region.id;
+    state.highlightRegion = region.id;
+    state.offline.update(region.id, { bounds });
+    toast(`Moved the edges of “${region.name}”. Download it again to fetch the new ground.`, { timeout: 7000 });
+  };
+
+  const edge = (which, label) => el('label', { class: 'region-edge' }, [
+    el('span', { class: 'region-edge-name', text: label }),
+    el('input', {
+      type: 'text', inputmode: 'decimal', value: region.bounds[which].toFixed(4),
+      'aria-label': `${label} edge of ${region.name}`,
+      onchange: (event) => {
+        const { bounds, problem } = withEdge(region.bounds, which, event.target.value);
+        if (problem) {
+          toast(problem, { tone: 'error', timeout: 8000 });
+          event.target.value = region.bounds[which].toFixed(4);
+          return;
+        }
+        moved(bounds);
+      },
+    }),
+  ]);
+
+  const box = el('details', {
+    class: 'region-edges',
+    open: state.regionEdgesOpen === region.id,
+    ontoggle: (event) => {
+      if (event.target.open) state.regionEdgesOpen = region.id;
+      else if (state.regionEdgesOpen === region.id) state.regionEdgesOpen = '';
+    },
+  }, [
+    el('summary', { text: 'Adjust the edges' }),
+    el('div', { class: 'region-edge-grid' }, [
+      edge('north', 'North'), edge('south', 'South'), edge('west', 'West'), edge('east', 'East'),
+    ]),
+    el('div', { class: 'region-controls' }, [
+      el('button', {
+        class: 'button button-ghost button-small', type: 'button', text: 'Use what is on screen',
+        title: 'Move this region’s edges to the edges of the map as it is now',
+        onclick: () => {
+          const bounds = normalizeBounds(state.map?.getBounds?.());
+          const problem = bounds ? regionSizeProblem(bounds) : 'The map has no view to take.';
+          if (problem) { toast(problem, { tone: 'error', timeout: 8000 }); return; }
+          moved(bounds);
+        },
+      }),
+    ]),
+  ]);
+  return box;
+}
+
 function regionRow(region, kind) {
   const measure = measureRegion(region, kind);
   const deepest = deepestUsefulZoom(region);
@@ -5597,6 +5827,7 @@ function regionRow(region, kind) {
       }),
     ]),
     el('div', { class: 'region-meta', text: regionBoundsLabel(region.bounds) }),
+    regionEdges(region),
     region.maxZoom > deepest
       ? el('p', {
         class: 'source-note',

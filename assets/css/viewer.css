@@ -1529,6 +1529,49 @@ html, body { height: 100%; overflow: hidden; }
   color: var(--clay-2); background: var(--clay-soft);
 }
 
+/*
+ * A region set by hand: what it is round, how far it reaches, and what it
+ * will weigh, above the list it is about to join. The same card as a saved
+ * region, so the one being set reads as one of them in the making.
+ */
+.region-hand {
+  display: grid; gap: 7px; margin: 0 0 12px; padding: 10px;
+  border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--line-strong);
+}
+.region-hand-row { display: flex; align-items: center; gap: 8px; }
+.region-hand-label { flex: none; width: 64px; font-size: .76rem; color: var(--ink-3); }
+.region-hand-around, .region-hand-reach {
+  flex: 1; min-width: 0; width: auto; padding: 3px 6px; font: inherit; font-size: .8rem;
+  color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 4px;
+}
+.region-hand-coordinate {
+  padding: 4px 7px; font: inherit; font-size: .8rem; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 4px;
+}
+.region-hand-coordinate[hidden] { display: none; }
+.region-hand .region-name { border-color: var(--line); background: var(--surface); }
+.region-hand .region-name::placeholder { font-weight: 400; color: var(--ink-3); }
+.region-hand-said { margin: 0; }
+.region-hand .region-warning { margin: 0; }
+.region-hand .offline-actions { margin: 0; }
+
+/* A saved region's edges, folded away until somebody needs to correct one. */
+.region-edges { margin-top: 6px; }
+.region-edges > summary {
+  cursor: pointer; font-size: .74rem; color: var(--ink-2); width: fit-content;
+}
+.region-edges > summary:hover { color: var(--ink); }
+.region-edge-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 5px 8px; margin-top: 6px;
+}
+.region-edge { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.region-edge-name { flex: none; width: 34px; font-size: .72rem; color: var(--ink-3); }
+.region-edge input {
+  flex: 1; min-width: 0; width: 100%; padding: 2px 5px; font: inherit; font-size: .76rem;
+  font-variant-numeric: tabular-nums; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 4px;
+}
+
 /* ==========================================================================
    Layer groups and colour keys
    ========================================================================== */
@@ -1718,6 +1761,9 @@ html, body { height: 100%; overflow: hidden; }
 /* The picture and the download each on a line of their own; the exports
    share one, and so do the download and the draw. */
 .offline-actions .button { flex: 1 1 0; }
+/* The two ways to set a region by other means share a line, sized to their
+   words rather than halved: halved, "Draw a region" lost its last letters. */
+#region-draw-button, #region-hand-button { flex: 1 1 auto; }
 .offline-actions .button-full { flex: 1 0 100%; }
 .offline-drop .folder-actions + .offline-heading { margin-top: 4px; }
 

@@ -234,6 +234,98 @@ export function regionSizeProblem(bounds) {
   return '';
 }
 
+/* ------------------------------------------------------- regions by hand */
+
+/*
+ * A region set by hand rather than dragged out.
+ *
+ * Nobody plans "the rectangle from here to there". They plan ten miles round
+ * the trailhead, or the ground under every pin in a trip, or a box whose
+ * edges are the coordinates in a permit. These turn each of those into the
+ * same {west, south, east, north} a drawn region has, so everything after -
+ * the size cap, the tile count, the download - is shared.
+ */
+
+/** Kilometres in a mile, for a distance chosen in miles. */
+export const KM_PER_MILE = 1.609344;
+
+/**
+ * Distances a region can reach, in the units somebody reads.
+ *
+ * Capped below what REGION_MAX_KM2 allows round a single point - a square 79
+ * km from its centre to each edge is 25,000 km2 - so every choice here makes a
+ * region that can be saved.
+ */
+export const REACH_CHOICES = {
+  imperial: [1, 2, 5, 10, 15, 25, 40],
+  metric: [1, 2, 5, 10, 25, 50, 75],
+};
+
+/** A reach in kilometres, from a number in the given units. */
+export function reachKm(value, units = 'imperial') {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) return 0;
+  return units === 'metric' ? number : number * KM_PER_MILE;
+}
+
+/**
+ * A box grown by `km` on every side, corrected for latitude so a mile east is
+ * a mile and not a degree. Clamped at the antimeridian rather than wrapped:
+ * a region reaching over it is drawn by hand, not typed.
+ */
+export function padBoundsKm(bounds, km = 0) {
+  const box = normalizeBounds(bounds);
+  if (!box || !Number.isFinite(km) || km < 0) return null;
+  const dLat = km / 111.32;
+  const south = box.south - dLat;
+  const north = box.north + dLat;
+  // The widest latitude of the box decides the east-west stretch, so the
+  // reach is at least `km` everywhere along it, never short at the far edge.
+  const widest = Math.max(Math.abs(south), Math.abs(north)) * (Math.PI / 180);
+  const dLon = km / (111.32 * Math.max(Math.cos(widest), 0.01));
+  return normalizeBounds({
+    west: Math.max(-180, box.west - dLon),
+    south,
+    east: Math.min(180, box.east + dLon),
+    north,
+  });
+}
+
+/** The box reaching `km` in every direction from a point. */
+export function boundsAround(point, km) {
+  const [lon, lat] = Array.isArray(point) ? point : [];
+  if (![lon, lat].every(Number.isFinite) || !(km > 0)) return null;
+  return padBoundsKm({ west: lon, south: lat, east: lon, north: lat }, km);
+}
+
+const EDGE_LIMITS = { north: 85.0511, south: 85.0511, east: 180, west: 180 };
+
+/**
+ * A region's bounds with one edge typed in, or the sentence saying why not.
+ *
+ * @returns {{ bounds: object|null, problem: string }}
+ */
+export function withEdge(bounds, edge, value) {
+  if (!(edge in EDGE_LIMITS)) return { bounds: null, problem: `${edge} is not an edge.` };
+  const text = String(value ?? '').trim();
+  const number = Number(text);
+  if (!text || !Number.isFinite(number)) return { bounds: null, problem: 'That edge has to be a number of degrees.' };
+  if (Math.abs(number) > EDGE_LIMITS[edge]) {
+    return {
+      bounds: null,
+      problem: edge === 'north' || edge === 'south'
+        ? 'Latitude on this map runs from -85 to 85.'
+        : 'Longitude runs from -180 to 180.',
+    };
+  }
+  const next = { ...normalizeBounds(bounds), [edge]: number };
+  if (next.north <= next.south) return { bounds: null, problem: 'The north edge has to be north of the south edge.' };
+  if (next.east <= next.west) return { bounds: null, problem: 'The east edge has to be east of the west edge.' };
+  const size = regionSizeProblem(next);
+  if (size) return { bounds: null, problem: size };
+  return { bounds: next, problem: '' };
+}
+
 /* ------------------------------------------------------------------ regions */
 
 function clampName(value, fallback) {
