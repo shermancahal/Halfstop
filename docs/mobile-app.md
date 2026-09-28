@@ -553,7 +553,9 @@ asks where the page is running, so the `ABMAP_BILLING_STORE = 'stripe'` a local
 `token.js` carries for testing the website cannot turn into a card form inside
 the app. What has to be set up in Play Console, Google Cloud and Supabase before
 a purchase works is in the Google Play section of [payments.md](payments.md). The
-iPhone app still sells nothing; StoreKit is not built.
+iPhone app still sells nothing: the server side of App Store purchases is built
+and deployed (`appstore-billing`), and the purchase in the app waits for products
+to exist in App Store Connect - see the App Store section of payments.md.
 
 ## 7. Things that behave differently inside the shell
 
@@ -749,6 +751,8 @@ the least commission and the most paperwork.
    `source = 'appstore'` and the expiry Apple reports. Server notifications rather
    than client receipts: a receipt the app hands you is a string the app can
    invent, and renewals and cancellations arrive when nobody has the app open.
+   The function is `appstore-billing`, deployed; what is left is in the App Store
+   section of [payments.md](payments.md).
 5. **Only then turn `BILLING.live` on**, which closes the gates the website
    already describes.
 

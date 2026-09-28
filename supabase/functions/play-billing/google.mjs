@@ -9,9 +9,9 @@
  *
  * WHY THIS IS THE SAFE HALF
  *
- * The App Store side was left unbuilt because it means verifying signatures
- * on notifications that grant entitlements, where a permissive bug looks like
- * strangers with subscriptions. This is a different shape. Nothing the phone
+ * Verifying signatures on notifications that grant entitlements is where a
+ * permissive bug looks like strangers with subscriptions, so this does not.
+ * appstore-billing is built the same way, for the same reason. Nothing the phone
  * or a notification says is believed: each one only names a purchase token,
  * and what that token bought, for whom and until when is asked of Google's
  * own API over a connection this function opens, authenticated with a key

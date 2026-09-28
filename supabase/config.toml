@@ -59,3 +59,10 @@ verify_jwt = true
 # whom is asked of Google. See play-billing/decide.mjs.
 [functions.play-billing]
 verify_jwt = false
+
+# Apple's App Store Server Notifications carry no Supabase session, so the
+# gateway cannot check one. The function checks the app's caller itself and
+# the notification by a secret in its URL, and believes neither: both only
+# name a transaction, which it asks Apple about. See the file's header.
+[functions.appstore-billing]
+verify_jwt = false

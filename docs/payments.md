@@ -666,19 +666,52 @@ matters or somebody carries on paying for an account that is not there.
 
 ---
 
+## App Store, for the iPhone app
+
+The server half is built and deployed: `supabase/functions/appstore-billing`,
+the twin of `play-billing` and built the same way. Nothing the phone or a
+notification sends is believed. Each only names a transaction id, and the
+function asks Apple's App Store Server API what that transaction is - whose,
+which product, until when - with this project's own In-App Purchase key. So
+there is no signature verification to get wrong: a forged request can at most
+make it ask Apple about an id. `test/appstore-server.test.mjs` holds the rules.
+
+The account id travels with the purchase as StoreKit's `appAccountToken`, and
+Apple hands it back on every answer, which is how a purchase is tied to an
+account and how one handed in by a different account is refused. A purchase on
+top of a subscription running on the website or Google Play is refused too -
+and, unlike Google, Apple does not refund an unconfirmed purchase by itself, so
+the refusal says to ask Apple for a refund at reportaproblem.apple.com.
+
+What is still to do, once the Apple developer account is there:
+
+1. **App Store Connect: the subscriptions.** App → Monetization →
+   Subscriptions → a subscription group (for example *Halfstop Premium*) with
+   two auto-renewable subscriptions, product IDs `premium.monthly` and
+   `premium.yearly` - or set `APPSTORE_PRODUCT_IDS` to whatever you name them.
+   Prices to match the website: $4.99 and $49.
+2. **The In-App Purchase key.** Users and Access → Integrations → In-App
+   Purchase → generate a key. Download the `.p8` (once only), and note the
+   **Key ID** and the **Issuer ID** at the top of the page. Like the Play
+   service account key, the `.p8` goes into Supabase and nowhere else - not the
+   repository, not a chat - and the download is deleted afterwards.
+3. **The secrets, in Supabase** (Edge Functions → Secrets):
+   - `APPSTORE_KEY` - the `.p8` file's whole text
+   - `APPSTORE_KEY_ID` and `APPSTORE_ISSUER_ID`
+   - `APPSTORE_NOTIFY_TOKEN` - a long random string, as for Google's
+4. **Server notifications.** App → App Information → App Store Server
+   Notifications, **Version 2**, for both Production and Sandbox:
+   `https://gqemcvuushtfbbbxypvf.supabase.co/functions/v1/appstore-billing/notify?token=` followed by
+   `APPSTORE_NOTIFY_TOKEN`. Then **Request a Test Notification**: the function's
+   log says `test notification from App Store Connect received`.
+5. **The purchase in the app.** The one piece of client code not written yet,
+   because it cannot be tried without products to buy: the same
+   `@capgo/native-purchases` plugin the Android app uses, buying `premium.monthly`
+   or `premium.yearly` with the account id as `appAccountToken`, then sending
+   the transaction id to `appstore-billing`. `purchaseRoute` in `tiers.js`
+   answers `no-store` on an iPhone until that is in.
+
 ## What is not built
-
-**The App Store side.** StoreKit is not built into the iPhone app, and the
-server half, an endpoint receiving App Store Server Notifications and writing an
-`entitlements` row with `source = 'appstore'`, is deliberately not written yet
-either: it could not be exercised until there is a product to exercise it with,
-and untested signature verification sitting deployed on a path that grants
-entitlements is the exact thing the Stripe tests exist to avoid.
-
-Google Play did not have that problem, which is why it went first. Nothing
-Google sends is trusted on its signature: every notification only names a
-purchase token, and the function asks Google's API about it directly, with
-its own credentials. A forged notification can at most make it ask.
 
 **One person, two subscriptions** — decided, and closed. A checkout is refused
 outright for an account that already has a running subscription, with a 409 and
