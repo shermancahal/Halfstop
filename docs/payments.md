@@ -457,8 +457,11 @@ first, which it would anyway.
 **Upload it** - [Play Console](https://play.google.com/console):
 
 1. **Create app** if Halfstop is not listed yet: name *Halfstop*, *App*, and
-   **Free** - the download is free and the subscription is sold inside it.
-   Paid-to-download cannot be undone later. Accept the two declarations.
+   **Free**. Free and Paid are only the price of the download; Premium is sold
+   inside the app either way, and once the subscription exists Play labels the
+   listing *In-app purchases* by itself. Google lets a paid app become free but
+   never a free app become paid - which costs nothing here, since Halfstop
+   never charges for the download. Accept the two declarations.
 2. The app → **Test and release → Testing → Internal testing** → **Testers**
    tab: create an email list with your own Google account on it, save, and
    copy the **opt-in link**.
