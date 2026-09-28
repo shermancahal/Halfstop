@@ -111,9 +111,18 @@ reviewers need to reach it without paying. Make them an account:
    `+review` alias of your own.
 2. In **Admin** (the footer link, on your account), grant that account Premium
    with no end date.
-3. In the form: name *Premium review account*, the email and password, and:
-   > Premium features (weather layers, offline downloads, trip routing, sync)
-   > are unlocked on this account. Everything else works without signing in.
+3. In the form: name *Premium review account*, the email and password (not
+   Google - reviewers cannot use a Google account of yours), and:
+   > Open the settings menu, tap Sign in, and sign in with this email and
+   > password. Premium is granted on this account: weather layers, offline
+   > downloads, trip routing, waypoint photos, state maps, extra basemaps,
+   > Mapbox search, unlimited sync and inviting others to a folder. Everything
+   > else works without signing in.
+
+Play states that reviewers will not create accounts, buy, or start a trial,
+so the account has to arrive with Premium already on it. Keep its password
+unchanged while a review is open, and keep the grant in place for as long as
+the app is listed: Play reviews every update, not just the first.
 
 ### Ads
 
