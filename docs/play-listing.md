@@ -76,15 +76,24 @@ Maps are for planning. Carry a paper map where it matters, and use your own judg
 | --- | --- |
 | App icon, 512 × 512 | `assets/img/icon-512.png` |
 | Feature graphic, 1024 × 500 | `docs/store/play-feature-graphic.png` - regenerate with `node tools/build-feature-graphic.mjs`, on the Mac for the site's own serif |
-| Phone screenshots, 2 to 8 | from the emulator or a phone, below |
+| Phone screenshots, 2 to 8 | `docs/store/screenshots/` - `node tools/build-store-screenshots.mjs`, below |
 
-Screenshots: in the emulator, the camera button in the toolbar on the right
-saves one to the desktop. Portrait, and the four that say the most:
+Screenshots: Play wants 9:16 exactly, and a phone's own screenshots are
+taller than that, so they are taken by a script instead, at 1080 x 1920:
 
-1. The map with a folder of pins over a topo or aerial basemap
-2. A pin's panel open, showing the sun and moon times
-3. Public land boundaries (a national forest or BLM area)
-4. The folder list, or a trip
+```
+node tools/build-store-screenshots.mjs
+```
+
+It photographs the live site in a phone-sized Chromium and writes six to
+`docs/store/screenshots/`: the map over the Tetons, a pin's sun and moon
+times (Oxbow Bend), public land around Moab, sky brightness, satellite over
+Horseshoe Bend, and the layers list. Run it on the Mac, where the map tiles
+load, and look at each before uploading - a scene whose tiles failed comes out
+as an empty map, or with a "not returning any tiles" notice on it. Upload them
+in that order; the first three are what shows before anybody scrolls. Each
+scene is a link in the script's `SCENES`, so one can be moved somewhere else
+without touching the rest.
 
 **Category**: *Maps & Navigation*. **Tags**: photography, maps, outdoors.
 
