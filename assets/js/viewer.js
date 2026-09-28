@@ -53,7 +53,7 @@ import { createAccountPanel } from './lib/account-panel.js';
 import { wireSettingsMenu as wireSharedSettingsMenu } from './lib/settings-menu.js';
 import {
   formatDD, formatDMS, formatDDM, toUTM, distanceBearing, compassPoint, reverseGeocode, searchPlaces,
-  parseCoordinate, lookupProvider,
+  parseCoordinate, lookupProvider, mergeSearchResults, searchCredit,
 } from './lib/place.js';
 import {
   sunTimes, sunPosition, moonTimes, moonPosition, moonIllumination,
@@ -1385,13 +1385,21 @@ function wirePlaceSearch() {
     inFlight = controller;
 
     const centre = state.map?.getCenter?.();
+    const near = centre ? [centre.lng, centre.lat] : null;
+    const provider = lookup();
+    /*
+     * Premium asks both services at once. Mapbox answers towns, businesses
+     * and addresses best, and first; OpenStreetMap knows the arches, springs
+     * and trailheads a commercial geocoder often does not. The Mapbox list is
+     * shown the moment it arrives, and OpenStreetMap's additions join it when
+     * they do, rather than the fast answer waiting on the slow one.
+     */
+    const alongside = provider === 'mapbox'
+      ? searchPlaces(query, { near, signal: controller.signal, provider: 'osm' }).catch(() => null)
+      : null;
     let answer;
     try {
-      answer = await searchPlaces(query, {
-        near: centre ? [centre.lng, centre.lat] : null,
-        signal: controller.signal,
-        provider: lookup(),
-      });
+      answer = await searchPlaces(query, { near, signal: controller.signal, provider });
     } catch {
       return;   // aborted; a newer query is already running
     }
@@ -1400,25 +1408,36 @@ function wirePlaceSearch() {
     const mine = savedMatches(query);
     const typed = coordinateMatches(query);
     const offline = [...typed, ...mine];
-    if (!answer.ok && !offline.length) { note(answer.reason); return; }
-    if (!answer.results.length && !offline.length) { note(`Nothing found for “${query}”.`); return; }
 
-    show([...offline, ...answer.results]);
-    // Said under the results rather than instead of them: your own places
-    // still answered, and the reason the rest did not is worth one line.
-    if (!answer.ok) results.append(el('p', { class: 'map-search-note', text: answer.reason }));
-    /*
-     * OpenStreetMap's data comes with a condition, which is saying so. And on
-     * a free account, the one line that says what Premium's search would add -
-     * the reason somebody searching for a restaurant's address found nothing.
-     */
-    if (answer.ok && answer.provider === 'osm' && answer.results.length) {
-      const more = allowed('addressSearch') ? '' : ' Premium search also finds businesses and street addresses.';
-      results.append(el('p', {
-        class: 'map-search-note',
-        text: `Places © OpenStreetMap contributors, found by Photon.${more}`,
-      }));
-    }
+    const render = (found, reason) => {
+      if (!found.length && !offline.length) {
+        note(reason || `Nothing found for “${query}”.`);
+        return;
+      }
+      show([...offline, ...found]);
+      // Said under the results rather than instead of them: your own places
+      // still answered, and the reason the rest did not is worth one line.
+      if (reason) results.append(el('p', { class: 'map-search-note', text: reason }));
+      /*
+       * Whose places these are, which both services ask to be told. And on a
+       * free account, the one line that says what Premium's search would add -
+       * the reason somebody searching for a restaurant's address found nothing.
+       */
+      const credit = searchCredit(found);
+      if (credit) {
+        const more = found.some((place) => place.source === 'mapbox') || allowed('addressSearch')
+          ? '' : ' Premium search also finds businesses and street addresses.';
+        results.append(el('p', { class: 'map-search-note', text: `${credit}${more}` }));
+      }
+    };
+
+    render(answer.ok ? answer.results : [], answer.ok ? '' : answer.reason);
+    if (!alongside) return;
+
+    const extra = await alongside;
+    if (controller !== inFlight || !extra?.ok || !extra.results.length) return;
+    // If Mapbox could not answer at all, OpenStreetMap's list stands in for it.
+    render(mergeSearchResults(answer.ok ? answer.results : [], extra.results, { extra: answer.ok ? 3 : 6 }), '');
   };
 
   const show = (places) => {

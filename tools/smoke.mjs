@@ -759,6 +759,24 @@ const serveStubs = async (route) => {
       body: JSON.stringify({ features: [{ place_type: ['region'], text: 'Tennessee', properties: { short_code: 'US-TN' } }] }),
     });
   }
+  /*
+   * Photon, for Premium's second search: one place Mapbox also knows, which
+   * must be listed once, and one it does not, which must be added under it.
+   */
+  if (/photon\.komoot\.io\/api\//.test(url)) {
+    const asked = new URL(url).searchParams.get('q') || '';
+    const features = /elkmont/i.test(asked) ? [
+      {
+        type: 'Feature', geometry: { type: 'Point', coordinates: [-83.5801, 35.6502] },
+        properties: { osm_type: 'N', osm_id: 11, osm_value: 'camp_site', type: 'other', name: 'Elkmont Campground', city: 'Gatlinburg', state: 'Tennessee', countrycode: 'US' },
+      },
+      {
+        type: 'Feature', geometry: { type: 'Point', coordinates: [-83.6, 35.64] },
+        properties: { osm_type: 'W', osm_id: 12, osm_value: 'trailhead', type: 'other', name: 'Elkmont Nature Trail', state: 'Tennessee', countrycode: 'US' },
+      },
+    ] : [];
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ type: 'FeatureCollection', features }) });
+  }
   return route.fulfill({ status: 200, contentType: 'application/javascript', body: GL });
 };
 
@@ -5215,10 +5233,20 @@ const searchList = await page.evaluate(() => [...document.querySelectorAll('.map
   where: row.querySelector('.map-search-where')?.textContent.trim() || '',
   kind: row.querySelector('.map-search-kind')?.textContent.trim(),
 })));
-check('the box offers what it found', searchList.length, 2);
+check('the box offers what it found', searchList.length, 3);
 check('each result says what it is called', searchList[0].name, 'Elkmont Campground');
 check('and where that is, so three Elkmonts are three choices', searchList[0].where, 'Gatlinburg, Tennessee');
-check('and which kind of thing it is', searchList.map((row) => row.kind), ['Place', 'Town']);
+check('and which kind of thing it is', searchList.map((row) => row.kind), ['Place', 'Town', 'Trailhead']);
+/*
+ * Premium asks Mapbox and OpenStreetMap together: Mapbox's list first, the
+ * campground both know listed once, the trail only OpenStreetMap knows added
+ * under it - and both services named, as each asks to be.
+ */
+check('Premium search adds what only OpenStreetMap knows, once',
+  searchList.map((row) => row.name), ['Elkmont Campground', 'Elkmont', 'Elkmont Nature Trail']);
+check('and credits both services',
+  await page.evaluate(() => document.querySelector('.map-search-note')?.textContent || ''),
+  'Places from Mapbox and \u00a9 OpenStreetMap contributors, found by Photon.');
 
 /*
  * Your own places, before the geocoder's.

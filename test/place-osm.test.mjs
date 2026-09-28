@@ -157,13 +157,63 @@ test('osm: every lookup the viewer makes names the provider its plan chose', asy
    * A call that leaves the provider out gets the default, which is
    * OpenStreetMap - so forgetting it at one call site quietly gives Premium
    * the free search there, and nothing fails. Checked at the source instead.
+   *
+   * Two forms are allowed: the plan's provider, asked with lookup() or held
+   * in a `provider` read from it; and OpenStreetMap named outright, which is
+   * Premium's second search and so only ever asked when the plan's answer is
+   * Mapbox.
    */
   const viewer = await readFile(new URL('../assets/js/viewer.js', import.meta.url), 'utf8');
   const calls = [...viewer.matchAll(/\b(reverseGeocode|searchPlaces)\(([\s\S]*?)\)\s*(?:\.then|\.catch|;|\))/g)]
     .filter((match) => !/^\s*$/.test(match[2]));
-  assert.ok(calls.length >= 4, `found only ${calls.length} lookups in viewer.js`);
-  for (const [whole] of calls) {
-    assert.match(whole, /provider: lookup\(\)/, `a lookup without the plan's provider: ${whole.slice(0, 80)}`);
+  assert.ok(calls.length >= 5, `found only ${calls.length} lookups in viewer.js`);
+  for (const { 0: whole, index } of calls) {
+    const planned = /provider: lookup\(\)/.test(whole) || /[{,]\s*provider\s*[},]/.test(whole);
+    const second = /provider: 'osm'/.test(whole)
+      && /provider === 'mapbox'\s*\?\s*$/.test(viewer.slice(Math.max(0, index - 200), index).trimEnd() + ' ');
+    assert.ok(planned || second, `a lookup without the plan's provider: ${whole.slice(0, 90)}`);
   }
   assert.match(viewer, /const lookup = \(\) => lookupProvider\(\{ premium: allowed\('addressSearch'\) \}\);/);
+  // Where `provider` is shorthand, it was read from the plan.
+  const run = viewer.slice(viewer.indexOf('  const run = async (query) => {'));
+  assert.match(run.slice(0, 1500), /const provider = lookup\(\);/);
+});
+
+test('osm: Premium search keeps Mapbox’s answers first and adds what only OpenStreetMap knows', async () => {
+  const { mergeSearchResults, searchCredit } = await import('../assets/js/lib/place.js');
+  const mapbox = [
+    { name: 'Moab', kind: 'Town', center: [-109.5498, 38.5733], source: 'mapbox' },
+    { name: 'Moab Avenue Southeast', kind: 'Address', center: [-80.56, 41.16], source: 'mapbox' },
+  ];
+  const osm = [
+    { name: 'Moab', kind: 'Town', center: [-109.5496, 38.5738], source: 'osm' },        // the same town
+    { name: 'MOÁB', kind: 'Address', center: [-109.5501, 38.5731], source: 'osm' }, // same name, accents aside
+    { name: 'Mesa Arch', kind: 'Arch', center: [-109.8681, 38.3892], source: 'osm' },
+    { name: 'Moab', kind: 'Street', center: [-112.1, 33.4], source: 'osm' },             // same name, far away
+    { name: 'Moab Rim', kind: 'Trailhead', center: [-109.57, 38.56], source: 'osm' },
+    { name: 'Moab Canyon', kind: 'Valley', center: [-109.6, 38.6], source: 'osm' },
+  ];
+  const merged = mergeSearchResults(mapbox, osm);
+  assert.deepEqual(merged.map((place) => `${place.name}/${place.source}`), [
+    'Moab/mapbox', 'Moab Avenue Southeast/mapbox', 'Mesa Arch/osm', 'Moab/osm', 'Moab Rim/osm',
+  ], 'Mapbox first, duplicates once, three additions at most');
+  assert.equal(mergeSearchResults(mapbox, osm, { extra: 0 }).length, 2);
+  // If Mapbox answered nothing, OpenStreetMap's list stands in - with its own
+  // two spellings of the one town listed once.
+  assert.equal(mergeSearchResults([], osm, { extra: 6 }).length, 5);
+
+  assert.equal(searchCredit(merged), 'Places from Mapbox and © OpenStreetMap contributors, found by Photon.');
+  assert.equal(searchCredit(mapbox), 'Places from Mapbox.');
+  assert.equal(searchCredit(osm), 'Places © OpenStreetMap contributors, found by Photon.');
+  assert.equal(searchCredit([{ name: 'A waypoint of yours' }]), '');
+});
+
+test('osm: every search result says which service it came from', async () => {
+  const stub = stubFetch({ status: 200, body: { features: [feature({ name: 'Arches', type: 'other', countrycode: 'US' })] } });
+  try {
+    const answer = await searchPlaces('arches', { provider: 'osm' });
+    assert.equal(answer.results[0].source, 'osm');
+  } finally {
+    stub.restore();
+  }
 });

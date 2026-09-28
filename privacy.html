@@ -188,7 +188,7 @@
       </p>
       <ul>
         <li><b>Mapbox</b> — searching for a place by name and naming the nearest town for a pin, on Premium; the label fonts on the topographic map, and the mapping library itself.</li>
-        <li><b>komoot (Photon)</b> — searching for a place by name and naming the nearest town for a pin, on a free account. What you type into the search box, the rough centre of the map it is searching near, the coordinate of a pin you open, and the names of places in a Google Maps list you import go to komoot's Photon service, which answers from OpenStreetMap data. On Premium the same go to Mapbox instead.</li>
+        <li><b>komoot (Photon)</b> — searching for a place by name and naming the nearest town for a pin, on a free account. What you type into the search box, the rough centre of the map it is searching near, the coordinate of a pin you open, and the names of places in a Google Maps list you import go to komoot's Photon service, which answers from OpenStreetMap data. On Premium those go to Mapbox, and what you type into the search box goes to both.</li>
         <li><b>Cloudflare</b> — storage for the topographic map archive.</li>
         <li><b>USGS, Esri, NOAA / the National Weather Service, the FAA, BLM, the US Forest Service and state agencies</b> — the aerial imagery, topographic quads, public land boundaries, airspace and weather layers.</li>
         <li><b>OpenStreetMap</b> — the street basemap, served by community tile servers.</li>
@@ -273,8 +273,10 @@
         <b>27 September 2026.</b> On a free account, searching for a place and
         naming the nearest town for a pin now go to komoot's Photon service
         instead of Mapbox, so komoot is listed among the services above. Premium
-        still uses Mapbox. Importing a Google Maps saved list looks its places up
-        the same way, by name. Nothing else about what is sent has changed.
+        still uses Mapbox, and its searches are sent to komoot as well, so places
+        only OpenStreetMap knows can be shown alongside. Importing a Google Maps
+        saved list looks its places up the same way, by name. Nothing else about
+        what is sent has changed.
       </p>
       <p>
         <b>26 September 2026.</b> This page now covers signing in with Google,

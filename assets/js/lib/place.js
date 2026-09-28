@@ -529,11 +529,71 @@ export async function searchPlaces(query, {
         ok: false, status: response.status, reason: `The geocoder answered ${response.status}.`, results: [], provider: 'mapbox',
       };
     }
-    return { ok: true, reason: '', results: parseSearch(await response.json()), provider: 'mapbox' };
+    const results = parseSearch(await response.json()).map((result) => ({ ...result, source: 'mapbox' }));
+    return { ok: true, reason: '', results, provider: 'mapbox' };
   } catch (error) {
     if (error?.name === 'AbortError') throw error;
     return { ok: false, reason: 'No answer — you may be offline.', results: [], provider: 'mapbox' };
   }
+}
+
+/* ------------------------------------------------------------ both at once */
+
+/** A name as it compares: case, accents and punctuation set aside. */
+function sameName(name) {
+  return String(name || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/** Kilometres between two [lon, lat] points, near enough for "the same place". */
+function apartKm(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b)) return Infinity;
+  const rad = Math.PI / 180;
+  const x = (b[0] - a[0]) * rad * Math.cos(((a[1] + b[1]) / 2) * rad);
+  const y = (b[1] - a[1]) * rad;
+  return Math.hypot(x, y) * 6371;
+}
+
+/**
+ * Premium's search: Mapbox's answers, then what OpenStreetMap adds to them.
+ *
+ * Mapbox leads, because for towns, businesses and addresses it is the better
+ * answer, and it is the one that arrives first. OpenStreetMap is asked too,
+ * because it knows the ground a photographer goes to that a commercial
+ * geocoder often does not - a named arch, a spring, a trailhead, a pullout -
+ * and a handful of those are added underneath. A place both of them know is
+ * listed once, as Mapbox has it: the same name within a few kilometres is the
+ * same place.
+ */
+export function mergeSearchResults(primary = [], secondary = [], { extra = 3, nearKm = 3 } = {}) {
+  const merged = [...primary];
+  let added = 0;
+  for (const result of secondary) {
+    if (added >= extra) break;
+    const known = merged.some((existing) => sameName(existing.name) === sameName(result.name)
+      && apartKm(existing.center, result.center) < nearKm);
+    if (known) continue;
+    merged.push(result);
+    added += 1;
+  }
+  return merged;
+}
+
+/**
+ * The line under a list of results, saying whose places they are.
+ *
+ * Both services ask to be named where their results are shown - OpenStreetMap
+ * as a condition of its licence, Mapbox by its terms - so the line names
+ * whichever is actually on the list, not whichever was asked.
+ */
+export function searchCredit(results = []) {
+  const sources = new Set(results.map((result) => result.source).filter(Boolean));
+  if (sources.has('mapbox') && sources.has('osm')) {
+    return 'Places from Mapbox and \u00a9 OpenStreetMap contributors, found by Photon.';
+  }
+  if (sources.has('mapbox')) return 'Places from Mapbox.';
+  if (sources.has('osm')) return 'Places \u00a9 OpenStreetMap contributors, found by Photon.';
+  return '';
 }
 
 /* ------------------------------------------------------ OpenStreetMap (Photon) */
@@ -563,7 +623,8 @@ export async function searchPlacesOSM(text, { near = null, limit = 6, signal = n
         ok: false, status: response.status, reason: `OpenStreetMap search answered ${response.status}.`, results: [], provider: 'osm',
       };
     }
-    const results = parsePhotonSearch(await response.json(), { country: anywhere ? '' : 'US' });
+    const results = parsePhotonSearch(await response.json(), { country: anywhere ? '' : 'US' })
+      .map((result) => ({ ...result, source: 'osm' }));
     return { ok: true, reason: '', results: results.slice(0, limit), provider: 'osm' };
   } catch (error) {
     if (error?.name === 'AbortError') throw error;
