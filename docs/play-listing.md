@@ -176,10 +176,11 @@ account, and an account is optional):
 | Location → **Precise location** | App functionality | The coordinates of saved pins, synced to the account. They are places the user chose rather than where the device is, but the privacy policy already treats them as personal location data, and declaring more than the minimum is the safe side of this form |
 | Financial info → **Purchase history** | App functionality | Whether the account has Premium, from where, until when |
 | App activity → **Other user-generated content** | App functionality | Folder names, pin names and notes, and who a folder is shared with |
+| App activity → **In-app search history** | App functionality | What is typed into the search box goes to komoot's Photon, and on Premium to Mapbox as well, to find the place. We keep none of it, but they are not ours to promise that for, so it is not marked ephemeral. The privacy policy names both, and the form should not say less than the policy |
 
 **Not collected** - leave these unticked: photos and videos (they stay on the
 device; only an identifier syncs), files and docs (read on the device), app
-activity and interactions, web browsing, app info and performance (no crash or
+activity and interactions (other than search, above), web browsing, app info and performance (no crash or
 analytics SDK), device or other IDs, contacts, calendar, messages, audio,
 health, fitness.
 
