@@ -76,24 +76,41 @@ Maps are for planning. Carry a paper map where it matters, and use your own judg
 | --- | --- |
 | App icon, 512 × 512 | `assets/img/icon-512.png` |
 | Feature graphic, 1024 × 500 | `docs/store/play-feature-graphic.png` - regenerate with `node tools/build-feature-graphic.mjs`, on the Mac for the site's own serif |
-| Phone screenshots, 2 to 8 | `docs/store/screenshots/` - `node tools/build-store-screenshots.mjs`, below |
+| Phone, 7-inch and 10-inch tablet screenshots, 2 to 8 each | `docs/store/screenshots/` - `node tools/build-store-screenshots.mjs`, below |
 
-Screenshots: Play wants 9:16 exactly, and a phone's own screenshots are
-taller than that, so they are taken by a script instead, at 1080 x 1920:
+Screenshots: Play wants 16:9 or 9:16 exactly, and a device's own screenshots
+are rarely either, so they are taken by a script instead:
 
 ```
 node tools/build-store-screenshots.mjs
 ```
 
-It photographs the live site in a phone-sized Chromium and writes six to
-`docs/store/screenshots/`: the map over the Tetons, a pin's sun and moon
-times (Oxbow Bend), public land around Moab, sky brightness, satellite over
-Horseshoe Bend, and the layers list. Run it on the Mac, where the map tiles
+It photographs the live site in a browser the size of each device and writes
+six per device, each set into its own folder under `docs/store/screenshots/`:
+
+| Folder | Size | Play's box |
+| --- | --- | --- |
+| `phone/` | 1080 x 1920 (9:16) | Phone screenshots |
+| `tablet-7/` | 2048 x 1152 (16:9) | 7-inch tablet screenshots |
+| `tablet-10/` | 2560 x 1440 (16:9) | 10-inch tablet screenshots |
+
+The scenes are the map over the Tetons, a pin's sun and moon times (Oxbow
+Bend), public land around Moab, sky brightness, satellite over Horseshoe
+Bend, and the layers list. The tablets are landscape and show the panel
+beside the map, as a tablet does. Run it on the Mac, where the map tiles
 load, and look at each before uploading - a scene whose tiles failed comes out
-as an empty map, or with a "not returning any tiles" notice on it. Upload them
-in that order; the first three are what shows before anybody scrolls. Each
-scene is a link in the script's `SCENES`, so one can be moved somewhere else
-without touching the rest.
+as an empty map, or with a "not returning any tiles" notice on it. A scene
+that fails is reported and the rest are still taken; `--only=tablet-10` (or
+any of the three, comma-separated) retakes one set. Without Playwright's own
+Chromium, point it at any Chromium browser:
+
+```
+CHROMIUM_PATH="/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" node tools/build-store-screenshots.mjs
+```
+
+Upload them in number order; the first three are what shows before anybody
+scrolls. Each scene is a link in the script's `SCENES`, so one can be moved
+somewhere else without touching the rest.
 
 **Category**: *Maps & Navigation*. **Tags**: photography, maps, outdoors.
 
