@@ -10,6 +10,8 @@
  *
  * CHROMIUM_PATH picks the browser, for a machine where Playwright's own
  * Chromium is not installed: any Chromium will do - Chrome, Brave, Edge.
+ * HEADED=1 shows its windows while it works, which uses the machine's own
+ * graphics rather than the hidden browser's, for when screenshots time out.
  *
  * Play asks for 16:9 or 9:16 exactly. Phone and 7" tablet screenshots are
  * 320 to 3840 pixels a side, 10" tablet ones 1080 to 7680. A device's own
@@ -63,6 +65,11 @@ export function pixels({ viewport, scale }) {
 }
 // Play's limit is 8 MB; a satellite scene as PNG can come close.
 const MAX_BYTES = 7.5 * 1024 * 1024;
+// A screenshot waits for the page to draw a frame, which a map still
+// decoding tiles can take a while to give up.
+const SHOT_TIMEOUT = 60000;
+// Tries per scene, each in a browser of its own.
+const ATTEMPTS = 2;
 // Where "From here" measures from on the pin: Jackson, Wyoming, down the
 // valley from the pin, so the distance and bearing read as a real drive.
 const STANDING = { latitude: 43.4799, longitude: -110.7624 };
@@ -165,14 +172,14 @@ async function take(page, site, scene, folder) {
   await page.evaluate(() => document.activeElement?.blur?.());
 
   const target = path.join(folder, scene.file);
-  await page.screenshot({ path: target, type: 'png' });
+  await page.screenshot({ path: target, type: 'png', timeout: SHOT_TIMEOUT });
   let { size } = await stat(target);
   let written = scene.file;
   if (size > MAX_BYTES) {
     // Over Play's limit as a PNG: the same picture as a JPEG instead.
     await unlink(target);
     written = scene.file.replace(/\.png$/, '.jpg');
-    await page.screenshot({ path: path.join(folder, written), type: 'jpeg', quality: 90 });
+    await page.screenshot({ path: path.join(folder, written), type: 'jpeg', quality: 90, timeout: SHOT_TIMEOUT });
     ({ size } = await stat(path.join(folder, written)));
   }
   return { written, size };
@@ -190,50 +197,66 @@ async function main() {
     return;
   }
 
-  const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+  const launch = () => chromium.launch({
+    executablePath: process.env.CHROMIUM_PATH || undefined,
+    headless: !process.env.HEADED,
+  });
   const failed = [];
-  try {
-    for (const name of names) {
-      const device = DEVICES[name];
-      const size = pixels(device);
-      const folder = path.join(OUT, name);
-      await mkdir(folder, { recursive: true });
-      console.log(`\n${name}: ${size.width} x ${size.height}, into ${path.relative(ROOT, folder)}/`);
+  for (const name of names) {
+    const device = DEVICES[name];
+    const size = pixels(device);
+    const folder = path.join(OUT, name);
+    await mkdir(folder, { recursive: true });
+    console.log(`\n${name}: ${size.width} x ${size.height}, into ${path.relative(ROOT, folder)}/`);
 
-      const context = await browser.newContext({
-        viewport: device.viewport,
-        deviceScaleFactor: device.scale,
-        isMobile: true,
-        hasTouch: true,
-        colorScheme: 'light',
-        locale: 'en-US',
-        timezoneId: 'America/Denver',
-        geolocation: STANDING,
-        permissions: ['geolocation'],
-      });
-      for (const scene of SCENES) {
-        // Said before, not only after: a scene can take half a minute while
-        // the tiles settle, and silence reads as stuck.
-        process.stdout.write(`  ${scene.file} ... `);
-        const page = await context.newPage();
+    for (const scene of SCENES) {
+      // Said before, not only after: a scene can take half a minute while
+      // the tiles settle, and silence reads as stuck.
+      process.stdout.write(`  ${scene.file} ... `);
+      let outcome = null;
+      let problem = '';
+      /*
+       * A browser of its own for every scene, and for every try. A map is a
+       * WebGL canvas, and a browser that has drawn a couple of them - Brave,
+       * hidden, on a Mac in particular - can stop producing frames, after
+       * which every screenshot in it waits out its timeout. Starting clean
+       * costs a second or two a scene and takes that off the table.
+       */
+      for (let attempt = 1; attempt <= ATTEMPTS && !outcome; attempt += 1) {
+        const browser = await launch();
         try {
-          const { written, size: bytes } = await take(page, site, scene, folder);
-          console.log(`${written === scene.file ? '' : `${written}, `}${(bytes / 1048576).toFixed(1)} MB  ${scene.what}`);
+          const context = await browser.newContext({
+            viewport: device.viewport,
+            deviceScaleFactor: device.scale,
+            isMobile: true,
+            hasTouch: true,
+            colorScheme: 'light',
+            locale: 'en-US',
+            timezoneId: 'America/Denver',
+            geolocation: STANDING,
+            permissions: ['geolocation'],
+          });
+          outcome = await take(await context.newPage(), site, scene, folder);
         } catch (error) {
-          failed.push(`${name}/${scene.file}`);
-          console.log(`FAILED: ${String(error?.message || error).split('\n')[0]}`);
+          problem = String(error?.message || error).split('\n')[0];
+          if (attempt < ATTEMPTS) process.stdout.write('retrying ... ');
         } finally {
-          await page.close().catch(() => {});
+          await browser.close().catch(() => {});
         }
       }
-      await context.close();
+      if (outcome) {
+        const { written, size: bytes } = outcome;
+        console.log(`${written === scene.file ? '' : `${written}, `}${(bytes / 1048576).toFixed(1)} MB  ${scene.what}`);
+      } else {
+        failed.push(`${name}/${scene.file}`);
+        console.log(`FAILED: ${problem}`);
+      }
     }
-  } finally {
-    await browser.close();
   }
 
   if (failed.length) {
-    console.log(`\n${failed.length} did not come out: ${failed.join(', ')}. Run again, or with --only= for one device.`);
+    console.log(`\n${failed.length} did not come out: ${failed.join(', ')}. Run again, or with --only= for one `
+      + 'device; if screenshots keep timing out, add HEADED=1 in front of the command.');
     process.exitCode = 1;
   }
   console.log('\nLook at each one before uploading: a map whose tiles did not load photographs as empty.');

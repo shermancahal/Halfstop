@@ -108,6 +108,10 @@ Chromium, point it at any Chromium browser:
 CHROMIUM_PATH="/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" node tools/build-store-screenshots.mjs
 ```
 
+If screenshots time out (`page.screenshot: Timeout`), put `HEADED=1` in front
+of the command: the windows show while it works, and draw with the Mac's own
+graphics rather than the hidden browser's.
+
 Upload them in number order; the first three are what shows before anybody
 scrolls. Each scene is a link in the script's `SCENES`, so one can be moved
 somewhere else without touching the rest.
