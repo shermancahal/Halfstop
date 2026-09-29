@@ -18,6 +18,8 @@ import { mountPageSettings } from './lib/page-settings.js';
 import { formatDistance, formatElevation } from './lib/geo.js';
 import { registerServiceWorker, reloadOntoNewBuild } from './lib/pwa.js';
 import { mountSiteFooter } from './lib/site-footer.js';
+import { mountAppInvite } from './lib/app-invite.js';
+import { appShell } from './lib/native-shell.js';
 
 const dom = {};
 let catalog = { maps: [] };
@@ -207,6 +209,10 @@ async function main() {
    */
   const { account } = mountPageSettings({ toast: createToaster(document.body) });
   mountSiteFooter({ account });
+  // The Android test, offered in a browser and never inside the app itself.
+  let store = null;
+  try { store = globalThis.localStorage || null; } catch { /* private mode: shown every visit */ }
+  mountAppInvite({ app: SITE.androidApp, native: appShell().native, store });
 
   /*
    * The catalogue is optional markup now.

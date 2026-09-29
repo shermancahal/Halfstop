@@ -518,6 +518,8 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
   text-transform: uppercase; color: var(--ink-3); padding-top: 3px;
 }
 .roadmap .shipped { color: var(--pine); }
+.roadmap .testing { color: var(--clay); }
+.roadmap span.detail a { white-space: nowrap; }
 .roadmap b { display: block; font-weight: 600; }
 .roadmap span.detail { font-size: .89rem; color: var(--ink-2); }
 
@@ -1306,3 +1308,34 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 /* The one control in the account panel that destroys something, set apart from
    the two that do not. */
 .account-danger { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+
+
+/* ==========================================================================
+   The Android testing banner, under the header on the homepage
+   (lib/app-invite.js draws it, and only in a browser)
+   ========================================================================== */
+
+.app-invite { background: var(--pine-soft); border-bottom: 1px solid var(--line); color: var(--ink); }
+.app-invite-row { display: flex; align-items: center; gap: 12px; padding-top: 10px; padding-bottom: 10px; }
+.app-invite-mark { flex: none; display: inline-flex; color: var(--pine); }
+.app-invite-mark svg { width: 22px; height: 22px; }
+.app-invite-text { flex: 1 1 auto; min-width: 0; margin: 0; font-size: .92rem; line-height: 1.4; }
+.app-invite-text span { color: var(--ink-2); }
+.app-invite-go { flex: none; white-space: nowrap; }
+.app-invite-close {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%;
+  background: transparent; color: var(--ink-2); cursor: pointer;
+}
+.app-invite-close:hover { background: var(--paper-3); color: var(--ink); }
+.app-invite-close svg { width: 16px; height: 16px; }
+
+@media (max-width: 640px) {
+  /* The words take the whole first line; the button and the close sit under
+     them, rather than squeezing the sentence into a column two words wide. */
+  .app-invite-row { flex-wrap: wrap; row-gap: 8px; }
+  .app-invite-mark { display: none; }
+  .app-invite-text { flex-basis: calc(100% - 44px); }
+  .app-invite-close { order: 2; }
+  .app-invite-go { order: 3; }
+}

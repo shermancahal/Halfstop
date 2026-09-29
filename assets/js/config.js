@@ -42,6 +42,20 @@ export const SITE = {
   url: 'https://app.halfstop.app/',
   contactEmail: 'support@halfstop.app',
   /*
+   * The Android app on Google Play.
+   *
+   * `testing` is true while the Play release is a test rather than a public
+   * one: the homepage offers a banner inviting people in, and the words
+   * everywhere say "testing". Set it to false when the app goes public, and
+   * the banner stands down on its own. The url is the listing itself, and the
+   * links written into index.html and faq.html are held to it by
+   * test/app-invite.test.mjs, so this is the one place to change it.
+   */
+  androidApp: {
+    url: 'https://play.google.com/store/apps/details?id=com.halfstop.app',
+    testing: true,
+  },
+  /*
    * Who may edit page content in place.
    *
    * A convenience for the browser, not a permission. The pencil is hidden for
