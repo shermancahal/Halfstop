@@ -862,3 +862,67 @@ export async function clearTiles(cacheName = 'abmap-tiles-v1', store = globalThi
   if (!store?.delete) return false;
   return store.delete(cacheName);
 }
+
+/*
+ * Keeping downloads once they are made.
+ *
+ * Everything a browser stores for a site is "best effort" until the site asks
+ * for more: when the device runs short of space, the browser may clear it,
+ * oldest-used site first, and say nothing. For a map somebody downloaded so
+ * that it would be there at the end of a forest road, that is the worst way
+ * for it to go. navigator.storage.persist() asks the browser to keep this
+ * site's storage until the person clears it themselves.
+ *
+ * Chromium browsers - Chrome, Brave, Edge - answer at once and without a
+ * prompt, saying yes most readily to a site that is installed or bookmarked.
+ * Firefox asks the person, which is why this is only ever called from a
+ * download they started. Safari keeps an installed home-screen app's storage
+ * whatever this says. Inside the native app none of this applies: the app's
+ * storage is its own, and lasts until it is uninstalled.
+ */
+
+/**
+ * Ask the browser to keep this site's storage.
+ *
+ * @returns {Promise<'kept'|'best-effort'|'unsupported'>}
+ */
+export async function keepStorage(storage = globalThis.navigator?.storage) {
+  if (typeof storage?.persist !== 'function') return 'unsupported';
+  try {
+    if (await storage.persisted?.()) return 'kept';
+    return (await storage.persist()) ? 'kept' : 'best-effort';
+  } catch {
+    return 'best-effort';
+  }
+}
+
+/**
+ * Whether the browser has already agreed to keep this site's storage, without
+ * asking: for describing it, where a prompt would be out of place.
+ *
+ * @returns {Promise<'kept'|'best-effort'|'unsupported'>}
+ */
+export async function storageStanding(storage = globalThis.navigator?.storage) {
+  if (typeof storage?.persisted !== 'function') return 'unsupported';
+  try {
+    return (await storage.persisted()) ? 'kept' : 'best-effort';
+  } catch {
+    return 'unsupported';
+  }
+}
+
+/**
+ * The sentence under the storage figure that says whether downloads will be
+ * kept, or '' where there is nothing worth saying.
+ *
+ * @param {'kept'|'best-effort'|'unsupported'} standing
+ * @param {object} context
+ * @param {boolean} context.native     running inside the app
+ * @param {boolean} context.installed  running as an installed web app
+ */
+export function keptNote(standing, { native = false, installed = false } = {}) {
+  if (native || standing === 'unsupported') return '';
+  if (standing === 'kept') return 'This browser has agreed to keep downloads until you delete them.';
+  return 'If this device runs short of space, the browser may clear downloads to make room.'
+    + (installed ? '' : ' Installing Halfstop as an app makes that much less likely.');
+}

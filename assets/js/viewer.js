@@ -82,7 +82,8 @@ import { registerNPSImages, npsIconSVG } from './lib/nps-draw.js';
 import { kpNow, auroraChance, describeKp } from './lib/aurora.js';
 import { lunarEclipses, describeEclipse, shadowGeometry } from './lib/eclipse.js';
 import { describeSync } from './lib/sync.js';
-import { registerServiceWorker, applyServiceWorkerUpdate } from './lib/pwa.js';
+import { registerServiceWorker, applyServiceWorkerUpdate, isInstalled } from './lib/pwa.js';
+import { appShell } from './lib/native-shell.js';
 import { mayEdit } from './lib/editors.js';
 import { settleCheckoutReturn } from './lib/checkout-return.js';
 import { upgradePlanBlock } from './lib/upgrade-plan.js';
@@ -96,6 +97,7 @@ import {
   regionTileKeys,
   measureRegion, regionsToGeoJSON, formatBytes as formatTileBytes, regionSizeProblem,
   REACH_CHOICES, reachKm, padBoundsKm, boundsAround, withEdge, normalizeBounds,
+  keepStorage, storageStanding, keptNote,
 } from './lib/offline.js';
 import {
   putPhoto, photoURL, deletePhoto, pruneUnreferenced, fetchLinkedPhoto, formatBytes, PHOTO_TYPES,
@@ -5696,15 +5698,23 @@ function renderOfflineTab() {
  * that is genuinely about.
  */
 async function describeStorage(node) {
+  let figure = '';
   try {
     const { usage = 0, quota = 0 } = (await navigator.storage?.estimate?.()) || {};
-    if (!quota) { node.textContent = 'This browser does not report how much it can store.'; return; }
-    const share = Math.round((usage / quota) * 100);
-    node.textContent = `About ${formatTileBytes(usage)} stored of roughly `
-      + `${formatTileBytes(quota)} available${share >= 1 ? ` (${share}%)` : ''}.`;
+    if (!quota) {
+      figure = 'This browser does not report how much it can store.';
+    } else {
+      const share = Math.round((usage / quota) * 100);
+      figure = `About ${formatTileBytes(usage)} stored of roughly `
+        + `${formatTileBytes(quota)} available${share >= 1 ? ` (${share}%)` : ''}.`;
+    }
   } catch {
-    node.textContent = '';
+    figure = '';
   }
+  // Whether it will still be there on the trip, which matters more than
+  // how much of it there is. Read, never asked: asking is for a download.
+  const kept = keptNote(await storageStanding(), { native: appShell().native, installed: isInstalled() });
+  node.textContent = [figure, kept].filter(Boolean).join(' ');
 }
 
 /** One saved region: what it covers, what it costs, and what you can do to it. */
@@ -5965,6 +5975,14 @@ function downloadRow(region) {
       if (controller) { controller.abort(); return; }
       controller = new AbortController();
       button.textContent = 'Stop';
+      /*
+       * Ask the browser to keep what is about to be stored. From here and
+       * not on page load, because Firefox puts the question to the person,
+       * and it should come with a reason they can see. Not awaited: the
+       * download does not wait on an answer, and the storage line under the
+       * regions reads the outcome next time it is drawn.
+       */
+      if (!appShell().native) keepStorage();
 
       const tiers = [{ zoom: region.minZoom, boxes: [region.bounds] }];
       for (let zoom = region.minZoom + 1; zoom <= region.maxZoom; zoom += 1) {
@@ -11570,6 +11588,7 @@ function staleRegionNotice(region, drift) {
       again.disabled = true;
       drop.disabled = true;
       status.textContent = 'Downloading…';
+      if (!appShell().native) keepStorage();
       try {
         /*
          * The old tiles go first, and that ordering is the point.
