@@ -15,10 +15,12 @@
 <link rel="manifest" href="manifest.webmanifest">
 <!-- iOS ignores the manifest for "Add to Home Screen"; these three are what it
      reads instead. apple-touch-icon must be a PNG with no transparency: Safari
-     composites anything transparent onto black. -->
+     composites anything transparent onto black. The status bar is "black", not
+     "black-translucent": translucent has iOS size the installed app a status
+     bar's height short of the screen, which left a blank strip under the map. -->
 <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Halfstop">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="stylesheet" href="assets/css/site.css">
