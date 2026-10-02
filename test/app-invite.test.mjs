@@ -16,7 +16,7 @@ import { SITE } from '../assets/js/config.js';
 import { inviteWanted } from '../assets/js/lib/app-invite.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const app = { url: 'https://play.google.com/store/apps/details?id=com.halfstop.app', testing: true };
+const app = { url: 'https://play.google.com/store/apps/details?id=com.halfstop.app', testing: true, banner: true };
 const PIXEL = 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Mobile Safari/537.36';
 const MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Safari/605.1.15';
 const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Mobile/15E148 Safari/604.1';
@@ -32,9 +32,10 @@ test('app invite: never inside the app, never on an iPhone, and not once closed'
   assert.equal(inviteWanted({ app, userAgent: PIXEL, dismissed: true }), false);
 });
 
-test('app invite: stands down when the app is public, or has no link', () => {
+test('app invite: stands down when switched off, when the app is public, or with no link', () => {
   assert.equal(inviteWanted({ app: { ...app, testing: false }, userAgent: PIXEL }), false);
-  assert.equal(inviteWanted({ app: { url: '', testing: true }, userAgent: PIXEL }), false);
+  assert.equal(inviteWanted({ app: { url: '', testing: true, banner: true }, userAgent: PIXEL }), false);
+  assert.equal(inviteWanted({ app: { ...app, banner: false }, userAgent: PIXEL }), false, 'switched off in config');
   assert.equal(inviteWanted({ userAgent: PIXEL }), false);
 });
 

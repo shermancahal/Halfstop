@@ -45,15 +45,18 @@ export const SITE = {
    * The Android app on Google Play.
    *
    * `testing` is true while the Play release is a test rather than a public
-   * one: the homepage offers a banner inviting people in, and the words
-   * everywhere say "testing". Set it to false when the app goes public, and
-   * the banner stands down on its own. The url is the listing itself, and the
-   * links written into index.html and faq.html are held to it by
-   * test/app-invite.test.mjs, so this is the one place to change it.
+   * one, and the words everywhere say "testing". `banner` is whether the
+   * homepage shows the strip under the header inviting people in: off while
+   * the open test is in Play's review, and true brings it back. Setting
+   * `testing` to false when the app goes public stands the banner down too.
+   * The url is the listing itself, and the links written into index.html and
+   * faq.html are held to it by test/app-invite.test.mjs, so this is the one
+   * place to change it.
    */
   androidApp: {
     url: 'https://play.google.com/store/apps/details?id=com.halfstop.app',
     testing: true,
+    banner: false,
   },
   /*
    * Who may edit page content in place.

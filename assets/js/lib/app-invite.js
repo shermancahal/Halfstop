@@ -10,8 +10,8 @@
  * localStorage: a convenience for one reader, and nothing breaks if the
  * browser forgets.
  *
- * The link and whether the app is still in testing come from SITE.androidApp
- * in config.js.
+ * The link, whether the app is still in testing, and whether the banner is
+ * wanted at all come from SITE.androidApp in config.js.
  */
 
 import { el } from './ui.js';
@@ -30,13 +30,13 @@ const CLOSE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
  * Whether to draw the banner at all.
  *
  * @param {object} options
- * @param {object} options.app        SITE.androidApp
+ * @param {object} options.app        SITE.androidApp: { url, testing, banner }
  * @param {boolean} options.native    running inside the app
  * @param {string} options.userAgent
  * @param {boolean} options.dismissed closed before on this browser
  */
 export function inviteWanted({ app, native = false, userAgent = '', dismissed = false } = {}) {
-  if (!app?.url || !app.testing) return false;
+  if (!app?.url || !app.testing || !app.banner) return false;
   if (native || dismissed) return false;
   // iPhones and iPads, including an iPad that says it is a Mac: a Play
   // Store link is a dead end on any of them.
