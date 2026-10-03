@@ -30,9 +30,11 @@ Where it goes:
   - Whether a pin in a folder with trip dates opens on the trip's first day.
   - Whether a shared pin link carries the day (`&d=2026-10-24`), so "be here
     at sunrise on this day" can be sent.
-- Times are shown in the pin's own time zone, or the device's - check which
-  the section uses today before a picked date makes the difference show
-  (a pin in Utah planned from Indiana).
+- Times are shown in the device's time zone: `clockTime` is
+  `toLocaleTimeString` with no `timeZone`. So a pin in Utah, planned from
+  Indiana, shows Indiana times. A planning tool makes that matter more;
+  showing the pin's own zone (or naming the zone beside the times) belongs
+  with this.
 - Tests: `test/sky.test.mjs` covers the calculations; the date only needs a
   smoke check that changing it changes the sunrise shown.
 
