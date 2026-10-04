@@ -3066,7 +3066,7 @@ if (!external) {
       await stranger.evaluate(() => document.querySelectorAll('.footer-admin').length), 0);
     check('and the footer they do get is the shared one',
       await stranger.evaluate(() => [...document.querySelectorAll('.footer-menu a')].map((a) => a.textContent.trim())),
-      ['Home', 'Map', 'About', 'Help & FAQ', 'Roadmap', 'What it costs', 'Terms', 'Privacy']);
+      ['Home', 'Map', 'About', 'Help & FAQ', 'Roadmap', "What's new", 'What it costs', 'Terms', 'Privacy']);
     await stranger.close();
     await anyone.close();
   }
