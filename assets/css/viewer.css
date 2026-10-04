@@ -502,6 +502,11 @@ html, body { height: 100%; overflow: hidden; }
    one level down. */
 @media (max-width: 820px) {
   .folder-menu-button { min-height: 40px; padding: 8px 13px; }
+  /* The folder row's pencil is an icon in a square, not a labelled button:
+     the padding above, inside a 28px width, left the icon no room at all and
+     drew an empty box. A thumb-sized square with nothing to pad. */
+  .folder-head .icon-button.folder-menu-button { width: 40px; height: 40px; min-height: 40px; padding: 0; }
+  .folder-head .icon-button.folder-menu-button svg { width: 16px; height: 16px; flex: none; }
   .picker-row .button { min-height: 40px; }
   .folder-item .icon-button,
   .waypoint-card .icon-button { min-width: 38px; min-height: 38px; }
