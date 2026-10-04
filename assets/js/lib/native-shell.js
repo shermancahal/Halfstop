@@ -64,6 +64,33 @@ export const RETURN_KEY = 'halfstop-oauth-return-v1';
 /** The launch link already acted on, so a page load cannot act on it twice. */
 export const LAUNCH_KEY = 'halfstop-launch-link-v1';
 
+/** A map file another app asked this one to open, held for the map page. */
+export const OPEN_FILE_KEY = 'halfstop-open-file-v1';
+
+/**
+ * Whether a URL the app was opened with is a file rather than a link.
+ *
+ * Tapping a GPX in Gmail, Messages or Files and choosing Halfstop arrives
+ * through the same door as a sign-in link - Android's VIEW intent, which
+ * Capacitor reports as `appUrlOpen` - but as a `content://` address the other
+ * app has lent us, or now and then a bare `file://` one.
+ */
+export function isFileUrl(url) {
+  return /^(content|file):\/\//i.test(String(url || ''));
+}
+
+/** The file waiting to be opened, once: reading it removes it. */
+export function takeOpenedFile(store) {
+  if (!store) return '';
+  try {
+    const url = String(store.getItem(OPEN_FILE_KEY) || '');
+    store.removeItem(OPEN_FILE_KEY);
+    return isFileUrl(url) ? url : '';
+  } catch {
+    return '';
+  }
+}
+
 /** Where every emailed link lands, on the website and in the app. */
 const ACCOUNT_PAGE = 'account.html';
 
@@ -189,7 +216,7 @@ export function navigate(landing, where = globalThis.location) {
 }
 
 /**
- * Listen for the app being opened by one of its own links.
+ * Listen for the app being opened by one of its own links, or with a file.
  *
  * Two ways in, and both are needed:
  *
@@ -209,6 +236,22 @@ export function watchAppLinks({ shell = appShell(), store = sessionStore(), go =
   if (!app?.addListener) return false;
 
   const follow = (url) => {
+    /*
+     * A map file goes to the map, which is the page that opens files. Held in
+     * storage rather than in the address, because a content:// address is
+     * long, means nothing in a query string, and is only lent to this app
+     * for as long as it runs.
+     */
+    if (isFileUrl(url)) {
+      if (!store) return;
+      try {
+        store.setItem(OPEN_FILE_KEY, String(url));
+      } catch {
+        return;
+      }
+      go('map.html');
+      return;
+    }
     const landing = landingFor(url, { remembered: takeReturn(store) });
     if (!landing) return;
     // The in-app browser, if Google was opened in one. It closes itself on

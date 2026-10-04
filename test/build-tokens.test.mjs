@@ -5,7 +5,7 @@ import { chooseToken, appTokenFile, webTokenFile, appPreflight } from '../tools/
 import {
   preflight as appMachinePreflight, withAndroidPermissions, ANDROID_PERMISSIONS,
   CAPACITOR_INSTALL, afterOpening, agpMajor, agpDrift, AGP_SUPPORTED_MAJOR,
-  withSupportedProguard, withDeepLink, APP_PLUGINS, withProjectName, versionFor, withVersion,
+  withSupportedProguard, withDeepLink, withMapFiles, MAP_FILE_TYPES, APP_PLUGINS, withProjectName, versionFor, withVersion,
 } from '../tools/app.mjs';
 import { APP_SCHEME } from '../assets/js/lib/native-shell.js';
 
@@ -522,6 +522,33 @@ test('android: links and permissions together leave nothing else changed', () =>
   const unlinked = both.replace(/\n\n\s*<intent-filter>\s*<action android:name="android.intent.action.VIEW" \/>[\s\S]*?<\/intent-filter>/, '');
   const unpermitted = unlinked.replace(/ {4}<uses-permission android:name="android.permission.ACCESS_(FINE|COARSE)_LOCATION" \/>\n/g, '');
   assert.equal(unpermitted, GENERATED_MANIFEST);
+});
+
+/*
+ * "Open with" for a map file: somebody sent a GPX, the person it was sent to
+ * taps it in Gmail or Messages, and Halfstop has to be one of the choices.
+ */
+test('android: Halfstop is offered for a tapped GPX, KML, KMZ or GeoJSON', () => {
+  const linked = withDeepLink(GENERATED_MANIFEST, 'com.halfstop.app').manifest;
+  const { manifest, added } = withMapFiles(linked);
+  assert.equal(added, true);
+  // Whichever filter carries the types; both new filters sit just after the launcher's.
+  const typed = manifest.indexOf('android:mimeType');
+  const filter = manifest.slice(manifest.lastIndexOf('<intent-filter>', typed), manifest.indexOf('</intent-filter>', typed));
+  assert.match(filter, /android.intent.action.VIEW/);
+  assert.match(filter, /android.intent.category.DEFAULT/);
+  assert.match(filter, /<data android:scheme="content" \/>/);
+  for (const type of ['application/gpx+xml', 'application/vnd.google-earth.kmz', 'application/geo+json', 'application/octet-stream']) {
+    assert.ok(filter.includes(`<data android:mimeType="${type}" />`), type);
+  }
+  // Its own filter: types on the app's link filter would stop the links matching.
+  assert.doesNotMatch(filter, /com\.halfstop\.app/);
+  assert.ok(manifest.indexOf('android:mimeType') < manifest.indexOf('</activity>'));
+  // Once, however often the tool runs.
+  const again = withMapFiles(manifest);
+  assert.equal(again.added, false);
+  assert.equal(again.manifest, manifest);
+  assert.equal(MAP_FILE_TYPES.length, new Set(MAP_FILE_TYPES).size);
 });
 
 test('android: a manifest with no launcher, or no scheme to register, is refused', () => {

@@ -187,6 +187,66 @@ export function withDeepLink(manifest, scheme) {
 }
 
 /**
+ * The map files Halfstop offers to open, by the types other apps send them as.
+ *
+ * The named types first. Then the three generic ones a map file most often
+ * arrives as in practice: a GPX from Gmail or a messaging app is commonly
+ * `application/octet-stream`, a GeoJSON `application/json`, a KML plain XML.
+ * Listing those puts Halfstop in "Open with" for other files of the same
+ * types too, which is the price of being there for the map files at all - and
+ * lib/opened-file.js reads the bytes and says plainly when a file is not one.
+ */
+export const MAP_FILE_TYPES = [
+  'application/gpx+xml',
+  'application/gpx',
+  'application/vnd.google-earth.kml+xml',
+  'application/vnd.google-earth.kmz',
+  'application/geo+json',
+  'application/vnd.geo+json',
+  'application/octet-stream',
+  'application/json',
+  'application/xml',
+  'text/xml',
+];
+
+/**
+ * The intent filter that puts Halfstop in Android's "Open with" for a map file.
+ *
+ * A VIEW of a content:// or file:// address of one of MAP_FILE_TYPES. It
+ * arrives in the page as `appUrlOpen` with that address, the same door as a
+ * sign-in link, and lib/native-shell.js sends it to the map to be imported.
+ * Beside the launcher filter, in the singleTask activity, so a file opened
+ * while the app is running comes to that copy rather than starting another.
+ *
+ * Pure and idempotent, like the deep link: an android/ made before this gets
+ * it on the next build, and a second run changes nothing.
+ */
+export function withMapFiles(manifest, types = MAP_FILE_TYPES) {
+  if (manifest.includes(`android:mimeType="${types[0]}"`)) return { manifest, added: false };
+
+  const launcher = manifest.indexOf('android.intent.category.LAUNCHER');
+  const close = launcher === -1 ? -1 : manifest.indexOf('</intent-filter>', launcher);
+  if (close === -1) {
+    throw new Error('AndroidManifest.xml has no launcher intent filter - not a file this knows how to edit.');
+  }
+
+  const at = close + '</intent-filter>'.length;
+  const filter = [
+    '',
+    '',
+    '            <intent-filter>',
+    '                <action android:name="android.intent.action.VIEW" />',
+    '                <category android:name="android.intent.category.DEFAULT" />',
+    '                <category android:name="android.intent.category.BROWSABLE" />',
+    '                <data android:scheme="content" />',
+    '                <data android:scheme="file" />',
+    ...types.map((type) => `                <data android:mimeType="${type}" />`),
+    '            </intent-filter>',
+  ].join('\n');
+  return { manifest: `${manifest.slice(0, at)}${filter}${manifest.slice(at)}`, added: true };
+}
+
+/**
  * What to do once the IDE is open, for the IDE that actually opened.
  *
  * This used to print one pair of lines for both, and they were Xcode's: "pick
@@ -505,7 +565,9 @@ async function main() {
     const scheme = capacitorConfig().appId;
     const linked = withDeepLink(permitted, scheme);
     if (linked.added) console.log(`\n>> AndroidManifest.xml now opens ${scheme}:// links (sign-in emails, the return from Google)`);
-    if (linked.manifest !== before) writeFileSync(manifestPath, linked.manifest);
+    const files = withMapFiles(linked.manifest);
+    if (files.added) console.log('\n>> AndroidManifest.xml now offers Halfstop in "Open with" for GPX, KML, KMZ and GeoJSON files');
+    if (files.manifest !== before) writeFileSync(manifestPath, files.manifest);
   }
 
   // 2b. The iPhone project's link handling, permission strings, icon, launch

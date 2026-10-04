@@ -83,7 +83,8 @@ import { kpNow, auroraChance, describeKp } from './lib/aurora.js';
 import { lunarEclipses, describeEclipse, shadowGeometry } from './lib/eclipse.js';
 import { describeSync } from './lib/sync.js';
 import { registerServiceWorker, applyServiceWorkerUpdate, isInstalled } from './lib/pwa.js';
-import { appShell } from './lib/native-shell.js';
+import { appShell, sessionStore, takeOpenedFile } from './lib/native-shell.js';
+import { readOpenedFile } from './lib/opened-file.js';
 import { mayEdit } from './lib/editors.js';
 import { settleCheckoutReturn } from './lib/checkout-return.js';
 import { upgradePlanBlock } from './lib/upgrade-plan.js';
@@ -1014,9 +1015,30 @@ async function main() {
    * Last, because everything above this line is a place somebody asked for and
    * this is only where you happen to be standing.
    */
-  if (!arrivedWithAView && !initial.pin && !initial.slugs.length) centreOnYou();
+  // A map file another app opened Halfstop with - Android's "Open with" -
+  // read before deciding where the map goes, because the file decides that.
+  const handed = takeOpenedFile(sessionStore());
+
+  if (!arrivedWithAView && !initial.pin && !initial.slugs.length && !handed) centreOnYou();
 
   renderDetailsTab();
+  if (handed) openHandedFile(handed);
+}
+
+/**
+ * Open a file another app handed to this one, the way a dropped file opens.
+ *
+ * Read by lib/opened-file.js, which works out what it is from its bytes, and
+ * then given to handleFiles like anything chosen in the Folders tab - so it
+ * is filed, or offered a folder to go into, exactly as an import is.
+ */
+async function openHandedFile(url) {
+  try {
+    const file = await readOpenedFile(url);
+    await handleFiles([file]);
+  } catch (error) {
+    toast(error.message, { tone: 'error', timeout: 9000 });
+  }
 }
 
 /**

@@ -44,3 +44,20 @@ Taken down 2026-10-02 while the open test was in Play's review. To bring it
 back, set `banner: true` in `SITE.androidApp` in `assets/js/config.js`. When
 the app is public, set `testing: false` instead, and reword the roadmap entry
 and the FAQ answer (`faq.html#android-app`), which both say "testing".
+
+## Opening a map file in Halfstop on an iPhone, and in the installed website
+
+The Android app is offered under "Open with" for GPX, KML, KMZ and GeoJSON
+(`withMapFiles` in `tools/app.mjs`, read by `lib/opened-file.js`). Two more
+places would want the same:
+
+- **The iPhone app**, once it ships: `CFBundleDocumentTypes` (and
+  `UTImportedTypeDeclarations` for GPX, which iOS has no type for) in
+  Info.plist, written by `tools/ios-native.mjs` the way the URL scheme is.
+  The file arrives as `appUrlOpen` with a `file://` address, which
+  `lib/native-shell.js` already sends to the map.
+- **The website installed to an Android home screen**: a `share_target` in
+  `manifest.webmanifest`, with the service worker catching the POST and
+  handing the file to the map. Chrome supports it for installed sites; Brave
+  may not. iPhones do not support it for websites at all, so there the way
+  in stays Folders, then choose a file.
