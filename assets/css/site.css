@@ -518,6 +518,18 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
   text-transform: uppercase; color: var(--ink-3); padding-top: 3px;
 }
 .roadmap .shipped { color: var(--pine); }
+/* What's new: dated entries, newest first, in the roadmap's rhythm. */
+.release-notes { display: grid; gap: 4px; }
+.release { padding: 14px 0; border-bottom: 1px solid var(--line); }
+.release:last-child { border-bottom: 0; }
+.release h3 {
+  margin: 0 0 8px; font-family: var(--font-sans); font-size: .72rem; font-weight: 600;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3);
+}
+.release ul { margin: 0; padding-left: 1.1em; display: grid; gap: 6px; }
+.release li { font-size: .93rem; color: var(--ink-2); }
+.release li b { color: var(--ink); font-weight: 600; }
+
 .roadmap .testing { color: var(--clay); }
 .roadmap span.detail a { white-space: nowrap; }
 .roadmap b { display: block; font-weight: 600; }
@@ -670,6 +682,9 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 
 /* Landed on from a link: clear of the sticky header, and marked for a moment. */
 .faq-item, .faq-section { scroll-margin-top: calc(var(--header-h) + var(--safe-top) + 12px); }
+/* The homepage sections the footer links to - What's new, Roadmap, What it
+   costs - land below the sticky header rather than under it. */
+.section[id] { scroll-margin-top: calc(var(--header-h) + var(--safe-top)); }
 .faq-item:target > summary { background: var(--paper-2); }
 
 /* Where the sections are, before any of them is opened. */
