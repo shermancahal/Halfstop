@@ -129,3 +129,49 @@ export async function readOpenedFile(url, { capacitor = globalThis.Capacitor, fe
   };
   return new File([bytes], openedFileName(url, kind), { type: types[kind] });
 }
+
+/** The endings the import goes by; a file without one is read to find out. */
+const KNOWN_ENDING = /\.(gpx|kml|kmz|geojson|json|csv)$/i;
+
+/**
+ * A chosen or dropped file, named so the import knows what it is.
+ *
+ * The import goes by the ending, and a phone does not keep endings reliably:
+ * a GPX saved from Gmail or Messages can arrive as "1234", "attachment" or
+ * "trip.gpx.xml". Such a file is read - its first few kilobytes - and renamed
+ * for what it is. One that is not a map file is handed back as it was, for
+ * the import to refuse in words.
+ *
+ * @param {File} file
+ * @returns {Promise<File>}
+ */
+export async function asMapFile(file) {
+  if (!file || KNOWN_ENDING.test(file.name || '')) return file;
+  let kind = '';
+  try {
+    kind = sniffMapFile(new Uint8Array(await file.slice(0, 4096).arrayBuffer()));
+  } catch {
+    kind = '';
+  }
+  if (!kind) return file;
+  const base = String(file.name || '').replace(/\.[a-z0-9]{1,5}$/i, '').trim() || 'Shared file';
+  // "trip.gpx.xml" is a trip.gpx with something added, not a trip.gpx.gpx.
+  const name = new RegExp(`\\.${kind}$`, 'i').test(base) ? base : `${base}.${kind}`;
+  return new File([file], name, { type: file.type || '', lastModified: file.lastModified });
+}
+
+/**
+ * What the import's file picker should filter by, or '' for every file.
+ *
+ * On a computer the extension list is a help: the dialog greys out what will
+ * not open. On a phone it is the opposite. Android's picker turns the list
+ * into types and greys out a GPX it knows only as "a file" - which is how one
+ * saved from Gmail or Messages is usually labelled - and iPhone's has a
+ * history of doing the same to types it has no name for. That is how a
+ * folder sent from Halfstop could not be chosen in Halfstop. So on a phone,
+ * and in the app, nothing is filtered, and asMapFile and the import decide.
+ */
+export function pickerAccept(list, { native = false, userAgent = '', touchMac = false } = {}) {
+  if (native || touchMac || /\b(Android|iPhone|iPad|iPod)\b/i.test(userAgent)) return '';
+  return list;
+}

@@ -9,7 +9,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { sniffMapFile, openedFileName, readOpenedFile, bytesFromBase64 } from '../assets/js/lib/opened-file.js';
+import {
+  sniffMapFile, openedFileName, readOpenedFile, bytesFromBase64, asMapFile, pickerAccept,
+} from '../assets/js/lib/opened-file.js';
 import {
   OPEN_FILE_KEY, appShell, isFileUrl, takeOpenedFile, watchAppLinks,
 } from '../assets/js/lib/native-shell.js';
@@ -126,4 +128,40 @@ test('opened file: a file that started the app is opened once, not on every load
   // Something that is not a file address never comes back out as one.
   store.setItem(OPEN_FILE_KEY, 'javascript:alert(1)');
   assert.equal(takeOpenedFile(store), '');
+});
+
+/*
+ * A folder sent from Halfstop could not be chosen in Halfstop: the phone's
+ * picker greyed out a GPX it knew only as "a file", and a GPX that lost its
+ * ending on the way was refused by name.
+ */
+test('import: a map file that lost its ending is read and named for what it is', async () => {
+  const gpx = '<?xml version="1.0"?><gpx version="1.1"><wpt lat="1" lon="2"/></gpx>';
+  const renamed = await asMapFile(new File([gpx], '1234', { type: 'application/octet-stream' }));
+  assert.equal(renamed.name, '1234.gpx');
+  assert.equal(await renamed.text(), gpx);
+  assert.equal((await asMapFile(new File([gpx], 'Moab trip.gpx.xml'))).name, 'Moab trip.gpx');
+  assert.equal((await asMapFile(new File([gpx], 'Moab trip.xml'))).name, 'Moab trip.gpx');
+  assert.equal((await asMapFile(new File(['{"type":"FeatureCollection","features":[]}'], 'attachment'))).name, 'attachment.geojson');
+  assert.equal((await asMapFile(new File([gpx], ''))).name, 'Shared file.gpx');
+});
+
+test('import: a file with a known ending, or one that is not a map file, is left as it was', async () => {
+  const named = new File(['anything'], 'trip.gpx');
+  assert.equal(await asMapFile(named), named, 'the parser decides about a .gpx, not this');
+  const list = new File(['Title,Note,URL'], 'Saved.csv');
+  assert.equal(await asMapFile(list), list);
+  const photo = new File([Uint8Array.from([0xff, 0xd8, 0xff, 0xe0])], 'IMG_0001.jpg');
+  assert.equal(await asMapFile(photo), photo);
+});
+
+test('import: the picker filters by extension on a computer and not on a phone or in the app', () => {
+  const list = '.gpx,.kml,.kmz,.geojson,.json,.csv';
+  const mac = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Safari/605.1.15';
+  assert.equal(pickerAccept(list, { userAgent: mac }), list);
+  assert.equal(pickerAccept(list, { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/140.0' }), list);
+  assert.equal(pickerAccept(list, { userAgent: 'Mozilla/5.0 (Linux; Android 15; Pixel 9) Chrome/140.0 Mobile' }), '');
+  assert.equal(pickerAccept(list, { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X)' }), '');
+  assert.equal(pickerAccept(list, { userAgent: mac, touchMac: true }), '', 'an iPad that says it is a Mac');
+  assert.equal(pickerAccept(list, { native: true, userAgent: mac }), '');
 });

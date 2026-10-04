@@ -84,7 +84,7 @@ import { lunarEclipses, describeEclipse, shadowGeometry } from './lib/eclipse.js
 import { describeSync } from './lib/sync.js';
 import { registerServiceWorker, applyServiceWorkerUpdate, isInstalled } from './lib/pwa.js';
 import { appShell, sessionStore, takeOpenedFile } from './lib/native-shell.js';
-import { readOpenedFile } from './lib/opened-file.js';
+import { readOpenedFile, asMapFile, pickerAccept } from './lib/opened-file.js';
 import { mayEdit } from './lib/editors.js';
 import { settleCheckoutReturn } from './lib/checkout-return.js';
 import { upgradePlanBlock } from './lib/upgrade-plan.js';
@@ -8957,6 +8957,17 @@ function fileOpenedDocument(entry) {
 }
 
 function wireDropzone() {
+  // Every file on a phone, the extension list on a computer: see pickerAccept.
+  if (dom.fileInput) {
+    const accept = pickerAccept(dom.fileInput.getAttribute('accept') || '', {
+      native: appShell().native,
+      userAgent: navigator.userAgent || '',
+      // An iPad says it is a Mac, and gives itself away with a touch screen.
+      touchMac: /Macintosh/.test(navigator.userAgent || '') && (navigator.maxTouchPoints || 0) > 1,
+    });
+    if (accept) dom.fileInput.setAttribute('accept', accept);
+    else dom.fileInput.removeAttribute('accept');
+  }
   dom.dropzone?.addEventListener('click', () => dom.fileInput.click());
   dom.fileInput?.addEventListener('change', (event) => {
     handleFiles([...event.target.files]);
@@ -9206,6 +9217,10 @@ function reviewGoogleList(filename, text) {
 }
 
 async function handleFiles(files) {
+  // A map file that lost its ending on the way - a GPX saved from Gmail as
+  // "1234" - is read and named for what it is, so the checks below see it.
+  files = await Promise.all(files.map((file) => asMapFile(file)));
+
   /*
    * A Google Maps saved list comes as a CSV and needs its places found and
    * checked before it is anything, so it goes its own way: one review at a
