@@ -104,7 +104,7 @@ import {
   keepStorage, storageStanding, keptNote,
 } from './lib/offline.js';
 import {
-  putPhoto, photoURL, deletePhoto, pruneUnreferenced, fetchLinkedPhoto, formatBytes, PHOTO_TYPES,
+  putPhoto, photoURL, deletePhoto, pruneUnreferenced, fetchLinkedPhoto, formatBytes, photoAccept,
   listSnapshots, SNAPSHOT_SOURCE,
 } from './lib/photos.js';
 // The two numbers the card quotes, from the module that decides them rather
@@ -12184,7 +12184,11 @@ async function attachPhotos(folder, item, files) {
 function photoPicker(folder, item, { camera = false, onDone = () => {}, onBusy = () => {} } = {}) {
   return el('input', {
     type: 'file',
-    accept: PHOTO_TYPES.join(','),
+    // What to ask the system for differs on an iPhone: see photoAccept.
+    accept: photoAccept({
+      userAgent: navigator.userAgent || '',
+      touchMac: /Macintosh/.test(navigator.userAgent || '') && (navigator.maxTouchPoints || 0) > 1,
+    }),
     multiple: !camera,
     ...(camera ? { capture: 'environment' } : {}),
     hidden: true,

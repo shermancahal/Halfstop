@@ -26,8 +26,65 @@ const DB_NAME = 'ab-maps-photos';
 const DB_VERSION = 1;
 const STORE = 'photos';
 
-/** Accepted image types. HEIC is deliberately absent — browsers cannot decode it. */
+/**
+ * Image types every browser this runs in can show as they are.
+ *
+ * Anything else that is an image - HEIC from an iPhone or a Samsung, TIFF,
+ * BMP - is still welcome, but only if this browser can read it, because it is
+ * converted on the way in (see putPhoto) and never stored as it came.
+ */
 export const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'];
+
+/** HEIC and HEIF: what iPhones shoot, and Samsungs on "high efficiency". */
+const HEIC_TYPES = ['image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence'];
+
+/** Whether a file is HEIC or HEIF, by its type or, where that is blank, its name. */
+export function isHeic(type = '', name = '') {
+  return HEIC_TYPES.includes(String(type).toLowerCase()) || /\.(heic|heif)$/i.test(String(name));
+}
+
+/**
+ * Whether a file is worth trying to read as a photo at all.
+ *
+ * The shown-as-is types, anything else that says it is an image, and a HEIC
+ * whose type the system left blank - which Chrome on Windows does.
+ */
+export function mayBePhoto(type = '', name = '') {
+  return PHOTO_TYPES.includes(type) || /^image\//i.test(String(type)) || isHeic(type, name);
+}
+
+/**
+ * What the photo picker asks the system for.
+ *
+ * On an iPhone or iPad, exactly the shown-as-is types and nothing else. That
+ * is not a restriction: asked for those, iOS converts a HEIC to JPEG as it is
+ * picked, which works on every iOS version - and listing HEIC, or `image/*`,
+ * would turn that conversion off and hand over the HEIC instead.
+ *
+ * Everywhere else, any image, and HEIC by name for the desktop pickers that do
+ * not count it as one. Whether it can be read is found out by trying.
+ */
+export function photoAccept({ userAgent = '', touchMac = false } = {}) {
+  if (touchMac || /\b(iPhone|iPad|iPod)\b/i.test(userAgent)) return PHOTO_TYPES.join(',');
+  return 'image/*,.heic,.heif';
+}
+
+/**
+ * The sentence for a photo this browser could not read, by what it was.
+ */
+export function unreadablePhoto(name = '', type = '') {
+  const what = name ? `\u201c${name}\u201d` : 'That photo';
+  if (isHeic(type, name)) {
+    return `${what} is a HEIC photo, which this browser cannot read. Safari can, and an iPhone converts it `
+      + 'to JPEG by itself when you add it from there. Otherwise, save it as a JPEG first - on a Mac, '
+      + 'Photos then File, Export - or, on a Samsung, turn off High efficiency pictures in the camera\u2019s '
+      + 'settings for the photos you take next.';
+  }
+  if (/raw|dng|x-canon|x-nikon|x-sony|x-fuji|x-panasonic|x-olympus/i.test(type) || /\.(dng|cr2|cr3|nef|arw|raf|rw2|orf)$/i.test(name)) {
+    return `${what} is a RAW file, which no browser can read. Export it as a JPEG and add that.`;
+  }
+  return `${what} could not be read as a photo. JPEG, PNG, WebP, GIF and AVIF always work.`;
+}
 export const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 
 let dbPromise = null;
@@ -86,9 +143,15 @@ function makeId() {
  */
 export async function putPhoto(blob, meta = {}, { shrink = true } = {}) {
   if (!(blob instanceof Blob)) throw new Error('Not an image.');
-  if (!PHOTO_TYPES.includes(blob.type)) {
-    throw new Error(`${meta.name || 'That file'} is a ${blob.type || 'unknown'} — only JPEG, PNG, WebP, GIF and AVIF can be shown.`);
+  if (!mayBePhoto(blob.type, meta.name)) {
+    throw new Error(unreadablePhoto(meta.name, blob.type));
   }
+  /*
+   * A type that cannot be shown as it is - HEIC, TIFF, BMP - has to come
+   * through the converter or not at all. Kept as it came, it would be a
+   * photo nobody could see on another browser, or on this one.
+   */
+  const mustConvert = !PHOTO_TYPES.includes(blob.type);
   /*
    * The ceiling is on what arrives, not on what is kept.
    *
@@ -105,13 +168,14 @@ export async function putPhoto(blob, meta = {}, { shrink = true } = {}) {
   let width = null;
   let height = null;
 
-  if (shrink) {
+  if (shrink || mustConvert) {
     try {
       const shrunk = await shrinkToBudget(blob);
       kept = shrunk.blob;
       width = shrunk.width;
       height = shrunk.height;
     } catch (error) {
+      if (mustConvert) throw new Error(unreadablePhoto(meta.name, blob.type));
       /*
        * Stored as it came rather than refused.
        *

@@ -61,3 +61,19 @@ places would want the same:
   handing the file to the map. Chrome supports it for installed sites; Brave
   may not. iPhones do not support it for websites at all, so there the way
   in stays Folders, then choose a file.
+
+## HEIC photos inside the apps
+
+The website takes any image the browser can read and converts it (see
+`putPhoto` in `lib/photos.js`). That covers HEIC on an iPhone, which converts
+it as it is picked, and in Safari on a Mac, which reads it. Chrome, Firefox
+and the Android app's web view cannot read HEIC, and are told so in words.
+
+Shipping a HEIC decoder in the page is not the answer: they are HEVC
+decoders, which are LGPL and patent-encumbered. The phone's own decoder is.
+`@capacitor/camera`'s `pickImages()` hands back JPEG on both Android and iOS,
+converting HEIC with the system's decoder, so using it for **Add photos** when
+`appShell().native` is true would make HEIC work in both apps. It is a new
+plugin: add it to `APP_PLUGINS`, `CAPACITOR_INSTALL` and `includePlugins`.
+HEIC on Android is uncommon (Samsung's "High efficiency pictures" is off by
+default), which is why this waited.
