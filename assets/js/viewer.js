@@ -85,6 +85,9 @@ import { describeSync } from './lib/sync.js';
 import { registerServiceWorker, applyServiceWorkerUpdate, isInstalled } from './lib/pwa.js';
 import { appShell, sessionStore, takeOpenedFile } from './lib/native-shell.js';
 import { readOpenedFile, asMapFile, pickerAccept } from './lib/opened-file.js';
+import {
+  readLinkId, linkCollection, folderLinkParts, linkLastsUntil, LINK_DAYS, LINK_MAX_PLACES,
+} from './lib/folder-link.js';
 import { mayEdit } from './lib/editors.js';
 import { settleCheckoutReturn } from './lib/checkout-return.js';
 import { upgradePlanBlock } from './lib/upgrade-plan.js';
@@ -1019,10 +1022,36 @@ async function main() {
   // read before deciding where the map goes, because the file decides that.
   const handed = takeOpenedFile(sessionStore());
 
-  if (!arrivedWithAView && !initial.pin && !initial.slugs.length && !handed) centreOnYou();
+  if (!arrivedWithAView && !initial.pin && !initial.slugs.length && !handed && !initial.link) centreOnYou();
 
   renderDetailsTab();
   if (handed) openHandedFile(handed);
+  if (initial.link) openSentFolder(initial.link);
+}
+
+/**
+ * Open a folder somebody sent as a link: map.html?f=<id>.
+ *
+ * Read from the server - open_folder_link() needs no account - and then
+ * opened as a GeoJSON file would be, through handleFiles, so it lands on the
+ * map and asks which folder to go into, the same as any import. The id comes
+ * off the address once it is read: a reload should not offer the same folder
+ * a second time.
+ */
+async function openSentFolder(id) {
+  setStatus(true, 'Opening the folder you were sent\u2026');
+  const result = state.account
+    ? await state.account.openFolderLink(id)
+    : { ok: false, reason: 'Folder links are not available here.' };
+  setStatus(false);
+  writeURL();
+  if (!result.ok) {
+    toast(result.reason, { tone: 'error', timeout: 10000 });
+    return;
+  }
+  const name = String(result.name || 'Shared places').replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'Shared places';
+  const file = new File([JSON.stringify(result.geojson)], `${name}.geojson`, { type: 'application/geo+json' });
+  await handleFiles([file], { arrived: `Opened \u201c${name}\u201d, sent to you as a link.` });
 }
 
 /**
@@ -1228,6 +1257,8 @@ function readURL() {
      * coordinate off the globe would move the map somewhere it cannot draw.
      */
     pin: readSharedPin(params),
+    // A folder somebody sent as a link: see lib/folder-link.js.
+    link: readLinkId(params),
   };
 }
 
@@ -9216,7 +9247,7 @@ function reviewGoogleList(filename, text) {
   });
 }
 
-async function handleFiles(files) {
+async function handleFiles(files, { arrived = '' } = {}) {
   // A map file that lost its ending on the way - a GPX saved from Gmail as
   // "1234" - is read and named for what it is, so the checks below see it.
   files = await Promise.all(files.map((file) => asMapFile(file)));
@@ -9278,7 +9309,8 @@ async function handleFiles(files) {
   setStatus(false);
   if (bounds) {
     fitTo(bounds);
-    const loaded = `Loaded ${accepted.length} file${accepted.length > 1 ? 's' : ''}.`;
+    // What arrived, in the words somebody would use: a link is not a file.
+    const loaded = arrived || `Loaded ${accepted.length} file${accepted.length > 1 ? 's' : ''}.`;
     if (filedInto.length) {
       const added = filedInto.reduce((sum, r) => sum + r.added, 0);
       const names = [...new Set(filedInto.map((r) => r.folder.name))];
@@ -12278,27 +12310,105 @@ function focusFolderItem(item, folderId = null, { edit = false } = {}) {
 }
 
 /**
- * A folder, handed to somebody else as a file.
+ * The folder's "Send a copy" choices, opened under its actions by Share.
  *
- * A link cannot carry a folder. One here holds 1,320 waypoints, and there is
- * no server to put them on - so the honest unit for a folder is the GPX it
- * already exports, offered to the share sheet rather than dropped in Downloads.
- *
- * Falls back to the download when a device has no share sheet, or has one that
- * refuses files, which is most desktops. Same file either way; only where it
- * lands differs.
+ * A link first, because it is the one that works for anybody: it opens in any
+ * browser with nothing to install, which a file does not - a phone opens a
+ * GPX only with an app that reads one, and the person a folder was sent to
+ * tapped one and got nothing. Then the two files, for Gaia GPS, Garmin and
+ * every other map app (GPX), or anything that wants every property (GeoJSON).
  */
-async function shareFolder(folder) {
+function toggleSendPanel(folder, actions) {
+  const open = actions?.nextElementSibling;
+  if (open?.classList.contains('editor-send')) { open.remove(); return; }
+  actions?.after(sendPanel(folder));
+}
+
+function sendPanel(folder) {
+  const status = el('p', { class: 'hint editor-send-status', text: '' });
+  const signedIn = Boolean(state.account?.user);
+
+  const link = el('button', {
+    class: 'button button-primary button-small', type: 'button',
+    html: `${icons.share}<span>Send a link</span>`,
+    onclick: () => sendFolderLink(folder, { status, button: link }),
+  });
+  const gpx = el('button', {
+    class: 'button button-secondary button-small', type: 'button',
+    title: 'For Gaia GPS, Garmin, OsmAnd and most other map apps',
+    html: `${icons.export}<span>GPX file</span>`,
+    onclick: () => shareFolderFile(folder, 'gpx'),
+  });
+  const geojson = el('button', {
+    class: 'button button-secondary button-small', type: 'button',
+    title: 'Every property on every pin, for another map or a script to read',
+    html: `${icons.export}<span>GeoJSON file</span>`,
+    onclick: () => shareFolderFile(folder, 'geojson'),
+  });
+
+  return el('div', { class: 'editor-send' }, [
+    el('div', { class: 'settings-label', text: 'Send a copy' }),
+    el('p', {
+      class: 'hint', style: 'margin:0 0 8px',
+      text: signedIn
+        ? `A link opens these places on a map in any browser, for ${LINK_DAYS} days, and they can save them to their own folders. `
+          + 'A file is for other map apps.'
+        : 'Sign in to send a link, which opens on any phone or computer. Without an account you can send a file, '
+          + 'for Halfstop or any other map app.',
+    }),
+    el('div', { class: 'editor-send-choices' }, [signedIn ? link : null, gpx, geojson]),
+    status,
+  ]);
+}
+
+/** Make a link to a copy of the folder and hand it over. */
+async function sendFolderLink(folder, { status, button }) {
+  const collection = linkCollection(state.folders.folderGeoJSON(folder.id));
+  const count = collection.features.length;
+  if (!count) { status.textContent = 'That folder is empty, so there is nothing to send.'; return; }
+  if (count > LINK_MAX_PLACES) {
+    status.textContent = `A link carries up to ${LINK_MAX_PLACES.toLocaleString()} places, and this folder has `
+      + `${count.toLocaleString()}. Send it as a file instead.`;
+    return;
+  }
+
+  button.disabled = true;
+  status.textContent = 'Making the link\u2026';
+  const result = await state.account.createFolderLink(folder.name, collection);
+  button.disabled = false;
+  if (!result.ok) { status.textContent = result.reason; return; }
+
+  const url = shareableURL({ href: location.href, protocol: location.protocol, site: SITE.url, ...folderLinkParts(result.id) });
+  status.textContent = `Link made. It opens ${linkLastsUntil(result.expiresAt)}, and changing the folder `
+    + 'afterwards does not change what it shows.';
+  await offerLink(url, {
+    title: folder.name,
+    text: `${folder.name}: ${count} place${count === 1 ? '' : 's'} sent from Halfstop.`,
+    ok: 'Link copied. Paste it into a message.',
+  });
+}
+
+/**
+ * A folder, handed to somebody as a file: GPX or GeoJSON.
+ *
+ * To the share sheet where a device has one that takes files, which is most
+ * phones; downloaded otherwise, which is most computers. Same file either way.
+ */
+async function shareFolderFile(folder, format = 'gpx') {
   const geojson = state.folders.folderGeoJSON(folder.id);
   if (!geojson.features.length) {
     toast('That folder is empty, so there is nothing to share.', { tone: 'error' });
     return;
   }
-  const filename = gpxNameFor(folder.name);
-  const gpx = toGPX(geojson, { name: folder.name });
+  const asGeoJSON = format === 'geojson';
+  const filename = asGeoJSON ? gpxNameFor(folder.name).replace(/\.gpx$/, '.geojson') : gpxNameFor(folder.name);
+  const type = asGeoJSON ? 'application/geo+json' : 'application/gpx+xml';
+  const body = asGeoJSON
+    ? JSON.stringify(linkCollection(geojson), null, 1)
+    : toGPX(geojson, { name: folder.name });
 
   if (navigator.canShare && navigator.share) {
-    const file = new File([gpx], filename, { type: 'application/gpx+xml' });
+    const file = new File([body], filename, { type });
     if (navigator.canShare({ files: [file] })) {
       try {
         await navigator.share({ files: [file], title: folder.name });
@@ -12309,7 +12419,7 @@ async function shareFolder(folder) {
       }
     }
   }
-  downloadText(filename, gpx, 'application/gpx+xml');
+  downloadText(filename, body, type);
   toast(`Saved ${geojson.features.length} item${geojson.features.length === 1 ? '' : 's'} as ${filename}.`, { tone: 'ok' });
 }
 
@@ -13521,9 +13631,9 @@ function folderActionsRow(folder) {
       }),
       el('button', {
         class: 'button button-ghost button-small', type: 'button',
-        title: `Send ${folder.name} to somebody as a GPX file`,
+        title: `Send somebody a copy of ${folder.name}, as a link or a file`,
         html: `${icons.share}<span>Share</span>`,
-        onclick: () => shareFolder(folder),
+        onclick: (event) => toggleSendPanel(folder, event.currentTarget.closest('.editor-folder-actions')),
       }),
       // No delete for the reserved folder: the store refuses it, and the next
       // saved pin would make it again anyway. Emptying it means moving the

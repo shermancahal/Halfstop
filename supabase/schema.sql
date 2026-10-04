@@ -783,3 +783,145 @@ create policy "support is for the administrator"
   to authenticated
   using (lower((select auth.jwt()) ->> 'email') = 'shermancahal@gmail.com')
   with check (lower((select auth.jwt()) ->> 'email') = 'shermancahal@gmail.com');
+
+-- ------------------------------------------------------------ folder links
+--
+-- A copy of a folder anybody holding the link can open, for thirty days.
+--
+-- Sending a folder used to mean sending a GPX, and a phone opens a GPX only
+-- with an app that reads one: the person it went to tapped it and got nothing.
+-- A link opens in any browser. What it opens is a snapshot - the places as
+-- they were when it was made, not the folder itself - so it carries none of
+-- the sender's account, and changing or deleting the folder later changes
+-- nothing for whoever has the link. Inviting somebody to the folder itself is
+-- the Premium feature in "sharing" above; this is the copy.
+--
+-- Nobody writes to the table directly. create_folder_link() is the way in, so
+-- the limits below are the server's rather than a browser's: signed in, a
+-- FeatureCollection, at most 2,000 places and 2 MB, fifty links a day. The id
+-- is 32 hex characters of a random UUID, which is what makes it unguessable;
+-- open_folder_link() hands back one by its id and never lists them.
+
+create table if not exists public.folder_links (
+  id          text        primary key check (id ~ '^[0-9a-f]{32}$'),
+  owner       uuid        not null references auth.users (id) on delete cascade,
+  name        text        not null check (char_length(name) between 1 and 120),
+  features    integer     not null check (features between 1 and 2000),
+  geojson     jsonb       not null,
+  created_at  timestamptz not null default now(),
+  expires_at  timestamptz not null default now() + interval '30 days'
+);
+
+create index if not exists folder_links_owner_created
+  on public.folder_links (owner, created_at desc);
+
+alter table public.folder_links enable row level security;
+
+-- Your own links, to see and to take back. No insert or update policy: the
+-- function below is the only way in.
+drop policy if exists "your own folder links" on public.folder_links;
+create policy "your own folder links"
+  on public.folder_links
+  for select
+  to authenticated
+  using (owner = (select auth.uid()));
+
+drop policy if exists "take back your own folder links" on public.folder_links;
+create policy "take back your own folder links"
+  on public.folder_links
+  for delete
+  to authenticated
+  using (owner = (select auth.uid()));
+
+create or replace function public.create_folder_link(link_name text, collection jsonb)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  me     uuid := (select auth.uid());
+  places integer;
+  today  integer;
+  made   public.folder_links;
+begin
+  if me is null then
+    return jsonb_build_object('ok', false, 'error', 'Sign in to send a link.');
+  end if;
+
+  if jsonb_typeof(collection) is distinct from 'object'
+     or collection ->> 'type' is distinct from 'FeatureCollection'
+     or jsonb_typeof(collection -> 'features') is distinct from 'array' then
+    return jsonb_build_object('ok', false, 'error', 'That is not a folder of places.');
+  end if;
+
+  places := jsonb_array_length(collection -> 'features');
+  if places = 0 then
+    return jsonb_build_object('ok', false, 'error', 'That folder is empty, so there is nothing to send.');
+  end if;
+  if places > 2000 then
+    return jsonb_build_object('ok', false, 'error',
+      format('A link carries up to 2,000 places, and this folder has %s. Send it as a file instead.', places));
+  end if;
+  if pg_column_size(collection) > 2000000 then
+    return jsonb_build_object('ok', false, 'error',
+      'That folder is too large for a link - long tracks, most likely. Send it as a file instead.');
+  end if;
+
+  select count(*) into today
+    from public.folder_links
+   where owner = me and created_at > now() - interval '1 day';
+  if today >= 50 then
+    return jsonb_build_object('ok', false, 'error',
+      'That is fifty links today, which is the limit. The ones already sent still work.');
+  end if;
+
+  insert into public.folder_links (id, owner, name, features, geojson)
+  values (
+    replace(gen_random_uuid()::text, '-', ''),
+    me,
+    left(coalesce(nullif(btrim(link_name), ''), 'Shared places'), 120),
+    places,
+    collection
+  )
+  returning * into made;
+
+  return jsonb_build_object('ok', true, 'id', made.id, 'expires_at', made.expires_at, 'features', places);
+end;
+$$;
+
+revoke execute on function public.create_folder_link(text, jsonb) from public;
+revoke execute on function public.create_folder_link(text, jsonb) from anon;
+grant execute on function public.create_folder_link(text, jsonb) to authenticated;
+
+-- Anybody with the link, signed in or not: the person it was sent to may not
+-- have an account, and needs none to look.
+create or replace function public.open_folder_link(link_id text)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(
+    (select jsonb_build_object(
+              'ok', true, 'name', l.name, 'features', l.features,
+              'geojson', l.geojson, 'created_at', l.created_at, 'expires_at', l.expires_at)
+       from public.folder_links l
+      where l.id = link_id
+        and link_id ~ '^[0-9a-f]{32}$'
+        and l.expires_at > now()),
+    jsonb_build_object('ok', false,
+      'error', 'That link has expired or was taken back. Ask whoever sent it for a new one.'));
+$$;
+
+revoke execute on function public.open_folder_link(text) from public;
+grant execute on function public.open_folder_link(text) to anon, authenticated;
+
+-- Expired links are never read again - open_folder_link() checks expires_at -
+-- but they stay in the table until cleared. Nothing clears them on its own:
+-- there is no scheduler on this project. Run this now and then from the SQL
+-- editor; it removes only links more than a day past their end.
+--
+--   delete from public.folder_links where expires_at < now() - interval '1 day';

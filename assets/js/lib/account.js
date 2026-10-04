@@ -1121,6 +1121,40 @@ export class Account extends EventTarget {
   }
 
   /**
+   * Make a link to a copy of a folder, for sending to somebody.
+   *
+   * The server decides everything that matters - who is asking, the size,
+   * how many today, the id, and how long it lasts - in create_folder_link().
+   * This only hands over the name and the places, and passes its refusals on
+   * as the sentences they already are.
+   *
+   * @returns {Promise<{ok: true, id: string, expiresAt: string} | {ok: false, reason: string}>}
+   */
+  async createFolderLink(name, collection) {
+    if (!this.user) return { ok: false, reason: 'Sign in to send a link.' };
+    const client = await this.getClient();
+    if (!client) return { ok: false, reason: 'Accounts are not configured here.' };
+    const { data, error } = await client.rpc('create_folder_link', { link_name: name, collection });
+    if (error) return { ok: false, reason: error.message };
+    if (!data?.ok) return { ok: false, reason: data?.error || 'The link was not made.' };
+    return { ok: true, id: data.id, expiresAt: data.expires_at };
+  }
+
+  /**
+   * Open a folder link: anybody may, signed in or not.
+   *
+   * @returns {Promise<{ok: true, name: string, geojson: object, expiresAt: string} | {ok: false, reason: string}>}
+   */
+  async openFolderLink(id) {
+    const client = await this.getClient();
+    if (!client) return { ok: false, reason: 'Folder links are not available here.' };
+    const { data, error } = await client.rpc('open_folder_link', { link_id: id });
+    if (error) return { ok: false, reason: 'That link could not be opened just now. Try again in a moment.' };
+    if (!data?.ok) return { ok: false, reason: data?.error || 'That link could not be opened.' };
+    return { ok: true, name: data.name, geojson: data.geojson, expiresAt: data.expires_at };
+  }
+
+  /**
    * Wait for a checkout to show up as an entitlement.
    *
    * Paying and being entitled are not the same instant. Stripe sends the

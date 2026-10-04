@@ -186,7 +186,7 @@ test('google list: the map accepts a CSV and sends it to the review, not the fil
     readFile(new URL('../assets/js/viewer.js', import.meta.url), 'utf8'),
   ]);
   assert.match(page, /id="file-input"[^>]*accept="[^"]*\.csv/);
-  const handle = viewer.slice(viewer.indexOf('async function handleFiles(files) {'));
+  const handle = viewer.slice(viewer.indexOf('async function handleFiles(files'));
   assert.match(handle.slice(0, 1200), /reviewGoogleLists\(lists\)/);
   // The review looks places up with the plan's provider, like every other lookup.
   assert.match(viewer, /lookupPlaces\(places, \{\s*search: searchPlaces,\s*provider,/);

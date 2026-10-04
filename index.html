@@ -447,7 +447,7 @@
      * code and is never exchanged. It looks exactly like signing in doing
      * nothing. Carried through to the map, where something is listening.
      */
-    var carries = ['m', 'b', 'o', 'u', 'code', 'error'].some(function (key) { return search.has(key); });
+    var carries = ['m', 'b', 'o', 'u', 'f', 'code', 'error'].some(function (key) { return search.has(key); });
     if (carries || /^#(view|-?\d)/.test(location.hash) || /access_token=|[#&]error=/.test(location.hash)) {
       location.replace('map.html' + location.search + location.hash);
     }

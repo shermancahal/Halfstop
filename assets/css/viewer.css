@@ -497,6 +497,17 @@ html, body { height: 100%; overflow: hidden; }
   overflow: hidden; text-overflow: ellipsis;
 }
 
+/* Share's "Send a copy": a link first, then the two files. Wraps to a line
+   each on a narrow panel rather than shrinking three labels to ellipses. */
+.editor-send { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.editor-send-choices { display: flex; flex-wrap: wrap; gap: 6px; }
+.editor-send-choices .button {
+  display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; min-height: 36px;
+}
+.editor-send-choices .button svg { width: 14px; height: 14px; flex: none; }
+.editor-send-status { margin: 8px 0 0; }
+.editor-send-status:empty { display: none; }
+
 /* Every tap target in the folder tree gets a thumb's worth of height. The
    per-pin edit and remove icons are the same complaint as the folder toolbar,
    one level down. */

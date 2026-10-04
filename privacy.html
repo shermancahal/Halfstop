@@ -65,7 +65,7 @@
   </section>
 
   <div class="wrap legal-wrap">
-    <p class="legal-date">In effect from 8 September 2026. Last changed 27 September 2026 - see <a href="#changes">what changed</a>.</p>
+    <p class="legal-date">In effect from 8 September 2026. Last changed 4 October 2026 - see <a href="#changes">what changed</a>.</p>
 
     <section class="legal-section">
       <h2>The short version</h2>
@@ -117,6 +117,7 @@
         <li><b>A display name</b>, if you set one. If you sign in with Google, Google also gives us your name and the address of your profile picture; we keep them with the account, and use your own display name first.</li>
         <li><b>Your folders and what is in them</b> — the name and color of each folder, and for every pin its coordinates, name, notes, icon and color. Coordinates of places you have saved are location data about places you care about, so we treat them as personal to you.</li>
         <li><b>Who you have shared a folder with</b> — the email address you invited, and whether they can view or edit.</li>
+        <li><b>Folder links you send</b> — when you send a folder as a link, a copy of its places (coordinates, names, notes, icons and colors, but not photographs) for thirty days. Anybody holding the link can open that copy, signed in or not; links are not listed or searchable anywhere. After thirty days the link stops opening, and the copy is deleted at our next clear-out of expired links. You can also send a folder as a file instead, which leaves nothing with us.</li>
         <li><b>Your plan</b> — whether you have Premium, where it came from (the free month, a subscription, or a grant from us), when it renews or ends, and, for a subscription, the payment provider's reference for it. Whether you have used your free month, so it is only taken once.</li>
         <li><b>Messages you send us</b> at support@halfstop.app, kept in our support inbox so we can answer them.</li>
         <li><b>Your signed-in sessions</b> — for each device you are signed in on, the time, the IP address and the browser or app it came from. The sign-in service keeps these to keep the account secure, and a session's record goes when you sign out of it.</li>
@@ -128,7 +129,8 @@
       <p>
         Accounts and folder storage run on <b>Supabase</b>, which hosts the
         database on our behalf. Rules on the database restrict every row to the
-        account that created it.
+        account that created it - except a folder link's copy, which is opened
+        by its link, as described above.
       </p>
     </section>
 
@@ -223,7 +225,8 @@
       <p>
         In the app or on the website: <b>Help &amp; FAQ → Accounts →
         <a href="faq.html#close-account">Closing your account</a></b>. It removes your
-        folders and pins from our database and deletes the account itself. It
+        folders and pins and any folder links you have sent from our database,
+        and deletes the account itself. It
         cannot be undone, so export anything you want to keep first.
       </p>
       <p>
@@ -270,6 +273,12 @@
         If this changes, the date at the top changes with it. If a change means
         we start collecting something we did not collect before, we will say so
         plainly rather than quietly editing a paragraph.
+      </p>
+      <p>
+        <b>4 October 2026.</b> A folder can now be sent as a link. Doing so keeps
+        a copy of its places on our database for thirty days, for whoever has
+        the link to open; it is listed above under what we hold. Nothing is
+        kept unless you send a link.
       </p>
       <p>
         <b>27 September 2026.</b> On a free account, searching for a place and
