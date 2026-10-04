@@ -149,20 +149,39 @@ window.ABMAP_SUPABASE_KEY = 'sb_publishable_x';
 window.ABMAP_PROTOMAPS_ARCHIVE = 'https://pub-x.r2.dev/byways.pmtiles';
 window.ABMAP_PROTOMAPS_MAXZOOM = '14';
 window.ABMAP_ROUTING_URL = '';
+window.ABMAP_BILLING_LIVE = 'true';
 `;
 
-test('a complete token.js gets no warnings, only the routing note', () => {
+test('a complete token.js gets no warnings, only the billing and routing notes', () => {
   const flight = appPreflight(FULL);
   assert.deepEqual(flight.warnings, []);
-  assert.equal(flight.notes.length, 1);
-  assert.match(flight.notes[0], /FOSSGIS/);
+  assert.equal(flight.notes.length, 2);
+  assert.match(flight.notes[0], /Billing is live/);
+  assert.match(flight.notes[1], /FOSSGIS/);
 });
 
 test('a bare token.js is warned about by name, for each thing it will silently lack', () => {
   const flight = appPreflight("window.ABMAP_MAPBOX_TOKEN_APP = 'pk.application';");
-  assert.equal(flight.warnings.length, 2);
+  assert.equal(flight.warnings.length, 3);
   assert.match(flight.warnings[0], /accounts and folder sync will be OFF/);
   assert.match(flight.warnings[1], /billed per tile/);
+  assert.match(flight.warnings[2], /Billing is OFF/);
+});
+
+/*
+ * The first open-testing build went to Play with billing off: everything free,
+ * no way to subscribe, and nothing looked wrong to the person who built it,
+ * because an editor is shown the purchase panel as a preview either way.
+ */
+test('billing off is a warning in an app build, and says why it looks fine from the inside', () => {
+  for (const off of ["window.ABMAP_BILLING_LIVE = '';", "window.ABMAP_BILLING_LIVE = 'false';", '']) {
+    const flight = appPreflight(FULL.replace("window.ABMAP_BILLING_LIVE = 'true';", off));
+    assert.equal(flight.warnings.length, 1, off || '(line missing)');
+    assert.match(flight.warnings[0], /Billing is OFF/);
+    assert.match(flight.warnings[0], /editors and named testers/);
+    assert.match(flight.warnings[0], /ABMAP_BILLING_LIVE = 'true'/);
+    assert.ok(!flight.notes.some((line) => /Billing is live/.test(line)));
+  }
 });
 
 test('an archive with no maxzoom is its own warning, because 15 over a 14 draws blank ground', () => {
@@ -178,7 +197,7 @@ test('half a Supabase config counts as none', () => {
 
 test('a routing URL of your own switches the note off', () => {
   const flight = appPreflight(FULL.replace("ABMAP_ROUTING_URL = ''", "ABMAP_ROUTING_URL = 'https://valhalla.example'"));
-  assert.deepEqual(flight.notes, []);
+  assert.ok(!flight.notes.some((line) => /FOSSGIS/.test(line)));
 });
 
 /*

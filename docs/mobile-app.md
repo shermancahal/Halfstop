@@ -257,7 +257,7 @@ to look at once it is running.
    file from disk — it does not see the repository variables the website deploy
    uses — and ships whatever is in it. The build now prints what the bundle
    will and will not have; a line reading `accounts & sync OFF` or `MAPBOX
-   TILES (billed)` means a value is missing. All six:
+   TILES (billed)` means a value is missing. All seven:
 
    | | |
    | --- | --- |
@@ -267,6 +267,14 @@ to look at once it is running.
    | `ABMAP_PROTOMAPS_ARCHIVE` | the archive URL — the `PROTOMAPS_ARCHIVE` repository variable |
    | `ABMAP_PROTOMAPS_MAXZOOM` | what *Check a map archive* reports; `14` for the current cut |
    | `ABMAP_ROUTING_URL` | leave empty |
+   | `ABMAP_BILLING_LIVE` | `'true'` for anything going to Play - see below |
+
+   **`ABMAP_BILLING_LIVE` matters most and is the easiest to miss.** Without it
+   the app opens every paid feature to everybody and shows nobody a way to
+   subscribe - except editors and named testers, who are shown the purchase
+   panel as a preview. So it looks right signed in as yourself, and wrong to
+   everybody else. The first open-testing build went out like that. The build
+   now warns `Billing is OFF in this build` when it is missing.
 
 ### On the Mac
 

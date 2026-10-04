@@ -166,6 +166,22 @@ export function appPreflight(source = '') {
    * So the setting is harmless here, and what is worth saying is what the app
    * will actually do.
    */
+  /*
+   * Billing off in an app build is a warning, not a note, because of what it
+   * looks like from the inside. With it off every paid feature is open to
+   * everybody and the purchase panel is drawn for nobody - except the
+   * editors and named testers, who get it as a preview. So the person who
+   * built the app signs in, sees Premium and a way to buy it, and ships it;
+   * and everybody else who installs it from Play finds no way to subscribe.
+   * That is how the first open-testing build went out.
+   */
+  if (!billing.live) {
+    warnings.push('Billing is OFF in this build: every paid feature is open to everybody, and nobody '
+      + 'but editors and named testers is shown a way to subscribe - so it looks right signed in as '
+      + 'yourself, and wrong to everybody else. A build for Google Play wants '
+      + "window.ABMAP_BILLING_LIVE = 'true' in assets/js/token.js, as the website has.");
+  }
+
   const notes = [];
   if (billing.live) {
     notes.push('Billing is live, so the paid features are gated. The Android app sells through Google '
