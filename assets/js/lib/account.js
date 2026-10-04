@@ -874,11 +874,12 @@ export class Account extends EventTarget {
      * device holds the only copy; the pins that point at them come back with
      * the folders on the next sign-in, ids and all.
      */
-    // Asked before the plan is forgotten below. Folders held back by the free
-    // allowance have no up-to-date copy on the server to come back from, so
-    // they stay - and the sentence should say that, not blame a sync.
-    const heldBack = this.heldBack();
     const saved = sync && this.user ? await this.sync() : null;
+    // Asked after the sync, which has waited for the plan, and before the plan
+    // is forgotten below. Folders held back by the free allowance have no
+    // up-to-date copy on the server to come back from, so they stay - and the
+    // sentence should say that, not blame a sync.
+    const heldBack = this.heldBack();
 
     try {
       const client = await this.getClient();
@@ -1414,10 +1415,34 @@ export class Account extends EventTarget {
    * the way the trigger in schema.sql counts. Read off the folders on this
    * device, which is what a sync would send.
    */
-  heldBack() {
-    if (can('folderSync', { tier: tierFor(this) })) return '';
+  heldBack({ billing = this.billing } = {}) {
+    /*
+     * Not knowing the plan is not the same as knowing it is free.
+     *
+     * my_plan() answers for every account, free ones included, so a null plan
+     * means it has not arrived - or could not be read. Treating that as free
+     * is how a Premium account, signing in, was told its 8,782 waypoints were
+     * past the free allowance: the sync started a moment before the plan came
+     * back. sync() and pushFolder() now wait for it; and if it cannot be read
+     * at all, the server's trigger is the one that counts, so this says
+     * nothing rather than something untrue.
+     */
+    if (!this.plan) return '';
+    const options = billing ? { billing } : {};
+    if (can('folderSync', { tier: tierFor(this, options), ...options })) return '';
     const own = typeof this.folders?.snapshot === 'function' ? this.folders.snapshot() : [];
     return allowanceNote(syncLoad(own));
+  }
+
+  /**
+   * The plan, once it is known: loaded now if it has not been yet.
+   *
+   * One request however many callers ask at once - signing in starts a sync
+   * and a plan read together, and both want the answer.
+   */
+  async planKnown() {
+    if (this.plan || !this.user) return this.plan;
+    return this.planLoading || this.refreshPlan();
   }
 
   /**
@@ -1451,6 +1476,8 @@ export class Account extends EventTarget {
        * account past the allowance; this only saves making requests it is
        * certain to refuse, and says why nothing moved.
        */
+      // The plan decides what travels, so it is waited for, not guessed.
+      await this.planKnown();
       const heldBack = this.heldBack();
       if (heldBack) {
         const onlyShared = await this.pullShared(client);
@@ -1634,16 +1661,26 @@ export class Account extends EventTarget {
    */
   async refreshPlan() {
     if (!this.user) { this.plan = null; return null; }
+    // Held while it is in flight, so planKnown() can wait on this read
+    // rather than start a second one.
+    const loading = (async () => {
+      try {
+        const client = await this.getClient();
+        const { data, error } = await client.rpc('my_plan');
+        if (error) throw new Error(error.message);
+        this.plan = data || null;
+        this.emit();
+        return this.plan;
+      } catch (error) {
+        console.warn('[account] could not read the plan:', error?.message || error);
+        return this.plan;
+      }
+    })();
+    this.planLoading = loading;
     try {
-      const client = await this.getClient();
-      const { data, error } = await client.rpc('my_plan');
-      if (error) throw new Error(error.message);
-      this.plan = data || null;
-      this.emit();
-      return this.plan;
-    } catch (error) {
-      console.warn('[account] could not read the plan:', error?.message || error);
-      return this.plan;
+      return await loading;
+    } finally {
+      if (this.planLoading === loading) this.planLoading = null;
     }
   }
 
@@ -1745,6 +1782,7 @@ export class Account extends EventTarget {
     // Your own folders travel within the plan's allowance. A folder somebody
     // shared for editing is not yours and does not count against it.
     if (!folder?.sharedFrom) {
+      await this.planKnown();
       const heldBack = this.heldBack();
       if (heldBack) { this.setStatus('signed-in', heldBack); return; }
     }

@@ -245,3 +245,64 @@ test('sync plan: an edit the server refuses says why, for your folder and for on
   await account.pushFolder({ id: 'theirs', name: 'Theirs', items: [], sharedFrom: { ownerId: 'them', role: 'editor' } });
   assert.match(account.message, /^Not saved to your account: the owner of this folder no longer has Premium/);
 });
+
+/*
+ * A Premium account, signing in, was told its 8,782 waypoints were past the
+ * free allowance - with "Plan: Premium" printed underneath. The sync started
+ * a moment before my_plan() answered, and a plan not yet known was read as
+ * free.
+ */
+function overAllowance() {
+  const items = Array.from({ length: FREE_SYNC.waypoints + 5 }, (_, i) => ({ id: `w${i}`, feature: { properties: { kind: 'waypoint' } } }));
+  return [{ id: 'big', name: 'Big', items }];
+}
+
+test('sync plan: a plan not yet known is not taken for free', () => {
+  const folders = { snapshot: overAllowance };
+  const account = new Account(folders, { client: async () => ({}), configured: () => true });
+  account.user = { id: 'me' };
+  account.billing = { live: true };
+
+  assert.equal(account.plan, null);
+  assert.equal(account.heldBack(), '', 'unknown says nothing; the server counts');
+  account.plan = { tier: 'free', source: null };
+  assert.match(account.heldBack(), /free account syncs up to 100 folders and 100 waypoints/);
+  account.plan = { tier: 'premium', source: 'granted' };
+  assert.equal(account.heldBack(), '');
+});
+
+test('sync plan: signing in, the sync waits for the plan before deciding what travels', async () => {
+  const asked = [];
+  let answerPlan;
+  const client = {
+    rpc: (name) => {
+      asked.push(name);
+      return new Promise((resolve) => { answerPlan = () => resolve({ data: { tier: 'premium', source: 'granted' }, error: null }); });
+    },
+    from: () => {
+      asked.push('folders');
+      const query = {
+        select: () => query,
+        eq: () => Promise.resolve({ data: [], error: null }),
+        upsert: () => Promise.resolve({ error: null }),
+      };
+      return query;
+    },
+  };
+  const folders = { snapshot: overAllowance, list: overAllowance, replaceAll() {}, applyRemote() {}, setOwner() {} };
+  const account = new Account(folders, { client: async () => client, configured: () => true });
+  account.user = { id: 'me' };
+  account.billing = { live: true };
+
+  // The plan read and the sync start together, as they do on SIGNED_IN.
+  account.refreshPlan();
+  const syncing = account.sync().catch(() => null);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(asked, ['my_plan'], 'nothing is decided before the plan answers');
+  answerPlan();
+  await syncing;
+
+  assert.equal(account.plan.tier, 'premium');
+  assert.ok(asked.includes('folders'), 'a Premium account’s folders are read and synced');
+  assert.doesNotMatch(account.message || '', /free account syncs/);
+});
