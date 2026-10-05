@@ -394,7 +394,13 @@ const showTab = async (name) => {
 const consoleErrors = [];
 page.on('pageerror', (error) => consoleErrors.push(`pageerror: ${error.message}`));
 page.on('console', (message) => { if (message.type() === 'error' && !/404/.test(message.text())) consoleErrors.push(message.text()); });
-page.on('dialog', (dialog) => dialog.accept('Smoke folder'));
+// Every dialog is accepted, unless a step sets this to see what "Cancel" does.
+let dismissDialogs = false;
+const dialogsSeen = [];
+page.on('dialog', (dialog) => {
+  dialogsSeen.push(dialog.message());
+  return dismissDialogs ? dialog.dismiss() : dialog.accept('Smoke folder');
+});
 
 /*
  * A warning shaped exactly like the live one, including the motion field whose
@@ -3621,6 +3627,23 @@ check('and offers the rest', await more.count(), 1);
 await more.click();
 await page.waitForTimeout(400);
 check('which grows it', await folder.locator('.folder-item').count() > rows, true);
+
+console.log('\nDeleting a pin asks first');
+{
+  // The cross at the end of a row was a single-tap delete, with no undo.
+  const before = await folder.locator('.folder-item').count();
+  const cross = folder.locator('.folder-item').last().locator('button[aria-label^="Remove "]');
+  dismissDialogs = true;
+  dialogsSeen.length = 0;
+  await cross.click();
+  await page.waitForTimeout(300);
+  dismissDialogs = false;
+  check('the cross asks before deleting', /^Delete .+\? This cannot be undone\.$/.test(dialogsSeen[0] || ''), true);
+  check('and Cancel keeps the pin', await folder.locator('.folder-item').count(), before);
+  await folder.locator('.folder-item').last().locator('button[aria-label^="Remove "]').click();
+  await page.waitForTimeout(400);
+  check('and OK deletes it', await folder.locator('.folder-item').count(), before - 1);
+}
 
 console.log('\nA folder is shown or hidden with an eye, not a checkbox');
 const eye = page.locator('.folder-eye').first();

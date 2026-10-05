@@ -8876,12 +8876,29 @@ function savedItemActions(props, popup, content) {
     tone: 'ghost',
     title: 'Delete this waypoint',
     onclick: () => {
+      if (!confirmPinDelete(props.name)) return;
       state.folders.removeItem(props.folderId, props.itemId);
       popup.remove();
     },
   }));
 
   return el('div', { class: 'popup-actions' }, children);
+}
+
+/**
+ * Ask before a pin goes, as a folder, a trip's pins and a table selection
+ * already did.
+ *
+ * A pin was the one thing deleted on a single tap - the Remove on its card,
+ * and the cross at the end of its row, which on a phone sits a thumb's width
+ * from the colour button. There is no undo, and a pin can carry a note and
+ * photographs that exist nowhere else.
+ */
+function confirmPinDelete(name, folderName = '') {
+  const what = String(name || '').trim() ? `“${String(name).trim()}”` : 'this pin';
+  const where = folderName ? ` from “${folderName}”` : '';
+  // eslint-disable-next-line no-alert
+  return window.confirm(`Delete ${what}${where}? This cannot be undone.`);
 }
 
 /* ------------------------------------------------------------------ documents */
@@ -12122,6 +12139,7 @@ function renderFolderItem(folder, item) {
       class: 'icon-button', type: 'button', title: 'Remove from this folder',
       'aria-label': `Remove ${props.name} from ${folder.name}`, html: icons.close,
       onclick: () => {
+        if (!confirmPinDelete(props.name, folder.name)) return;
         state.selection.delete(key);
         state.folders.removeItem(folder.id, item.id);
       },
