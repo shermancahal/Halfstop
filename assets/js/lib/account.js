@@ -330,6 +330,10 @@ function loadVendored(src) {
  */
 export const SESSION_KEY = 'sb-halfstop-auth-token';
 
+/** What the account says while it is signed in without a signal. */
+export const OFFLINE_NOTE = 'Offline. You are still signed in, and your folders are on this device; '
+  + 'changes sync when there is a signal again.';
+
 /** The name supabase-js would derive for a URL, by its own rule. */
 export function derivedSessionKey(url) {
   try {
@@ -346,6 +350,73 @@ function sessionStore() {
   } catch {
     return null;
   }
+}
+
+/**
+ * The person a session still kept on this device belongs to, or null.
+ *
+ * supabase-js keeps a session here as its access token (good for an hour),
+ * its refresh token and the user. Opened with no signal after that hour, it
+ * tries to refresh, cannot, and answers getSession() with no session at all -
+ * while leaving this entry exactly where it was, because a network failure is
+ * not a reason to forget somebody. A refusal is: a revoked refresh token gets
+ * the entry removed. So an entry that is still here, with a refresh token in
+ * it, is somebody who is signed in and offline.
+ */
+export function storedSessionUser(store = sessionStore(), key = SESSION_KEY) {
+  try {
+    const raw = store?.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const session = parsed?.currentSession || parsed;
+    return session?.refresh_token && session?.user?.id ? session.user : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The plan as last read from the server, kept for when it cannot be asked. */
+export const PLAN_CACHE_KEY = 'halfstop-plan-v1';
+
+export function cachePlan(userId, plan, store = sessionStore()) {
+  try {
+    if (!store || !userId) return;
+    if (plan) store.setItem(PLAN_CACHE_KEY, JSON.stringify({ userId, plan }));
+    else store.removeItem(PLAN_CACHE_KEY);
+  } catch {
+    /* Without it, offline is Free until the next answer, which is all that is lost. */
+  }
+}
+
+/**
+ * The cached plan for this person, or null.
+ *
+ * Only theirs, and only while it lasts: a plan whose end date has passed is
+ * not answered for, because offline is no reason to extend a trial.
+ */
+export function cachedPlan(userId, { store = sessionStore(), now = Date.now() } = {}) {
+  try {
+    const kept = JSON.parse(store?.getItem(PLAN_CACHE_KEY) || 'null');
+    if (!kept || kept.userId !== userId || !kept.plan) return null;
+    const ends = Date.parse(kept.plan.expires_at || '');
+    if (Number.isFinite(ends) && ends < now) return null;
+    return kept.plan;
+  } catch {
+    return null;
+  }
+}
+
+/** Whether this device can be expected to reach the server just now. */
+function online() {
+  return globalThis.navigator?.onLine !== false;
+}
+
+/**
+ * Whether an error is the request never getting there, in any browser's words:
+ * Chrome's "Failed to fetch", Firefox's "NetworkError", Safari's "Load failed".
+ */
+export function networkFailure(error) {
+  return /failed to fetch|networkerror|load failed|network request failed/i.test(String(error?.message || error || ''));
 }
 
 /**
@@ -498,6 +569,13 @@ export class Account extends EventTarget {
      */
     this.linkFailed = false;
     this.message = '';
+    /*
+     * Signed in from this device's own copy of the session, because the
+     * server could not be reached to renew it. See holdOffline().
+     */
+    this.offline = false;
+    /* Shown signed in from that copy while the server is first asked. */
+    this.renewing = false;
     this.syncing = false;
     this.lastSyncAt = null;
     /*
@@ -569,7 +647,13 @@ export class Account extends EventTarget {
      * before this, a recovery link delivered INITIAL_SESSION and nothing else.
      */
     client.auth.onAuthStateChange((event, session) => {
+      // No session, and not because anybody signed out: an expired token
+      // that could not be renewed for want of a signal. Still signed in.
+      if (!session && event !== 'SIGNED_OUT' && this.holdOffline()) return;
+      // The signal is back and the library renewed the session on its own.
+      if (session && this.offline && event === 'TOKEN_REFRESHED') { this.resume(session); return; }
       this.user = session?.user || null;
+      if (session) this.offline = false;
       /*
        * A recovery link signs somebody in, which is not what they came for.
        *
@@ -603,9 +687,35 @@ export class Account extends EventTarget {
     // is not.
     this.refreshProviders();
 
-    const { data } = await client.auth.getSession();
+    /*
+     * Signed in from the first moment, when this device says so.
+     *
+     * getSession() has to renew an access token that has run out - they last
+     * an hour - and with no signal the library retries for half a minute
+     * before it gives up, twice over, all of it showing "signed out" to
+     * somebody who is not. So the session kept here answers first, and the
+     * server's answer, when it comes, confirms it, ends it (a session closed
+     * elsewhere), or leaves the person signed in offline. Not over a sign-in
+     * or recovery link, which is about to say who is signed in itself.
+     */
+    if (!/access_token|error|[?&]code=/.test(arriving + (window.location.search || ''))) {
+      if (online()) this.holdStored();
+      else this.holdOffline();
+    }
+
+    let data = null;
+    try {
+      ({ data } = await client.auth.getSession());
+    } finally {
+      this.renewing = false;
+    }
     this.user = data?.session?.user || null;
-    if (this.user) this.refreshPlan();
+    if (this.user) this.offline = false;
+    else this.holdOffline();
+    if (this.user && !this.offline) this.refreshPlan();
+
+    // Back in signal: renew the session, then catch up.
+    globalThis.addEventListener?.('online', () => { this.reconnect(); });
 
     /*
      * A link that came back and did not work has to say so.
@@ -644,9 +754,79 @@ export class Account extends EventTarget {
     }
     // Not over the top of a recovery, which has already said the one thing
     // that matters and would otherwise be replaced by a plain "signed in".
-    if (!this.recovering) this.setStatus(this.user ? 'signed-in' : 'signed-out');
+    if (!this.recovering) this.setStatus(this.user ? 'signed-in' : 'signed-out', this.offline ? OFFLINE_NOTE : '');
+    if (!this.user) this.plan = null;
 
-    if (this.user) this.sync();
+    if (this.user && !this.offline) this.sync();
+  }
+
+  /**
+   * Stay signed in from this device's copy of the session, when the server
+   * could not be reached to renew it.
+   *
+   * Nothing is trusted that was not already here: the person is the one the
+   * stored session names, and the server still checks every request against
+   * a token it has to renew first. What this keeps is the app's own idea of
+   * who is signed in - their folders, their plan as last read - instead of
+   * dropping them to signed out the moment the bars do.
+   *
+   * @returns {boolean} whether it did
+   */
+  holdOffline() {
+    if (this.user && this.offline) return true;
+    const kept = storedSessionUser();
+    if (!kept) return false;
+    this.user = kept;
+    this.offline = true;
+    this.plan = cachedPlan(kept.id);
+    this.setStatus('signed-in', OFFLINE_NOTE);
+    return true;
+  }
+
+  /**
+   * Shown signed in while the server is asked, from the session kept here.
+   *
+   * Only while init() waits on getSession(): the person is the one the stored
+   * session names, nothing is sent on their behalf until the answer comes
+   * (sync() and pushFolder() wait for it), and init() settles it either way.
+   */
+  holdStored() {
+    const kept = storedSessionUser();
+    if (!kept) return false;
+    this.user = kept;
+    this.renewing = true;
+    this.plan = cachedPlan(kept.id);
+    this.setStatus('signed-in');
+    return true;
+  }
+
+  /**
+   * Back online: renew the session and catch up on what waited.
+   *
+   * Asking for the session is what renews it, and a renewal arrives through
+   * onAuthStateChange as TOKEN_REFRESHED, which calls resume(). A renewal the
+   * server refuses - the session was ended elsewhere - signs out through the
+   * SIGNED_OUT the library sends. Anything else leaves this offline, for the
+   * next 'online', or the library's own retry every half minute, to try again.
+   */
+  async reconnect() {
+    if (!this.offline) return;
+    try {
+      const client = await this.getClient();
+      const { data } = await client.auth.getSession();
+      if (data?.session && this.offline) this.resume(data.session);
+    } catch (error) {
+      console.warn('[account] still offline:', error?.message || error);
+    }
+  }
+
+  /** Online again with a renewed session: say so, and send what waited. */
+  resume(session) {
+    this.user = session.user;
+    this.offline = false;
+    this.setStatus('signed-in');
+    this.refreshPlan();
+    this.sync();
   }
 
   async signUp(email, password) {
@@ -881,12 +1061,32 @@ export class Account extends EventTarget {
     // sentence should say that, not blame a sync.
     const heldBack = this.heldBack();
 
-    try {
-      const client = await this.getClient();
-      await client.auth.signOut();
-    } catch (error) {
-      console.warn('[account] the sign-out call failed:', error?.message || error);
+    const reachable = !this.offline && online();
+    let signedOutLocally = false;
+    // With no signal there is nobody to tell, and the library would spend
+    // half a minute retrying a renewal before it even tried.
+    if (reachable) {
+      try {
+        const client = await this.getClient();
+        const { error } = (await client.auth.signOut()) || {};
+        if (error) throw error;
+        signedOutLocally = true;
+      } catch (error) {
+        console.warn('[account] the sign-out call failed:', error?.message || error);
+      }
     }
+    /*
+     * Signed out means signed out, signal or not. The library leaves its
+     * session in place when it cannot tell the server - which, offline, put
+     * the person straight back in on the next page load. So the entry goes
+     * here when the library did not take it. The server is not told, but the
+     * only copy of what it would have revoked was this entry, and it is gone.
+     */
+    if (!signedOutLocally) {
+      try { sessionStore()?.removeItem(SESSION_KEY); } catch { /* nothing to remove */ }
+    }
+    cachePlan(this.user?.id, null);
+    this.offline = false;
     // The library clears its own entry; this clears the one adoptSession()
     // copied from, so signing out leaves nothing behind under either name.
     forgetAdoptedSession();
@@ -904,8 +1104,11 @@ export class Account extends EventTarget {
     }
     this.setStatus('signed-out', heldBack
       ? `Signed out. ${heldBack}`
-      : 'Signed out. The last sync did not go through, so your folders are still on this '
-        + 'device rather than lost.');
+      : reachable
+        ? 'Signed out. The last sync did not go through, so your folders are still on this '
+          + 'device rather than lost.'
+        : 'Signed out. There was no signal to sync, so your folders are still on this device '
+          + 'rather than lost.');
   }
 
   /**
@@ -1453,6 +1656,13 @@ export class Account extends EventTarget {
    */
   async sync() {
     if (!this.user || this.syncing || !this.syncs) return null;
+    // init() syncs once the server has answered for the session.
+    if (this.renewing) return null;
+    // Nothing to reach. Said, not tried: a sync that times out reads as broken.
+    if (this.offline || !online()) {
+      this.setStatus('signed-in', OFFLINE_NOTE);
+      return null;
+    }
     this.syncing = true;
     this.setStatus('syncing');
 
@@ -1601,8 +1811,9 @@ export class Account extends EventTarget {
     } catch (error) {
       this.syncing = false;
       // A failed sync is not a failed session: the local folders are untouched
-      // and still authoritative for this device.
-      this.setStatus('signed-in', `Sync failed: ${error.message}`);
+      // and still authoritative for this device. One that never reached the
+      // server is no signal, and says that rather than "failed".
+      this.setStatus('signed-in', networkFailure(error) ? OFFLINE_NOTE : `Sync failed: ${error.message}`);
       return null;
     }
   }
@@ -1669,6 +1880,7 @@ export class Account extends EventTarget {
         const { data, error } = await client.rpc('my_plan');
         if (error) throw new Error(error.message);
         this.plan = data || null;
+        cachePlan(this.user?.id, this.plan);
         this.emit();
         return this.plan;
       } catch (error) {
@@ -1776,6 +1988,9 @@ export class Account extends EventTarget {
    */
   async pushFolder(folder) {
     if (!this.user) return;
+    // Kept on this device and sent by the sync that follows reconnect().
+    if (this.renewing) return;
+    if (this.offline || !online()) { this.setStatus('signed-in', OFFLINE_NOTE); return; }
     // Looking at somebody's folder is not editing it, and a push that the
     // policy is certain to refuse is worth not making.
     if (folder?.sharedFrom && !canEdit(folder)) return;
