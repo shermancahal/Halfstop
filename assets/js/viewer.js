@@ -85,6 +85,7 @@ import { describeSync } from './lib/sync.js';
 import { registerServiceWorker, applyServiceWorkerUpdate, isInstalled } from './lib/pwa.js';
 import { appShell, sessionStore, takeOpenedFile } from './lib/native-shell.js';
 import { readOpenedFile, asMapFile, pickerAccept } from './lib/opened-file.js';
+import { holdPageScale } from './lib/page-zoom.js';
 import {
   readLinkId, linkCollection, folderLinkParts, linkLastsUntil, LINK_DAYS, LINK_MAX_PLACES,
 } from './lib/folder-link.js';
@@ -579,6 +580,9 @@ function uniqueKey(base) {
 /* ------------------------------------------------------------------ boot */
 
 async function main() {
+  // First, before anything can be tapped: a page zoomed in by accident here
+  // cannot be zoomed back out. See lib/page-zoom.js.
+  holdPageScale(document);
   cacheDom();
   document.title = SITE.name;
   applyBranding();

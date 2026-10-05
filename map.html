@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover">
+<!-- The page itself never zooms, only the map: a page zoomed by tapping a
+     small text box could not be zoomed back out, because every pinch lands on
+     the map. See assets/js/lib/page-zoom.js. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Map — Halfstop</title>
 <meta name="description" content="View published GPS tracks and waypoints on topo, satellite and street basemaps — or drop in your own GPX, KML or KMZ file.">
 <meta name="theme-color" content="#1f2846" media="(prefers-color-scheme: light)">
@@ -88,6 +91,7 @@
 <link rel="modulepreload" href="assets/js/lib/parse.js">
 <link rel="modulepreload" href="assets/js/lib/google-list.js">
 <link rel="modulepreload" href="assets/js/lib/opened-file.js">
+<link rel="modulepreload" href="assets/js/lib/page-zoom.js">
 <link rel="modulepreload" href="assets/js/lib/folder-link.js">
 <link rel="modulepreload" href="assets/js/lib/photos.js">
 <link rel="modulepreload" href="assets/js/lib/photo-encode.js">

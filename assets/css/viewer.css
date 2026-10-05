@@ -3,6 +3,10 @@
    ========================================================================== */
 
 html, body { height: 100%; overflow: hidden; }
+/* Panning only: no double-tap or pinch zoom of the page, which on a phone
+   could not be undone once the map filled the screen (lib/page-zoom.js).
+   The map sets its own touch-action and does its own zooming. */
+html, body { touch-action: pan-x pan-y; }
 
 .app {
   display: grid;

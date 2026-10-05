@@ -3645,6 +3645,30 @@ console.log('\nDeleting a pin asks first');
   check('and OK deletes it', await folder.locator('.folder-item').count(), before - 1);
 }
 
+console.log('\nThe page does not zoom, only the map');
+{
+  // On an iPhone a page zoom here could not be undone: every pinch lands on
+  // the map. See lib/page-zoom.js.
+  const zoom = await page.evaluate(() => {
+    const event = new Event('gesturestart', { cancelable: true });
+    document.dispatchEvent(event);
+    return {
+      viewport: document.querySelector('meta[name="viewport"]')?.content || '',
+      body: getComputedStyle(document.body).touchAction,
+      // The real map's container; the run may be drawing a stand-in instead.
+      map: (() => {
+        const canvas = document.querySelector('.maplibregl-canvas-container');
+        return canvas ? getComputedStyle(canvas).touchAction : 'none';
+      })(),
+      pinch: event.defaultPrevented,
+    };
+  });
+  check('the viewport holds the scale', /maximum-scale=1,.*user-scalable=no/.test(zoom.viewport), true);
+  check('Safari\'s page pinch is cancelled', zoom.pinch, true);
+  check('the page pans but does not zoom', zoom.body, 'pan-x pan-y');
+  check('and the map still takes every gesture itself', zoom.map, 'none');
+}
+
 console.log('\nA folder is shown or hidden with an eye, not a checkbox');
 const eye = page.locator('.folder-eye').first();
 check('the eye is there', await eye.count(), 1);
