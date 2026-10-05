@@ -83,6 +83,7 @@ import { kpNow, auroraChance, describeKp } from './lib/aurora.js';
 import { lunarEclipses, describeEclipse, shadowGeometry } from './lib/eclipse.js';
 import { describeSync } from './lib/sync.js';
 import { registerServiceWorker, applyServiceWorkerUpdate, isInstalled } from './lib/pwa.js';
+import { offerUpdate, arrivedOnNewBuild, noteUpdated, watchForUpdates } from './lib/update-notice.js';
 import { appShell, sessionStore, takeOpenedFile } from './lib/native-shell.js';
 import { readOpenedFile, asMapFile, pickerAccept } from './lib/opened-file.js';
 import { holdPageScale } from './lib/page-zoom.js';
@@ -963,7 +964,9 @@ async function main() {
   }
   renderBuildStamp();
   checkForNewerBuild();
-  registerServiceWorker({ onUpdate: offerNewerBuild });
+  // And again on coming back to an app left open, which can be days later.
+  registerServiceWorker({ onUpdate: offerNewerBuild })
+    .then((registration) => watchForUpdates({ registration, check: checkForNewerBuild }));
   renderLayersTab();
   renderOfflineTab();
   renderFoldersTab();
@@ -2063,24 +2066,31 @@ async function fillArcGISLegend(host, { url, layer } = {}) {
  * Silently absent when there is no deployed.txt, which is the normal state for
  * a local checkout.
  */
+async function takeNewerBuild() {
+  // Hand over to the waiting service worker first. Reloading without this
+  // comes back controlled by the old worker, still serving the old cache, and
+  // the button appears to do nothing.
+  await applyServiceWorkerUpdate();
+  // `true` forces a fetch past the cache in the engines that still honour it,
+  // and is harmless in the ones that do not.
+  globalThis.location.reload(true);
+}
+
 function newerBuildButton() {
   return el('button', {
     class: 'build-newer', type: 'button',
     text: 'A newer build is available — reload',
-    onclick: async () => {
-      // Hand over to the waiting service worker first. Reloading without this
-      // comes back controlled by the old worker, still serving the old cache,
-      // and the button appears to do nothing.
-      await applyServiceWorkerUpdate();
-      // `true` forces a fetch past the cache in the engines that still honour
-      // it, and is harmless in the ones that do not.
-      globalThis.location.reload(true);
-    },
+    onclick: takeNewerBuild,
   });
 }
 
-/** Show the reload prompt once, however the newer build was noticed. */
+/**
+ * Offer the newer build, however it was noticed: a box at the foot of the
+ * screen with a link to what changed (lib/update-notice.js), and the line at
+ * the foot of the panel, which stays after the box is put away.
+ */
 function offerNewerBuild() {
+  offerUpdate({ update: takeNewerBuild, parent: dom.toasts || undefined });
   if (!dom.buildStamp || document.querySelector('.build-newer')) return;
   dom.buildStamp.after(newerBuildButton());
   dom.buildStamp.hidden = false;
@@ -2109,7 +2119,13 @@ async function checkForNewerBuild() {
     const response = await fetch('build.json', { cache: 'no-store' });
     if (!response.ok) return;
     const { build } = await response.json();
-    if (!build || build === running) return;
+    if (!build) return;
+    // Current, and new to this device: it has just been updated, so say what
+    // changed. Only when current, because a stale page is not an update.
+    if (build === running) {
+      if (arrivedOnNewBuild(running)) noteUpdated({ parent: dom.toasts || undefined });
+      return;
+    }
 
     offerNewerBuild();
   } catch {

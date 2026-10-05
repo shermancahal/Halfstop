@@ -13,6 +13,7 @@ import { Account } from './lib/account.js';
 import { NO_FOLDERS, mountPageSettings } from './lib/page-settings.js';
 import { mountAccountPage } from './lib/account-page.js';
 import { registerServiceWorker, reloadOntoNewBuild } from './lib/pwa.js';
+import { noteIfUpdated } from './lib/update-notice.js';
 import { SITE } from './config.js';
 import { mountSiteFooter } from './lib/site-footer.js';
 import { settleCheckoutReturn } from './lib/checkout-return.js';
@@ -58,6 +59,8 @@ account.init()
   });
 
 registerServiceWorker({ onUpdate: reloadOntoNewBuild });
+// Taken up without asking, so said afterwards, with a link to what changed.
+noteIfUpdated();
 
 for (const node of document.querySelectorAll('#brand-name')) node.textContent = SITE.name;
 const parentName = SITE.parent?.name || '';

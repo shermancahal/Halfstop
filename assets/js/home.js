@@ -17,6 +17,7 @@ import { el, escapeHTML, applyStoredTheme, createToaster, formatDate } from './l
 import { mountPageSettings } from './lib/page-settings.js';
 import { formatDistance, formatElevation } from './lib/geo.js';
 import { registerServiceWorker, reloadOntoNewBuild } from './lib/pwa.js';
+import { noteIfUpdated } from './lib/update-notice.js';
 import { mountSiteFooter } from './lib/site-footer.js';
 import { mountAppInvite } from './lib/app-invite.js';
 import { appShell } from './lib/native-shell.js';
@@ -257,4 +258,6 @@ main();
 // nothing in progress to lose, and a deploy nobody sees is a deploy that did
 // not happen. The map offers a button instead - see reloadOntoNewBuild.
 registerServiceWorker({ onUpdate: reloadOntoNewBuild });
+// Taken up without asking, so said afterwards, with a link to what changed.
+noteIfUpdated();
 

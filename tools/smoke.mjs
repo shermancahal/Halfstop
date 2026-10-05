@@ -3886,12 +3886,41 @@ check('build stamp is shown', stamp.length > 0, true);
 console.log('\nA page running older code than the server says so');
 check('nothing is claimed while the page is current',
   await page.locator('.build-newer').count(), 0);
+check('and no update is offered or announced',
+  await page.locator('.update-box').count(), 0);
+
+/*
+ * The first page opened on a new build says so, with a link to what changed.
+ * A device that last ran another build is one that has just been updated.
+ */
+await page.evaluate(() => localStorage.setItem('halfstop-seen-build', 'an-older-build'));
+await page.reload({ waitUntil: 'networkidle' });
+await page.waitForSelector('.update-box.is-done', { timeout: 5000 }).catch(() => {});
+check('a page on a new build says it was updated',
+  await page.locator('.update-box.is-done').count(), 1);
+check('and links to the release notes',
+  await page.locator('.update-box.is-done a').getAttribute('href').catch(() => ''), 'faq.html#whats-new');
+await page.reload({ waitUntil: 'networkidle' });
+await page.waitForTimeout(800);
+check('once, not on every load after',
+  await page.locator('.update-box.is-done').count(), 0);
 
 pretendNewerBuild = true;
 await page.reload({ waitUntil: 'networkidle' });
 await page.waitForSelector('.build-newer', { timeout: 5000 }).catch(() => {});
 check('and it offers a reload once the server has moved on',
   await page.locator('.build-newer').count(), 1);
+{
+  // In a box at the foot of the screen, not only at the foot of the panel.
+  const box = page.locator('.update-box:not(.is-done)');
+  check('in a box anybody will see', await box.count(), 1);
+  check('with Update now', await box.locator('button', { hasText: 'Update now' }).count(), 1);
+  check('and a link to what is new', await box.locator('a').getAttribute('href').catch(() => ''), 'faq.html#whats-new');
+  check('and it is on the screen', await box.isVisible(), true);
+  await box.locator('.update-box-close').click();
+  check('Not now puts it away', await page.locator('.update-box:not(.is-done)').count(), 0);
+  check('and the line in the panel still offers it', await page.locator('.build-newer').count(), 1);
+}
 
 /*
  * The dropped-pin card.

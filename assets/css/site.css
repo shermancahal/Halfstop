@@ -1310,6 +1310,25 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
 .toast.is-error { border-left-color: #c0392b; }
 .toast.is-ok { border-left-color: var(--pine); }
 .toast button { margin-left: auto; }
+/* A new version: the offer on the map, and the note after an update. In the
+   toast stack when the page has one, so the two never overlap; pinned to the
+   foot of the screen when it does not. */
+.update-box {
+  background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--pine);
+  border-radius: var(--radius-md, 8px); box-shadow: var(--shadow-lg, 0 10px 30px rgba(0, 0, 0, .18));
+  padding: 12px 14px; font-size: .88rem; color: var(--ink);
+  display: grid; gap: 10px;
+}
+.update-box-text { margin: 0; line-height: 1.45; color: var(--ink-2); }
+.update-box-text b { color: var(--ink); }
+.update-box-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.update-box-close { margin-left: auto; }
+.update-box.is-done { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.update-box.is-done .update-box-actions { margin-left: auto; }
+body > .update-box {
+  position: fixed; z-index: 70; left: 50%; transform: translateX(-50%);
+  bottom: calc(34px + var(--safe-bottom, 0px)); width: min(430px, calc(100% - 32px));
+}
 .toast-count {
   flex: none; padding: 1px 6px; border-radius: 999px;
   font-size: .7rem; font-weight: 700; font-variant-numeric: tabular-nums;

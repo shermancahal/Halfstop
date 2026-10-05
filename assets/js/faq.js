@@ -10,6 +10,7 @@ import { applyStoredTheme, createToaster } from './lib/ui.js';
 import { mountPageSettings } from './lib/page-settings.js';
 import { mountDeleteAccount } from './lib/delete-account.js';
 import { registerServiceWorker, reloadOntoNewBuild } from './lib/pwa.js';
+import { noteIfUpdated } from './lib/update-notice.js';
 import { mountSiteFooter } from './lib/site-footer.js';
 import { mountFaqAnchors } from './lib/faq-anchors.js';
 import { SITE } from './config.js';
@@ -80,6 +81,8 @@ window.addEventListener('hashchange', openTargetedAnswer);
  * something else.
  */
 registerServiceWorker({ onUpdate: reloadOntoNewBuild });
+// Taken up without asking, so said afterwards, with a link to what changed.
+noteIfUpdated();
 for (const node of document.querySelectorAll('#brand-name')) node.textContent = SITE.name;
 // The parent line goes when there is no parent to name; the markup's fallback
 // would otherwise keep showing the old one. The footer is filled from the same
