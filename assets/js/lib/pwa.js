@@ -79,7 +79,22 @@ export function applyServiceWorkerUpdate({ timeout = 3000 } = {}) {
   });
 }
 
-/** Remove any worker registered for this scope, and the caches it owns. */
+/*
+ * The cache holding map tiles somebody chose to download - TILE_CACHE in
+ * lib/offline.js, TILES in sw.js. Written out rather than imported so this
+ * module stays free of the map's code; test/offline-keep.test.mjs holds the
+ * three names together.
+ */
+const DOWNLOADED_TILES = 'abmap-tiles-v1';
+
+/**
+ * Remove any worker registered for this scope, and the caches it owns.
+ *
+ * Not the downloaded tiles. They are not the worker's: they are ground
+ * somebody waited for, and this runs on any page that finds itself without
+ * a build stamp - which a page can, if build.js fails to arrive - and so
+ * could take every offline region with it.
+ */
 export async function unregisterServiceWorker() {
   if (!SUPPORTED) return false;
   try {
@@ -88,7 +103,7 @@ export async function unregisterServiceWorker() {
     for (const registration of registrations) removed = (await registration.unregister()) || removed;
     if (removed && typeof caches !== 'undefined') {
       for (const name of await caches.keys()) {
-        if (name.startsWith('abmap-')) await caches.delete(name);
+        if (name.startsWith('abmap-') && name !== DOWNLOADED_TILES) await caches.delete(name);
       }
       console.warn('[pwa] removed a service worker left over from a built deployment');
     }

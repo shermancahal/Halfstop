@@ -63,6 +63,13 @@ export const TILE_BUDGET = 6000;
 const BYTES_PER_TILE = { vector: 45000, raster: 28000 };
 
 const STORAGE_KEY = 'ab-maps-offline-v1';
+
+/**
+ * The cache downloaded tiles go into. sw.js reads it by the same name, and
+ * lib/pwa.js spares it when a worker is removed.
+ */
+export const TILE_CACHE = 'abmap-tiles-v1';
+
 const NAME_LIMIT = 80;
 
 let idCounter = 0;
@@ -558,12 +565,20 @@ export class OfflineStore extends EventTarget {
     }
   }
 
+  /*
+   * Whether the last write reached storage. A region the browser would not
+   * keep - storage full, or switched off - lasts until the page closes, and
+   * the person who made it has to be told so rather than find out on reload.
+   */
   save() {
     try {
       this.storage?.setItem(STORAGE_KEY, JSON.stringify(this.regions));
+      this.unsaved = false;
     } catch (error) {
+      this.unsaved = true;
       console.warn('[offline] could not save regions:', error.message);
     }
+    return !this.unsaved;
   }
 
   emit() {
@@ -591,11 +606,26 @@ export class OfflineStore extends EventTarget {
     const region = this.get(id);
     if (!region) return null;
 
+    const ground = JSON.stringify([region.bounds, region.minZoom, region.maxZoom]);
     if (changes.name !== undefined) region.name = clampName(changes.name, region.name);
     if (changes.bounds !== undefined) region.bounds = normalizeBounds(changes.bounds) || region.bounds;
     if (changes.minZoom !== undefined) region.minZoom = Math.max(0, Math.min(HARD_MAX_ZOOM, Math.round(changes.minZoom)));
     if (changes.maxZoom !== undefined) region.maxZoom = Math.max(0, Math.min(HARD_MAX_ZOOM, Math.round(changes.maxZoom)));
     if (region.maxZoom < region.minZoom) region.maxZoom = region.minZoom;
+    /*
+     * Which archive its tiles came out of, and how deep that archive went.
+     * Written by every Byways Topo download and read to tell when the map has
+     * moved or been re-cut since - and, until this line, dropped here, so
+     * neither was ever recorded.
+     */
+    if (changes.archive !== undefined) region.archive = String(changes.archive || '');
+    if (changes.archiveDepth !== undefined) region.archiveDepth = Number(changes.archiveDepth) || 0;
+    if (changes.saved !== undefined) region.saved = changes.saved ? savedRecord(changes.saved) : null;
+    // Moved or re-zoomed after downloading: what is held is the old ground.
+    if (region.saved && changes.saved === undefined
+      && JSON.stringify([region.bounds, region.minZoom, region.maxZoom]) !== ground) {
+      region.saved = { ...region.saved, outdated: true };
+    }
 
     region.updatedAt = Date.now();
     this.emit();
@@ -713,7 +743,7 @@ export function tileURLsFor(tiers, templates, fill) {
  * @returns {Promise<{done: number, failed: number, cancelled: boolean}>}
  */
 export async function downloadTiles(urls, {
-  cacheName = 'abmap-tiles-v1', concurrency = 6, onProgress, signal, caches: store = globalThis.caches,
+  cacheName = TILE_CACHE, concurrency = 6, onProgress, signal, caches: store = globalThis.caches,
 } = {}) {
   if (!store?.open) throw new Error('This browser cannot store tiles offline.');
   const cache = await store.open(cacheName);
@@ -857,8 +887,139 @@ export async function downloadArchiveTiles(tiles, {
   return { done, failed, absent, cancelled: Boolean(signal?.aborted) };
 }
 
+/* ------------------------------------------------ what a download left */
+
+/** How many of a download's tiles are remembered, to check it is still here. */
+export const SAVED_SAMPLE = 12;
+
+/**
+ * Up to `size` items spread evenly through a list, first and last included.
+ *
+ * A download's list runs from the widest zoom to the closest, so an even
+ * spread checks every level rather than the first dozen tiles of the first.
+ */
+export function spreadSample(list, size = SAVED_SAMPLE) {
+  const items = Array.isArray(list) ? list : [];
+  if (items.length <= size) return items.slice();
+  if (size <= 1) return items.slice(0, 1);
+  const step = (items.length - 1) / (size - 1);
+  return Array.from({ length: size }, (_, index) => items[Math.round(index * step)]);
+}
+
+/**
+ * Tiles from a download that did arrive, to check for later.
+ *
+ * Drawn from the full list but kept only when present, because a region is
+ * allowed tiles a service did not have - a tile that 404'd at the edge of
+ * coverage, checked later, would read as the download having gone.
+ *
+ * @param {string[]} list  everything the download asked for
+ * @param {(item: string) => Promise<boolean>} has
+ */
+export async function presentSample(list, has, size = SAVED_SAMPLE) {
+  const kept = [];
+  for (const item of spreadSample(list, size * 2)) {
+    if (kept.length >= size) break;
+    try {
+      if (await has(item)) kept.push(item);
+    } catch {
+      /* Unreadable is not present. */
+    }
+  }
+  return kept;
+}
+
+/**
+ * What a download leaves on its region, so a reload still knows.
+ *
+ * It used to leave nothing. "N tiles saved. This region works offline." was
+ * written into the row and lost with it, so after a refresh every region
+ * offered "Download for offline" as if it never had been - which read, quite
+ * reasonably, as the download not having stuck.
+ */
+export function savedRecord({
+  at = Date.now(), tiles = 0, failed = 0, absent = 0, complete = true, outdated = false, urls = [], keys = [],
+} = {}) {
+  const count = (value) => Math.max(0, Math.round(Number(value) || 0));
+  return {
+    at: Number(at) || Date.now(),
+    tiles: count(tiles),
+    failed: count(failed),
+    absent: count(absent),
+    complete: Boolean(complete),
+    outdated: Boolean(outdated),
+    urls: (Array.isArray(urls) ? urls : []).slice(0, SAVED_SAMPLE).map(String),
+    keys: (Array.isArray(keys) ? keys : []).slice(0, SAVED_SAMPLE).map(String),
+  };
+}
+
+/**
+ * How much of a download is still on this device, from its sample.
+ *
+ * A browser may clear a site's storage when the device runs short of space,
+ * and Safari clears a website's after a week unvisited. Neither says so, so
+ * this looks: the raster tiles in the Cache API, the archive tiles in the
+ * tile store.
+ *
+ * @returns {Promise<{checked: number, present: number}>}
+ */
+export async function savedPresence(saved, { caches: cacheStorage = globalThis.caches, store = null, cacheName = TILE_CACHE } = {}) {
+  let checked = 0;
+  let present = 0;
+  if (saved?.urls?.length && cacheStorage?.open) {
+    try {
+      const cache = await cacheStorage.open(cacheName);
+      for (const url of saved.urls) {
+        checked += 1;
+        if (await cache.match(url, { ignoreVary: true })) present += 1;
+      }
+    } catch {
+      /* A cache that cannot be opened holds nothing that can be used. */
+    }
+  }
+  if (saved?.keys?.length && store?.has) {
+    for (const key of saved.keys) {
+      checked += 1;
+      try {
+        if (await store.has(key)) present += 1;
+      } catch {
+        /* As above. */
+      }
+    }
+  }
+  return { checked, present };
+}
+
+/**
+ * One line on whether a region is downloaded, for its row.
+ *
+ * @param {object} region
+ * @param {{checked: number, present: number} | null} presence  null while being looked at
+ */
+export function describeSaved(region, presence = null, { locale = undefined } = {}) {
+  const saved = region?.saved;
+  if (!saved) return 'Not downloaded yet.';
+  const day = new Date(saved.at).toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+  const tiles = `${saved.tiles.toLocaleString(locale)} tile${saved.tiles === 1 ? '' : 's'}`;
+  const head = saved.complete ? `Downloaded ${day}, ${tiles}` : `Stopped part way on ${day}, ${tiles} kept`;
+  const after = saved.outdated ? ' The region has changed since; download again to match.' : '';
+
+  const missed = saved.failed
+    ? ` ${saved.failed.toLocaleString(locale)} could not be fetched from the service.`
+    : '';
+  if (!presence || !presence.checked) return `${head}.${missed}${after}`;
+  if (presence.present === presence.checked) {
+    return `${head}, on this device${saved.complete ? ' and ready to use offline' : ''}.${missed}${after}`;
+  }
+  if (!presence.present) {
+    return `${head}, but they are no longer on this device - the browser cleared them, `
+      + 'which it may do when space runs short. Download again.';
+  }
+  return `${head}, but some are no longer on this device. Download again to fill the gaps.`;
+}
+
 /** Drop every tile a cache holds. */
-export async function clearTiles(cacheName = 'abmap-tiles-v1', store = globalThis.caches) {
+export async function clearTiles(cacheName = TILE_CACHE, store = globalThis.caches) {
   if (!store?.delete) return false;
   return store.delete(cacheName);
 }

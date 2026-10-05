@@ -46,7 +46,7 @@ import {
 } from './lib/route-shields.js';
 import { shieldLayerUpdates, PALETTE, MAPBOX_SCHEMA, PROTOMAPS_SCHEMA } from './lib/byways-style.js';
 import { PMTilesArchive } from './lib/pmtiles.js';
-import { openTileStore } from './lib/pmtiles-store.js';
+import { openTileStore, tileKey } from './lib/pmtiles-store.js';
 import { previewFor, swatchSVG, tileURL } from './lib/preview.js';
 import { Account, isConfigured as accountsAvailable, displayName } from './lib/account.js';
 import { createAccountPanel } from './lib/account-panel.js';
@@ -103,6 +103,7 @@ import {
   measureRegion, regionsToGeoJSON, formatBytes as formatTileBytes, regionSizeProblem,
   REACH_CHOICES, reachKm, padBoundsKm, boundsAround, withEdge, normalizeBounds,
   keepStorage, storageStanding, keptNote,
+  TILE_CACHE, presentSample, savedPresence, describeSaved,
 } from './lib/offline.js';
 import {
   putPhoto, photoURL, deletePhoto, pruneUnreferenced, fetchLinkedPhoto, formatBytes, photoAccept,
@@ -605,6 +606,8 @@ async function main() {
   state.offline.addEventListener('change', () => {
     renderOfflineTab();
     refreshRegionData();
+    // The list under Folders says the same about each region, so it follows.
+    renderSavedOffline();
   });
   state.account = new Account(state.folders);
   accountPanel = createAccountPanel({
@@ -5327,6 +5330,10 @@ function saveRegionFrom(bounds, { download = false, name = '' } = {}) {
     basemapName: basemap?.name || '',
   });
   if (!region) { toast('That could not be read as a region.', { tone: 'error' }); return null; }
+  if (state.offline.unsaved) {
+    toast('This browser would not keep the list of regions - its storage for this site is full or '
+      + 'switched off - so this one lasts until the page is closed.', { tone: 'error', timeout: 12000 });
+  }
 
   state.highlightRegion = region.id;
   refreshRegionData();
@@ -5933,8 +5940,65 @@ function regionRow(region, kind) {
       class: 'region-meta',
       text: `${Math.round(measure.area).toLocaleString()} km² · ${region.basemapName || 'no basemap recorded'}`,
     }),
+    savedLine(region),
     downloadRow(region),
   ]);
+}
+
+/**
+ * Whether a region is downloaded, said on its row and checked on the device.
+ *
+ * Drawn from what the download recorded on the region, so a reload still
+ * knows - and then checked against the tiles themselves, because a browser
+ * short of space may clear them without a word, and "downloaded" over ground
+ * that is no longer there is the one thing worse than not saying.
+ */
+function savedLine(region) {
+  const line = el('p', { class: 'source-note region-saved', text: describeSaved(region) });
+  if (region.saved) {
+    regionPresence(region).then((presence) => {
+      line.textContent = describeSaved(region, presence);
+      line.classList.toggle('is-gone', presence.checked > 0 && presence.present < presence.checked);
+    });
+  }
+  return line;
+}
+
+async function regionPresence(region) {
+  let store = null;
+  if (region.saved?.keys?.length) {
+    try { store = await openTileStore(); } catch { store = null; }
+  }
+  return savedPresence(region.saved, { store });
+}
+
+/**
+ * Write what a download left onto its region.
+ *
+ * With a few of the tiles that did arrive, so savedLine() can look for them
+ * later. Nothing is written for a download that kept nothing.
+ */
+async function recordDownload(region, { result, urls = [], keys = [], store = null }) {
+  if (!result?.done) return;
+  let cache = null;
+  if (urls.length && globalThis.caches) {
+    try { cache = await globalThis.caches.open(TILE_CACHE); } catch { cache = null; }
+  }
+  const [heldURLs, heldKeys] = await Promise.all([
+    cache ? presentSample(urls, async (url) => Boolean(await cache.match(url, { ignoreVary: true }))) : [],
+    store ? presentSample(keys, (key) => store.has(key)) : [],
+  ]);
+  state.offline.update(region.id, {
+    saved: {
+      at: Date.now(),
+      tiles: result.done,
+      failed: result.failed,
+      absent: result.absent || 0,
+      complete: !result.cancelled,
+      urls: heldURLs,
+      keys: heldKeys,
+    },
+  });
 }
 
 /**
@@ -6023,9 +6087,10 @@ function downloadRow(region) {
   ].filter(Boolean).join(' + ');
   row.append(el('p', { class: 'source-note', text: `Will store: ${covering}.` }));
 
+  const idle = region.saved ? 'Download again' : 'Download for offline';
   const button = el('button', {
     class: 'button button-secondary button-small', type: 'button',
-    text: 'Download for offline',
+    text: idle,
     // Named so the one-tap "Offline download" above can press it for you.
     dataset: { regionDownload: region.id },
     onclick: async () => {
@@ -6056,11 +6121,13 @@ function downloadRow(region) {
       };
 
       try {
+        const archiveName = archiveURL ? new URL(archiveURL, document.baseURI).href : '';
+        const tileStore = archiveTiles.length ? await openTileStore() : null;
         const result = archiveTiles.length
           ? await downloadArchiveTiles(archiveTiles, {
-            archive: new PMTilesArchive(new URL(archiveURL, document.baseURI).href),
-            store: await openTileStore(),
-            name: new URL(archiveURL, document.baseURI).href,
+            archive: new PMTilesArchive(archiveName),
+            store: tileStore,
+            name: archiveName,
             signal: controller.signal,
             onProgress: progress(0),
           })
@@ -6104,11 +6171,19 @@ function downloadRow(region) {
           status.textContent = `${result.done.toLocaleString()} tiles saved. This region works offline.`;
         }
         if (archiveTiles.length && !result.cancelled) stampArchive(region, archiveURL);
+        // Last, because it redraws the row: the line it leaves says the same
+        // as the one above, and is still there after a reload.
+        await recordDownload(region, {
+          result,
+          urls,
+          keys: archiveTiles.map(({ z, x, y }) => tileKey(archiveName, z, x, y)),
+          store: tileStore,
+        });
       } catch (error) {
         status.textContent = error.message || 'The download could not start.';
       } finally {
         controller = null;
-        button.textContent = 'Download for offline';
+        button.textContent = idle;
       }
     },
   });
@@ -11616,7 +11691,6 @@ async function renderSavedOffline() {
   if (regions.length) {
     node.append(el('h3', { class: 'offline-heading', text: 'Map regions' }));
     for (const region of regions) {
-      const held = stored.get(current);
       const row = el('div', { class: 'region' }, [
         el('div', { class: 'region-head' }, [
           el('b', { class: 'region-name-static', text: region.name }),
@@ -11631,9 +11705,15 @@ async function renderSavedOffline() {
         ]),
         el('div', {
           class: 'region-meta',
-          text: `z${region.minZoom}–${region.maxZoom} · ${region.basemapName || 'no basemap recorded'}`
-            + (held ? ` · ${held.tiles.toLocaleString()} tiles held` : ' · not downloaded'),
+          text: `z${region.minZoom}–${region.maxZoom} · ${region.basemapName || 'no basemap recorded'}`,
         }),
+        /*
+         * Per region, from what its own download recorded. This used to be
+         * the archive's total tile count, the same on every row, and "not
+         * downloaded" for every region taken on a raster map - USGS Topo, the
+         * aerials - whose tiles go to a cache this never looked in.
+         */
+        savedLine(region),
       ]);
       const drift = archiveDrift(region, current);
       if (drift) row.append(staleRegionNotice(region, drift));
@@ -11695,7 +11775,8 @@ function staleRegionNotice(region, drift) {
           tiers.push({ zoom, boxes: [region.bounds] });
         }
         const name = new URL(archiveURL, document.baseURI).href;
-        const result = await downloadArchiveTiles(tileKeysFor(tiers), {
+        const tiles = tileKeysFor(tiers);
+        const result = await downloadArchiveTiles(tiles, {
           archive: new PMTilesArchive(name),
           store,
           name,
@@ -11704,6 +11785,9 @@ function staleRegionNotice(region, drift) {
           },
         });
         stampArchive(region, archiveURL);
+        await recordDownload(region, {
+          result, keys: tiles.map(({ z, x, y }) => tileKey(name, z, x, y)), store,
+        });
         status.textContent = `${result.done.toLocaleString()} tiles saved.`;
         renderSavedOffline();
       } catch (error) {
@@ -11728,7 +11812,7 @@ function staleRegionNotice(region, drift) {
          * somebody drew and named; the tiles are what was thrown away, and
          * taking the rectangle too would mean drawing it again to get it back.
          */
-        state.offline.update(region.id, { archive: '', archiveDepth: 0 });
+        state.offline.update(region.id, { archive: '', archiveDepth: 0, saved: null });
         toast(`Removed ${removed.toLocaleString()} out-of-date tiles.`);
         renderSavedOffline();
       } catch (error) {
