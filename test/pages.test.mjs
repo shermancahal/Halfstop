@@ -171,16 +171,16 @@ test('pages: every footer link points at something that exists', async () => {
   const hrefs = [...footer.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
   assert.ok(hrefs.length >= 7, `only ${hrefs.length} links in the footer`);
 
-  const home = await read('index.html');
   for (const href of hrefs) {
     const [path, hash] = href.split('#');
     const file = path === './' || path === '' ? 'index.html' : path;
     assert.ok(PAGES.includes(file), `the footer links to ${file}, which the build does not ship`);
     await assert.doesNotReject(read(file), `${file} is a 404`);
     // A fragment pointing at no id scrolls nowhere and reports nothing, which
-    // is worse than a broken link: it looks like it worked.
+    // is worse than a broken link: it looks like it worked. Looked for on the
+    // page the link names - What's new and the roadmap are on the help page.
     if (hash) {
-      assert.ok(home.includes(`id="${hash}"`), `${href} points at an id that is not on the page`);
+      assert.ok((await read(file)).includes(`id="${hash}"`), `${href} points at an id that is not on ${file}`);
     }
   }
 });

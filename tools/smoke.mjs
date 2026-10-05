@@ -6118,15 +6118,16 @@ if (!external) {
      * reason the map does: a precache is only worth having if it covers the
      * pages somebody reaches for.
      *
-     * #roadmap rather than #catalog-grid, which is what this used to look for.
+     * #costs rather than #catalog-grid, which is what this used to look for.
      * The catalogue is commented out of index.html now, so that locator would
      * count 0 whether the page came out of the cache or never arrived at all -
      * a check that cannot fail for the right reason and cannot pass for it
-     * either. #roadmap is markup the page always ships.
+     * either. #costs is markup the page always ships. (It was #roadmap, until
+     * the roadmap moved to the help page.)
      */
     await offlinePage.goto(new URL('./', URL_UNDER_TEST).href, { waitUntil: 'load' });
     check('and so does the homepage, which was never visited online',
-      await offlinePage.locator('#roadmap').count(), 1);
+      await offlinePage.locator('#costs').count(), 1);
 
     /*
      * Deliberately after the homepage, because the order is the test.

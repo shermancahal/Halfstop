@@ -326,123 +326,6 @@
 
   -->
 
-  <section class="section" id="whats-new">
-    <div class="wrap">
-      <div class="section-head">
-        <h2>What's new</h2>
-        <p>The latest changes, newest first.</p>
-      </div>
-      <div class="release-notes">
-        <article class="release">
-          <h3><time datetime="2026-10-05">5 October 2026</time></h3>
-          <ul>
-            <li><b>Fixed:</b> the website showed you as signed out wherever there was no signal. You now stay signed in, with your folders and Premium, and changes sync when the signal comes back. <a href="faq.html#no-signal">More on using Halfstop offline</a>.</li>
-            <li><b>Fixed:</b> signing out with no signal could leave you signed in the next time the page opened.</li>
-          </ul>
-        </article>
-        <article class="release">
-          <h3><time datetime="2026-10-04">4 October 2026</time></h3>
-          <ul>
-            <li><b>Send a folder as a link.</b> Share now makes a link that opens your places on a map in any browser, on any phone or computer, for thirty days, and lets whoever opens it save them to their own folders. GPX and GeoJSON files are there too, for other map apps.</li>
-            <li><b>More kinds of photo.</b> Any picture your browser can open is converted on the way in. iPhone photos (HEIC) work from an iPhone and in Safari on a Mac; anywhere that cannot read them says how to save them as JPEG.</li>
-            <li><b>Importing on a phone.</b> Every file can be chosen now, and a GPX, KML or GeoJSON that lost its file ending on the way is recognised by what is inside it.</li>
-            <li><b>Fixed:</b> the edit button on each folder showed as an empty box on phones.</li>
-            <li><b>Fixed:</b> signing in to a Premium account could say for a moment that its folders were over the free sync allowance.</li>
-          </ul>
-        </article>
-        <article class="release">
-          <h3><time datetime="2026-10-02">2 October 2026</time></h3>
-          <ul>
-            <li><b>Offline maps that stay put.</b> Downloading a region asks your browser to keep it, and the storage line under your regions says whether it agreed. The help page has <a href="faq.html#keeping-downloads">what else keeps downloads safe</a>.</li>
-            <li><b>Halfstop on an iPhone home screen</b> now has a solid status bar, so the map can reach the bottom of the screen. Add it to your home screen again to pick this up.</li>
-          </ul>
-        </article>
-        <article class="release">
-          <h3><time datetime="2026-09-28">28 September 2026</time></h3>
-          <ul>
-            <li><b>Better search on Premium.</b> A search asks Mapbox and OpenStreetMap together: Mapbox's answers first, then places only OpenStreetMap knows, with both credited.</li>
-            <li><b>Set a download region by hand</b> - round the middle of the map, a coordinate you type, or every place in a folder, reaching as far as you choose - and adjust a saved region's edges.</li>
-          </ul>
-        </article>
-        <article class="release">
-          <h3><time datetime="2026-09-27">27 September 2026</time></h3>
-          <ul>
-            <li><b>Bring in your Google Maps places.</b> Starred places and saved lists from Google Takeout open on the map, and a saved list is checked place by place before anything is filed.</li>
-            <li><b>Link to any help answer.</b> Every question on the help page has a link you can copy and send.</li>
-            <li><b>Free accounts</b> sync up to 100 folders and 100 waypoints between devices, and search places from OpenStreetMap. Premium syncs any number, and adds Mapbox search.</li>
-          </ul>
-        </article>
-      </div>
-    </div>
-  </section>
-
-  <section class="section" id="roadmap">
-    <div class="wrap">
-      <div class="section-head">
-        <h2>Where this is going</h2>
-        <p>What is shipped, what is next, and what is further out.</p>
-      </div>
-      <ul class="roadmap">
-        <li>
-          <span class="phase shipped">Shipped</span>
-          <span><b>A map-first field atlas</b><span class="detail">Topographic, aerial and street basemaps with stackable overlays, and a shareable URL for any view.</span></span>
-        </li>
-        <li>
-          <span class="phase shipped">Shipped</span>
-          <span><b>Sun, moon and sky timing</b><span class="detail">Sunrise, sunset, blue hour, moonrise and moonset for any pin you drop, plus eclipse tracks and aurora forecasts.</span></span>
-        </li>
-        <li>
-          <span class="phase shipped">Shipped</span>
-          <span><b>Folders for your waypoints</b><span class="detail">Import, nest, color, sort and bulk-edit them; export any folder back out as GPX.</span></span>
-        </li>
-        <li>
-          <span class="phase shipped">Shipped</span>
-          <span><b>Public land and access layers</b><span class="detail">Federal and state boundaries, wilderness, forest road numbers and drone ceilings, drawn over the ground they govern.</span></span>
-        </li>
-        <li>
-          <span class="phase shipped">Shipped</span>
-          <span><b>Offline map regions</b><span class="detail">Mark the ground you are heading for and download it. The map draws with no signal.</span></span>
-        </li>
-        <li>
-          <span class="phase shipped">Shipped</span>
-          <span><b>An account that syncs</b><span class="detail">Folders and pins follow you between the phone in your pocket and the laptop you plan on.</span></span>
-        </li>
-        <li>
-          <span class="phase shipped">Shipped</span>
-          <span><b>An iPhone app</b><span class="detail">The same atlas, installed, without a browser around it.</span></span>
-        </li>
-        <li>
-          <span class="phase shipped">Shipped</span>
-          <span><b>Client-side GPX / KML / KMZ parsing</b><span class="detail">Files are read and measured in your browser, never uploaded.</span></span>
-        </li>
-        <li>
-          <span class="phase shipped">Shipped</span>
-          <span><b>Adjustable download regions</b><span class="detail">Set a region round a place, a coordinate or a whole folder, and type over its edges, rather than only dragging a rectangle across the map.</span></span>
-        </li>
-        <li>
-          <span class="phase testing">Testing</span>
-          <span><b>Android</b><span class="detail">The same shell, the same atlas, on the other half of the phones. Open for testing now: <a href="https://play.google.com/store/apps/details?id=com.halfstop.app" target="_blank" rel="noopener">install it from Google Play</a>, and tell us what breaks.</span></span>
-        </li>
-        <li>
-          <span class="phase">Next</span>
-          <span><b>On the App Store</b><span class="detail">TestFlight first, so the people who will actually carry it can break it, then a public release.</span></span>
-        </li>
-        <li>
-          <span class="phase later">Later</span>
-          <span><b>Route drawing and editing</b><span class="detail">Sketch a route, snap it to the roads and trails underneath, and export it as GPX for whatever you navigate with.</span></span>
-        </li>
-        <li>
-          <span class="phase later">Later</span>
-          <span><b>Sharing a scouted location</b><span class="detail">Send somebody a pin with its timing attached, so they know not just where but when.</span></span>
-        </li>
-        <li>
-          <span class="phase later">Later</span>
-          <span><b>Terrain and skylines in three dimensions</b><span class="detail">Ridges and city blocks drawn from elevation data, and sun and moon times that account for them &mdash; when the light actually reaches a spot, rather than when a flat horizon says it should.</span></span>
-        </li>
-      </ul>
-    </div>
-  </section>
-
 </main>
 
 <footer class="site-footer">
@@ -468,8 +351,8 @@
       </ul>
       <ul>
         <li><a href="faq.html">Help &amp; FAQ</a></li>
-        <li><a href="index.html#roadmap">Roadmap</a></li>
-        <li><a href="index.html#whats-new">What's new</a></li>
+        <li><a href="faq.html#roadmap">Roadmap</a></li>
+        <li><a href="faq.html#whats-new">What's new</a></li>
         <li><a href="index.html#costs">What it costs</a></li>
         <li><a href="terms.html">Terms</a> and <a href="privacy.html">Privacy</a></li>
       </ul>
@@ -501,6 +384,12 @@
     var carries = ['m', 'b', 'o', 'u', 'f', 'code', 'error'].some(function (key) { return search.has(key); });
     if (carries || /^#(view|-?\d)/.test(location.hash) || /access_token=|[#&]error=/.test(location.hash)) {
       location.replace('map.html' + location.search + location.hash);
+      return;
+    }
+    // What's new and the roadmap moved to the help page; links to their old
+    // places on this one follow them there.
+    if (/^#(whats-new|roadmap)$/.test(location.hash)) {
+      location.replace('faq.html' + location.hash);
     }
   }());
 </script>

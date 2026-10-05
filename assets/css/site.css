@@ -518,11 +518,12 @@ input[type="search"]:focus, select:focus { border-color: var(--clay); outline: n
   text-transform: uppercase; color: var(--ink-3); padding-top: 3px;
 }
 .roadmap .shipped { color: var(--pine); }
-/* What's new: dated entries, newest first, in the roadmap's rhythm. */
+/* What's new: dated entries, newest first, in the roadmap's rhythm. On the
+   help page, so the date heading is held over .faq-section h3. */
 .release-notes { display: grid; gap: 4px; }
 .release { padding: 14px 0; border-bottom: 1px solid var(--line); }
 .release:last-child { border-bottom: 0; }
-.release h3 {
+.release-notes .release h3 {
   margin: 0 0 8px; font-family: var(--font-sans); font-size: .72rem; font-weight: 600;
   letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3);
 }

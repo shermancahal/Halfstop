@@ -43,7 +43,8 @@ Where it goes:
 Taken down 2026-10-02 while the open test was in Play's review. To bring it
 back, set `banner: true` in `SITE.androidApp` in `assets/js/config.js`. When
 the app is public, set `testing: false` instead, and reword the roadmap entry
-and the FAQ answer (`faq.html#android-app`), which both say "testing".
+(`faq.html#roadmap`) and the FAQ answer (`faq.html#android-app`), which both say
+"testing".
 
 ## Opening a map file in Halfstop on an iPhone, and in the installed website
 
