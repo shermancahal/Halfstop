@@ -5,7 +5,7 @@ import { chooseToken, appTokenFile, webTokenFile, appPreflight } from '../tools/
 import {
   preflight as appMachinePreflight, withAndroidPermissions, ANDROID_PERMISSIONS,
   CAPACITOR_INSTALL, afterOpening, agpMajor, agpDrift, AGP_SUPPORTED_MAJOR,
-  withSupportedProguard, withDeepLink, withMapFiles, MAP_FILE_TYPES, APP_PLUGINS, withProjectName, versionFor, withVersion, withAppVersion,
+  withSupportedProguard, withDeepLink, withMapFiles, MAP_FILE_TYPES, APP_PLUGINS, withProjectName, versionFor, withVersion, withAppVersion, carriesVersion,
 } from '../tools/app.mjs';
 import { APP_SCHEME } from '../assets/js/lib/native-shell.js';
 
@@ -666,6 +666,19 @@ test('app version: the code is the commit count, and the name ends in it', () =>
   assert.match(text, /^\s+versionName "0\.1\.185"$/m);
   // Nothing else in the block moves.
   assert.equal(text.replace('versionCode 185', 'versionCode 1').replace('"0.1.185"', '"1.0"'), GENERATED_DEFAULT_CONFIG);
+});
+
+test('app version: the assignment form Android Studio rewrites to is versioned too, and checked', () => {
+  const assigned = GENERATED_DEFAULT_CONFIG.replace('versionCode 1', 'versionCode = 1').replace('versionName "1.0"', 'versionName = "1.0"');
+  const version = { code: 612, name: '0.1.612' };
+  const { text } = withVersion(assigned, version);
+  assert.match(text, /versionCode = 612$/m);
+  assert.match(text, /versionName = "0\.1\.612"$/m);
+  assert.equal(carriesVersion(text, version), true);
+  assert.equal(carriesVersion(withVersion(GENERATED_DEFAULT_CONFIG, version).text, version), true);
+  // Neither line there to set: said, not assumed.
+  assert.equal(carriesVersion(GENERATED_DEFAULT_CONFIG, version), false);
+  assert.equal(carriesVersion('versionCode 6120\nversionName "0.1.612"', version), false, '6120 is not 612');
 });
 
 test('app version: the app says its version on the build line', () => {

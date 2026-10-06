@@ -405,10 +405,19 @@ export function withAppVersion(buildJson, version) {
 export function withVersion(appBuildGradle, version) {
   const text = String(appBuildGradle || '');
   if (!version) return { text, changed: false };
+  // `versionCode 1` as Capacitor writes it, or `versionCode = 1` as Android
+  // Studio's plugin upgrade rewrites it.
   const fixed = text
-    .replace(/(\bversionCode\s+)\d+/, `$1${version.code}`)
-    .replace(/(\bversionName\s+)"[^"]*"/, `$1"${version.name.replace(/"/g, '')}"`);
+    .replace(/(\bversionCode\s*=?\s*)\d+/, `$1${version.code}`)
+    .replace(/(\bversionName\s*=?\s*)"[^"]*"/, `$1"${version.name.replace(/"/g, '')}"`);
   return { text: fixed, changed: fixed !== text };
+}
+
+/** Whether a build.gradle carries this version, read back after writing it. */
+export function carriesVersion(appBuildGradle, version) {
+  const text = String(appBuildGradle || '');
+  return new RegExp(`\\bversionCode\\s*=?\\s*${version.code}\\b`).test(text)
+    && text.includes(`"${version.name}"`);
 }
 
 /** Commits on HEAD, and whether this clone has all of them. */
@@ -577,7 +586,15 @@ async function main() {
     } else {
       const versioned = withVersion(readFileSync(appGradlePath, 'utf8'), version);
       if (versioned.changed) writeFileSync(appGradlePath, versioned.text);
-      console.log(`\n>> Version ${version.name} (code ${version.code}) - use "${version.name}" as the release name in Play Console`);
+      // Read back rather than assumed: a build.gradle laid out some other way
+      // takes neither line, and an upload numbered 1 is refused by Play.
+      if (carriesVersion(readFileSync(appGradlePath, 'utf8'), version)) {
+        console.log(`\n>> Version ${version.name} (code ${version.code}) - use "${version.name}" as the release name in Play Console`);
+      } else {
+        console.warn(`\n  WARNING: could not set the version in android/app/build.gradle - it still is not `
+          + `versionCode ${version.code} / versionName "${version.name}". Do not upload this build; Play refuses `
+          + 'a version code it has seen. Send the defaultConfig block from that file to be looked at.');
+      }
     }
 
     const manifestPath = path.join(ROOT, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
