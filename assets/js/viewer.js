@@ -1206,7 +1206,24 @@ function waitForStyle(timeoutMs = 15000) {
       finish(false);
     }, timeoutMs);
 
-    if (state.map.loaded && state.map.loaded()) { finish(true); return; }
+    /*
+     * The style, not the whole first picture.
+     *
+     * 'load' waits for every tile on screen to arrive or fail, and offline
+     * - or with no service, where requests hang - the tiles that were never
+     * downloaded do neither, so folders, pins and regions sat off the map
+     * for the whole fifteen seconds. Anything this file adds needs only the
+     * style, which 'style.load' says is ready. Whichever comes first.
+     */
+    // `style._loaded` is the flag 'style.load' is fired on, for a style that
+    // finished before anybody was listening; isStyleLoaded() also waits on tiles.
+    if (state.map.style?._loaded === true
+      || (state.map.isStyleLoaded && state.map.isStyleLoaded())
+      || (state.map.loaded && state.map.loaded())) {
+      finish(true);
+      return;
+    }
+    state.map.once('style.load', () => finish(true));
     state.map.once('load', () => finish(true));
   });
 }

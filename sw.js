@@ -62,6 +62,32 @@ const CACHE = `abmap-${BUILD}`;
 // new build is no reason to make them do it again.
 const TILES = 'abmap-tiles-v1';
 
+/*
+ * The lettering for map labels, kept for good.
+ *
+ * Byways Topo draws its labels from Protomaps' published font set, which is
+ * fetched a range of characters at a time. The map will not finish drawing a
+ * tile until the lettering for its labels has arrived - so offline, with
+ * nothing kept, downloaded ground came up without a single name on it, and
+ * with no service at all (a request that hangs rather than fails) the tiles
+ * waited on lettering that was never coming. Reported as the map being
+ * extremely slow even with the ground downloaded.
+ *
+ * So every range is kept once fetched - they never change - the common ones
+ * are fetched as the worker installs, and a range that is neither kept nor
+ * answering gives up after GLYPH_PATIENCE_MS, so the tile draws without those
+ * letters rather than not at all. GLYPHS_BASE and GLYPH_FONTS match the style
+ * (lib/byways-style.js); test/sw-patience.test.mjs holds them together.
+ */
+const GLYPHS = 'abmap-glyphs-v1';
+const GLYPHS_BASE = 'https://protomaps.github.io/basemaps-assets/fonts/';
+const GLYPH_FONTS = ['Noto Sans Regular', 'Noto Sans Medium'];
+// Latin, its extensions and accents, and punctuation: every label in the
+// country, near enough. Anything else is kept the first time it is drawn.
+const GLYPH_RANGES = ['0-255', '256-511', '512-767', '768-1023', '7680-7935', '8192-8447'];
+const GLYPH_PATIENCE_MS = 5000;
+const glyphURL = (font, range) => `${GLYPHS_BASE}${encodeURIComponent(font)}/${range}.pbf`;
+
 /** The pages the app has, so an offline navigation to any of them can be answered. */
 const PAGES = ['index.html', 'map.html', 'account.html', 'faq.html'];
 
@@ -79,13 +105,21 @@ self.addEventListener('install', (event) => {
     const failed = PRECACHE.filter((_, i) => results[i].status === 'rejected');
     if (failed.length) console.warn(`[sw] ${failed.length} file(s) did not precache:`, failed);
     console.log(`[sw] build ${BUILD}: cached ${PRECACHE.length - failed.length}/${PRECACHE.length} files`);
+
+    // The common lettering, so labels draw offline on ground never browsed
+    // online. Best effort, and never a reason to fail the install.
+    const glyphs = await caches.open(GLYPHS);
+    await Promise.allSettled(GLYPH_FONTS.flatMap((font) => GLYPH_RANGES.map(async (range) => {
+      const url = glyphURL(font, range);
+      if (!(await glyphs.match(url))) await glyphs.add(new Request(url, { mode: 'cors' }));
+    })));
   })());
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     for (const name of await caches.keys()) {
-      if (name.startsWith('abmap-') && name !== CACHE && name !== TILES) await caches.delete(name);
+      if (name.startsWith('abmap-') && name !== CACHE && name !== TILES && name !== GLYPHS) await caches.delete(name);
     }
     await self.clients.claim();
   })());
@@ -223,6 +257,23 @@ async function networkFirst(request, { fallback, revalidate = false, patience = 
   }
 }
 
+/** Lettering: kept for good once fetched, and never waited on for long. */
+async function glyphFirst(request, event) {
+  const cache = await caches.open(GLYPHS);
+  const hit = await cache.match(request, { ignoreVary: true });
+  if (hit) return hit;
+  const network = fetch(request).then((response) => {
+    if (response.ok) cache.put(request, response.clone());
+    return response;
+  });
+  const late = new Promise((resolve) => { setTimeout(() => resolve(null), GLYPH_PATIENCE_MS); });
+  const first = await Promise.race([network.catch(() => null), late]);
+  if (first) return first;
+  // Keep it if it does come, for next time; draw this tile without it now.
+  event?.waitUntil(network.catch(() => {}));
+  return new Response(null, { status: 504, statusText: 'No lettering without a network' });
+}
+
 async function cacheFirst(request) {
   const cache = await caches.open(CACHE);
   const hit = await cache.match(request);
@@ -253,6 +304,11 @@ self.addEventListener('fetch', (event) => {
    * holds megabytes somebody waited for, and throwing that away because the
    * app updated would be the worst moment to do it.
    */
+  if (url.href.startsWith(GLYPHS_BASE) && url.pathname.endsWith('.pbf')) {
+    event.respondWith(glyphFirst(request, event));
+    return;
+  }
+
   if (url.origin !== self.location.origin) {
     /*
      * Narrowed to things that can actually be in the tile cache.

@@ -22,8 +22,11 @@ const PATIENCE = 150;
 
 /** sw.js in a sandbox with a fake cache and a network the test controls. */
 function worker({ network }) {
-  const source = SOURCE.replace('const PAGE_PATIENCE_MS = 3500;', `const PAGE_PATIENCE_MS = ${PATIENCE};`);
-  assert.notEqual(source, SOURCE, 'the patience constant moved; this test no longer controls it');
+  const source = SOURCE
+    .replace('const PAGE_PATIENCE_MS = 3500;', `const PAGE_PATIENCE_MS = ${PATIENCE};`)
+    .replace('const GLYPH_PATIENCE_MS = 5000;', `const GLYPH_PATIENCE_MS = ${PATIENCE};`);
+  assert.ok(source.includes(`PAGE_PATIENCE_MS = ${PATIENCE}`) && source.includes(`GLYPH_PATIENCE_MS = ${PATIENCE}`),
+    'a patience constant moved; this test no longer controls it');
 
   const stores = new Map();
   const keyOf = (request, ignoreSearch = false) => {
@@ -44,6 +47,12 @@ function worker({ network }) {
           return undefined;
         },
         async put(request, response) { held.set(keyOf(request), await response.text()); },
+        async add(request) {
+          const response = await fetch(request);
+          if (!response.ok) throw new TypeError(`${response.status}`);
+          held.set(keyOf(request), await response.text());
+        },
+        async keys() { return [...held.keys()]; },
       };
     },
     async keys() { return [...stores.keys()]; },
@@ -78,8 +87,14 @@ function worker({ network }) {
     const response = await answer;
     return { body: await response.text(), ms: Date.now() - started };
   };
-  const keep = async (url, body) => (await caches.open('abmap-__BUILD__')).put(url, new Response(body));
-  return { ask, keep, fetched };
+  const keep = async (url, body, name = 'abmap-__BUILD__') => (await caches.open(name)).put(url, new Response(body));
+  /** Run an install or activate event to the end. */
+  const lifecycle = async (type) => {
+    const waits = [];
+    listeners[type]({ waitUntil: (promise) => { waits.push(promise); } });
+    await Promise.all(waits);
+  };
+  return { ask, keep, fetched, caches, stores, lifecycle };
 }
 
 const never = () => new Promise(() => {});
@@ -148,4 +163,67 @@ test('airplane mode is as it was: the network fails at once and the cache answer
   const page = await sw.ask(`${SCOPE}faq.html`);
   assert.equal(page.body, 'the help page, as kept');
   assert.ok(page.ms < 100, `took ${page.ms}ms with the network already known to be down`);
+});
+
+/* ------------------------------------------------------ the map's lettering */
+
+const GLYPH = 'https://protomaps.github.io/basemaps-assets/fonts/Noto%20Sans%20Regular/0-255.pbf';
+
+test('lettering: kept for good, and read from the device first', async () => {
+  const sw = worker({ network: never });
+  await sw.keep(GLYPH, 'letters', 'abmap-glyphs-v1');
+  const glyph = await sw.ask(GLYPH);
+  assert.equal(glyph.body, 'letters');
+  assert.ok(glyph.ms < 100, `kept lettering waited ${glyph.ms}ms for a network`);
+});
+
+test('lettering: with no service a tile draws without it rather than waiting', async () => {
+  const sw = worker({ network: never });
+  let status = 0;
+  const started = Date.now();
+  // ask() reads the body; a 504 has none, which is the point.
+  const result = await sw.ask(GLYPH.replace('0-255', '19968-20223'));
+  status = result.body === '' ? 504 : 200;
+  assert.equal(status, 504);
+  assert.ok(Date.now() - started < PATIENCE + 500);
+});
+
+test('lettering: fetched once online, it is there offline', async () => {
+  let online = true;
+  const sw = worker({ network: async () => (online ? new Response('fetched letters') : never()) });
+  assert.equal((await sw.ask(GLYPH)).body, 'fetched letters');
+  online = false;
+  assert.equal((await sw.ask(GLYPH)).body, 'fetched letters');
+});
+
+test('lettering: the common ranges are kept as the worker installs, and survive a new build', async () => {
+  const sw = worker({ network: async (request) => new Response(`range ${new URL(request.url).pathname}`) });
+  await sw.lifecycle('install');
+  const kept = await (await sw.caches.open('abmap-glyphs-v1')).keys();
+  assert.equal(kept.length, 12, `kept ${kept.length} ranges`);
+  assert.ok(kept.includes(GLYPH));
+  assert.ok(kept.some((url) => url.includes('Noto%20Sans%20Medium/8192-8447.pbf')));
+
+  // A new build sweeps the old app cache, and leaves lettering and tiles.
+  await sw.keep('https://app.example/old.js', 'old', 'abmap-oldbuild');
+  await sw.keep('https://tiles.example/1/2/3.png', 'tile', 'abmap-tiles-v1');
+  await sw.lifecycle('activate');
+  assert.deepEqual([...sw.stores.keys()].sort(), ['abmap-__BUILD__', 'abmap-glyphs-v1', 'abmap-tiles-v1']);
+});
+
+test('lettering: the worker keeps the fonts the style draws with, from where it draws them', async () => {
+  const { PROTOMAPS_SCHEMA } = await import('../assets/js/lib/byways-style.js');
+  const base = /const GLYPHS_BASE = '([^']+)'/.exec(SOURCE)?.[1];
+  assert.ok(PROTOMAPS_SCHEMA.glyphs().startsWith(base), 'the style reads lettering from somewhere the worker does not keep');
+  const fonts = JSON.parse(/const GLYPH_FONTS = (\[[^\]]*\])/.exec(SOURCE)?.[1].replace(/'/g, '"') || '[]');
+  assert.deepEqual(fonts.sort(), [...PROTOMAPS_SCHEMA.font, ...PROTOMAPS_SCHEMA.fontBold].sort());
+
+  const pwa = await readFile(new URL('../assets/js/lib/pwa.js', import.meta.url), 'utf8');
+  assert.match(pwa, /KEPT_GLYPHS = 'abmap-glyphs-v1'/, 'removing a worker would take the lettering with it');
+});
+
+test('the map adds folders and pins once its style is ready, not once every tile has come', async () => {
+  const viewer = await readFile(new URL('../assets/js/viewer.js', import.meta.url), 'utf8');
+  const wait = viewer.slice(viewer.indexOf('function waitForStyle'), viewer.indexOf('function waitForStyle') + 1800);
+  assert.match(wait, /once\('style\.load'/);
 });

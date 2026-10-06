@@ -86,6 +86,8 @@ export function applyServiceWorkerUpdate({ timeout = 3000 } = {}) {
  * three names together.
  */
 const DOWNLOADED_TILES = 'abmap-tiles-v1';
+// And the map's lettering, kept by sw.js so labels draw offline.
+const KEPT_GLYPHS = 'abmap-glyphs-v1';
 
 /**
  * Remove any worker registered for this scope, and the caches it owns.
@@ -103,7 +105,7 @@ export async function unregisterServiceWorker() {
     for (const registration of registrations) removed = (await registration.unregister()) || removed;
     if (removed && typeof caches !== 'undefined') {
       for (const name of await caches.keys()) {
-        if (name.startsWith('abmap-') && name !== DOWNLOADED_TILES) await caches.delete(name);
+        if (name.startsWith('abmap-') && name !== DOWNLOADED_TILES && name !== KEPT_GLYPHS) await caches.delete(name);
       }
       console.warn('[pwa] removed a service worker left over from a built deployment');
     }
