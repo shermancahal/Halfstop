@@ -358,8 +358,11 @@ export function withProjectName(settingsGradle, name) {
  * nobody to remember it, and two builds of the same commit are the same
  * build, which Play is right to treat as one.
  *
- * The name people see is package.json's version. Raise that for a release
- * worth naming; the code looks after itself.
+ * The name people see ends in that same number: major.minor from
+ * package.json, then the build - 0.1.612. Every build, a fix or not, moves
+ * the name on by itself, and the store, the app's build line and Play
+ * Console's release name all say the same thing. A release worth naming
+ * raises package.json from 0.1 to 0.2, and its own third number is ignored.
  *
  * @returns {{ code: number, name: string } | null} null when git cannot say
  */
@@ -369,7 +372,33 @@ export function versionFor({ commits, shallow = false, packageVersion = '' } = {
   // than an upload Play has already seen. Refusing to guess is better than a
   // build Play rejects at the end of an upload.
   if (!Number.isInteger(code) || code < 1 || shallow) return null;
-  return { code, name: String(packageVersion || '').trim() || '1.0' };
+  const [major, minor] = String(packageVersion || '').trim().split('.')
+    .map((part) => Number.parseInt(part, 10));
+  const series = Number.isInteger(major) && major >= 0
+    ? `${major}.${Number.isInteger(minor) && minor >= 0 ? minor : 0}`
+    : '1.0';
+  return { code, name: `${series}.${code}` };
+}
+
+/**
+ * build.json with the app's version in it, for the build line in the panel.
+ *
+ * Written into dist/ before `cap sync` copies it, so the version on the
+ * store page is the one the app says it is - which is what a tester reading
+ * it out in a bug report needs.
+ */
+export function withAppVersion(buildJson, version) {
+  const text = String(buildJson || '');
+  if (!version) return { text, changed: false };
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return { text, changed: false };
+  }
+  if (data.version === version.name) return { text, changed: false };
+  const fixed = `${JSON.stringify({ ...data, version: version.name })}\n`;
+  return { text: fixed, changed: true };
 }
 
 /** app/build.gradle with the version set, and whether that changed it. */
@@ -548,7 +577,7 @@ async function main() {
     } else {
       const versioned = withVersion(readFileSync(appGradlePath, 'utf8'), version);
       if (versioned.changed) writeFileSync(appGradlePath, versioned.text);
-      console.log(`\n>> Version ${version.name} (${version.code}) - the code is this clone's commit count`);
+      console.log(`\n>> Version ${version.name} (code ${version.code}) - use "${version.name}" as the release name in Play Console`);
     }
 
     const manifestPath = path.join(ROOT, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
@@ -573,6 +602,14 @@ async function main() {
   // 2b. The iPhone project's link handling, permission strings, icon, launch
   //     image and version - every run, for the same reason as 2a.
   if (platform === 'ios') await patchIos();
+
+  // 2c. The version into the bundle's build.json, so the app's build line
+  //     names the version the store does.
+  const buildJsonPath = path.join(ROOT, 'dist', 'build.json');
+  if (existsSync(buildJsonPath)) {
+    const stamped = withAppVersion(readFileSync(buildJsonPath, 'utf8'), gitVersion());
+    if (stamped.changed) writeFileSync(buildJsonPath, stamped.text);
+  }
 
   // 3. The copy. This is the step people forget.
   run(`Copy dist/ into ${platform}/`, 'npx', ['cap', 'sync', platform]);

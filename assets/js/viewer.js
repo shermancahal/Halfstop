@@ -2199,9 +2199,11 @@ function buildTime(value) {
 async function renderBuildStamp() {
   if (!dom.buildStamp) return;
 
-  const show = (id, when) => {
+  const show = (id, when, version = '') => {
     const stamp = buildTime(when);
-    const text = [id && `build ${id}`, stamp].filter(Boolean).join(' · ');
+    // The app's version first, where there is one: it is what the store page
+    // and Play Console call this build. The website has none.
+    const text = [version && `version ${version}`, id && `build ${id}`, stamp].filter(Boolean).join(' · ');
     if (!text) return false;
     dom.buildStamp.textContent = text;
     dom.buildStamp.hidden = false;
@@ -2239,8 +2241,8 @@ async function renderBuildStamp() {
   try {
     const response = await fetch('build.json', { cache: 'no-store' });
     if (!response.ok) return;
-    const { build, built } = await response.json();
-    show(build, built);
+    const { build, built, version } = await response.json();
+    show(build, built, version);
   } catch {
     // A source checkout rather than a built package. Nothing to say.
   }

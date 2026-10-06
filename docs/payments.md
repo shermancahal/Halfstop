@@ -449,8 +449,11 @@ opened:
 The version is set for you. Play refuses an upload whose `versionCode` it has
 seen before, so `npm run app:android` writes this clone's commit count there on
 every run - it only grows as the code changes - and prints
-`>> Version 0.1.0 (185)`. The name, `0.1.0`, is `version` in `package.json`;
-raise that for a release worth naming. Two builds of the same commit are the
+`>> Version 0.1.612 (code 612)`. The name people see ends in the same
+number: major.minor from `version` in `package.json`, then the build, so every
+build moves it on by itself. Raise `package.json` to 0.2 for a release worth
+naming; its third number is not used. Use the name as the release name in Play
+Console, and the app's build line says it too. Two builds of the same commit are the
 same version, so a rebuild after a fix needs the fix committed and pulled
 first, which it would anyway.
 
@@ -468,7 +471,7 @@ first, which it would anyway.
 3. **Releases** tab → **Create new release**. If asked about app signing,
    choose **Use Google-generated key** (Play App Signing) - Google keeps the
    key that signs what users download, and yours is only for uploading.
-4. Drop `app-release.aab` in, give the release a name (`1.0 (1)` is fine),
+4. Drop `app-release.aab` in, give the release a name (the version the build printed, e.g. `0.1.612`),
    **Next**, then **Save and publish** / **Start rollout to Internal
    testing**. If Play lists setup items it wants first, the app's Dashboard
    says which.

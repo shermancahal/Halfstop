@@ -416,10 +416,11 @@ is signed in with that account under Settings → Accounts.
    Testers install the **TestFlight** app from the App Store, open the
    invitation or link there, and get Halfstop. Builds expire after 90 days.
 
-6. **Every build after the first.** Bump the **Build** number in Xcode
-   (App target → General → Identity; App Store Connect refuses a duplicate),
-   then `npm run app:ios`, Archive, Upload, add the build to the group. The
-   version string (`0.1.0`) can stay until something is worth calling 0.2.
+6. **Every build after the first.** Commit and pull, then `npm run app:ios`,
+   Archive, Upload, add the build to the group. The **Build** number is set
+   for you - the clone's commit count, so App Store Connect never sees a
+   duplicate - and the version string ends in the same number, `0.1.612`;
+   raise `package.json` to 0.2 for something worth calling that.
 
 ### What testers will not get
 

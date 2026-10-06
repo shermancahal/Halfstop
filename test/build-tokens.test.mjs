@@ -5,7 +5,7 @@ import { chooseToken, appTokenFile, webTokenFile, appPreflight } from '../tools/
 import {
   preflight as appMachinePreflight, withAndroidPermissions, ANDROID_PERMISSIONS,
   CAPACITOR_INSTALL, afterOpening, agpMajor, agpDrift, AGP_SUPPORTED_MAJOR,
-  withSupportedProguard, withDeepLink, withMapFiles, MAP_FILE_TYPES, APP_PLUGINS, withProjectName, versionFor, withVersion,
+  withSupportedProguard, withDeepLink, withMapFiles, MAP_FILE_TYPES, APP_PLUGINS, withProjectName, versionFor, withVersion, withAppVersion,
 } from '../tools/app.mjs';
 import { APP_SCHEME } from '../assets/js/lib/native-shell.js';
 
@@ -654,22 +654,36 @@ const GENERATED_DEFAULT_CONFIG = `    defaultConfig {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }`;
 
-test('app version: the code is the commit count, the name is package.json\'s', () => {
-  assert.deepEqual(versionFor({ commits: '185\n', packageVersion: '0.1.0' }), { code: 185, name: '0.1.0' });
-  const { text, changed } = withVersion(GENERATED_DEFAULT_CONFIG, { code: 185, name: '0.1.0' });
+test('app version: the code is the commit count, and the name ends in it', () => {
+  // major.minor from package.json, then the build: every build moves the
+  // name on, and the name and the code say the same number.
+  assert.deepEqual(versionFor({ commits: '185\n', packageVersion: '0.1.0' }), { code: 185, name: '0.1.185' });
+  assert.equal(versionFor({ commits: '612', packageVersion: '0.2.7' }).name, '0.2.612', 'package.json\'s patch is not used');
+  assert.equal(versionFor({ commits: '612', packageVersion: '1' }).name, '1.0.612');
+  const { text, changed } = withVersion(GENERATED_DEFAULT_CONFIG, { code: 185, name: '0.1.185' });
   assert.equal(changed, true);
   assert.match(text, /^\s+versionCode 185$/m);
-  assert.match(text, /^\s+versionName "0\.1\.0"$/m);
+  assert.match(text, /^\s+versionName "0\.1\.185"$/m);
   // Nothing else in the block moves.
-  assert.equal(text.replace('versionCode 185', 'versionCode 1').replace('"0.1.0"', '"1.0"'), GENERATED_DEFAULT_CONFIG);
+  assert.equal(text.replace('versionCode 185', 'versionCode 1').replace('"0.1.185"', '"1.0"'), GENERATED_DEFAULT_CONFIG);
+});
+
+test('app version: the app says its version on the build line', () => {
+  const built = '{"build":"abc12345","built":"2026-10-06T12:00:00.000Z"}\n';
+  const { text, changed } = withAppVersion(built, { code: 612, name: '0.1.612' });
+  assert.equal(changed, true);
+  assert.deepEqual(JSON.parse(text), { build: 'abc12345', built: '2026-10-06T12:00:00.000Z', version: '0.1.612' });
+  assert.deepEqual(withAppVersion(text, { code: 612, name: '0.1.612' }), { text, changed: false });
+  assert.deepEqual(withAppVersion(built, null), { text: built, changed: false });
+  assert.deepEqual(withAppVersion('not json', { code: 1, name: '0.1.1' }), { text: 'not json', changed: false });
 });
 
 test('app version: a later commit is a larger code, and a rebuild is the same one', () => {
   // Play refuses a code it has seen. More commits is always a bigger number;
   // the same commit is the same build.
   assert.ok(versionFor({ commits: '186' }).code > versionFor({ commits: '185' }).code);
-  const once = withVersion(GENERATED_DEFAULT_CONFIG, { code: 186, name: '0.1.0' }).text;
-  assert.deepEqual(withVersion(once, { code: 186, name: '0.1.0' }), { text: once, changed: false });
+  const once = withVersion(GENERATED_DEFAULT_CONFIG, { code: 186, name: '0.1.186' }).text;
+  assert.deepEqual(withVersion(once, { code: 186, name: '0.1.186' }), { text: once, changed: false });
 });
 
 test('app version: when git cannot say, the build is left alone rather than guessed at', () => {
@@ -680,5 +694,5 @@ test('app version: when git cannot say, the build is left alone rather than gues
   assert.equal(versionFor({ commits: 'fatal: not a git repository' }), null);
   assert.deepEqual(withVersion(GENERATED_DEFAULT_CONFIG, null), { text: GENERATED_DEFAULT_CONFIG, changed: false });
   // And a version with no name still has one.
-  assert.equal(versionFor({ commits: '3' }).name, '1.0');
+  assert.equal(versionFor({ commits: '3' }).name, '1.0.3');
 });
