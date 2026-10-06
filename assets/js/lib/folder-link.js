@@ -20,13 +20,16 @@ export const LINK_MAX_PLACES = 2000;
 /**
  * The link id in a page's query, or '' when there is none or it is not one.
  *
- * The id is 32 hex characters, and anything else is dropped here rather than
- * sent: the server refuses it either way, and a malformed id is more often a
- * link mangled by a messaging app than anything worth a round trip.
+ * The id is the 32 hex characters the value starts with. Only the start,
+ * because a link pasted into an address bar can arrive with the message that
+ * came with it stuck on the end - "...c1e3Waterfalls: 1543 places sent from
+ * Halfstop." - which turned a good link into one that did nothing at all.
+ * Anything shorter is dropped here rather than sent: the server would refuse
+ * it either way.
  */
 export function readLinkId(params) {
   const value = String(params?.get?.(LINK_PARAM) || '').trim().toLowerCase();
-  return /^[0-9a-f]{32}$/.test(value) ? value : '';
+  return /^[0-9a-f]{32}/.exec(value)?.[0] || '';
 }
 
 /**

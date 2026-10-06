@@ -5792,6 +5792,9 @@ const openAt = async ({ hash = '', search = '', fix = COLORADO, allow = true, in
     lon: Number(window.__map.getCenter().lng.toFixed(2)),
     lat: Number(window.__map.getCenter().lat.toFixed(2)),
     zoom: Number(window.__map.getZoom().toFixed(2)),
+    hash: location.hash,
+    // The card a shared pin opens on, and the name in it.
+    pinCard: document.querySelector('.drop-pin-name')?.value ?? null,
   }));
   await ctx.close();
   return where;
@@ -5806,16 +5809,32 @@ check('a link carrying a view is left exactly where it points',
   [shared.lon, shared.lat, shared.zoom], [-84.28, 35.96, 9]);
 
 /*
- * A pin in the query names a place, so the reader's own position stands down
- * for it. The camera is not moved to the pin here because that is the hash's
- * job - a shared pin link carries both, and pinLinkParts writes both - so what
- * is checked is the part this feature owns: that it did not take over.
+ * The message a share sheet copies with the link, stuck onto the end of it by
+ * an address bar. The map read that as no view and opened over Tennessee.
  */
-const pinned = await openAt({ search: '?p=35.65,-83.58' });
-check('a link carrying a pin is not recentred on the reader',
-  [pinned.lon, pinned.lat], [DEFAULT_VIEW.center[0], DEFAULT_VIEW.center[1]]);
-check('and that is a different place from where the reader is',
-  [pinned.lon, pinned.lat].join() === [COLORADO.longitude, COLORADO.latitude].join(), false);
+const glued = await openAt({ hash: '#view=9/44.38/-73.85This%20is%20a%20broad%20view%20sent%20from%20Halfstop:' });
+check('a view with the message stuck on the end still opens where it points',
+  [glued.lon, glued.lat, glued.zoom], [-73.85, 44.38, 9]);
+check('and the address is put right', glued.hash.startsWith('#view=9/44.38/-73.85'), true);
+
+/*
+ * A pin in the query names a place, so the reader's own position stands down
+ * for it, and the map opens on the pin even when the link lost its view on
+ * the way - with the pin on the map, named, rather than only in a closed panel.
+ */
+const pinned = await openAt({ search: '?p=35.65,-83.58&pn=Abrams+Falls' });
+check('a link carrying a pin opens on the pin, not on the reader',
+  [pinned.lon, pinned.lat], [-83.58, 35.65]);
+check('close enough to see it', pinned.zoom >= 14, true);
+check('with the pin on the map under the name it was sent with', pinned.pinCard, 'Abrams Falls');
+
+const sentPin = await openAt({
+  search: '?p=35.650000,-83.580000&pn=Abrams+Falls',
+  hash: '#view=14/35.65000/-83.58000This%20is%20a%20view%20of%20Abrams%20Falls%20sent%20from%20Halfstop.',
+});
+check('a pin link with the message stuck on still opens on the pin',
+  [sentPin.lon, sentPin.lat, sentPin.zoom], [-83.58, 35.65, 14]);
+check('and shows it', sentPin.pinCard, 'Abrams Falls');
 
 const refused = await openAt({ allow: false });
 check('a refused permission leaves the map where it was',

@@ -22,7 +22,12 @@ const ID = '0123456789abcdef0123456789abcdef';
 test('folder link: the id is read off the address, and only a real one', () => {
   assert.equal(readLinkId(new URLSearchParams(`?f=${ID}`)), ID);
   assert.equal(readLinkId(new URLSearchParams(`?f=${ID.toUpperCase()}`)), ID, 'a messaging app that shouts');
-  assert.equal(readLinkId(new URLSearchParams(`?f=${ID}x`)), '');
+  // The message a share sheet copies with the link, stuck onto the end of it
+  // by an address bar: the id is still the 32 characters it starts with.
+  assert.equal(readLinkId(new URLSearchParams(`?f=${ID}x`)), ID);
+  assert.equal(readLinkId(new URLSearchParams(`?f=${ID}Waterfalls:%201543%20places%20sent%20from%20Halfstop.`)), ID);
+  assert.equal(readLinkId(new URLSearchParams(`?f=${ID}bear%20falls`)), ID, 'text that starts with hex letters');
+  assert.equal(readLinkId(new URLSearchParams(`?f=${ID.slice(0, 31)}`)), '', 'one character short is not an id');
   assert.equal(readLinkId(new URLSearchParams('?f=../../etc')), '');
   assert.equal(readLinkId(new URLSearchParams('?m=byways')), '');
   assert.equal(LINK_PARAM, 'f');

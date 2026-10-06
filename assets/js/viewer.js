@@ -93,7 +93,7 @@ import {
 import { mayEdit } from './lib/editors.js';
 import { settleCheckoutReturn } from './lib/checkout-return.js';
 import { upgradePlanBlock } from './lib/upgrade-plan.js';
-import { shareableURL, readSharedPin, pinLinkParts, linkCarriesView } from './lib/share.js';
+import { shareableURL, readSharedPin, pinLinkParts, linkCarriesView, cleanViewHash } from './lib/share.js';
 import {
   canEdit, isShared, looksLikeEmail, describeShares, describeRole,
 } from './lib/shares.js';
@@ -741,6 +741,15 @@ async function main() {
    */
   const initial = readURL();
   /*
+   * A shared view with the message that came with it stuck on the end, put
+   * right before the map reads it - which it does once, as it is built, and
+   * an unreadable one sends it to the default view. See cleanViewHash.
+   */
+  const cleanHash = cleanViewHash(location.hash);
+  if (cleanHash !== location.hash) {
+    history.replaceState(null, '', `${location.pathname}${location.search}${cleanHash}`);
+  }
+  /*
    * Read before the map exists, which is the whole reason it is a separate
    * line. `hash: 'view'` below means the map writes the camera into the hash
    * as it moves - including the move centreOnYou() makes - so asking after
@@ -1016,12 +1025,36 @@ async function main() {
    *
    * After the catalogue, deliberately: fitAll() moves the camera to whatever
    * files were on the link, and doing this first would show the pin and then
-   * pan away from it. The hash has already put the map over the point, so this
-   * only has to mark it and say what it is.
+   * pan away from it.
+   *
+   * On the map, as the card a dropped pin gets, named, with Save on it. It
+   * used to open the Details tab and nothing else - which on a phone is a
+   * closed panel, so the person sent a pin saw a map with no pin on it. The
+   * Details tab still has it, and opens by itself only where there is room
+   * beside the map.
+   *
+   * The link's view puts the camera over the point. One that lost its view on
+   * the way - or whose view does not include the pin - is put there anyway.
    */
   if (initial.pin) {
     const { lon, lat, name } = initial.pin;
-    showPointDetails([lon, lat], name);
+    const bounds = state.map.getBounds();
+    const inView = lon >= bounds.getWest() && lon <= bounds.getEast()
+      && lat >= bounds.getSouth() && lat <= bounds.getNorth();
+    if (!arrivedWithAView || !inView) {
+      state.map.jumpTo({ center: [lon, lat], zoom: Math.max(state.map.getZoom(), 14) });
+    }
+    showPointDetails([lon, lat], name, { open: !isNarrow() });
+    showDropPin([lon, lat], { name });
+    /*
+     * On a phone the card hangs below the pin and is taller than half the
+     * screen, so with the pin in the middle its Save buttons were off the
+     * bottom. The pin goes a quarter of the way down instead.
+     */
+    if (isNarrow()) {
+      const height = document.getElementById('map')?.clientHeight || 0;
+      if (height) state.map.easeTo({ center: [lon, lat], offset: [0, -Math.round(height * 0.25)], duration: 0 });
+    }
   }
 
   /*
@@ -7687,16 +7720,22 @@ function wireMapClicks() {
   });
 }
 
-/** The dropped-pin popup: where this is, how high, what the sky is doing. */
-function showDropPin(position) {
+/**
+ * The dropped-pin popup: where this is, how high, what the sky is doing.
+ *
+ * `name` is for a pin that arrived on a link, which opens on this card so it
+ * can be saved - under the name it was sent with rather than "Dropped pin".
+ */
+function showDropPin(position, { name = '' } = {}) {
   state.dropPopup?.remove();
 
+  const given = String(name || '').trim();
   const content = el('div', { class: 'drop-pin' });
   const feature = {
     type: 'Feature',
     geometry: { type: 'Point', coordinates: position },
     properties: {
-      kind: 'waypoint', name: 'Dropped pin', description: '', icon: DEFAULT_PIN_ICON,
+      kind: 'waypoint', name: given || 'Dropped pin', description: '', icon: DEFAULT_PIN_ICON,
     },
   };
 
@@ -7708,7 +7747,7 @@ function showDropPin(position) {
   state.dropPopup = popup;
 
   const nameInput = el('input', {
-    class: 'drop-pin-name', value: 'Dropped pin', 'aria-label': 'Name for this pin',
+    class: 'drop-pin-name', value: given || 'Dropped pin', 'aria-label': 'Name for this pin',
     oninput: (event) => { feature.properties.name = event.target.value.trim() || 'Dropped pin'; },
   });
 
@@ -7810,7 +7849,12 @@ function showDropPin(position) {
     el('div', { class: 'popup-bar' }, [
       labelledButton(icons.info, 'Details', {
         tone: 'ghost', title: 'Everything known about this place',
-        onclick: () => { popup.remove(); showPointDetails(position); },
+        onclick: () => {
+          popup.remove();
+          // Under its own name, when it has one, not as "Dropped pin".
+          const named = feature.properties.name;
+          showPointDetails(position, named === 'Dropped pin' ? '' : named);
+        },
       }),
       labelledButton(icons.close, 'Close', {
         tone: 'ghost', title: 'Close this pin',
@@ -8595,13 +8639,13 @@ function armProbe(button) {
  * and re-sharing from that panel sent the name on as "Dropped pin", so it
  * degraded on every hop. Clicking the map passes none, which clears it.
  */
-function showPointDetails(position, name = '') {
+function showPointDetails(position, name = '', { open = true } = {}) {
   state.selectedPin = null;
   state.scratchName = String(name || '').trim();
   state.scratchPoint = position;
   setProbeMark(position);
   renderDetailsTab();
-  openTab('details');
+  if (open) openTab('details');
 }
 
 /** Remember which saved pin the Details tab should describe, and show it. */
@@ -14189,7 +14233,9 @@ async function shareView() {
   writeURL();
   await offerLink(here(), {
     title: SITE.name,
-    text: 'This is a broad view sent from Halfstop:',
+    // A full stop, not a colon: a share sheet may put the sentence after the
+    // link rather than before it, and a colon then points at nothing.
+    text: 'This is a broad view sent from Halfstop.',
     ok: 'Link copied \u2014 it restores these maps, this basemap and this view.',
   });
 }
@@ -14208,8 +14254,8 @@ async function sharePin(props, [lon, lat]) {
     title: name || SITE.name,
     // A pin with no name of its own still needs a sentence that reads.
     text: name
-      ? `This is a view of ${name} sent from Halfstop:`
-      : 'This is a view of a place sent from Halfstop:',
+      ? `This is a view of ${name} sent from Halfstop.`
+      : 'This is a view of a place sent from Halfstop.',
     ok: 'Link copied \u2014 it opens the map on this pin.',
   });
 }

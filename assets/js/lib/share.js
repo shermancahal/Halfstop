@@ -63,12 +63,43 @@ export function shareableURL({ href, protocol, site, path = 'map.html', search =
 export function readSharedPin(params) {
   const raw = String(params.get('p') || '').split(',');
   if (raw.length !== 2) return null;
-  const lat = Number(raw[0]);
-  const lon = Number(raw[1]);
+  // The leading number of each half: a link pasted into an address bar can
+  // arrive with the message after it stuck on the end. See cleanViewHash.
+  const lat = leadingNumber(raw[0]);
+  const lon = leadingNumber(raw[1]);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
   const name = String(params.get('pn') || '').trim().slice(0, 80);
   return { lon, lat, name };
+}
+
+/** The number a string starts with, or NaN. */
+function leadingNumber(text) {
+  const match = /^\s*(-?\d+(?:\.\d+)?)/.exec(String(text ?? ''));
+  return match ? Number(match[1]) : NaN;
+}
+
+/**
+ * A shared view, with whatever was stuck onto the end of it taken off.
+ *
+ * Reported as shared links that did nothing. A phone's share sheet copies the
+ * link and the sentence that goes with it as two lines - the link first - and
+ * anything that drops the line break between them, an address bar above all,
+ * glues the sentence onto the end of the address:
+ *
+ *     #view=8.46/44.3765/-73.85This%20is%20a%20broad%20view...
+ *
+ * The map reads that as no view at all and opens over east Tennessee. The
+ * numbers are all still there, at the front, so they are kept and the rest
+ * dropped. A hash with nothing stuck to it comes back exactly as it was.
+ *
+ * @returns {string} the hash to use, with its leading #
+ */
+export function cleanViewHash(hash) {
+  const text = String(hash || '');
+  const match = /(^#?|&)view=(-?\d+(?:\.\d+)?(?:\/-?\d+(?:\.\d+)?){2,4})([^&]*)/.exec(text);
+  if (!match || !match[3]) return text;
+  return `${text.slice(0, match.index)}${match[1]}view=${match[2]}${text.slice(match.index + match[0].length)}`;
 }
 
 /**
