@@ -150,21 +150,75 @@ function firstTimeThisBuild(request) {
   return true;
 }
 
-async function networkFirst(request, { fallback, revalidate = false } = {}) {
+/*
+ * How long a page waits for the network before the copy kept here answers.
+ *
+ * Network first used to mean network first however long the network took,
+ * and the only way to the cache was the network failing. With no signal at
+ * all it does fail, at once, which is what the offline tests do. With no
+ * service it does not: a phone with bars and no data hangs a request until
+ * the system gives up, which on an iPhone can be a minute - for the page,
+ * and then again for every one of the dozens of modules the map imports,
+ * one level of imports after another. Reported as the home-screen app not
+ * opening at all where there was no service, offline maps and all.
+ *
+ * So a page that has a copy here gives the network this long, and then the
+ * copy answers. The fetch carries on and refreshes the copy if it ever
+ * arrives. A page with no copy here waits as long as it takes, because there
+ * is nothing else to show.
+ */
+const PAGE_PATIENCE_MS = 3500;
+
+/*
+ * After a page has been answered from the cache for want of a network, the
+ * rest of that load comes from the cache too, for this long.
+ *
+ * Partly for speed - every module would otherwise wait out its own timeout -
+ * and partly for correctness: a page from one build running modules from
+ * another is the failure described at the top of this file, and the cached
+ * page's own modules are the ones in the cache beside it. A page that the
+ * network does answer in time ends the spell.
+ */
+const OFFLINE_SPELL_MS = 60 * 1000;
+let offlineUntil = 0;
+const inOfflineSpell = () => Date.now() < offlineUntil;
+
+async function networkFirst(request, { fallback, revalidate = false, patience = 0, event = null } = {}) {
   const cache = await caches.open(CACHE);
-  try {
+  const kept = async () => {
+    const hit = await cache.match(request, { ignoreSearch: request.mode === 'navigate' });
+    if (hit) return hit;
+    return fallback ? cache.match(fallback) : undefined;
+  };
+  const network = (async () => {
     const response = await fetch(revalidate && firstTimeThisBuild(request)
       ? new Request(request, { cache: 'no-cache' })
       : request);
     if (isCacheable(response)) cache.put(request, response.clone());
     return response;
-  } catch (error) {
-    const hit = await cache.match(request, { ignoreSearch: request.mode === 'navigate' });
-    if (hit) return hit;
-    if (fallback) {
-      const page = await cache.match(fallback);
-      if (page) return page;
+  })();
+
+  if (patience > 0) {
+    const copy = await kept();
+    if (copy) {
+      const late = new Promise((resolve) => { setTimeout(() => resolve(null), patience); });
+      const first = await Promise.race([network.catch(() => null), late]);
+      if (first) {
+        offlineUntil = 0;
+        return first;
+      }
+      // Too slow, or failed: the copy answers, and the fetch may yet refresh it.
+      offlineUntil = Date.now() + OFFLINE_SPELL_MS;
+      event?.waitUntil(network.catch(() => {}));
+      return copy;
     }
+  }
+
+  try {
+    return await network;
+  } catch (error) {
+    const copy = await kept();
+    if (copy) return copy;
     throw error;
   }
 }
@@ -262,7 +316,16 @@ self.addEventListener('fetch', (event) => {
 
   if (request.mode === 'navigate' || path.endsWith('.html') || path.endsWith('/')) {
     const known = PAGES.find((page) => path.endsWith(`/${page}`));
-    event.respondWith(networkFirst(request, { fallback: scoped(known || 'index.html') }));
+    event.respondWith(networkFirst(request, {
+      fallback: scoped(known || 'index.html'), patience: PAGE_PATIENCE_MS, event,
+    }));
+    return;
+  }
+
+  // A page the cache answered for want of a network: the rest of it comes
+  // from the cache as well - see OFFLINE_SPELL_MS.
+  if (inOfflineSpell()) {
+    event.respondWith(cacheFirst(request));
     return;
   }
 
