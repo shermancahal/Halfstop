@@ -394,6 +394,46 @@ jobs:
       && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     steps:
+      # Only the one folder: this job reads the live site, and needs nothing
+      # from the repository but the file it compares against.
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .well-known
+
+      # The file that lets Android open the site's map links in the app. A
+      # 404, a redirect or the wrong content type and Android quietly keeps
+      # opening them in the browser, with nothing anywhere to say why.
+      - name: Read the app links file back
+        env:
+          PAGE_URL: ${{ needs.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          if [ ! -f .well-known/assetlinks.json ]; then
+            echo "No .well-known/assetlinks.json in the repository; nothing to check."
+            exit 0
+          fi
+          url="${PAGE_URL}.well-known/assetlinks.json"
+          for attempt in 1 2 3 4 5 6; do
+            if live=$(curl -fsS --max-time 20 "$url" 2>/dev/null); then break; fi
+            echo "  not served yet (attempt $attempt); waiting"
+            sleep 10
+            live=""
+          done
+          if [ -z "$live" ]; then
+            echo "::error::$url is not being served, so Android will open the site's links in the browser, not the app."
+            exit 1
+          fi
+          type=$(curl -fsSI --max-time 20 "$url" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-type"{print $2}')
+          case "$type" in
+            application/json*) ;;
+            *) echo "::error::$url is served as '$type'; Android reads it only as application/json."; exit 1 ;;
+          esac
+          if [ "$(jq -cS . <<<"$live")" != "$(jq -cS . .well-known/assetlinks.json)" ]; then
+            echo "::error::the live assetlinks.json is not the repository's."
+            exit 1
+          fi
+          echo "assetlinks.json is live and matches."
+
       - name: Read the live site back
         env:
           PAGE_URL: ${{ needs.deploy.outputs.url }}

@@ -58,6 +58,30 @@ export const APP_SCHEME = 'com.halfstop.app';
  */
 export const APP_RETURN = `${APP_SCHEME}://account`;
 
+/**
+ * The website a shared link points at, whose map links the Android app takes.
+ *
+ * Android hands a tapped https://app.halfstop.app/map.html... link to the
+ * app instead of the browser once the site vouches for the app - the intent
+ * filter tools/app.mjs writes, and /.well-known/assetlinks.json. It arrives
+ * here as `appUrlOpen`, and opens this app's own copy of the map with the
+ * same query and fragment: a view, a pin, a folder link.
+ */
+export const SHARED_HOST = 'app.halfstop.app';
+
+/** The page in this app a shared website link opens, or null when it is not one. */
+export function sharedLanding(url, { host = SHARED_HOST } = {}) {
+  let parsed;
+  try {
+    parsed = new URL(String(url || ''));
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'https:' || parsed.hostname !== host) return null;
+  if (parsed.pathname !== '/map.html') return null;
+  return `map.html${parsed.search}${parsed.hash}`;
+}
+
 /** The page to come back to after Google, held while somebody is away. */
 export const RETURN_KEY = 'halfstop-oauth-return-v1';
 
@@ -250,6 +274,12 @@ export function watchAppLinks({ shell = appShell(), store = sessionStore(), go =
         return;
       }
       go('map.html');
+      return;
+    }
+    // A shared map link from the website: the same map, in here.
+    const shared = sharedLanding(url);
+    if (shared) {
+      go(shared);
       return;
     }
     const landing = landingFor(url, { remembered: takeReturn(store) });

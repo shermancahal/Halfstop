@@ -664,6 +664,20 @@ async function main() {
     if (stripped !== tokenSource) console.log('  The app token was stripped — it does not belong in the website.');
   }
 
+  /*
+   * /.well-known/, verbatim: assetlinks.json, which is how Android knows the
+   * app is ours and may open the site's map links (see withAppLinks in
+   * tools/app.mjs). The website only - an app has no address to vouch for -
+   * and never precached: it is read by Google's verifier, not by a page.
+   */
+  const wellKnown = path.join(ROOT, '.well-known');
+  if (!wantsApp && existsSync(wellKnown)) {
+    for (const name of (await readdir(wellKnown)).sort()) {
+      if (EXCLUDE.has(name)) continue;
+      staged.push({ name: `.well-known/${name}`, data: await readFile(path.join(wellKnown, name)) });
+    }
+  }
+
   staged.push({ name: '.htaccess', data: encoder.encode(HTACCESS) });
   staged.push({ name: 'UPLOAD-INSTRUCTIONS.txt', data: encoder.encode(deployNotes(staged.length + 1, bytes)) });
 

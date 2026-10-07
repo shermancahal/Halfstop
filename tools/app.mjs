@@ -187,6 +187,45 @@ export function withDeepLink(manifest, scheme) {
 }
 
 /**
+ * Shared map links from the website, opened in the app rather than the browser.
+ *
+ * A link somebody sends - a view, a pin, a folder - is an ordinary
+ * https://app.halfstop.app/map.html address, so that it works for anybody in
+ * any browser. With this filter Android offers it to the app instead, and
+ * with `autoVerify` and the site's /.well-known/assetlinks.json naming the
+ * app's signing key, it goes to the app without asking. Only the map page:
+ * the help, the account page and the rest stay in the browser.
+ *
+ * Android checks the site's file when the app is installed or updated, so
+ * the file has to be live first. Without it - or before it matches the key
+ * Play signs with - links simply keep opening in the browser.
+ */
+export const APP_LINK_HOST = 'app.halfstop.app';
+export const APP_LINK_PATH = '/map.html';
+
+export function withAppLinks(manifest, { host = APP_LINK_HOST, path: prefix = APP_LINK_PATH } = {}) {
+  if (manifest.includes(`android:host="${host}"`)) return { manifest, added: false };
+
+  const launcher = manifest.indexOf('android.intent.category.LAUNCHER');
+  const close = launcher === -1 ? -1 : manifest.indexOf('</intent-filter>', launcher);
+  if (close === -1) {
+    throw new Error('AndroidManifest.xml has no launcher intent filter - not a file this knows how to edit.');
+  }
+  const at = close + '</intent-filter>'.length;
+  const filter = [
+    '',
+    '',
+    '            <intent-filter android:autoVerify="true">',
+    '                <action android:name="android.intent.action.VIEW" />',
+    '                <category android:name="android.intent.category.DEFAULT" />',
+    '                <category android:name="android.intent.category.BROWSABLE" />',
+    `                <data android:scheme="https" android:host="${host}" android:pathPrefix="${prefix}" />`,
+    '            </intent-filter>',
+  ].join('\n');
+  return { manifest: `${manifest.slice(0, at)}${filter}${manifest.slice(at)}`, added: true };
+}
+
+/**
  * The map files Halfstop offers to open, by the types other apps send them as.
  *
  * The named types first. Then the three generic ones a map file most often
@@ -613,7 +652,9 @@ async function main() {
     if (linked.added) console.log(`\n>> AndroidManifest.xml now opens ${scheme}:// links (sign-in emails, the return from Google)`);
     const files = withMapFiles(linked.manifest);
     if (files.added) console.log('\n>> AndroidManifest.xml now offers Halfstop in "Open with" for GPX, KML, KMZ and GeoJSON files');
-    if (files.manifest !== before) writeFileSync(manifestPath, files.manifest);
+    const shared = withAppLinks(files.manifest);
+    if (shared.added) console.log(`\n>> AndroidManifest.xml now opens ${APP_LINK_HOST}${APP_LINK_PATH} links in the app`);
+    if (shared.manifest !== before) writeFileSync(manifestPath, shared.manifest);
   }
 
   // 2b. The iPhone project's link handling, permission strings, icon, launch
