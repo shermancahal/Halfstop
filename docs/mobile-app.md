@@ -503,6 +503,19 @@ email and the return from Google come back into the app rather than into
 Chrome. It prints `>> AndroidManifest.xml now opens com.halfstop.app:// links`
 the first time. See [app-auth.md](app-auth.md).
 
+**Shared links open in the app.** Each run also adds a verified link
+filter for `https://app.halfstop.app/map.html`, so a view, pin or folder link
+somebody sends opens in the installed app instead of the browser. Android only
+does that once the website vouches for the app, in
+`/.well-known/assetlinks.json`, by the SHA-256 fingerprints of the keys the app
+is signed with. Both are in Play Console under **Test and release → App
+integrity → App signing**: the *App signing key certificate* (what Play
+installs) and the *Upload key certificate* (what a build run from Android
+Studio is signed with). The file lives in `.well-known/` at the repository
+root; the website build publishes it, and the deploy reads it back. Android
+checks it when the app is installed or updated, so publish the file before
+installing the build that asks.
+
 **And the project's name.** Android Studio calls a Gradle project after its
 folder, which has to be `android` because that is where Capacitor looks. Each
 run writes `rootProject.name = 'Halfstop'` into `android/settings.gradle`
