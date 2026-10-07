@@ -93,7 +93,9 @@ import {
 import { mayEdit } from './lib/editors.js';
 import { settleCheckoutReturn } from './lib/checkout-return.js';
 import { upgradePlanBlock } from './lib/upgrade-plan.js';
-import { shareableURL, readSharedPin, pinLinkParts, linkCarriesView, cleanViewHash } from './lib/share.js';
+import {
+  shareableURL, readSharedPin, pinLinkParts, linkCarriesView, cleanViewHash, copyWhenReady,
+} from './lib/share.js';
 import {
   canEdit, isShared, looksLikeEmail, describeShares, describeRole,
 } from './lib/shares.js';
@@ -12515,12 +12517,14 @@ function toggleSendPanel(folder, actions) {
 
 function sendPanel(folder) {
   const status = el('p', { class: 'hint editor-send-status', text: '' });
+  // Where a made link is shown, with its own Share and Copy: see sendFolderLink.
+  const made = el('div', { class: 'editor-send-made', hidden: true });
   const signedIn = Boolean(state.account?.user);
 
   const link = el('button', {
     class: 'button button-primary button-small', type: 'button',
     html: `${icons.share}<span>Send a link</span>`,
-    onclick: () => sendFolderLink(folder, { status, button: link }),
+    onclick: () => sendFolderLink(folder, { status, button: link, made }),
   });
   const gpx = el('button', {
     class: 'button button-secondary button-small', type: 'button',
@@ -12547,11 +12551,12 @@ function sendPanel(folder) {
     }),
     el('div', { class: 'editor-send-choices' }, [signedIn ? link : null, gpx, geojson]),
     status,
+    made,
   ]);
 }
 
 /** Make a link to a copy of the folder and hand it over. */
-async function sendFolderLink(folder, { status, button }) {
+async function sendFolderLink(folder, { status, button, made }) {
   const collection = linkCollection(state.folders.folderGeoJSON(folder.id));
   const count = collection.features.length;
   if (!count) { status.textContent = 'That folder is empty, so there is nothing to send.'; return; }
@@ -12562,19 +12567,75 @@ async function sendFolderLink(folder, { status, button }) {
   }
 
   button.disabled = true;
-  status.textContent = 'Making the link\u2026';
-  const result = await state.account.createFolderLink(folder.name, collection);
+  made.hidden = true;
+  made.replaceChildren();
+  status.textContent = 'Making the link\u2026 With a weak signal this can take a minute.';
+  const text = `${folder.name}: ${count} place${count === 1 ? '' : 's'} sent from Halfstop.`;
+  const linkFor = (id) => shareableURL({
+    href: location.href, protocol: location.protocol, site: SITE.url, ...folderLinkParts(id),
+  });
+
+  /*
+   * The copy starts now, inside the tap, before anything is awaited.
+   *
+   * Making the link is a round trip carrying the whole folder, and on a weak
+   * signal that is a minute. The share sheet and the clipboard used to be
+   * asked once it came back - by which time the tap's permission had run
+   * out, both refused, and the link could only be copied by hand out of a
+   * notice. See copyWhenReady.
+   */
+  const making = state.account.createFolderLink(folder.name, collection);
+  const copied = copyWhenReady(making.then((result) => (result.ok
+    ? `${text} ${linkFor(result.id)}`
+    : Promise.reject(new Error(result.reason)))));
+
+  const result = await making;
   button.disabled = false;
   if (!result.ok) { status.textContent = result.reason; return; }
 
-  const url = shareableURL({ href: location.href, protocol: location.protocol, site: SITE.url, ...folderLinkParts(result.id) });
-  status.textContent = `Link made. It opens ${linkLastsUntil(result.expiresAt)}, and changing the folder `
-    + 'afterwards does not change what it shows.';
-  await offerLink(url, {
-    title: folder.name,
-    text: `${folder.name}: ${count} place${count === 1 ? '' : 's'} sent from Halfstop.`,
-    ok: 'Link copied. Paste it into a message.',
+  const url = linkFor(result.id);
+  const lasts = `It opens ${linkLastsUntil(result.expiresAt)}, and changing the folder afterwards does not change what it shows.`;
+  status.textContent = `Link made. ${lasts}`;
+  showMadeLink(made, { url, text, title: folder.name });
+  if (await copied) status.textContent = `Link made and copied - paste it into a message. ${lasts}`;
+}
+
+/**
+ * A made link, where it can be had however long it took to make.
+ *
+ * Shown in the panel with its own Share and Copy buttons, because those are
+ * a new tap - which the share sheet and the clipboard both want, and which
+ * the tap that started a slow link no longer is. The address is in a box too,
+ * selected when tapped, for copying by hand.
+ */
+function showMadeLink(made, { url, text, title }) {
+  const field = el('input', {
+    class: 'editor-send-url', type: 'text', readonly: true, value: url, 'aria-label': 'The link',
+    onfocus: (event) => event.currentTarget.select(),
   });
+  const copy = el('button', {
+    class: 'button button-secondary button-small', type: 'button',
+    html: `${icons.copy}<span>Copy link</span>`,
+    onclick: async (event) => {
+      const button = event.currentTarget;
+      try {
+        await navigator.clipboard.writeText(`${text} ${url}`);
+        button.querySelector('span').textContent = 'Copied';
+        setTimeout(() => { button.querySelector('span').textContent = 'Copy link'; }, 1600);
+      } catch {
+        // Refused: the link is selected in the box above, for copying by hand.
+        field.focus();
+        field.select();
+      }
+    },
+  });
+  const share = navigator.share ? el('button', {
+    class: 'button button-primary button-small', type: 'button',
+    html: `${icons.share}<span>Share\u2026</span>`,
+    onclick: () => navigator.share({ title, text, url }).catch(() => {}),
+  }) : null;
+  made.replaceChildren(field, el('div', { class: 'editor-send-choices' }, [share, copy]));
+  made.hidden = false;
 }
 
 /**

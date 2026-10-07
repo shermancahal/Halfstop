@@ -511,6 +511,13 @@ html, body { touch-action: pan-x pan-y; }
 .editor-send-choices .button svg { width: 14px; height: 14px; flex: none; }
 .editor-send-status { margin: 8px 0 0; }
 .editor-send-status:empty { display: none; }
+/* A made link: the address, then Share and Copy. */
+.editor-send-made { margin-top: 8px; display: grid; gap: 6px; }
+.editor-send-made[hidden] { display: none; }
+.editor-send-url {
+  width: 100%; min-width: 0; font: inherit; font-size: .8rem; color: var(--ink-2);
+  padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper-2);
+}
 
 /* Every tap target in the folder tree gets a thumb's worth of height. The
    per-pin edit and remove icons are the same complaint as the folder toolbar,

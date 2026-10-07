@@ -130,3 +130,38 @@ export function pinLinkParts({ lon, lat, name = '' }) {
     hash: `#view=14/${lat.toFixed(5)}/${lon.toFixed(5)}`,
   };
 }
+
+/**
+ * Put text on the clipboard that is not ready yet.
+ *
+ * A phone lets a page write to the clipboard only in answer to a tap, and a
+ * tap's permission runs out while the network is still answering: a folder
+ * link took the better part of a minute on two bars, by which time both the
+ * share sheet and the clipboard refused it, and the link could only be copied
+ * by hand out of a notice. The clipboard has an answer for exactly this:
+ * start the write during the tap, with the contents still to come, and the
+ * browser holds the permission until they arrive. Safari, Chrome and Firefox
+ * all take it.
+ *
+ * Must be called before anything in the tap's handler is awaited.
+ *
+ * @param {Promise<string>} text  what to copy, when it is known; a rejection copies nothing
+ * @returns {Promise<boolean>} whether it was copied
+ */
+export function copyWhenReady(text, {
+  clipboard = globalThis.navigator?.clipboard, Item = globalThis.ClipboardItem,
+} = {}) {
+  if (typeof Item !== 'function' || typeof clipboard?.write !== 'function') {
+    // No such clipboard: try the plain kind once the text is here, which a
+    // computer usually allows and a phone usually refuses.
+    return Promise.resolve(text)
+      .then((value) => clipboard?.writeText?.(value))
+      .then(() => Boolean(clipboard?.writeText), () => false);
+  }
+  try {
+    const blob = Promise.resolve(text).then((value) => new Blob([value], { type: 'text/plain' }));
+    return clipboard.write([new Item({ 'text/plain': blob })]).then(() => true, () => false);
+  } catch {
+    return Promise.resolve(false);
+  }
+}

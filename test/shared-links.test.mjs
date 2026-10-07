@@ -65,3 +65,63 @@ test('shared links: the sentence reads in either order', async () => {
   }
   assert.doesNotMatch(viewer, /sent from Halfstop:/);
 });
+
+/* ------------------------------------------- copying a link that takes time */
+
+import { copyWhenReady } from '../assets/js/lib/share.js';
+
+test('copying a slow link: the write starts inside the tap, before the link exists', async () => {
+  // Reported on two bars: the link took most of a minute, and by then the
+  // phone refused both the share sheet and the clipboard.
+  const writes = [];
+  class Item { constructor(parts) { this.parts = parts; } }
+  const clipboard = {
+    write: async (items) => {
+      writes.push(items);
+      const blob = await items[0].parts['text/plain'];
+      return blob.text();
+    },
+  };
+  let finish;
+  const text = new Promise((resolve) => { finish = resolve; });
+  const copied = copyWhenReady(text, { clipboard, Item });
+  assert.equal(writes.length, 1, 'the clipboard was not asked until the link had been made');
+
+  finish('Waterfalls: 3 places sent from Halfstop. https://app.halfstop.app/map.html?f=abc');
+  assert.equal(await copied, true);
+  assert.equal(await (await writes[0][0].parts['text/plain']).text(),
+    'Waterfalls: 3 places sent from Halfstop. https://app.halfstop.app/map.html?f=abc');
+});
+
+test('copying a slow link: a link that could not be made copies nothing, and says so', async () => {
+  class Item { constructor(parts) { this.parts = parts; } }
+  const clipboard = { write: async (items) => { await items[0].parts['text/plain']; } };
+  const copied = copyWhenReady(Promise.reject(new Error('No signal')), { clipboard, Item });
+  assert.equal(await copied, false);
+});
+
+test('copying a slow link: without that kind of clipboard, the plain kind is tried once it is ready', async () => {
+  const written = [];
+  assert.equal(await copyWhenReady(Promise.resolve('a link'), {
+    clipboard: { writeText: async (value) => { written.push(value); } }, Item: undefined,
+  }), true);
+  assert.deepEqual(written, ['a link']);
+  assert.equal(await copyWhenReady(Promise.resolve('a link'), {
+    clipboard: { writeText: async () => { throw new Error('NotAllowedError'); } }, Item: undefined,
+  }), false, 'a refused copy said it had copied');
+  assert.equal(await copyWhenReady(Promise.resolve('a link'), { clipboard: undefined, Item: undefined }), false);
+});
+
+test('copying a slow link: the folder panel starts the copy before it waits, and keeps the link on screen', async () => {
+  const viewer = await readFile(new URL('../assets/js/viewer.js', import.meta.url), 'utf8');
+  const send = viewer.slice(viewer.indexOf('async function sendFolderLink'), viewer.indexOf('function showMadeLink'));
+  const copyAt = send.indexOf('copyWhenReady(');
+  const firstAwait = send.indexOf('await ');
+  assert.ok(copyAt > -1 && copyAt < firstAwait, 'the copy is started after something was awaited, outside the tap');
+  assert.match(send, /showMadeLink\(made,/, 'the made link is not shown with its own Share and Copy');
+  // The box it is shown in has to reach the function: it once did not, and
+  // Send a link threw before it had done anything.
+  assert.match(send, /^async function sendFolderLink\(folder, \{ status, button, made \}\)/);
+  assert.match(viewer, /sendFolderLink\(folder, \{ status, button: link, made \}\)/);
+  assert.doesNotMatch(send, /offerLink\(/, 'the share sheet is opened after the wait again, which a phone refuses');
+});
