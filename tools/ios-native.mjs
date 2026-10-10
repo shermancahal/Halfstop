@@ -93,6 +93,19 @@ export function withIosPlist(plist, { scheme, usage = IOS_USAGE } = {}) {
     added.push(key);
   }
 
+  /*
+   * Export compliance, answered once.
+   *
+   * The app's only encryption is HTTPS, which is exempt. Without this key App
+   * Store Connect stops every uploaded build at "Missing Compliance" until the
+   * same question is answered again by hand, which is a TestFlight build
+   * nobody can install for no reason anybody remembers.
+   */
+  if (!text.includes('<key>ITSAppUsesNonExemptEncryption</key>')) {
+    text = insertAtEnd(text, '\t<key>ITSAppUsesNonExemptEncryption</key>\n\t<false/>');
+    added.push('ITSAppUsesNonExemptEncryption');
+  }
+
   return { text, added, warnings };
 }
 

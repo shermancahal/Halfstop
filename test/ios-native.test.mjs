@@ -41,6 +41,20 @@ test('ios: every permission the app uses says why, including the camera', () => 
   assert.ok('NSCameraUsageDescription' in IOS_USAGE);
 });
 
+test('ios: export compliance is answered in the build, not on every upload', () => {
+  // HTTPS only, which is exempt. Without the key every build waits at
+  // "Missing Compliance" in App Store Connect until somebody answers by hand.
+  const { text, added } = withIosPlist(TEMPLATE, { scheme: APP_SCHEME });
+  assert.ok(added.includes('ITSAppUsesNonExemptEncryption'));
+  assert.match(text, /<key>ITSAppUsesNonExemptEncryption<\/key>\n\t<false\/>/);
+  // An answer somebody set in Xcode is theirs.
+  const set = TEMPLATE.replace('</dict>\n</plist>',
+    '\t<key>ITSAppUsesNonExemptEncryption</key>\n\t<true/>\n</dict>\n</plist>');
+  const kept = withIosPlist(set, { scheme: APP_SCHEME });
+  assert.ok(!kept.added.includes('ITSAppUsesNonExemptEncryption'));
+  assert.equal(kept.text.match(/ITSAppUsesNonExemptEncryption/g).length, 1);
+});
+
 test('ios: running it again adds nothing, and a string somebody set is kept', () => {
   const once = withIosPlist(TEMPLATE, { scheme: APP_SCHEME }).text;
   assert.deepEqual(withIosPlist(once, { scheme: APP_SCHEME }), { text: once, added: [], warnings: [] });

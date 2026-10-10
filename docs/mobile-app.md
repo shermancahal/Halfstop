@@ -396,8 +396,8 @@ is signed in with that account under Settings → Accounts.
    - The location permission string in `Info.plist` (§5). Without it the
      upload passes and the app is rejected at TestFlight review instead.
    - An export-compliance answer. The app uses only HTTPS, which is exempt.
-     Add `ITSAppUsesNonExemptEncryption` = `NO` to `Info.plist` once, and
-     App Store Connect stops asking on every build.
+     `npm run app:ios` writes `ITSAppUsesNonExemptEncryption` = `NO` into
+     `Info.plist`, so App Store Connect does not ask on every build.
 
 4. **Archive and upload.** In Xcode: pick **Any iOS Device (arm64)** as the
    destination, then Product → **Archive**. When the Organizer opens:
