@@ -23,7 +23,7 @@
 import { DEFAULT_PIN_ICON, pinColorFor, iconForPin } from './pin-icons.js';
 import { simplify } from './geo.js';
 
-const STORAGE_KEY = 'ab-maps-folders-v1';
+export const STORAGE_KEY = 'ab-maps-folders-v1';
 
 /**
  * How deep folders may nest.

@@ -86,7 +86,9 @@ node tools/build-store-screenshots.mjs
 ```
 
 It photographs the live site in a browser the size of each device and writes
-six per device, each set into its own folder under `docs/store/screenshots/`:
+seven per device, each set into its own folder under `docs/store/screenshots/`
+(`--only=play` takes just these three; the App Store's two sizes are in
+[app-store-listing.md](app-store-listing.md)):
 
 | Folder | Size | Play's box |
 | --- | --- | --- |
@@ -95,8 +97,10 @@ six per device, each set into its own folder under `docs/store/screenshots/`:
 | `tablet-10/` | 2560 x 1440 (16:9) | 10-inch tablet screenshots |
 
 The scenes are the map over the Tetons, a pin's sun and moon times (Oxbow
-Bend), public land around Moab, sky brightness, satellite over Horseshoe
-Bend, and the layers list. The tablets are landscape and show the panel
+Bend), public land around Moab, sky brightness with its scale along the
+bottom, satellite over Horseshoe Bend, the layers list, and a trip's folders
+of pins in the Tetons - sample folders the script puts in the browser before
+the page loads, so nothing of yours is in the picture. The tablets are landscape and show the panel
 beside the map, as a tablet does. Run it on the Mac, where the map tiles
 load, and look at each before uploading - a scene whose tiles failed comes out
 as an empty map, or with a "not returning any tiles" notice on it. A scene

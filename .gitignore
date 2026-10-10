@@ -25,3 +25,7 @@ supabase/.temp/
 *.p12
 *.aab
 *.apk
+
+# Store screenshots are made on the Mac from the live site
+# (tools/build-store-screenshots.mjs) and uploaded by hand; not kept here.
+docs/store/screenshots/
