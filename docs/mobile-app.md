@@ -419,8 +419,8 @@ is signed in with that account under Settings → Accounts.
 6. **Every build after the first.** Commit and pull, then `npm run app:ios`,
    Archive, Upload, add the build to the group. The **Build** number is set
    for you - the clone's commit count, so App Store Connect never sees a
-   duplicate - and the version string ends in the same number, `0.1.612`;
-   raise `package.json` to 0.2 for something worth calling that.
+   duplicate - and the version string ends in the same number, `1.0.640`;
+   raise `package.json` to 1.1 for something worth calling that.
 
 ### What testers will not get
 

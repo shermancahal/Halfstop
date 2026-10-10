@@ -398,10 +398,10 @@ export function withProjectName(settingsGradle, name) {
  * build, which Play is right to treat as one.
  *
  * The name people see ends in that same number: major.minor from
- * package.json, then the build - 0.1.612. Every build, a fix or not, moves
+ * package.json, then the build - 1.0.640. Every build, a fix or not, moves
  * the name on by itself, and the store, the app's build line and Play
  * Console's release name all say the same thing. A release worth naming
- * raises package.json from 0.1 to 0.2, and its own third number is ignored.
+ * raises package.json from 1.0 to 1.1, and its own third number is ignored.
  *
  * @returns {{ code: number, name: string } | null} null when git cannot say
  */
