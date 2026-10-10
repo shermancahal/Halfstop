@@ -677,6 +677,13 @@ html, body { touch-action: pan-x pan-y; }
 }
 .popup-actions button.is-primary:hover { background: var(--clay-2); border-color: var(--clay-2); }
 
+/* A saved pin: where it is filed on one row, what to do with it on the next,
+   three equal buttons whatever the width of the folder's name. */
+.popup-actions.is-saved { display: grid; gap: 6px; }
+.popup-move-row select { width: 100%; }
+.popup-button-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.popup-button-row .button { width: 100%; justify-content: center; }
+
 /* Its own row: a folder name needs the full width, and it only appears at all
    when "New folder" is the selection. */
 /* Saving asks nothing until it is asked for: one button, and the folder choice
@@ -857,14 +864,13 @@ html, body { touch-action: pan-x pan-y; }
 }
 .layer-info svg { width: 15px; height: 15px; }
 .layer-info:hover { background: var(--paper-3); color: var(--ink); }
-.layer-info.is-open { background: var(--clay-soft); color: var(--clay); }
 
-.layer-desc {
-  margin: -2px 9px 8px 38px; padding: 8px 11px;
-  font-size: .81rem; line-height: 1.45; color: var(--ink-2);
-  background: var(--surface-2); border-left: 2px solid var(--line-strong);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-}
+/* What a layer is, in a window over the panel. Its scale, for a layer read by
+   colour, is the last thing in it, set off by a rule. */
+.layer-dialog .layer-desc-text { font-size: .88rem; line-height: 1.5; color: var(--ink-2); }
+.layer-dialog .legend-note { font-size: .78rem; }
+.layer-scale { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.layer-scale .legend { margin-top: 10px; }
 
 /* ==========================================================================
    Mobile: the panel is an overlay, so it must get out of the way
@@ -1024,6 +1030,16 @@ html, body { touch-action: pan-x pan-y; }
   background: var(--surface); border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm); padding: 8px 9px;
 }
+
+/* Which folder, then which order: one control to a line, each full width. */
+.waypoint-filters { display: grid; gap: 7px; margin-bottom: 11px; }
+.waypoint-filters [hidden] { display: none; }
+.waypoint-sort-field { display: flex; align-items: center; gap: 9px; margin: 0; }
+.waypoint-sort-field > span {
+  flex: none; font-size: .72rem; font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.waypoint-sort-field select { flex: 1; min-width: 0; }
 
 /*
  * A trip's dates, under its folder name.
@@ -2872,3 +2888,110 @@ body.has-table { overflow: hidden; }
   .table-title h2 { font-size: .95rem; }
 }
 
+
+
+/* ==========================================================================
+   Colour scales
+   ========================================================================== */
+
+.scale { display: grid; gap: 4px; }
+.scale-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  font-size: .72rem; line-height: 1.2; color: var(--ink-2);
+}
+.scale-name { font-weight: 600; color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scale-unit { color: var(--ink-3); white-space: nowrap; }
+.scale-bar {
+  display: flex; height: 10px; border-radius: 3px; overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, .18);
+}
+.scale-step { flex: 1; min-width: 0; position: relative; }
+.scale-step img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; }
+.scale-labels { font-size: .68rem; line-height: 1.25; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.scale-labels.is-cells { display: flex; }
+.scale-labels.is-cells > span { flex: 1; min-width: 0; text-align: center; overflow-wrap: anywhere; }
+.scale-labels.is-ends { display: flex; justify-content: space-between; }
+.scale-labels.is-ticks { position: relative; height: 1.25em; }
+.scale-labels.is-ticks > span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.scale-labels.is-ticks > .is-first { left: 0 !important; transform: none; }
+.scale-labels.is-ticks > .is-last { left: auto !important; right: 0; transform: none; }
+
+/*
+ * The scales of the colour layers that are on, along the bottom of the map.
+ *
+ * Above the engine's own corner controls - the distance scale and the
+ * attribution - rather than over them, and transparent to taps so a pin under
+ * it can still be pressed.
+ */
+.scale-strip {
+  position: absolute; z-index: 4; left: 50%; transform: translateX(-50%);
+  /* --map-foot is the measured height of the engine's bottom corners, which
+     already include the safe area; the fallback is one line of attribution. */
+  bottom: calc(var(--map-foot, calc(var(--safe-bottom) + 30px)) + 6px);
+  width: min(420px, calc(100% - 24px));
+  display: grid; gap: 8px; padding: 8px 11px 7px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow-md); pointer-events: none;
+}
+.scale-strip:empty { display: none; }
+
+/* ==========================================================================
+   Map cards on a phone: the whole screen
+   ========================================================================== */
+
+/*
+ * A card floating over the map works with a mouse and a wide screen. On a
+ * phone it was a 300px box over a 390px map, holding a text field, a symbol
+ * grid and a row of buttons, with the map still live around its edges - so a
+ * thumb aimed at a button could pan the map instead, and the card moved with
+ * it. Here it takes the screen: nothing behind it to hit by mistake, room for
+ * the buttons to be full-size, and the actions pinned to the bottom where a
+ * thumb already is.
+ *
+ * Done over the engine's own popup rather than by building a second kind of
+ * card, so every card - a pin, a dropped pin, what is here - gets it, and a
+ * tablet or a desk keeps the card beside the place it describes. The
+ * engine positions a popup with an inline transform on every frame, which is
+ * why these are !important: they have to win over that, and only here.
+ */
+@media (max-width: 600px), (max-height: 500px) and (pointer: coarse) {
+  .maplibregl-popup, .mapboxgl-popup {
+    position: fixed !important; inset: 0 !important; transform: none !important;
+    max-width: none !important; width: auto !important; height: auto !important;
+    display: flex !important; flex-direction: column !important;
+    z-index: 70; pointer-events: auto;
+  }
+  .maplibregl-popup-tip, .mapboxgl-popup-tip { display: none !important; }
+  .maplibregl-popup-content, .mapboxgl-popup-content {
+    flex: 1; min-height: 0; width: 100%; max-width: none;
+    overflow-y: auto; overscroll-behavior: contain;
+    border: 0; border-radius: 0; box-shadow: none;
+    padding: calc(var(--safe-top) + 20px) calc(var(--safe-right) + 18px) 0 calc(var(--safe-left) + 18px);
+    font-size: 1rem;
+  }
+  /* The corner close, where a thumb finds it, and big enough to hit. Fixed
+     to the card rather than the text, so it does not scroll away. */
+  .maplibregl-popup-close-button, .mapboxgl-popup-close-button {
+    position: fixed; top: calc(var(--safe-top) + 10px); right: calc(var(--safe-right) + 10px);
+    width: 40px; height: 40px; font-size: 26px; z-index: 2;
+  }
+  .popup-head { padding-right: 44px; }
+  .popup-desc { max-height: none; }
+  .identify-card, .drop-pin { min-width: 0; }
+  /* Room under the last line for the home indicator, on a card whose last
+     row is not already the sticky bar that carries its own. */
+  .maplibregl-popup-content:not(:has(.popup-bar, .popup-tail)),
+  .mapboxgl-popup-content:not(:has(.popup-bar, .popup-tail)) {
+    padding-bottom: calc(var(--safe-bottom) + 18px);
+  }
+  /* The row that ends a card stays on screen however long the card is: it
+     holds Close, and the way out should never be a scroll away. */
+  .popup-bar, .popup-tail {
+    position: sticky; bottom: 0; z-index: 1;
+    margin-left: -18px; margin-right: -18px;
+    padding: 10px 18px calc(var(--safe-bottom) + 12px);
+    background: var(--popup-bg);
+  }
+  .popup-actions button, .popup-actions select { font-size: .9rem; padding: 10px 12px; }
+}

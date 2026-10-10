@@ -666,6 +666,9 @@ test('byways: the basemap row says the thing a reader can act on', async () => {
 
   // The Mapbox twin never follows the switch — it is the comparison.
   assert.equal(sourceNoteFor(mapbox, { archive, token: 'pk.x' }), 'Cannot be downloaded for offline use.');
+  // And says it once to an editor too: its description already names Mapbox.
+  assert.equal(sourceNoteFor(mapbox, { archive, token: 'pk.x', editor: true }),
+    'Cannot be downloaded for offline use.');
 
   /*
    * Silent where neither source is configured, rather than explaining the

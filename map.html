@@ -69,6 +69,7 @@
 <link rel="modulepreload" href="assets/js/lib/aurora.js">
 <link rel="modulepreload" href="assets/js/lib/byways-style.js">
 <link rel="modulepreload" href="assets/js/lib/catalog.js">
+<link rel="modulepreload" href="assets/js/lib/color-scale.js">
 <link rel="modulepreload" href="assets/js/lib/directions.js">
 <link rel="modulepreload" href="assets/js/lib/eclipse.js">
 <link rel="modulepreload" href="assets/js/lib/editors.js">
@@ -117,6 +118,7 @@
 <link rel="modulepreload" href="assets/js/lib/shares.js">
 <link rel="modulepreload" href="assets/js/lib/trip-plan.js">
 <link rel="modulepreload" href="assets/js/lib/ui.js">
+<link rel="modulepreload" href="assets/js/lib/waypoint-sort.js">
 <link rel="modulepreload" href="assets/js/lib/xml.js">
 <link rel="preconnect" href="https://api.mapbox.com" crossorigin>
 <link rel="preconnect" href="https://protomaps.github.io" crossorigin>
@@ -303,8 +305,14 @@
               <label class="visually-hidden" for="waypoint-search">Search waypoints</label>
               <input type="search" id="waypoint-search" placeholder="Search by name or note…" autocomplete="off">
             </div>
-            <label class="visually-hidden" for="waypoint-folder">Filter by folder</label>
-            <select id="waypoint-folder" class="drop-target" style="margin-bottom:11px"></select>
+            <div class="waypoint-filters">
+              <label class="visually-hidden" for="waypoint-folder">Filter by folder</label>
+              <select id="waypoint-folder" class="drop-target"></select>
+              <label class="waypoint-sort-field">
+                <span>Sort</span>
+                <select id="waypoint-sort" class="drop-target" aria-label="Sort waypoints"></select>
+              </label>
+            </div>
             <!--
               The panel is a column beside a map: one pin at a time, read on a
               phone. Editing a hundred of them wants rows and columns and the

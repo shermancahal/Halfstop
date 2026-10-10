@@ -592,7 +592,7 @@ export const BASEMAPS = [
     audience: 'editors',
     premium: true,
     group: 'Topographic',
-    description: 'The house map drawn from Mapbox geometry, for comparison.',
+    description: 'The house map drawn from Mapbox geometry.',
     tiles: [
       'https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
       'https://b.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
@@ -809,6 +809,14 @@ export const OVERLAYS = [
     group: 'Conditions',
     name: 'Light pollution',
     description: 'Night lights from VIIRS. Dark ground is dark sky.',
+    // The colours of the picture itself, dark to bright: there are no steps
+    // to list, so the scale under the map is a gradient through them.
+    legendRamp: {
+      colors: ['#05070d', '#1d2433', '#7a5a2a', '#e0a83c', '#fff6d8'],
+      from: 'Dark',
+      to: 'Bright',
+    },
+    scaleUnit: 'Night lights',
     legendNote: 'Brightness as the satellite sees it, not a Bortle class — '
       + 'a useful proxy for where to point a camera away from.',
     tiles: ['https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble'
@@ -842,13 +850,17 @@ export const OVERLAYS = [
     group: 'Conditions',
     name: 'Sky brightness (Bortle)',
     description: 'Modeled night-sky brightness, on the Bortle scale.',
+    // A scale, not a set of categories: class 3 is darker than class 5.
+    // `short` is what fits in a fifth of a phone under the map.
+    scale: true,
+    scaleUnit: 'Bortle class',
     legend: [
-      { color: '#000000', label: 'Bortle 1–2 · truly dark' },
-      { color: '#303e8c', label: 'Bortle 3 · rural' },
-      { color: '#2e7d5b', label: 'Bortle 4 · rural/suburban' },
-      { color: '#c8b93b', label: 'Bortle 5 · suburban' },
-      { color: '#c8752e', label: 'Bortle 6–7 · bright suburban' },
-      { color: '#c03a2b', label: 'Bortle 8–9 · city' },
+      { color: '#000000', label: 'Bortle 1–2 · truly dark', short: '1–2' },
+      { color: '#303e8c', label: 'Bortle 3 · rural', short: '3' },
+      { color: '#2e7d5b', label: 'Bortle 4 · rural/suburban', short: '4' },
+      { color: '#c8b93b', label: 'Bortle 5 · suburban', short: '5' },
+      { color: '#c8752e', label: 'Bortle 6–7 · bright suburban', short: '6–7' },
+      { color: '#c03a2b', label: 'Bortle 8–9 · city', short: '8–9' },
     ],
     legendNote: 'Colors follow the atlas own scale. Modeled sky brightness, '
       + 'not a measurement — a ridge between you and a town is not in it.',
@@ -1630,12 +1642,14 @@ export const OVERLAYS = [
    */
   {
     id: 'radar',
+    scale: true,
+    scaleUnit: 'Precipitation',
     legend: [
       { color: '#7FD4F5', label: 'Light' },
       { color: '#2E9BD6', label: 'Moderate' },
       { color: '#1F6FB2', label: 'Heavy' },
       { color: '#F2C744', label: 'Very heavy' },
-      { color: '#D9534F', label: 'Intense / hail' },
+      { color: '#D9534F', label: 'Intense / hail', short: 'Intense' },
     ],
     group: 'Weather',
     name: 'Radar',
@@ -1652,6 +1666,7 @@ export const OVERLAYS = [
   {
     id: 'weather-sky',
     group: 'Weather',
+    scaleUnit: '% of sky covered',
     name: 'Cloud cover',
     description: 'Forecast sky cover — the layer that decides whether a night shoot is worth driving to.',
     legendNote: 'Percentage of the sky the National Weather Service expects to be covered. '
@@ -1666,6 +1681,7 @@ export const OVERLAYS = [
   {
     id: 'weather-temp',
     group: 'Weather',
+    scaleUnit: '°F',
     name: 'Temperature',
     description: 'Forecast air temperature, 2 m above the ground.',
     // The National Weather Service's own GeoServer rather than nowCOAST, which
@@ -1681,6 +1697,7 @@ export const OVERLAYS = [
   {
     id: 'weather-wind',
     group: 'Weather',
+    scaleUnit: 'Knots',
     name: 'Wind speed',
     description: 'Forecast sustained wind at 10 m. Gusts run higher.',
     legendNote: 'Knots. A tripod starts arguing at about 15, and a high-sided vehicle at about 30.',
@@ -1694,6 +1711,7 @@ export const OVERLAYS = [
   {
     id: 'weather-rain-chance',
     group: 'Weather',
+    scaleUnit: '% chance',
     name: 'Chance of rain',
     description: 'Probability of precipitation over the next 12 hours.',
     ...ndfdLayer('pop12'),
@@ -1706,6 +1724,7 @@ export const OVERLAYS = [
   {
     id: 'weather-snowfall',
     group: 'Weather',
+    scaleUnit: 'Inches',
     name: 'Forecast snowfall',
     description: 'Snow accumulation the National Weather Service expects.',
     legendNote: 'The next forecast period rather than a running total.',
@@ -1741,6 +1760,10 @@ export const OVERLAYS = [
       url: 'https://mapservices.weather.noaa.gov/raster/rest/services/snow/NOHRSC_Snow_Analysis/MapServer/legend?f=pjson',
       layer: 3,
     },
+    // Depth is a quantity, so the classes above draw as a bar under the map
+    // as well as a list in the layer's (i).
+    scale: true,
+    scaleUnit: 'Snow depth',
     tileSize: 256,
     maxzoom: 12,
     opacity: 0.65,

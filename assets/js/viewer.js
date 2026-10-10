@@ -26,12 +26,14 @@ import {
   boundsAreValid, cumulativeDistances, formatDistance, formatDuration, formatElevation,
   formatTemperature, formatTemperatureDelta, geojsonBounds, mergeBounds, padBounds, zoomForAccuracy,
 } from './lib/geo.js';
-import { el, escapeHTML, createToaster, downloadText, saveBlob, applyStoredTheme, readTheme, setTheme, formatDate, withIcon } from './lib/ui.js';
+import { el, escapeHTML, createToaster, downloadText, saveBlob, applyStoredTheme, readTheme, setTheme, formatDate, withIcon, openDialog } from './lib/ui.js';
+import { scaleFor, scaleTicks, rampGradient, stepLabel, needsGlossary } from './lib/color-scale.js';
+import { WAYPOINT_SORTS, sortWaypoints, readSort } from './lib/waypoint-sort.js';
 import { fogOutlook, nightHours, fogName, fogNote, fogBand } from './lib/fog.js';
 import { icons } from './lib/icons.js';
 import {
   FolderStore, FOLDER_COLORS, COLOR_NAMES, readColor, inPalette, readTrip, tripStanding, localDay,
-  isUnfiled, unfiledFirst, UNFILED_NAME,
+  isUnfiled, unfiledFirst, UNFILED_NAME, folderTree, treeLabel,
 } from './lib/folders.js';
 import {
   PIN_ICONS, DEFAULT_PIN_ICON, pinIconGroups, pinIconSVG, pinImageId, registerPinImages, rasterizePinIcon, pinColorFor, searchPinIcons, getPinIcon,
@@ -278,6 +280,7 @@ const state = {
   /** folderId -> how many of its items are currently revealed in the tree. */
   folderReveal: new Map(),
   waypointFolderFilter: '',
+  waypointSort: 'name',
   /*
    * The table editor: its own search, its own page, and what is ticked.
    *
@@ -966,6 +969,7 @@ async function main() {
   trackShieldState();
   trackQueryOverlays();
   trackSkyScale();
+  trackNearestWaypoints();
   // A Mapbox vector style starts without our overlays; the raster path bakes
   // them into the initial style. The exception is a queried overlay, which
   // cannot be baked into either — it has no tiles, only an answer that depends
@@ -1272,6 +1276,7 @@ function cacheDom() {
   dom.tableEditor = document.getElementById('table-editor');
   dom.waypointSearch = document.getElementById('waypoint-search');
   dom.waypointFolder = document.getElementById('waypoint-folder');
+  dom.waypointSort = document.getElementById('waypoint-sort');
   dom.waypointCount = document.getElementById('waypoint-count');
   dom.loadedList = document.getElementById('loaded-list');
   dom.loadedCount = document.getElementById('loaded-count');
@@ -1385,6 +1390,18 @@ function wirePanel() {
     state.waypointPage = 0;
     renderWaypointsTab();
   });
+  if (dom.waypointSort) {
+    state.waypointSort = readWaypointSort();
+    dom.waypointSort.replaceChildren(...WAYPOINT_SORTS.map((sort) => el('option', {
+      value: sort.id, text: sort.label, selected: sort.id === state.waypointSort,
+    })));
+    dom.waypointSort.addEventListener('change', (event) => {
+      state.waypointSort = readSort(event.target.value);
+      state.waypointPage = 0;
+      keepWaypointSort(state.waypointSort);
+      renderWaypointsTab();
+    });
+  }
   document.getElementById('share-button')?.addEventListener('click', shareView);
   wireOfflineMenu();
   wirePlaceSearch();
@@ -1937,6 +1954,8 @@ function renderLayersTab() {
     dom.overlayList.append(group);
     renderOverlayRows(body, entries);
   }
+
+  renderScaleStrip();
 }
 
 /** The switch, opacity slider and colour key for each overlay in one group. */
@@ -2068,41 +2087,190 @@ const WIDE_LEGEND_AT = 16;
  */
 async function fillWMSLegend(host, url) {
   if (!host || !url) return;
-  try {
-    const response = await fetch(url);
-    if (!response.ok) return;
-    const entries = parseWMSLegend(await response.json());
-    if (!entries.length) return;
-    host.replaceChildren(legendList(entries));
-  } catch {
-    // A key that will not load leaves the layer's name and nothing else, which
-    // is better than a broken image where the explanation should be.
-  }
+  const entries = parseWMSLegend(await legendBody(url));
+  // A key that will not load leaves the layer's name and nothing else, which
+  // is better than a broken image where the explanation should be.
+  if (!entries.length) return;
+  host.replaceChildren(legendList(entries));
 }
 
 async function fillArcGISLegend(host, { url, layer } = {}) {
   if (!host || !url) return;
-  try {
-    const response = await fetch(url);
-    if (!response.ok) return;
-    const body = await response.json();
-    // Which sublayers, and whether a row is named by its class or by the
-    // sublayer it came from, is decided in lookup.js beside the other
-    // service-response readers — and tested there.
-    const classes = arcgisLegendRows(body, layer);
-    if (!classes.length) return;
+  // Which sublayers, and whether a row is named by its class or by the
+  // sublayer it came from, is decided in lookup.js beside the other
+  // service-response readers — and tested there.
+  const classes = arcgisLegendRows(await legendBody(url), layer);
+  // No key. The description above it still says what the layer is.
+  if (!classes.length) return;
 
-    host.replaceChildren(el('ul', { class: 'legend' }, classes.map((item) => el('li', { class: 'legend-item' }, [
-      el('img', {
-        class: 'legend-swatch is-image',
-        src: `data:${item.contentType};base64,${item.imageData}`,
-        alt: '',
-      }),
-      el('span', { text: item.label }),
-    ]))));
-  } catch {
-    // No key. The description above it still says what the layer is.
+  host.replaceChildren(el('ul', { class: 'legend' }, classes.map((item) => el('li', { class: 'legend-item' }, [
+    el('img', {
+      class: 'legend-swatch is-image',
+      src: `data:${item.contentType};base64,${item.imageData}`,
+      alt: '',
+    }),
+    el('span', { text: item.label }),
+  ]))));
+}
+
+/**
+ * A service's key, asked for once.
+ *
+ * The same key is now wanted in two places — the layer's (i) and the scale
+ * along the bottom of the map — and the layer list is redrawn on every switch.
+ * Fetching on each of those was a request per redraw for an answer that does
+ * not change. A failure is not remembered, so the next look tries again,
+ * which is what you want after walking back into signal.
+ *
+ * @returns {Promise<object|null>} The parsed body, or null.
+ */
+const legendBodies = new Map();
+function legendBody(url) {
+  if (!url) return Promise.resolve(null);
+  if (!legendBodies.has(url)) {
+    const request = fetch(url)
+      .then((response) => (response.ok ? response.json() : null))
+      .catch(() => null);
+    request.then((body) => { if (!body) legendBodies.delete(url); });
+    legendBodies.set(url, request);
   }
+  return legendBodies.get(url);
+}
+
+/**
+ * The steps of a layer's colour scale, whichever way the layer publishes them.
+ *
+ * @returns {Promise<{color?: string, image?: string, label: string, short?: string}[]>}
+ */
+async function scaleSteps(scale) {
+  if (!scale || scale.kind === 'ramp') return [];
+  if (scale.kind === 'steps') return scale.steps;
+  const body = await legendBody(scale.url);
+  if (scale.kind === 'service') return parseWMSLegend(body);
+  return arcgisLegendRows(body, scale.layer).map((row) => ({
+    image: `data:${row.contentType};base64,${row.imageData}`,
+    label: row.label,
+  }));
+}
+
+/**
+ * A colour scale as a bar, with its labels underneath.
+ *
+ * A handful of steps gets a label each; a long ramp gets its two ends and a
+ * few evenly spaced steps between them, which is the range and the shape of
+ * it — all anybody reads off a scale at a glance.
+ */
+function scaleBar(scale, steps, { name = '' } = {}) {
+  const head = name || scale.unit
+    ? el('div', { class: 'scale-head' }, [
+      name ? el('span', { class: 'scale-name', text: name }) : null,
+      scale.unit ? el('span', { class: 'scale-unit', text: scale.unit }) : null,
+    ])
+    : null;
+
+  if (scale.kind === 'ramp') {
+    return el('div', { class: 'scale' }, [
+      head,
+      el('div', { class: 'scale-bar is-ramp', style: `background:${rampGradient(scale.colors)}` }),
+      el('div', { class: 'scale-labels is-ends' }, [
+        el('span', { text: scale.from }),
+        el('span', { text: scale.to }),
+      ]),
+    ]);
+  }
+
+  const bar = el('div', { class: 'scale-bar' }, steps.map((step) => el('span', {
+    class: 'scale-step', title: step.label,
+    style: step.color ? `background:${step.color}` : null,
+  }, step.image ? [el('img', { src: step.image, alt: '' })] : [])));
+
+  const labels = steps.length <= 8
+    ? el('div', { class: 'scale-labels is-cells' }, steps.map((step) => el('span', { text: stepLabel(step) })))
+    : el('div', { class: 'scale-labels is-ticks' }, scaleTicks(steps.length, 5).map((index) => el('span', {
+      class: index === 0 ? 'is-first' : index === steps.length - 1 ? 'is-last' : null,
+      style: `left:${((index + 0.5) / steps.length) * 100}%`,
+      text: stepLabel(steps[index]),
+    })));
+
+  return el('div', { class: 'scale' }, [head, bar, labels]);
+}
+
+/**
+ * Fill a slot with a layer's scale once its steps are known.
+ *
+ * The slot stays empty, rather than showing an error, when a service will not
+ * answer: the layer still says what it is, and somebody with no signal is not
+ * helped by being told so twice.
+ */
+async function fillScale(host, scale, { name = '', glossary = false } = {}) {
+  const steps = await scaleSteps(scale);
+  if (scale.kind !== 'ramp' && !steps.length) {
+    host.remove();
+    return;
+  }
+  host.replaceChildren(scaleBar(scale, steps, { name }));
+  // "3" says where on the Bortle scale a colour is; "rural" says what that
+  // means. Under the bar in the (i), where there is room for both.
+  if (glossary && needsGlossary(steps)) host.append(legendList(steps));
+}
+
+/**
+ * Keep the scales clear of the engine's own footer.
+ *
+ * The attribution is one line on a quiet map and two or three once a few
+ * layers each add their credit, and it has to stay readable — showing it is a
+ * condition of using the tiles. So the strip is lifted by however tall the
+ * bottom corners actually are, measured, rather than by a guess that is right
+ * until somebody switches on one more layer.
+ */
+function watchMapFoot(surface) {
+  if (state.mapFootWatch || typeof ResizeObserver !== 'function') return;
+  // The corners' class names come from whichever engine loaded.
+  const prefix = state.engine === 'mapbox' ? 'mapboxgl' : 'maplibregl';
+  const corners = [...surface.querySelectorAll(`.${prefix}-ctrl-bottom-left, .${prefix}-ctrl-bottom-right`)];
+  if (!corners.length) return;
+  const measure = () => {
+    const tallest = Math.max(0, ...corners.map((corner) => corner.getBoundingClientRect().height));
+    surface.style.setProperty('--map-foot', `${Math.ceil(tallest)}px`);
+  };
+  state.mapFootWatch = new ResizeObserver(measure);
+  for (const corner of corners) state.mapFootWatch.observe(corner);
+  measure();
+}
+
+/**
+ * The scales of the colour layers that are switched on, along the bottom of
+ * the map.
+ *
+ * Where every printed atlas puts its key, and for the same reason: a colour
+ * means nothing until there is a number beside it, and the number should be
+ * where the colour is rather than three taps away in a panel. Redrawn with the
+ * layer list, which is redrawn on every switch.
+ */
+function renderScaleStrip() {
+  const surface = document.querySelector('.map-surface');
+  if (!surface) return;
+  let strip = document.getElementById('scale-strip');
+  const showing = inScopeOverlays().filter((overlay) => state.overlays.get(overlay.id)?.visible && scaleFor(overlay));
+  const ids = showing.map((overlay) => overlay.id).join(',');
+  if (!showing.length) {
+    strip?.remove();
+    return;
+  }
+  // Unchanged: leave it, rather than flashing every bar empty while the
+  // same keys are fetched from the cache again.
+  if (strip && strip.dataset.layers === ids) return;
+  if (!strip) {
+    strip = el('div', { class: 'scale-strip', id: 'scale-strip', role: 'group', 'aria-label': 'Color scales' });
+    surface.append(strip);
+    watchMapFoot(surface);
+  }
+  strip.dataset.layers = ids;
+  strip.replaceChildren(...showing.map((overlay) => {
+    const host = el('div', { class: 'scale-slot', dataset: { layer: overlay.id } });
+    fillScale(host, scaleFor(overlay), { name: layerName(overlay) });
+    return host;
+  }));
 }
 
 /**
@@ -2781,6 +2949,20 @@ function trackSkyScale() {
   });
 }
 
+/**
+ * "Nearest the middle of the map" means the middle now, not where it was
+ * when the tab was drawn. Re-sorted when the map stops, and only while the
+ * list is on screen in that order - a resort nobody can see is a redraw for
+ * nothing on every pan.
+ */
+function trackNearestWaypoints() {
+  state.map.on('moveend', () => {
+    if (state.waypointSort !== 'nearest') return;
+    if (dom.tabPanels?.waypoints?.hidden || dom.panel?.hidden) return;
+    renderWaypointsTab();
+  });
+}
+
 function trackQueryOverlays() {
   // Which floors the view was above last time, so the panel is only rebuilt
   // when one is actually crossed rather than on every pan.
@@ -3008,7 +3190,7 @@ function askWhereToFile(entries) {
 
   const select = folders.length
     ? el('select', { class: 'import-ask-select', 'aria-label': 'Folder to file into' },
-      folders.map((folder) => el('option', { value: folder.id, text: folder.name })))
+      folderOptions())
     : null;
 
   dom.importAsk.replaceChildren(el('div', { class: 'import-ask-card' }, [
@@ -6302,8 +6484,8 @@ function archiveDrift(region, current) {
 }
 
 /**
- * One layer row: control, name, and an info button that reveals the
- * description.
+ * One layer row: control, name, and an info button that opens what the layer
+ * is.
  *
  * The descriptions were previously always visible, which on a phone turned
  * every layer into a three-line paragraph and made the list unscannable. They
@@ -6312,46 +6494,102 @@ function archiveDrift(region, current) {
  */
 function layerRow({ entry, selected, control, preview = false }) {
   /*
-   * Byways Topo says whether it can be taken with you.
+   * A layer that is not on this plan is shown and not offered.
    *
-   * Its own description cannot: "OSM rendered for the outdoors" is equally
-   * true of Mapbox Streets, of our own archive and of the CyclOSM fallback,
-   * since all three are OpenStreetMap underneath. The difference between them
-   * that a reader can act on is whether the map downloads, and an editor also
-   * gets to see which source is live, because they are the one comparing.
+   * Shown, because hiding it answers "where did the weather go" with silence,
+   * and somebody deciding whether to pay has to be able to see what for.
+   * Not offered, because a switch that does nothing is worse than one that
+   * explains itself. The reason goes in the description, where the rest of
+   * what this layer is already lives.
+   *
+   * None of this does anything while BILLING.live is false: can() is true for
+   * everything, so every row is drawn exactly as it was.
    */
-  const sourceNote = sourceNoteFor(entry, { editor: mayEdit(state.account?.user) });
-  const description = [entry.description || '', sourceNote].filter(Boolean).join(' ');
-  const key = Array.isArray(entry.legend) && entry.legend.length ? entry.legend : null;
+  const needs = featureForLayer(entry);
+  const locked = Boolean(needs) && !allowed(needs);
+  if (locked) control.disabled = true;
 
-  // A continuous ramp — temperature, wind speed, cloud cover — has no list of
-  // colours to write out, so those layers carry the service's own legend image
-  // instead. Drawn on white because every one of them is black text on
-  // transparent, which disappears against a dark panel.
+  /*
+   * (i) opens a window rather than a paragraph under the row.
+   *
+   * Opened inline, the description pushed every layer below it down the list,
+   * and on a phone a weather key three columns deep took the whole panel —
+   * and stayed, because the way to close it was to find the same small button
+   * again. A window over the panel closes with its cross, with Escape or with
+   * a tap anywhere outside it, and leaves the list exactly where it was.
+   */
+  const info = hasLayerInfo(entry, locked)
+    ? el('button', {
+      class: 'layer-info', type: 'button', 'aria-haspopup': 'dialog',
+      'aria-label': `About ${entry.name}`,
+      html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 16.5v-5"/><path d="M12 8h.01"/></svg>',
+      onclick: () => openLayerInfo(entry, { locked, needs }),
+    })
+    : null;
+
+  const row = el('div', { class: `layer-row${selected ? ' is-selected' : ''}${locked ? ' is-locked' : ''}` }, [
+    el('label', { class: 'layer-option' }, [
+      control,
+      preview ? basemapThumb(entry) : null,
+      el('span', { class: 'layer-option-name' }, [
+        // The id on the label, so a test can ask which layers are on offer
+        // rather than matching on names that are meant to change.
+        el('span', { class: 'layer-option-label', dataset: { layer: entry.id }, text: layerName(entry) }),
+        layerBadge(entry),
+      ]),
+    ]),
+    info,
+  ]);
+
+  /*
+   * One element per layer, always - not a bare row and sometimes a fragment.
+   *
+   * A row and its opacity slider are one thing on screen and have to be one
+   * thing in the DOM before the list can be laid out in columns; as siblings
+   * they would be placed in separate cells.
+   */
+  return el('div', { class: 'layer-item' }, [row]);
+}
+
+/** Byways Topo's line about whether it can be taken with you, for this reader. */
+function layerSourceNote(entry) {
+  /*
+   * Its own description cannot say it: "OSM rendered for the outdoors" is
+   * equally true of Mapbox Streets, of our own archive and of the CyclOSM
+   * fallback, since all three are OpenStreetMap underneath. The difference
+   * between them that a reader can act on is whether the map downloads, and
+   * an editor also gets to see which source is live, because they are the one
+   * comparing.
+   */
+  return sourceNoteFor(entry, { editor: mayEdit(state.account?.user) });
+}
+
+/** Whether a layer has anything to say behind its (i). */
+function hasLayerInfo(entry, locked = false) {
+  return Boolean(entry.description || layerSourceNote(entry) || entry.legendNote
+    || (Array.isArray(entry.legend) && entry.legend.length) || entry.legendScale || entry.legendJSON
+    || entry.legendRamp || entry.query?.points || entry.legendImage || locked);
+}
+
+/**
+ * What a layer is, in a window: what it shows, how to read it, and — for a
+ * layer read by colour — its scale along the bottom.
+ */
+function openLayerInfo(entry, { locked = false, needs = null } = {}) {
+  const description = [entry.description || '', layerSourceNote(entry)].filter(Boolean).join(' ');
+  const scale = scaleFor(entry);
+  // A list of categories is the key for a layer that is not a scale. One that
+  // is draws as the bar at the bottom instead, and saying it twice in one
+  // window is how a reader learns to skip both.
+  const key = !scale && Array.isArray(entry.legend) && entry.legend.length ? entry.legend : null;
   const note = entry.legendNote || '';
 
   /*
-   * A layer with a scale explains itself with the scale.
-   *
-   * The prose above it was written when the alternative was an unlabelled
-   * ramp, and now restates what the swatches already say — "forecast air
-   * temperature" over a column reading -40 to 110. So a layer carrying a
-   * fetched scale shows the scale alone, and the descriptions that say
-   * something the colours cannot are kept in the catalogue rather than here.
+   * The keys the ArcGIS services publish for themselves — BLM routes, the
+   * MVUM, the recreation sites. Snow depth publishes one too, and as a depth
+   * it is a scale, so it is drawn as one below.
    */
-  const scaleHost = entry.legendScale ? el('div', { class: 'legend-slot' }) : null;
-  if (scaleHost) fillWMSLegend(scaleHost, entry.legendScale);
-
-  /*
-   * The same thing for the services that publish their key as ArcGIS JSON.
-   *
-   * Three layers — BLM routes, the MVUM and the recreation sites — have
-   * carried a `legendJSON` since they were added, and nothing read it. The
-   * fetcher for it existed and was never called, so those rows showed their
-   * note and no key at all, which looks exactly like a service that answered
-   * with nothing.
-   */
-  const serviceHost = entry.legendJSON ? el('div', { class: 'legend-slot' }) : null;
+  const serviceHost = entry.legendJSON && !scale ? el('div', { class: 'legend-slot' }) : null;
   if (serviceHost) fillArcGISLegend(serviceHost, entry.legendJSON);
 
   /*
@@ -6374,15 +6612,21 @@ function layerRow({ entry, selected, control, preview = false }) {
     ])))
     : null;
 
-  const descriptionNode = description || key || note || scaleHost || serviceHost || symbolKey || entry.legendImage
-    ? el('div', { class: 'layer-desc', hidden: true }, [
-      description && !scaleHost ? el('p', { class: 'layer-desc-text', text: description }) : null,
+  const scaleHost = scale
+    ? el('div', { class: 'layer-scale' }, [el('p', { class: 'legend-note', text: 'Loading the scale…' })])
+    : null;
+  if (scaleHost) fillScale(scaleHost, scale, { glossary: true });
+
+  openDialog({
+    title: layerName(entry),
+    className: 'layer-dialog',
+    body: [
+      description ? el('p', { class: 'layer-desc-text', text: description }) : null,
       key ? legendList(key, note) : null,
       symbolKey,
       serviceHost,
       !key && note ? el('p', { class: 'legend-note', text: note }) : null,
-      scaleHost,
-      entry.legendImage
+      entry.legendImage && !scale
         ? el('div', { class: 'legend-image-wrap' }, [
           el('img', {
             class: 'legend-image', src: entry.legendImage, loading: 'lazy',
@@ -6393,75 +6637,10 @@ function layerRow({ entry, selected, control, preview = false }) {
           }),
         ])
         : null,
-    ])
-    : null;
-
-  // Hover reveals on a mouse; tap pins it open on touch, where hover does not
-  // exist. `pinned` keeps a clicked description open when the pointer leaves.
-  let pinned = false;
-  const setOpen = (open) => {
-    descriptionNode.hidden = !open;
-    info.setAttribute('aria-expanded', String(open));
-    info.classList.toggle('is-open', open);
-  };
-
-  const info = descriptionNode
-    ? el('button', {
-      class: 'layer-info', type: 'button',
-      'aria-expanded': 'false', 'aria-label': key ? `About ${entry.name}, with color key` : `About ${entry.name}`,
-      html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 16.5v-5"/><path d="M12 8h.01"/></svg>',
-      onpointerenter: (event) => { if (event.pointerType === 'mouse' && !pinned) setOpen(true); },
-      onpointerleave: (event) => { if (event.pointerType === 'mouse' && !pinned) setOpen(false); },
-      onfocus: () => { if (!pinned) setOpen(true); },
-      onblur: () => { if (!pinned) setOpen(false); },
-      onclick: () => { pinned = !pinned; setOpen(pinned); },
-    })
-    : null;
-
-  /*
-   * A layer that is not on this plan is shown and not offered.
-   *
-   * Shown, because hiding it answers "where did the weather go" with silence,
-   * and somebody deciding whether to pay has to be able to see what for.
-   * Not offered, because a switch that does nothing is worse than one that
-   * explains itself. The reason goes in the description, where the rest of
-   * what this layer is already lives.
-   *
-   * None of this does anything while BILLING.live is false: can() is true for
-   * everything, so every row is drawn exactly as it was.
-   */
-  const needs = featureForLayer(entry);
-  const locked = Boolean(needs) && !allowed(needs);
-  if (locked) {
-    control.disabled = true;
-    if (descriptionNode) {
-      descriptionNode.append(el('p', { class: 'layer-locked-note', text: lockedBecause(needs) }));
-    }
-  }
-
-  const row = el('div', { class: `layer-row${selected ? ' is-selected' : ''}${locked ? ' is-locked' : ''}` }, [
-    el('label', { class: 'layer-option' }, [
-      control,
-      preview ? basemapThumb(entry) : null,
-      el('span', { class: 'layer-option-name' }, [
-        // The id on the label, so a test can ask which layers are on offer
-        // rather than matching on names that are meant to change.
-        el('span', { class: 'layer-option-label', dataset: { layer: entry.id }, text: layerName(entry) }),
-        layerBadge(entry),
-      ]),
-    ]),
-    info,
-  ]);
-
-  /*
-   * One element per layer, always - not a bare row and sometimes a fragment.
-   *
-   * A row, its description and its opacity slider are one thing on screen and
-   * have to be one thing in the DOM before the list can be laid out in
-   * columns; as siblings they would be placed in separate cells and a
-   * description would open under someone else's layer.
-   */
-  return el('div', { class: 'layer-item' }, descriptionNode ? [row, descriptionNode] : [row]);
+      locked ? el('p', { class: 'layer-locked-note', text: lockedBecause(needs) }) : null,
+      scaleHost,
+    ],
+  });
 }
 
 /**
@@ -8891,7 +9070,7 @@ function saveToFolderParts(feature, popup) {
   const folders = sortedFolders();
 
   const select = el('select', { class: 'popup-folder', 'aria-label': 'Folder to save into' }, [
-    ...folders.map((folder) => el('option', { value: folder.id, text: folder.name })),
+    ...folderOptions(),
     el('option', { value: '__new__', text: folders.length ? 'New folder…' : 'New folder' }),
   ]);
   select.value = folders.length ? folders[folders.length - 1].id : '__new__';
@@ -8994,55 +9173,70 @@ function plannableTrip() {
   return ranked.length ? ranked[0].folder : null;
 }
 
-/** Actions for a feature already saved in a folder. */
+/**
+ * Actions for a feature already saved in a folder.
+ *
+ * Two rows: where it is filed, then what to do with it. They used to share
+ * one wrapping row, so on a narrow card the folder menu and Details sat on one
+ * line and Edit and Remove fell to the next - a layout decided by the width of
+ * a folder's name rather than by what the buttons are.
+ */
 function savedItemActions(props, popup, content) {
-  const folders = state.folders.list().filter((folder) => folder.id !== props.folderId);
-  const children = [];
+  const others = state.folders.list().some((folder) => folder.id !== props.folderId);
+  const rows = [];
 
-  if (folders.length) {
-    const select = el('select', { 'aria-label': 'Move to another folder' }, [
+  if (others) {
+    const select = el('select', { class: 'popup-move', 'aria-label': 'Move to another folder' }, [
       el('option', { value: '', text: 'Move to…' }),
-      ...folders.map((folder) => el('option', { value: folder.id, text: folder.name })),
+      ...folderOptions({
+        // Its own folder stays in the menu so its subfolders still sit under
+        // it, and is greyed, because moving a pin to where it is does nothing.
+        label: (folder) => (folder.id === props.folderId ? `${folder.name} (here)` : folder.name),
+        unavailable: (folder) => folder.id === props.folderId,
+      }),
     ]);
     select.addEventListener('change', () => {
       if (!select.value) return;
       state.folders.moveItem(props.itemId, props.folderId, select.value);
       popup.remove();
     });
-    children.push(select);
+    rows.push(el('div', { class: 'popup-move-row' }, [select]));
   }
 
-  children.push(labelledButton(icons.info, 'Details', {
-    tone: 'ghost',
-    title: 'Everything known about this place',
-    onclick: () => { popup.remove(); selectPin(props.folderId, props.itemId); },
-  }));
+  const buttons = [
+    labelledButton(icons.info, 'Details', {
+      tone: 'ghost',
+      title: 'Everything known about this place',
+      onclick: () => { popup.remove(); selectPin(props.folderId, props.itemId); },
+    }),
 
-  /*
-   * Edit here, on the pin, rather than by jumping to its row in the list.
-   *
-   * The old button opened the Folders tab, re-rendered it and anchored an
-   * editor to the matching row — fine with a dozen pins and useless with a
-   * thousand, which is what a GaiaGPS export actually contains. The pin is
-   * already on screen and already the thing you are pointing at.
-   */
-  children.push(labelledButton(icons.pencil, 'Edit', {
-    tone: 'ghost',
-    title: 'Change the name, note, icon or color',
-    onclick: () => openPopupEditor(content, props, popup),
-  }));
+    /*
+     * Edit here, on the pin, rather than by jumping to its row in the list.
+     *
+     * The old button opened the Folders tab, re-rendered it and anchored an
+     * editor to the matching row — fine with a dozen pins and useless with a
+     * thousand, which is what a GaiaGPS export actually contains. The pin is
+     * already on screen and already the thing you are pointing at.
+     */
+    labelledButton(icons.pencil, 'Edit', {
+      tone: 'ghost',
+      title: 'Change the name, note, icon or color',
+      onclick: () => openPopupEditor(content, props, popup),
+    }),
 
-  children.push(labelledButton(icons.trash, 'Remove', {
-    tone: 'ghost',
-    title: 'Delete this waypoint',
-    onclick: () => {
-      if (!confirmPinDelete(props.name)) return;
-      state.folders.removeItem(props.folderId, props.itemId);
-      popup.remove();
-    },
-  }));
+    labelledButton(icons.trash, 'Remove', {
+      tone: 'ghost',
+      title: 'Delete this waypoint',
+      onclick: () => {
+        if (!confirmPinDelete(props.name)) return;
+        state.folders.removeItem(props.folderId, props.itemId);
+        popup.remove();
+      },
+    }),
+  ];
+  rows.push(el('div', { class: 'popup-button-row' }, buttons));
 
-  return el('div', { class: 'popup-actions' }, children);
+  return el('div', { class: 'popup-actions is-saved' }, rows);
 }
 
 /**
@@ -9136,10 +9330,9 @@ async function loadFromCatalog(slug, { fit = true } = {}) {
 function renderDropTarget() {
   if (!dom.dropTarget) return;
   const previous = dom.dropTarget.value;
-  const folders = state.folders.list();
   dom.dropTarget.replaceChildren(
     el('option', { value: '', text: 'Just show it on the map' }),
-    ...folders.map((folder) => el('option', { value: folder.id, text: `File waypoints into “${folder.name}”` })),
+    ...folderOptions({ label: (folder) => `File waypoints into “${folder.name}”` }),
     el('option', { value: '__new__', text: 'File waypoints into a new folder' }),
   );
   if (previous && [...dom.dropTarget.options].some((o) => o.value === previous)) dom.dropTarget.value = previous;
@@ -11605,27 +11798,31 @@ const byName = (a, b) => String(a.name).localeCompare(String(b.name), undefined,
  * alphabet says where to look for it among its siblings.
  */
 function sortedFolders() {
-  const out = [];
-  const walk = (parentId) => {
-    for (const folder of state.folders.childrenOf(parentId).sort(byName)) {
-      out.push(folder);
-      walk(folder.id);
-    }
-  };
-  walk(null);
-  /*
-   * Anything the walk could not reach still has to be listed.
-   *
-   * A folder whose parent was deleted on another device arrives pointing at
-   * nothing, and a collection that is invisible because of a bad id is worse
-   * than one that is untidy. They are shown at the top, where they can be
-   * refiled.
-   */
-  if (out.length !== state.folders.list().length) {
-    const seen = new Set(out.map((folder) => folder.id));
-    for (const folder of state.folders.list().filter((f) => !seen.has(f.id)).sort(byName)) out.push(folder);
-  }
-  return out;
+  // The rule itself - depth-first, alphabetical among siblings, the reserved
+  // folder first, and anything whose parent is missing still listed - lives
+  // in folders.js, where it is tested without a browser.
+  return folderTree(state.folders.list()).map((entry) => entry.folder);
+}
+
+/**
+ * Folders as menu options, in the order and nesting of the Folders list.
+ *
+ * Every menu that asks "which folder" used to list them its own way: one
+ * alphabetically with the subfolders mixed in, one in the order they happened
+ * to be stored, one as "Parent > Child" paths. Now each is the list itself,
+ * read top to bottom, with a subfolder indented under its parent.
+ *
+ * A folder that cannot be chosen here - the one a pin is already in, or one a
+ * folder cannot be filed under - stays in the menu, greyed, rather than being
+ * left out: dropping it would leave its subfolders indented under nothing.
+ */
+function folderOptions({ label = (folder) => folder.name, selected = null, unavailable = () => false } = {}) {
+  return folderTree(state.folders.list()).map(({ folder, depth }) => el('option', {
+    value: folder.id,
+    text: treeLabel(label(folder), depth),
+    selected: folder.id === selected,
+    disabled: unavailable(folder),
+  }));
 }
 
 function renderFoldersTab() {
@@ -12717,13 +12914,18 @@ function renderWaypointsTab() {
     }
   }
 
-  rows.sort((a, b) => a.item.feature.properties.name.localeCompare(b.item.feature.properties.name));
+  const centre = state.map?.getCenter?.();
+  const sorted = sortWaypoints(rows, state.waypointSort, {
+    centre: centre ? [centre.lng, centre.lat] : null,
+    folderOrder: sortedFolders().map((folder) => folder.id),
+  });
+  rows.splice(0, rows.length, ...sorted);
 
   // Keep the folder filter in step without clobbering the current choice.
   const previous = dom.waypointFolder.value;
   dom.waypointFolder.replaceChildren(
     el('option', { value: '', text: 'Every folder' }),
-    ...folders.map((folder) => el('option', { value: folder.id, text: folder.name })),
+    ...folderOptions(),
   );
   if (previous && folders.some((folder) => folder.id === previous)) dom.waypointFolder.value = previous;
   dom.waypointFolder.hidden = folders.length < 2;
@@ -12930,9 +13132,7 @@ function folderSelect(value, { lead = '', className = 'table-folder' } = {}) {
   // "Schools" once folders can be filed inside one another.
   return el('select', { class: className, 'aria-label': 'Folder' }, [
     lead ? el('option', { value: '', text: lead }) : null,
-    ...sortedFolders().map((held) => el('option', {
-      value: held.id, text: state.folders.pathOf(held.id), selected: held.id === value,
-    })),
+    ...folderOptions({ selected: value }),
   ].filter(Boolean));
 }
 
@@ -13321,6 +13521,30 @@ function renderTableEditor() {
 }
 
 const WAYPOINT_PAGE_SIZE = 30;
+
+/*
+ * The order the Waypoints tab was last left in, on this device.
+ *
+ * A convenience and nothing more, so it lives in this browser and a private
+ * window or cleared storage simply starts at A to Z.
+ */
+const WAYPOINT_SORT_KEY = 'halfstop-waypoint-sort';
+
+function readWaypointSort() {
+  try {
+    return readSort(localStorage.getItem(WAYPOINT_SORT_KEY));
+  } catch {
+    return 'name';
+  }
+}
+
+function keepWaypointSort(value) {
+  try {
+    localStorage.setItem(WAYPOINT_SORT_KEY, value);
+  } catch {
+    // Not kept: the list is still sorted, just not remembered.
+  }
+}
 /** How much of a field note fits on a card before it stops being a glance. */
 const NOTE_PREVIEW = 200;
 
@@ -13715,13 +13939,10 @@ function folderNameRow(folder) {
    */
   const nest = el('select', { class: 'folder-parent', 'aria-label': 'File this folder under' }, [
     el('option', { value: '', text: 'Top level', selected: !folder.parentId }),
-    ...sortedFolders()
-      .filter((entry) => state.folders.canNestUnder(folder.id, entry.id))
-      .map((entry) => el('option', {
-        value: entry.id,
-        text: state.folders.pathOf(entry.id),
-        selected: entry.id === folder.parentId,
-      })),
+    ...folderOptions({
+      selected: folder.parentId,
+      unavailable: (entry) => !state.folders.canNestUnder(folder.id, entry.id),
+    }),
   ]);
   nest.addEventListener('change', () => {
     if (!state.folders.setParent(folder.id, nest.value || null)) renderFoldersTab();
@@ -13790,7 +14011,7 @@ function folderShareRow(folder) {
   const status = el('p', { class: 'hint', style: 'margin:6px 0 0', text: '' });
 
   const field = el('input', {
-    type: 'email', placeholder: 'their@email.address', autocomplete: 'off',
+    class: 'share-email', type: 'email', placeholder: 'their@email.address', autocomplete: 'off',
     'aria-label': `Invite somebody to ${folder.name}`,
   });
 
@@ -13807,7 +14028,8 @@ function folderShareRow(folder) {
     el('option', { value: 'editor', text: 'to edit together' }),
   ]);
   const send = el('button', {
-    class: 'button button-secondary button-small', type: 'button', text: 'Invite',
+    class: 'button button-secondary button-small button-with-icon share-send', type: 'button',
+    html: `${icons.userPlus}<span>Invite</span>`,
     onclick: async () => {
       const email = field.value.trim();
       if (!looksLikeEmail(email)) { status.textContent = 'That does not look like an email address.'; return; }
@@ -13850,7 +14072,14 @@ function folderShareRow(folder) {
 
   row.append(
     el('div', { class: 'settings-label', text: 'Share with someone' }),
-    el('div', { class: 'picker-row' }, [field, role, send]),
+    /*
+     * One thing to a line: the address, what it is for, then the button.
+     *
+     * Side by side, three controls in a 320px panel left the address about
+     * twelve characters wide - you could not see what you had typed - and
+     * put Invite at the end of a line it did not fit on.
+     */
+    el('div', { class: 'share-form' }, [field, role, send]),
     list,
     status,
   );

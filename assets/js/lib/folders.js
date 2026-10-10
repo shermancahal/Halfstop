@@ -165,6 +165,64 @@ export function unfiledFirst(list = []) {
   return [...list.filter(isUnfiled), ...list.filter((entry) => !isUnfiled(entry))];
 }
 
+/**
+ * Every folder in the order the Folders list draws them, each with its depth.
+ *
+ * Depth-first: a folder, then what is filed under it, then the next folder.
+ * Alphabetical among siblings, the reserved folder first at the top - the same
+ * rule the list is drawn by, written once, so a menu of folders cannot put
+ * them in an order the list does not.
+ *
+ * A folder whose parent is missing - deleted on another device - is still
+ * listed, at the top level after the rest, because one that cannot be found
+ * cannot be refiled. Bounded against a cycle in hand-edited data, the way
+ * ancestorsOf is.
+ *
+ * @returns {{folder: object, depth: number}[]}
+ */
+export function folderTree(folders = []) {
+  const byName = (a, b) => String(a.name).localeCompare(String(b.name), undefined, { numeric: true, sensitivity: 'base' });
+  const under = new Map();
+  for (const folder of folders) {
+    const parent = folder.parentId || null;
+    if (!under.has(parent)) under.set(parent, []);
+    under.get(parent).push(folder);
+  }
+  const out = [];
+  const seen = new Set();
+  const walk = (parentId, depth) => {
+    const children = (under.get(parentId) || []).sort(byName);
+    for (const folder of depth === 0 ? unfiledFirst(children) : children) {
+      if (seen.has(folder.id) || depth > 32) continue;
+      seen.add(folder.id);
+      out.push({ folder, depth });
+      walk(folder.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  for (const folder of [...folders].sort(byName)) {
+    if (seen.has(folder.id)) continue;
+    seen.add(folder.id);
+    out.push({ folder, depth: 0 });
+    walk(folder.id, 1);
+  }
+  return out;
+}
+
+/**
+ * A folder's name as a line in a menu, indented under its parent.
+ *
+ * A <select> cannot be styled per option on a phone - the native wheel draws
+ * its own text - so the nesting has to be in the words: no-break spaces, which
+ * the wheel keeps where it would collapse ordinary ones, and a bullet, which
+ * says "this is under the one above" even where the indent is lost.
+ */
+export function treeLabel(name, depth = 0) {
+  const text = String(name ?? '');
+  if (!depth) return text;
+  return `${'\u00a0'.repeat(4 * depth)}\u2022 ${text}`;
+}
+
 /** Whether this is that folder, given either the folder or its id. */
 export function isUnfiled(folder) {
   const id = typeof folder === 'string' ? folder : folder?.id;

@@ -24,6 +24,65 @@ export function el(tag, attrs = {}, children = []) {
   return node;
 }
 
+/**
+ * A window over the page, closed the three ways people try to close one: the
+ * cross, Escape, and a tap outside it.
+ *
+ * Built on <dialog> and showModal(), which is what gives it a backdrop, keeps
+ * focus inside while it is open and hands focus back to whatever opened it -
+ * three things a positioned div has to fake, and usually fakes one of wrong.
+ * Removed from the page when it closes, so nothing stale is left to find.
+ *
+ * @returns {HTMLDialogElement}
+ */
+let dialogCount = 0;
+export function openDialog({ title = '', body = [], className = '', onClose } = {}) {
+  dialogCount += 1;
+  const headingId = `dialog-title-${dialogCount}`;
+  const close = el('button', {
+    class: 'dialog-close', type: 'button', 'aria-label': 'Close',
+    html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>',
+  });
+  const dialog = el('dialog', {
+    class: `dialog ${className}`.trim(), 'aria-labelledby': headingId,
+  }, [
+    el('div', { class: 'dialog-card' }, [
+      el('div', { class: 'dialog-head' }, [
+        el('h2', { class: 'dialog-title', id: headingId, text: title }),
+        close,
+      ]),
+      el('div', { class: 'dialog-body' }, body),
+    ]),
+  ]);
+
+  const onKey = (event) => { if (event.key === 'Escape') dialog.close?.(); };
+  dialog.addEventListener('close', () => {
+    document.removeEventListener('keydown', onKey);
+    dialog.remove();
+    onClose?.();
+  }, { once: true });
+  close.addEventListener('click', () => dialog.close());
+  // Escape is this window's, and only this window's: the page's own handlers
+  // close a panel on it too, and one press should not close two things.
+  dialog.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') event.stopPropagation();
+  });
+  // A tap on the backdrop is delivered to the dialog itself; one anywhere on
+  // the card lands on something inside it.
+  dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
+
+  document.body.append(dialog);
+  if (typeof dialog.showModal === 'function') {
+    dialog.showModal();
+  } else {
+    // An engine without modal dialogs still gets a window, and Escape.
+    dialog.setAttribute('open', '');
+    dialog.close = () => dialog.dispatchEvent(new Event('close'));
+    document.addEventListener('keydown', onKey);
+  }
+  return dialog;
+}
+
 const THEME_KEY = 'ab-maps-theme';
 
 /**

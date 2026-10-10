@@ -954,7 +954,9 @@ const parent = beforeNew[0];
 
 await page.locator(`.folder[data-folder="${child}"] > .folder-head .folder-menu-button`).click();
 await page.waitForTimeout(300);
-const nestOptions = await page.locator(`.folder[data-folder="${child}"] > .style-editor .folder-parent option`)
+// Only the choices that can be made: a folder that cannot take this one is
+// listed greyed, so the tree in the menu stays whole, and is not a choice.
+const nestOptions = await page.locator(`.folder[data-folder="${child}"] > .style-editor .folder-parent option:not([disabled])`)
   .evaluateAll((nodes) => nodes.map((node) => node.value));
 check('a new folder is offered every folder it could go inside',
   nestOptions[0] === '' && nestOptions.includes(parent), true);
@@ -1019,7 +1021,7 @@ check('showing it again clears that', (await childEye.getAttribute('class')).inc
 await page.locator(`.folder[data-folder="${parent}"] > .folder-head .folder-menu-button`).click();
 await page.waitForTimeout(300);
 check('a folder is never offered a place inside its own branch',
-  (await page.locator(`.folder[data-folder="${parent}"] > .style-editor .folder-parent option`)
+  (await page.locator(`.folder[data-folder="${parent}"] > .style-editor .folder-parent option:not([disabled])`)
     .evaluateAll((nodes) => nodes.map((node) => node.value))).includes(child), false);
 /*
  * Folding a parent takes the branch with it. This is the whole of what makes
@@ -1720,39 +1722,84 @@ check('and no label layer without glyphs to draw it with',
  * The weather keys, which used to be a fetched picture of somebody else's
  * typography and are now the same swatch list the radar layer draws.
  */
-console.log('\nA weather layer draws the service colour scale as swatches');
+console.log('\nA weather layer\'s (i) opens a window, with the colour scale along its foot');
 await showTab('layers');
 await page.waitForTimeout(300);
 // The group is a <details>, and a row inside a closed one is not clickable.
 await openGroup(/Weather/);
-const scale = await (async () => {
-  const row = page.locator('.layer-row', { hasText: /^Temperature/ }).first();
-  await row.locator('.layer-info, [aria-expanded]').first().click();
-  await page.waitForTimeout(400);
-  return row.evaluate((node) => {
-    // The description is the row's next sibling rather than a child of it —
-    // scoping this to the row itself finds nothing and reads as "the scale
-    // never rendered", which is a different bug entirely.
-    const desc = node.nextElementSibling;
-    const list = desc?.querySelector('.legend');
-    return {
-      swatches: desc?.querySelectorAll('.legend-swatch').length ?? 0,
-      split: !!(list?.classList.contains('is-split') || list?.classList.contains('is-wide')),
-      wide: !!list?.classList.contains('is-wide'),
-      labels: [...(desc?.querySelectorAll('.legend-item') || [])].slice(0, 3)
-        .map((item) => item.textContent.trim()),
-      // The prose above it restated what the swatches say, so a layer with a
-      // scale shows the scale alone.
-      prose: desc?.querySelectorAll('.layer-desc-text').length ?? 0,
-      picture: desc?.querySelectorAll('.legend-image').length ?? 0,
-    };
-  });
-})();
-check('the scale is drawn as swatches, not fetched as a picture', scale.picture, 0);
-check('every step in the colormap has a swatch', scale.swatches, 12);
-check('the nodata sentinel is not one of them', scale.labels.includes(''), false);
-check('a long ramp splits into more than one column', scale.split, true);
-check('and the prose that restated it is gone', scale.prose, 0);
+const readInfo = () => page.evaluate(() => {
+  const dialog = document.querySelector('dialog.layer-dialog[open]');
+  const body = dialog?.querySelector('.dialog-body');
+  const last = body?.lastElementChild;
+  return {
+    open: !!dialog,
+    modal: dialog ? dialog.matches(':modal') : false,
+    title: dialog?.querySelector('.dialog-title')?.textContent.trim() || '',
+    steps: dialog?.querySelectorAll('.layer-scale .scale-step').length ?? 0,
+    ticks: [...(dialog?.querySelectorAll('.layer-scale .scale-labels span') || [])].map((n) => n.textContent.trim()),
+    unit: dialog?.querySelector('.layer-scale .scale-unit')?.textContent.trim() || '',
+    scaleLast: !!last?.classList.contains('layer-scale'),
+    prose: dialog?.querySelectorAll('.layer-desc-text').length ?? 0,
+    picture: dialog?.querySelectorAll('.legend-image').length ?? 0,
+    dialogs: document.querySelectorAll('dialog').length,
+  };
+});
+const tempRow = page.locator('.layer-row', { hasText: /^Temperature/ }).first();
+await tempRow.locator('.layer-info').click();
+await page.waitForTimeout(400);
+const scale = await readInfo();
+check('the (i) opens a window', scale.open, true);
+check('a modal one, over the panel', scale.modal, true);
+check('titled with the layer', scale.title, 'Temperature');
+check('the scale is drawn as a bar, not fetched as a picture', scale.picture, 0);
+check('every step in the colormap has a place on the bar', scale.steps, 12);
+check('the nodata sentinel is not one of them', scale.ticks.includes(''), false);
+check('both ends of the range are labelled', [scale.ticks[0], scale.ticks.at(-1)], ['-40', '92']);
+check('a long ramp is labelled at a few steps, not all twelve', scale.ticks.length, 5);
+check('with what it measures', scale.unit, '°F');
+check('the scale is the last thing in the window', scale.scaleLast, true);
+check('and the description is there above it', scale.prose, 1);
+
+await page.keyboard.press('Escape');
+await page.waitForTimeout(250);
+check('Escape closes it, and leaves nothing behind', (await readInfo()).dialogs, 0);
+
+await tempRow.locator('.layer-info').click();
+await page.waitForTimeout(250);
+check('it opens again', (await readInfo()).open, true);
+// A tap outside the card lands on the backdrop, which is the dialog itself.
+await page.mouse.click(8, 8);
+await page.waitForTimeout(250);
+check('and a tap outside closes it', (await readInfo()).dialogs, 0);
+
+await tempRow.locator('.layer-info').click();
+await page.waitForTimeout(250);
+await page.locator('dialog.layer-dialog .dialog-close').click();
+await page.waitForTimeout(250);
+check('as does its close button', (await readInfo()).dialogs, 0);
+
+console.log('\nA colour layer that is on shows its scale along the bottom of the map');
+const readStrip = () => page.evaluate(() => {
+  const strip = document.getElementById('scale-strip');
+  return {
+    present: !!strip,
+    layers: [...(strip?.querySelectorAll('.scale-slot') || [])].map((n) => n.dataset.layer),
+    steps: strip?.querySelectorAll('.scale-slot[data-layer="weather-temp"] .scale-step').length ?? 0,
+    name: strip?.querySelector('.scale-slot[data-layer="weather-temp"] .scale-name')?.textContent.trim() || '',
+    inMap: !!strip?.closest('.map-surface'),
+  };
+});
+check('nothing along the bottom while no colour layer is on', (await readStrip()).present, false);
+await tempRow.locator('input[type=checkbox]').check();
+await page.waitForTimeout(500);
+const strip = await readStrip();
+check('switching one on puts its scale on the map', strip.layers, ['weather-temp']);
+check('the whole bar, every step', strip.steps, 12);
+check('named, so two scales cannot be confused', strip.name, 'Temperature');
+check('and it sits on the map rather than in the panel', strip.inMap, true);
+await page.locator('.layer-row', { hasText: /^Temperature/ }).first().locator('input[type=checkbox]').uncheck();
+await page.waitForTimeout(400);
+check('switching it off takes the scale away', (await readStrip()).present, false);
 
 /*
  * Recreation sites, which used to be two rasters of server-drawn names with
@@ -1812,15 +1859,18 @@ check('the symbols are registered as NPS images, not the pin glyphs',
  * The key shows the symbols themselves. A list of coloured squares cannot
  * answer "which of these is the tent", which is what got reported.
  */
+await page.locator('.layer-row', { hasText: /^Recreation/ }).first().locator('.layer-info').click();
+await page.waitForTimeout(250);
 const symbolKey = await page.evaluate(() => {
-  const row = [...document.querySelectorAll('.layer-row')]
-    .find((node) => /^Recreation/.test(node.textContent.trim()));
-  const desc = row?.nextElementSibling;
+  // In the layer's window, where its key now lives.
+  const desc = document.querySelector('dialog.layer-dialog[open]');
   return {
     rows: desc?.querySelectorAll('.legend.is-symbols .legend-item').length ?? 0,
     drawn: desc?.querySelectorAll('.legend-symbol svg').length ?? 0,
   };
 });
+await page.keyboard.press('Escape');
+await page.waitForTimeout(200);
 // Seven sublayers, six symbols: cabins and shelters share one.
 check('the key lists one row per symbol', symbolKey.rows, 7);
 check('and each row draws the symbol rather than a colour', symbolKey.drawn, 7);
@@ -3611,6 +3661,38 @@ check('a search from a later page still shows results', found > 0, true);
 check('and the cards carry the note that tells them apart',
   await page.locator('.waypoint-blurb').count() > 0, true);
 
+/*
+ * The order is a choice now, and the choice is kept.
+ *
+ * Alphabetical was the only order, which answers "where is the one called
+ * Creamery" and nothing else. Checked on the names actually drawn, both ways
+ * round, rather than on the menu's value.
+ */
+console.log('\nWaypoints can be sorted');
+await page.evaluate(() => {
+  const box = document.querySelector('#waypoint-search');
+  box.value = '';
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+});
+await page.waitForTimeout(300);
+const drawnNames = () => page.locator('.waypoint-card .waypoint-name').evaluateAll(
+  (nodes) => nodes.map((node) => node.textContent.trim()));
+const sortChoices = await page.locator('#waypoint-sort option').evaluateAll((nodes) => nodes.map((node) => node.value));
+check('the sort menu offers the orders', sortChoices,
+  ['name', 'name-desc', 'newest', 'oldest', 'nearest', 'folder', 'symbol', 'color']);
+const aToZ = await drawnNames();
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+check('A to Z by default', aToZ.length > 2 && aToZ.every((name, i) => i === 0 || collator.compare(aToZ[i - 1], name) <= 0), true);
+await page.selectOption('#waypoint-sort', 'name-desc');
+await page.waitForTimeout(300);
+const zToA = await drawnNames();
+check('Z to A turns it round', zToA.length > 2 && zToA.every((name, i) => i === 0 || collator.compare(zToA[i - 1], name) >= 0), true);
+check('and starts again from the first page', /1–\d+ of \d+/.test(await page.locator('.waypoint-pager').innerText()), true);
+check('the choice is remembered on this device',
+  await page.evaluate(() => localStorage.getItem('halfstop-waypoint-sort')), 'name-desc');
+await page.selectOption('#waypoint-sort', 'name');
+await page.waitForTimeout(300);
+
 await showTab('folders');
 await page.waitForTimeout(500);
 // Per folder, not across the panel: a second folder from an earlier step is
@@ -4125,6 +4207,66 @@ check('the address in the note is a link', opened.href, 'https://example.org/spr
 check('showing the address itself, not a label over it', opened.text, 'https://example.org/spring');
 check('and it opens away from the map, safely',
   `${opened.target} ${opened.rel}`, '_blank noopener noreferrer');
+
+/*
+ * Where it is filed on one row, what to do with it on the next.
+ *
+ * They shared one wrapping row, so the folder menu and Details sat together
+ * and Edit and Remove fell to a second line - a layout decided by how long a
+ * folder's name was. And the menu lists folders as the Folders tab does,
+ * subfolders indented under their parent, rather than in storage order.
+ */
+const savedCard = await page.evaluate(() => {
+  const popup = document.querySelector('.maplibregl-popup-content, .mapboxgl-popup-content');
+  const actions = popup?.querySelector('.popup-actions.is-saved');
+  const move = actions?.querySelector('.popup-move-row select');
+  const buttons = [...(actions?.querySelectorAll('.popup-button-row button') || [])];
+  const tops = buttons.map((button) => Math.round(button.getBoundingClientRect().top));
+  const options = [...(move?.options || [])].slice(1);
+  const plain = (text) => text.replace(/^[\u00a0\s]*(\u2022 )?/, '').replace(/ \(here\)$/, '');
+  return {
+    moveAlone: move ? move.parentElement.children.length === 1 : false,
+    buttons: buttons.map((button) => button.textContent.trim()),
+    oneLine: tops.length === 3 && new Set(tops).size === 1,
+    here: options.filter((option) => option.disabled).length,
+    menu: options.map((option) => plain(option.textContent)),
+    indented: options.some((option) => /^\u00a0+\u2022 /.test(option.textContent)),
+    nested: document.querySelectorAll('#folder-list .folder .folder').length > 0,
+    list: [...document.querySelectorAll('#folder-list .folder')]
+      .map((node) => node.querySelector('.folder-name')?.textContent.trim() || ''),
+  };
+});
+check('a saved pin: the folder menu has a row to itself', savedCard.moveAlone, true);
+check('then Details, Edit and Remove, in that order', savedCard.buttons, ['Details', 'Edit', 'Remove']);
+check('all three on one line', savedCard.oneLine, true);
+check('its own folder is in the menu, greyed, so the tree stays whole', savedCard.here, 1);
+// The reserved Unfiled folder is a place a pin can go even while the list
+// hides it for being empty, so it is left out of the comparison.
+check('the menu lists folders in the order the Folders tab does',
+  savedCard.menu.filter((name) => name !== 'Unfiled'), savedCard.list.filter((name) => name !== 'Unfiled'));
+// Indented exactly when the tab shows a folder inside another.
+check('with a subfolder indented under its parent, and only then', savedCard.indented, savedCard.nested);
+
+/*
+ * On a phone the card is the screen.
+ *
+ * A 300px box over a 390px map, with the map live round its edges, was hard to
+ * use without panning by accident. Measured against the viewport rather than
+ * by reading the stylesheet, because the engine positions a popup with an
+ * inline transform that a rule has to win over.
+ */
+await page.setViewportSize({ width: 390, height: 844 });
+await page.waitForTimeout(300);
+const fullCard = await page.evaluate(() => {
+  const box = document.querySelector('.maplibregl-popup, .mapboxgl-popup')?.getBoundingClientRect();
+  return box ? [Math.round(box.left), Math.round(box.top), Math.round(box.width), Math.round(box.height)] : null;
+});
+check('on a phone a pin card fills the screen', fullCard, [0, 0, 390, 844]);
+await page.setViewportSize({ width: 1280, height: 900 });
+await page.waitForTimeout(300);
+const deskCard = await page.evaluate(() => document.querySelector('.maplibregl-popup, .mapboxgl-popup')
+  ?.getBoundingClientRect().width || 0);
+check('and on a desk it is still a card beside the place', deskCard > 0 && deskCard <= 340, true);
 // Shut it again, or the checks below count this card as well as their own.
 // The close control is the app's own, on the popup's action bar.
 await page.evaluate(() => {
@@ -4676,25 +4818,22 @@ check('so a popup card keeps the app\'s ink, not the engine\'s',
  */
 console.log('\nA service-published key reaches the panel');
 await openGroup('Land & access');
+await page.waitForTimeout(400);
+const blmRow = page.locator('.layer-row', { hasText: 'BLM routes' }).first();
+const blmFound = await blmRow.count();
+if (blmFound) await blmRow.locator('.layer-info').click();
 await page.waitForTimeout(900);
 const blmKey = await page.evaluate(() => {
-  const row = [...document.querySelectorAll('.layer-row')]
-    .find((node) => node.textContent.includes('BLM routes'));
-  // The row and its description are appended as a pair, so they are adjacent
-  // siblings inside the group — not nested in a wrapper of their own. Asking
-  // the parent for ".layer-desc" returns the FIRST layer's description in the
-  // whole group, which is how this check reported an empty key for a key that
-  // was being filled correctly.
-  const desc = row?.nextElementSibling?.classList.contains('layer-desc')
-    ? row.nextElementSibling
-    : null;
-  const slot = desc?.querySelector('.legend-slot');
+  // The key is in the layer's window now, not under its row.
+  const slot = document.querySelector('dialog.layer-dialog[open] .legend-slot');
   return {
-    found: !!row,
     rows: [...(slot?.querySelectorAll('.legend-item') || [])].map((n) => n.textContent.trim()),
     swatches: slot?.querySelectorAll('img.legend-swatch').length || 0,
   };
 });
+blmKey.found = blmFound > 0;
+await page.keyboard.press('Escape');
+await page.waitForTimeout(200);
 check('the BLM routes row is there', blmKey.found, true);
 check('and its key is filled from the service', blmKey.rows, ['Open to all vehicles', 'Open seasonally']);
 check('each class drawn with the swatch the service published', blmKey.swatches, 2);
@@ -5713,8 +5852,14 @@ console.log('\nMetered basemaps are shown and not offered, once billing is live'
       name: item.querySelector('.layer-option-label')?.dataset.layer || '',
       locked: item.querySelector('.layer-row')?.classList.contains('is-locked') || false,
       disabled: item.querySelector('input[type=radio]')?.disabled || false,
-      note: item.querySelector('.layer-locked-note')?.textContent.trim() || '',
     })));
+  // The reason is in the row's (i), with the rest of what the layer is.
+  await paid.locator('#basemap-list .layer-item', { has: paid.locator('[data-layer="mapbox-outdoors"]') })
+    .locator('.layer-info').click();
+  await paid.waitForTimeout(250);
+  const lockedNote = await paid.evaluate(() => document.querySelector('dialog.layer-dialog[open] .layer-locked-note')
+    ?.textContent.trim() || '');
+  await paid.keyboard.press('Escape');
 
   const byId = Object.fromEntries(rows.map((row) => [row.name, row]));
   const metered = ['byways-topo-mapbox', 'mapbox-outdoors', 'mapbox-satellite-streets'];
@@ -5724,7 +5869,7 @@ console.log('\nMetered basemaps are shown and not offered, once billing is live'
   check('each one is drawn locked', metered.map((id) => byId[id]?.locked), [true, true, true]);
   check('and its control cannot be chosen', metered.map((id) => byId[id]?.disabled), [true, true, true]);
   check('with the reason on the row rather than a bare "upgrade"',
-    (byId['mapbox-outdoors']?.note || '').includes('Extra basemaps'), true);
+    lockedNote.includes('Extra basemaps'), true);
 
   // And the free ones are untouched, which is the half that would go unnoticed.
   const free = ['byways-topo', 'usgs-topo', 'usgs-classic', 'usgs-imagery-topo', 'esri-imagery', 'osm'];
@@ -5929,6 +6074,9 @@ await page.waitForTimeout(250);
  * the panel carries it and opening the menu is where you see it.
  */
 console.log('\nThe name is somewhere, at every width');
+// A card left open from an earlier check is the whole screen on a phone, and
+// would sit over the panel this section opens.
+await page.evaluate(() => document.querySelectorAll('.maplibregl-popup, .mapboxgl-popup').forEach((node) => node.remove()));
 await page.setViewportSize({ width: 402, height: 874 });
 await page.waitForTimeout(300);
 check('the header drops the title on a phone', await page.locator('.brand-text').isVisible(), false);

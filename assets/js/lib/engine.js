@@ -347,7 +347,10 @@ export function sourceNoteFor(basemap, {
   const everyone = fromArchive
     ? 'Can be downloaded for offline use.'
     : 'Cannot be downloaded for offline use.';
-  if (!editor) return everyone;
+  // The Mapbox twin's own description already says where it is drawn from,
+  // so an editor reading it gets the same sentence everyone does rather than
+  // the provenance twice in one card.
+  if (!editor || basemap.custom === 'byways-mapbox') return everyone;
 
   return fromArchive
     ? `Drawn from our own map archive. ${everyone}`
