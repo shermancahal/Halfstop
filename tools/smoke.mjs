@@ -199,7 +199,7 @@ class Src{constructor(d){this._d=d}setData(d){this._d=d}}
 // out at 1280px instead of the 340 it gets over a map — and a line of text
 // running under the close mark, which is a wrap-width bug, could not happen
 // here at all.
-class Popup{constructor(o){this._o=o||{}}setLngLat(){return this}
+class Popup{constructor(o){this._o=o||{};window.__popupOptions=this._o}setLngLat(){return this}
 // Detaches on remove(), as the real one does. A no-op remove() left every
 // popup in the DOM, so "the close button closes it" could not be tested at
 // all — and a stale card is indistinguishable from a live one to a selector.
@@ -3574,8 +3574,12 @@ check('and every hour mark carries its time', track.labelled, true);
  */
 const spoke = await page.evaluate(() => {
   const features = window.__map.getSource('light-directions')?._d?.features || [];
+  // The spoke is the core feature with no kind: the band is an 'arc', and
+  // the night's track and its hour marks are 'core' too. Matching anything
+  // but the arc picked up the track on a night the core never rises - late
+  // October at this pin - and failed it for having no bearing.
   const core = features.find((feature) => feature.properties.body === 'core'
-    && feature.properties.kind !== 'arc');
+    && !feature.properties.kind);
   return {
     present: !!core,
     label: core?.properties.label || '',
@@ -3709,6 +3713,122 @@ check('and offers the rest', await more.count(), 1);
 await more.click();
 await page.waitForTimeout(400);
 check('which grows it', await folder.locator('.folder-item').count() > rows, true);
+
+/*
+ * Edit from Details, on a pin past the rows its folder draws.
+ *
+ * The editor opens on the pin's row in the Folders tab, and a long folder
+ * draws only its first forty rows - so Edit on the fifty-seventh said the pin
+ * was "no longer in the folder list" when it was only below the fold. A second
+ * copy of the long file is a fresh folder, drawn to forty again.
+ */
+console.log('\nEditing a pin from Details, past the rows its folder draws');
+const foldersBefore = await page.locator('#folder-list .folder').evaluateAll((nodes) => nodes.map((node) => node.dataset.folder));
+await page.setInputFiles('#file-input', MANY);
+await page.waitForTimeout(1400);
+await page.click('#import-ask button:has-text("New folder")').catch(() => {});
+await page.waitForTimeout(900);
+await showTab('folders');
+await page.waitForTimeout(300);
+const fresh = (await page.locator('#folder-list .folder').evaluateAll((nodes) => nodes.map((node) => node.dataset.folder)))
+  .find((id) => !foldersBefore.includes(id));
+check('the second copy is a folder of its own', Boolean(fresh), true);
+check('drawn to its first forty rows', await page.locator(`.folder[data-folder="${fresh}"] .folder-item`).count(), 40);
+
+await showTab('waypoints');
+await page.waitForTimeout(300);
+await page.selectOption('#waypoint-folder', fresh);
+await page.evaluate(() => {
+  const box = document.querySelector('#waypoint-search');
+  box.value = 'Devils Race Path 57';
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+});
+await page.waitForTimeout(400);
+await page.locator('.waypoint-card', { hasText: 'Devils Race Path 57' }).first().click();
+await page.waitForTimeout(700);
+await page.evaluate(() => document.querySelectorAll('.maplibregl-popup, .mapboxgl-popup').forEach((node) => node.remove()));
+await showTab('details');
+await page.waitForTimeout(300);
+await page.locator('#details-body button', { hasText: /^Edit$/ }).first().click();
+await page.waitForTimeout(600);
+const pastFold = await page.evaluate((id) => {
+  const row = [...document.querySelectorAll(`.folder[data-folder="${id}"] .folder-item`)]
+    .find((node) => node.textContent.includes('Devils Race Path 57'));
+  return {
+    complaint: [...document.querySelectorAll('#toasts *')].some((node) => /no longer in the folder list/.test(node.textContent)),
+    row: Boolean(row),
+    editor: Boolean(document.querySelector('#folder-list .style-editor')),
+  };
+}, fresh);
+check('Edit does not say the pin is gone', pastFold.complaint, false);
+check('the folder grows to draw the pin\'s row', pastFold.row, true);
+check('and the editor opens on it', pastFold.editor, true);
+// The second copy goes again, or its seventy-eight waypoints push the ones
+// later checks look for off the first page of the list.
+await page.locator(`.folder[data-folder="${fresh}"] > .folder-head .folder-menu-button`).click();
+await page.waitForTimeout(300);
+await page.locator(`.folder[data-folder="${fresh}"] button[title^="Delete "]`).first().click();
+await page.waitForTimeout(400);
+check('and the second copy is cleared away again', await page.locator(`.folder[data-folder="${fresh}"]`).count(), 0);
+// Back to every waypoint, for the checks that follow. Set on the controls
+// directly: the Waypoints tab is not the one showing.
+await page.evaluate(() => {
+  const box = document.querySelector('#waypoint-search');
+  box.value = '';
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  const filter = document.querySelector('#waypoint-folder');
+  filter.value = '';
+  filter.dispatchEvent(new Event('change', { bubbles: true }));
+});
+
+console.log('\nOn a touch screen a card closes only by its own controls');
+{
+  /*
+   * A tap on the map closed a card, or replaced it with another, before it
+   * was read - a pan that started as a tap was enough. On a touch screen the
+   * card now ignores the map and the map ignores taps while a card is open.
+   */
+  const touch = await browser.newContext({
+    viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: 'block',
+  });
+  const phone = await touch.newPage();
+  await phone.route('**/*', serveStubs);
+  await phone.goto(MAP_URL, { waitUntil: 'networkidle' });
+  await phone.waitForTimeout(900);
+  await phone.locator('.map-tool[title^="Drop a pin"]').click();
+  await phone.waitForTimeout(500);
+  const before = await phone.evaluate(() => {
+    const card = document.querySelector('.maplibregl-popup, .mapboxgl-popup');
+    if (card) card.dataset.first = 'yes';
+    return {
+      open: Boolean(card),
+      width: card?.getBoundingClientRect().width || 0,
+      closeOnClick: window.__popupOptions?.closeOnClick,
+      button: (() => {
+        const tool = document.querySelector('.map-tool');
+        return tool ? Math.round(tool.getBoundingClientRect().width) : 0;
+      })(),
+    };
+  });
+  check('a dropped pin\'s card opens', before.open, true);
+  check('as a window rather than the whole screen', before.width > 0 && before.width < 390, true);
+  check('made not to close when the map is tapped', before.closeOnClick, false);
+  check('and the map buttons are a finger\'s size', before.button, 38);
+  // A tap on bare map, as the engine reports one.
+  await phone.evaluate(() => window.__map.fire('click', {
+    point: { x: 200, y: 700 }, lngLat: { lng: -84.2, lat: 35.9 }, originalEvent: {},
+  }));
+  await phone.waitForTimeout(500);
+  const after = await phone.evaluate(() => {
+    const cards = [...document.querySelectorAll('.maplibregl-popup, .mapboxgl-popup')];
+    return { count: cards.length, same: cards[0]?.dataset.first === 'yes' };
+  });
+  check('a tap on the map leaves the card where it was', after, { count: 1, same: true });
+  await phone.locator('.maplibregl-popup button, .mapboxgl-popup button', { hasText: /^Close$/ }).first().click();
+  await phone.waitForTimeout(300);
+  check('and its Close closes it', await phone.locator('.maplibregl-popup, .mapboxgl-popup').count(), 0);
+  await touch.close();
+}
 
 console.log('\nDeleting a pin asks first');
 {
@@ -4227,6 +4347,12 @@ const savedCard = await page.evaluate(() => {
   return {
     moveAlone: move ? move.parentElement.children.length === 1 : false,
     buttons: buttons.map((button) => button.textContent.trim()),
+    // "Remo..." was reported: three buttons in a 300px card had too little
+    // room each for a word and its icon.
+    clipped: buttons.filter((button) => {
+      const label = button.querySelector('span');
+      return label && label.scrollWidth > label.clientWidth + 1;
+    }).map((button) => button.textContent.trim()),
     oneLine: tops.length === 3 && new Set(tops).size === 1,
     here: options.filter((option) => option.disabled).length,
     menu: options.map((option) => plain(option.textContent)),
@@ -4239,6 +4365,7 @@ const savedCard = await page.evaluate(() => {
 check('a saved pin: the folder menu has a row to itself', savedCard.moveAlone, true);
 check('then Details, Edit and Remove, in that order', savedCard.buttons, ['Details', 'Edit', 'Remove']);
 check('all three on one line', savedCard.oneLine, true);
+check('with none of their words cut short', savedCard.clipped, []);
 check('its own folder is in the menu, greyed, so the tree stays whole', savedCard.here, 1);
 // The reserved Unfiled folder is a place a pin can go even while the list
 // hides it for being empty, so it is left out of the comparison.
@@ -4248,25 +4375,18 @@ check('the menu lists folders in the order the Folders tab does',
 check('with a subfolder indented under its parent, and only then', savedCard.indented, savedCard.nested);
 
 /*
- * On a phone the card is the screen.
- *
- * A 300px box over a 390px map, with the map live round its edges, was hard to
- * use without panning by accident. Measured against the viewport rather than
- * by reading the stylesheet, because the engine positions a popup with an
- * inline transform that a rule has to win over.
+ * A card is a window at every size - the full-screen version for phones was
+ * taken back - and with a mouse, a click on the map may close it as before.
  */
 await page.setViewportSize({ width: 390, height: 844 });
 await page.waitForTimeout(300);
-const fullCard = await page.evaluate(() => {
-  const box = document.querySelector('.maplibregl-popup, .mapboxgl-popup')?.getBoundingClientRect();
-  return box ? [Math.round(box.left), Math.round(box.top), Math.round(box.width), Math.round(box.height)] : null;
-});
-check('on a phone a pin card fills the screen', fullCard, [0, 0, 390, 844]);
+const phoneCard = await page.evaluate(() => document.querySelector('.maplibregl-popup, .mapboxgl-popup')
+  ?.getBoundingClientRect().width || 0);
+check('on a narrow screen a pin card is still a window, not the screen', phoneCard > 0 && phoneCard <= 340, true);
 await page.setViewportSize({ width: 1280, height: 900 });
 await page.waitForTimeout(300);
-const deskCard = await page.evaluate(() => document.querySelector('.maplibregl-popup, .mapboxgl-popup')
-  ?.getBoundingClientRect().width || 0);
-check('and on a desk it is still a card beside the place', deskCard > 0 && deskCard <= 340, true);
+check('with a mouse the engine may close a card on a map click as it always has',
+  await page.evaluate(() => window.__popupOptions?.closeOnClick), undefined);
 // Shut it again, or the checks below count this card as well as their own.
 // The close control is the app's own, on the popup's action bar.
 await page.evaluate(() => {

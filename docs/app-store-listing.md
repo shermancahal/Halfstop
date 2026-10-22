@@ -143,7 +143,7 @@ shows in search results.
 Changeable at any time without a new build.
 
 ```
-New in 1.0: color scales along the bottom of the map, pin cards that fill your phone's screen, and waypoints you can sort by name, date or distance.
+New in 1.0: color scales along the bottom of the map, pin cards that stay open until you close them, and waypoints you can sort by name, date or distance.
 ```
 
 ### Description (4000)

@@ -333,6 +333,13 @@ html, body { touch-action: pan-x pan-y; }
 .mapboxgl-ctrl-top-right .mapboxgl-ctrl-group:only-of-type {
   border-radius: var(--radius) !important;
 }
+/*
+ * Cards above the search bar and the menu button, which float over the map
+ * too. A card near the top of a phone's screen had its first row - the name
+ * of a dropped pin - under the search bar, where it could not be read or
+ * typed into.
+ */
+.maplibregl-popup, .mapboxgl-popup { z-index: 26; }
 .maplibregl-popup-content, .mapboxgl-popup-content {
   background: var(--popup-bg); color: var(--ink);
   border: 1px solid var(--line); border-radius: var(--radius);
@@ -682,7 +689,7 @@ html, body { touch-action: pan-x pan-y; }
 .popup-actions.is-saved { display: grid; gap: 6px; }
 .popup-move-row select { width: 100%; }
 .popup-button-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-.popup-button-row .button { width: 100%; justify-content: center; }
+.popup-button-row .button { width: 100%; justify-content: center; padding: 6px 4px; gap: 4px; font-size: .8rem; }
 
 /* Its own row: a folder name needs the full width, and it only appears at all
    when "New folder" is the selection. */
@@ -885,7 +892,9 @@ html, body { touch-action: pan-x pan-y; }
      is a control for something nobody can see. */
   .app.is-panel-open .map-search { display: none; }
 
-  .panel { width: min(92vw, 380px); box-shadow: var(--shadow-lg); }
+  /* Above the map's cards as well as the map: a card open behind the panel
+     waits there rather than floating over the list. */
+  .panel { width: min(92vw, 380px); box-shadow: var(--shadow-lg); z-index: 30; }
 
   .panel-close {
     position: absolute; top: 6px; right: 6px; z-index: 3;
@@ -1212,6 +1221,7 @@ html, body { touch-action: pan-x pan-y; }
 
 /* Photos on a saved pin */
 .photo-strip { display: flex; flex-wrap: wrap; gap: 7px; }
+.photo-strip[hidden] { display: none; }
 .photo-tile {
   position: relative; width: 68px; height: 68px; flex: none;
   border-radius: var(--radius-sm); overflow: hidden;
@@ -1824,6 +1834,17 @@ html, body { touch-action: pan-x pan-y; }
 .map-tool:last-child { border-bottom: 0; }
 .map-tool:hover { background: var(--paper-2); color: var(--ink); }
 .map-tool svg { width: 17px; height: 17px; }
+/*
+ * Bigger under a finger. The engine's 29px suits a mouse and is a near miss
+ * for a thumb; 38 is as large as the column can go before it crowds the map
+ * on a phone. The engine's own icons are centred in the button rather than
+ * stretched, so they keep their size and gain room around them.
+ */
+@media (pointer: coarse) {
+  .map-tool,
+  .maplibregl-ctrl-group button, .mapboxgl-ctrl-group button { width: 38px; height: 38px; }
+  .map-tool svg { width: 20px; height: 20px; }
+}
 /* Armed: the next tap asks a question instead of dropping a pin, and the
    button has to say so — a mode with no visible state is a trap. */
 .map-tool.is-on { background: var(--clay); color: #fff; }
@@ -2106,12 +2127,11 @@ html, body { touch-action: pan-x pan-y; }
   /*
    * `overflow: visible`, and the rounding moved onto the bands.
    *
-   * The now marker has to stand above and below the bar to be findable, and
-   * clipping it to the bar is what made it a two-pixel sliver among a dozen
-   * coloured ones. The bands carry the rounded ends now, so the bar still
-   * looks the same.
+   * The now arrow stands above the bar, and clipping it to the bar would cut
+   * it off. The bands carry the rounded ends instead, so the bar still looks
+   * the same. The top margin is the arrow's room.
    */
-  position: relative; display: flex; height: 13px; margin: 7px 0 4px;
+  position: relative; display: flex; height: 13px; margin: 17px 0 4px;
   border-radius: 3px; overflow: visible;
   border: 1px solid var(--line);
 }
@@ -2126,32 +2146,20 @@ html, body { touch-action: pan-x pan-y; }
 .sky-band.is-golden       { background: #f0b429; }
 .sky-band.is-day          { background: #9ecbe8; }
 
-/* Where we are in the day. Without it the bar is a diagram; with it, it is a
-   clock you can read in one glance. */
 /*
- * Findable against any band, which is the whole difficulty.
+ * Where we are in the day: an arrow above the bar, its point on the moment.
  *
- * The bands run from near-black at midnight to pale blue at noon, so no single
- * colour contrasts with all of them - a dark line vanishes into night and a
- * pale one vanishes into day. A white core inside a dark halo reads against
- * both, and the tab above it is what the eye actually lands on: at a glance the
- * bar is a clock with a hand, rather than a diagram with a hairline in it.
+ * It was a white line through the bar with a cap on top - findable, but read
+ * as a T rather than as "here". An arrow says "this point" by itself, and
+ * standing above the bar it sits on the panel's own background, so it needs
+ * no halo to show against night at one end and pale day at the other.
  */
 .sky-now {
-  position: absolute; top: -5px; bottom: -5px; width: 3px;
-  background: #fff;
-  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .85);
-  border-radius: 2px;
-  transform: translateX(-1.5px);
-  pointer-events: none;
+  position: absolute; bottom: 100%; margin-bottom: 1px;
+  width: 12px; height: 13px; transform: translateX(-6px);
+  color: var(--ink); line-height: 0; pointer-events: none;
 }
-/* A cap at the top, because at this size a triangle reads as a smudge. */
-.sky-now::before {
-  content: ""; position: absolute; left: 50%; top: -3px;
-  width: 9px; height: 3px; transform: translateX(-50%);
-  border-radius: 2px;
-  background: #fff; box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .85);
-}
+.sky-now svg { display: block; width: 12px; height: 13px; fill: currentColor; }
 
 .sky-bar-ends {
   display: flex; justify-content: space-between;
@@ -2935,63 +2943,3 @@ body.has-table { overflow: hidden; }
   box-shadow: var(--shadow-md); pointer-events: none;
 }
 .scale-strip:empty { display: none; }
-
-/* ==========================================================================
-   Map cards on a phone: the whole screen
-   ========================================================================== */
-
-/*
- * A card floating over the map works with a mouse and a wide screen. On a
- * phone it was a 300px box over a 390px map, holding a text field, a symbol
- * grid and a row of buttons, with the map still live around its edges - so a
- * thumb aimed at a button could pan the map instead, and the card moved with
- * it. Here it takes the screen: nothing behind it to hit by mistake, room for
- * the buttons to be full-size, and the actions pinned to the bottom where a
- * thumb already is.
- *
- * Done over the engine's own popup rather than by building a second kind of
- * card, so every card - a pin, a dropped pin, what is here - gets it, and a
- * tablet or a desk keeps the card beside the place it describes. The
- * engine positions a popup with an inline transform on every frame, which is
- * why these are !important: they have to win over that, and only here.
- */
-@media (max-width: 600px), (max-height: 500px) and (pointer: coarse) {
-  .maplibregl-popup, .mapboxgl-popup {
-    position: fixed !important; inset: 0 !important; transform: none !important;
-    max-width: none !important; width: auto !important; height: auto !important;
-    display: flex !important; flex-direction: column !important;
-    z-index: 70; pointer-events: auto;
-  }
-  .maplibregl-popup-tip, .mapboxgl-popup-tip { display: none !important; }
-  .maplibregl-popup-content, .mapboxgl-popup-content {
-    flex: 1; min-height: 0; width: 100%; max-width: none;
-    overflow-y: auto; overscroll-behavior: contain;
-    border: 0; border-radius: 0; box-shadow: none;
-    padding: calc(var(--safe-top) + 20px) calc(var(--safe-right) + 18px) 0 calc(var(--safe-left) + 18px);
-    font-size: 1rem;
-  }
-  /* The corner close, where a thumb finds it, and big enough to hit. Fixed
-     to the card rather than the text, so it does not scroll away. */
-  .maplibregl-popup-close-button, .mapboxgl-popup-close-button {
-    position: fixed; top: calc(var(--safe-top) + 10px); right: calc(var(--safe-right) + 10px);
-    width: 40px; height: 40px; font-size: 26px; z-index: 2;
-  }
-  .popup-head { padding-right: 44px; }
-  .popup-desc { max-height: none; }
-  .identify-card, .drop-pin { min-width: 0; }
-  /* Room under the last line for the home indicator, on a card whose last
-     row is not already the sticky bar that carries its own. */
-  .maplibregl-popup-content:not(:has(.popup-bar, .popup-tail)),
-  .mapboxgl-popup-content:not(:has(.popup-bar, .popup-tail)) {
-    padding-bottom: calc(var(--safe-bottom) + 18px);
-  }
-  /* The row that ends a card stays on screen however long the card is: it
-     holds Close, and the way out should never be a scroll away. */
-  .popup-bar, .popup-tail {
-    position: sticky; bottom: 0; z-index: 1;
-    margin-left: -18px; margin-right: -18px;
-    padding: 10px 18px calc(var(--safe-bottom) + 12px);
-    background: var(--popup-bg);
-  }
-  .popup-actions button, .popup-actions select { font-size: .9rem; padding: 10px 12px; }
-}

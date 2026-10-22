@@ -114,9 +114,6 @@ import {
   putPhoto, photoURL, deletePhoto, pruneUnreferenced, fetchLinkedPhoto, formatBytes, photoAccept,
   listSnapshots, SNAPSHOT_SOURCE,
 } from './lib/photos.js';
-// The two numbers the card quotes, from the module that decides them rather
-// than written out again here.
-import { LONG_EDGE, TARGET_BYTES } from './lib/photo-encode.js';
 
 /* ------------------------------------------------------------------ state */
 
@@ -511,6 +508,31 @@ const layerIdsFor = (key) => [
  * tapped the map, and the focus was already where they put it.
  */
 const POPUP_FOCUS = { focusAfterOpen: false };
+
+/*
+ * On a touch screen, a card stays until its own close control is pressed.
+ *
+ * The engine closes a popup on any tap on the map, and the map-tap handlers
+ * open a new card in its place. With a mouse that is what clicking elsewhere
+ * means. With a finger it is mostly an accident: a pan that starts as a tap,
+ * a thumb resting near the edge of the card, and the card is gone or replaced
+ * before it was read. So on a touch screen the card ignores the map, and the
+ * map ignores taps while a card is open; the cross, or the card's Close, is
+ * the way out.
+ */
+const touchScreen = () => globalThis.matchMedia?.('(pointer: coarse)').matches === true;
+
+/** The options every map card is made with. */
+function cardOptions(extra = {}) {
+  return { ...POPUP_FOCUS, ...extra, ...(touchScreen() ? { closeOnClick: false } : {}) };
+}
+
+/** Whether a card is open that a tap on the map should leave alone. */
+function cardHeld() {
+  if (!touchScreen()) return false;
+  // Either engine's class: the card is whichever drew it.
+  return Boolean(document.querySelector(['maplibregl', 'mapboxgl'].map((prefix) => `.${prefix}-popup`).join(', ')));
+}
 
 /** What a link with no wording of its own is called. */
 const DEFAULT_LINK_LABEL = 'More info';
@@ -3621,10 +3643,14 @@ function dayBar(phases, date) {
     title: `${phase.name} · ${clockTime(phase.from)}–${clockTime(phase.to)} · ${formatSpan(phase.minutes)}`,
   })));
 
-  // Where we are in the day, so the bar reads as "now" rather than a diagram.
+  // Where we are in the day, so the bar reads as "now" rather than a diagram:
+  // an arrow above the bar, pointing down at the moment.
   const elapsed = (date.valueOf() - first) / total;
   if (elapsed >= 0 && elapsed <= 1) {
-    bar.append(el('span', { class: 'sky-now', style: `left:${elapsed * 100}%` }));
+    bar.append(el('span', {
+      class: 'sky-now', style: `left:${elapsed * 100}%`, title: `Now, ${clockTime(date)}`,
+      html: '<svg viewBox="0 0 12 13" aria-hidden="true"><path d="M4.5 0h3v6.5H11L6 13 1 6.5h3.5z"/></svg>',
+    }));
   }
 
   return el('div', {}, [
@@ -7851,6 +7877,7 @@ function bindFeatureInteractions(layerId, { popup = true } = {}) {
   state.map.on('click', layerId, (event) => {
     const feature = event.features?.[0];
     if (!feature) return;
+    if (cardHeld()) return;
     /*
      * One card per tap, and the saved copy's card.
      *
@@ -7888,6 +7915,9 @@ function wireMapClicks() {
   state.map.on('click', (event) => {
     // The mouseup that ends a drawn region arrives here too, a moment later.
     if (Date.now() - state.regionDrawnAt < 400) return;
+    // A card open on a touch screen is closed by its own controls, not by
+    // the next tap - which would otherwise replace it with another.
+    if (cardHeld()) return;
     /*
      * Armed by the probe button, and disarmed by using it.
      *
@@ -7942,7 +7972,7 @@ function showDropPin(position, { name = '' } = {}) {
   // Our own close control rather than the engine's corner glyph: 26px,
   // unlabelled, and sitting on top of the title of any pin whose name filled
   // the line.
-  const popup = new state.gl.Popup({ ...POPUP_FOCUS, closeButton: false, maxWidth: '320px', offset: 12 })
+  const popup = new state.gl.Popup(cardOptions({ closeButton: false, maxWidth: '320px', offset: 12 }))
     .setLngLat(position);
   state.dropPopup = popup;
 
@@ -8284,7 +8314,7 @@ function showIdentifyResults(position, groups, { pending = false } = {}) {
   state.dropPopup?.remove();
 
   const content = el('div', { class: 'identify-card' });
-  const popup = new state.gl.Popup({ ...POPUP_FOCUS, closeButton: false, maxWidth: '340px', offset: 12 })
+  const popup = new state.gl.Popup(cardOptions({ closeButton: false, maxWidth: '340px', offset: 12 }))
     .setLngLat(position);
   state.dropPopup = popup;
 
@@ -8948,7 +8978,7 @@ function showFeaturePopup(feature, lngLat, { edit = false, identity = null } = {
     ])));
   }
 
-  const popup = new state.gl.Popup({ ...POPUP_FOCUS, closeButton: true, maxWidth: '300px', offset: 12 })
+  const popup = new state.gl.Popup(cardOptions({ closeButton: true, maxWidth: '300px', offset: 12 }))
     .setLngLat(feature.geometry?.type === 'Point' ? feature.geometry.coordinates : lngLat);
 
   content.append(props.itemId
@@ -10185,6 +10215,7 @@ function renderPinDetails(folder, item) {
            * down is hidden by the outer one whatever the inner one says.
            */
           state.folders.reveal(folder.id);
+          showFolderItemRow(folder.id, item.id);
           openTab('folders');
           renderFoldersTab();
 
@@ -10239,14 +10270,9 @@ function renderPinDetails(folder, item) {
     const paint = () => {
       const current = item.feature.properties.photos || [];
       strip.replaceChildren();
-      if (!current.length) {
-        strip.append(el('p', {
-          class: 'hint', style: 'margin:0',
-          text: 'Nothing here yet. One frame from last time is the fastest way to remember '
-            + 'what the light was doing.',
-        }));
-        return;
-      }
+      // No photos says nothing: the buttons below are the whole invitation.
+      strip.hidden = !current.length;
+      if (!current.length) return;
       (async () => {
         for (const photo of current) {
           const url = await photoURL(photo.id).catch(() => null);
@@ -10291,19 +10317,7 @@ function renderPinDetails(folder, item) {
     section.append(fromFiles, fromCamera,
       el('div', { class: 'picker-row', style: 'margin-top:8px' }, [addButton, cameraButton]));
 
-    /*
-     * Said once, under the buttons: what is about to happen to their picture.
-     * Only to somebody who can actually add one - explaining the resizing to a
-     * reader whose buttons are greyed out is a third line of clutter about
-     * something that is not going to happen to them.
-     */
-    if (mayAdd) {
-      section.append(el('p', {
-        class: 'hint', style: 'margin:8px 0 0',
-        text: `Kept at ${LONG_EDGE} pixels on the long edge and under `
-          + `${Math.round(TARGET_BYTES / 1024)} KB, on this device only.`,
-      }));
-    }
+    // How a picture is resized is in the FAQ, not under the buttons.
 
     dom.details.append(section);
   }
@@ -12149,6 +12163,24 @@ function archiveURLNow() {
   } catch {
     return PROTOMAPS_ARCHIVE;
   }
+}
+
+/**
+ * Make sure a pin's row is among the rows its folder draws.
+ *
+ * A long folder draws its first FOLDER_REVEAL_STEP rows and a "Show more"
+ * button, so a pin further down had no row at all - and Edit from the Details
+ * tab, which opens the editor on that row, reported the pin as gone from the
+ * folder list when it was only past the fold. Grown in whole steps, as the
+ * button grows it, so the list looks the same as if it had been pressed.
+ */
+function showFolderItemRow(folderId, itemId) {
+  const folder = state.folders.get(folderId);
+  const index = folder ? folder.items.findIndex((entry) => entry.id === itemId) : -1;
+  if (index < 0) return;
+  const shown = state.folderReveal.get(folderId) || FOLDER_REVEAL_STEP;
+  if (index < shown) return;
+  state.folderReveal.set(folderId, Math.ceil((index + 1) / FOLDER_REVEAL_STEP) * FOLDER_REVEAL_STEP);
 }
 
 /** Re-open the pin editor after a re-render, anchored to its row again. */

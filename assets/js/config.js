@@ -482,7 +482,7 @@ export const BASEMAPS = [
      * what all three do. Whether the paving is shown is a property of the
      * source, and the source's own note is where that belongs.
      */
-    description: 'OSM rendered for the outdoors — trails, tracks and route shields.',
+    description: 'OpenStreetMap topo with trails, tracks and route shields.',
     /*
      * Which geometry it draws from is decided at style time, not here.
      *
@@ -518,7 +518,7 @@ export const BASEMAPS = [
     id: 'usgs-topo',
     name: 'USGS Topo Modern',
     group: 'Topographic',
-    description: 'US Topo quads. Best all-round backcountry base.',
+    description: 'Current USGS topographic maps.',
     tiles: ['https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}'],
     tileSize: 256,
     maxzoom: 16,
@@ -528,7 +528,7 @@ export const BASEMAPS = [
     id: 'usgs-classic',
     name: 'USGS Topo Classic',
     group: 'Topographic',
-    description: 'Scanned 7.5-minute quads — the classic 20th-century paper topo.',
+    description: 'Scanned USGS 7.5-minute paper quads.',
     tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}'],
     tileSize: 256,
     maxzoom: 15,
@@ -538,7 +538,7 @@ export const BASEMAPS = [
     id: 'usgs-imagery-topo',
     name: 'USGS Imagery + Topo',
     group: 'Topographic',
-    description: 'Aerial imagery with contours and labels burned in.',
+    description: 'Aerial imagery with contours and labels.',
     tiles: ['https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryTopo/MapServer/tile/{z}/{y}/{x}'],
     tileSize: 256,
     maxzoom: 16,
@@ -568,7 +568,7 @@ export const BASEMAPS = [
     id: 'osm',
     name: 'Street',
     group: 'Road',
-    description: 'Standard OSM — the most current road data.',
+    description: 'The standard OpenStreetMap.',
     tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
     tileSize: 256,
     maxzoom: 19,
@@ -756,8 +756,7 @@ export const OVERLAYS = [
     // "Recreation sites" was wrong: a trailhead is not a site, and neither is a
     // boat launch. It is recreation.
     name: 'Recreation',
-    description: 'Campgrounds, trailheads, cabins and picnic areas. Tap one for details.',
-    legendNote: 'Symbols are the National Park Service map set — the ones on the signs.',
+    description: 'Campgrounds, trailheads, cabins and picnic areas.',
     query: {
       // `{layer}` is filled per sublayer, `{bbox}` per view. GeoJSON output
       // lower-cases field names, so the popup reads `name`, not `NAME`.
@@ -808,7 +807,7 @@ export const OVERLAYS = [
     id: 'light-pollution',
     group: 'Conditions',
     name: 'Light pollution',
-    description: 'Night lights from VIIRS. Dark ground is dark sky.',
+    description: 'Night lights seen from space by the VIIRS satellite.',
     // The colours of the picture itself, dark to bright: there are no steps
     // to list, so the scale under the map is a gradient through them.
     legendRamp: {
@@ -817,8 +816,6 @@ export const OVERLAYS = [
       to: 'Bright',
     },
     scaleUnit: 'Night lights',
-    legendNote: 'Brightness as the satellite sees it, not a Bortle class — '
-      + 'a useful proxy for where to point a camera away from.',
     tiles: ['https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble'
       + '/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png'],
     tileSize: 256,
@@ -862,8 +859,6 @@ export const OVERLAYS = [
       { color: '#c8752e', label: 'Bortle 6–7 · bright suburban', short: '6–7' },
       { color: '#c03a2b', label: 'Bortle 8–9 · city', short: '8–9' },
     ],
-    legendNote: 'Colors follow the atlas own scale. Modeled sky brightness, '
-      + 'not a measurement — a ridge between you and a town is not in it.',
     tiles: ['https://djlorenz.github.io/astronomy/image_tiles/tiles2022/tile_{z}_{x}_{y}.png'],
     tileSize: 256,
     maxzoom: 8,
@@ -883,7 +878,7 @@ export const OVERLAYS = [
     ],
     group: 'Land & access',
     name: 'Public lands',
-    description: 'Who manages this land — BLM, USFS, NPS, state, private.',
+    description: 'Who manages the land: BLM, USFS, NPS, state or private.',
     // BLM's cached Surface Management Agency layer: a proper tile service, not
     // a per-request export, so it is fast and behaves like any other basemap.
     tiles: ['https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_SMA_Cached_without_PriUnk/MapServer/tile/{z}/{y}/{x}'],
@@ -897,7 +892,7 @@ export const OVERLAYS = [
     id: 'usgs-contours',
     group: 'Terrain',
     name: 'Contours',
-    description: 'USGS contour lines — drape over imagery for relief.',
+    description: 'USGS contour lines.',
     tiles: ['https://carto.nationalmap.gov/arcgis/rest/services/contours/MapServer/export'
       + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'],
     tileSize: 256,
@@ -913,7 +908,7 @@ export const OVERLAYS = [
     // is a heading that costs more than it explains.
     group: 'Terrain',
     name: 'Forest cover',
-    description: 'Percentage of ground under tree canopy, from 30 m satellite data. Source: MRLC / NLCD',
+    description: 'Tree canopy cover, from 30 m satellite data. Source: MRLC / NLCD',
     /*
      * Canopy as an overlay rather than a change to the basemap.
      *
@@ -1000,14 +995,9 @@ export const OVERLAYS = [
      * instinct for a code that might be a prohibition; it is the wrong word
      * for one that turned out not to be in the country.
      */
-    legendNote: 'Standing and scheduled restrictions only. Same-day TFRs — fires, VIP '
-      + 'movements — are NOTAMs and are not in this layer; use the link on any feature to '
-      + 'check the current list before you fly. Red is where flight is prohibited or '
-      + 'restricted. Amber is everything that asks for care rather than permission: '
-      + 'wilderness and Park Service land, where flying over is not itself prohibited but '
-      + 'taking off, landing or operating from the ground is — so it means find somewhere '
-      + 'else to stand, not somewhere else to fly — and alert and warning areas, which '
-      + 'restrict nothing but mark where other aircraft are doing something unusual.',
+    legendNote: 'Red: flight prohibited or restricted. Amber: no takeoff or landing '
+      + '(wilderness, Park Service land), or other aircraft active. Same-day TFRs are not '
+      + 'shown; check current NOTAMs before you fly.',
     group: 'Airspace',
     name: 'Restrictions & advisories',
     description: 'Where drones may not fly, and where you would need permission. Source: FAA, NPS, USFS',
@@ -1233,9 +1223,8 @@ export const OVERLAYS = [
      * The first draft of this legend read "0 ft — authorisation needed",
      * which implied the other four values do not need one. They do.
      */
-    legendNote: 'Authorization is required anywhere this grid appears. The ceiling is how '
-      + 'high LAANC grants it instantly; 0 means the request goes to further coordination '
-      + 'or FAA DroneZone instead. Not a flight authorization — check before you fly.',
+    legendNote: 'Authorization is required anywhere this grid appears; 0 means no instant '
+      + 'approval. Not a flight authorization.',
     group: 'Airspace',
     name: 'Drone ceilings',
     description: 'How high LAANC instantly approves a drone flight, in feet above ground. Source: FAA',
@@ -1355,8 +1344,6 @@ export const OVERLAYS = [
      * Nothing here can suppress theirs; the shields are pixels by the time they
      * arrive. So the note says it instead.
      */
-    legendNote: 'USGS draws its own route markers into these tiles, so numbered '
-      + 'highways will carry two shields when Byways Topo is underneath.',
     tiles: ['https://carto.nationalmap.gov/arcgis/rest/services/transportation/MapServer/export'
       + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'],
     tileSize: 256,
@@ -1373,9 +1360,8 @@ export const OVERLAYS = [
     ],
     group: 'Conditions',
     name: 'Wildfire',
-    description: 'Current large-fire perimeters from NIFC. Zoom in to a region to load them.',
-    legendNote: 'The mapped edge of a fire as last flown or walked, which can be hours old '
-      + 'and is never a closure map. Check the responsible agency before traveling.',
+    description: 'Current large-fire perimeters from NIFC. Zoom in to load them.',
+    legendNote: 'Can be hours old, and is not a closure map. Check with the agency before traveling.',
     /*
      * Queried rather than tiled, because NIFC publishes this as a feature
      * service and nothing else. The previous URL asked that service for
@@ -1418,8 +1404,7 @@ export const OVERLAYS = [
       // different rendering than the one on screen.
       url: 'https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_02/MapServer/legend?f=pjson',
     },
-    legendNote: 'The MVUM is the legal authority for what is open — always check '
-      + 'the current year\'s map before relying on it.',
+    legendNote: 'Check the current year\'s map before relying on it.',
     group: 'Land & access',
     name: 'Forest roads (MVUM)',
     description: 'Which Forest Service roads are legally open, and to what.',
@@ -1542,8 +1527,6 @@ export const OVERLAYS = [
       url: 'https://gis.blm.gov/arcgis/rest/services/transportation/'
         + 'BLM_Natl_GTLF_Public_Display/MapServer/legend?f=pjson',
     },
-    legendNote: 'Ground Transportation Linear Features. BLM travel management '
-      + 'plans are the authority for what is open; this is their published map of it.',
     /*
      * GTLF publishes the designation as the sublayer NAME, not as a field:
      * "Roads Managed for Public Motorized Use", "…for Limited Public Motorized
@@ -1653,7 +1636,7 @@ export const OVERLAYS = [
     ],
     group: 'Weather',
     name: 'Radar',
-    description: 'Current precipitation from NOAA. Click a point for storm tracks.',
+    description: 'Current precipitation from NOAA.',
     tiles: ['https://nowcoast.noaa.gov/geoserver/weather_radar/wms'
       + '?service=WMS&version=1.3.0&request=GetMap&layers=base_reflectivity_mosaic'
       + '&styles=&crs=EPSG:3857&bbox={bbox-epsg-3857}&width=256&height=256&format=image/png&transparent=true'],
@@ -1668,9 +1651,7 @@ export const OVERLAYS = [
     group: 'Weather',
     scaleUnit: '% of sky covered',
     name: 'Cloud cover',
-    description: 'Forecast sky cover — the layer that decides whether a night shoot is worth driving to.',
-    legendNote: 'Percentage of the sky the National Weather Service expects to be covered. '
-      + 'Under about 20% is a clear night.',
+    description: 'Forecast sky cover.',
     ...ndfdLayer('sky'),
     tileSize: 256,
     maxzoom: 12,
@@ -1683,7 +1664,7 @@ export const OVERLAYS = [
     group: 'Weather',
     scaleUnit: '°F',
     name: 'Temperature',
-    description: 'Forecast air temperature, 2 m above the ground.',
+    description: 'Forecast air temperature.',
     // The National Weather Service's own GeoServer rather than nowCOAST, which
     // publishes the same NDFD grid: its legend honours the horizontal layout
     // and nowCOAST's does not, so this way the whole group's keys match.
@@ -1699,8 +1680,7 @@ export const OVERLAYS = [
     group: 'Weather',
     scaleUnit: 'Knots',
     name: 'Wind speed',
-    description: 'Forecast sustained wind at 10 m. Gusts run higher.',
-    legendNote: 'Knots. A tripod starts arguing at about 15, and a high-sided vehicle at about 30.',
+    description: 'Forecast sustained wind. Gusts run higher.',
     ...ndfdLayer('wspd'),
     tileSize: 256,
     maxzoom: 12,
@@ -1726,8 +1706,7 @@ export const OVERLAYS = [
     group: 'Weather',
     scaleUnit: 'Inches',
     name: 'Forecast snowfall',
-    description: 'Snow accumulation the National Weather Service expects.',
-    legendNote: 'The next forecast period rather than a running total.',
+    description: 'Forecast snow for the next forecast period.',
     seasonal: true,
     ...ndfdLayer('snow'),
     tileSize: 256,
@@ -1741,7 +1720,6 @@ export const OVERLAYS = [
     group: 'Weather',
     name: 'Snow on the ground',
     description: 'Modeled snow depth from the National Snow Analyses.',
-    legendNote: 'NOHRSC models this at 1 km from gauges, satellite and radar.',
     // Empty out of season, which is the layer working rather than failing.
     // tools/check-layers.mjs reads this so a summer run does not report a
     // snow map with no snow on it as a broken layer.
@@ -1812,7 +1790,7 @@ export const OVERLAYS = [
     at: [-84.5, 37.8],
     states: ['KY'],
     name: 'Aerial (3 in)',
-    description: 'Three-inch imagery — close enough to tell a gate from a turnout. Source: KyFromAbove',
+    description: 'Three-inch aerial imagery. Source: KyFromAbove',
     tiles: [`${KY_RASTER}/ImageServices/Ky_KYAPED_Phase3_3IN_WGS84WM/ImageServer/exportImage${ESRI_IMAGE}`],
     tileSize: 256,
     maxzoom: 19,
@@ -1827,7 +1805,7 @@ export const OVERLAYS = [
     at: [-84.5, 37.8],
     states: ['KY'],
     name: 'Lidar hillshade (5 ft)',
-    description: 'Five-foot lidar relief — old grades and benches the contours smooth away. Source: KyFromAbove',
+    description: 'Five-foot lidar relief. Source: KyFromAbove',
     tiles: [`${KY_RASTER}/ElevationServices/Ky_DEM_KYAPED_5FT_MultiDirectionalHillshade/ImageServer/exportImage${ESRI_IMAGE}`],
     tileSize: 256,
     maxzoom: 18,
@@ -1854,7 +1832,7 @@ export const OVERLAYS = [
     at: [-79.42, 39.06],
     states: ['WV'],
     name: 'Aerial, leaf-off',
-    description: 'Flown with the leaves down, so the ground under the canopy shows. Source: WV GIS Technical Center',
+    description: 'Leaf-off aerial imagery. Source: WV GIS Technical Center',
     tiles: [`${WV_GIS}/Imagery_BaseMaps_EarthCover/wv_imagery_WVGISTC_leaf_off_mosaic/MapServer/export${ESRI_IMAGE}`],
     tileSize: 256,
     maxzoom: 18,
@@ -1867,7 +1845,7 @@ export const OVERLAYS = [
     at: [-79.42, 39.06],
     states: ['WV'],
     name: 'Lidar hillshade (1 m)',
-    description: 'One-metre lidar relief — old grades and benches the contours smooth away. Source: WV GIS Technical Center',
+    description: 'One-metre lidar relief. Source: WV GIS Technical Center',
     tiles: [`${WV_GIS}/Elevation/wv_hillshade_1m_mosaic/MapServer/export${ESRI_IMAGE}`],
     tileSize: 256,
     maxzoom: 17,
@@ -1889,7 +1867,7 @@ export const OVERLAYS = [
     at: [-85.03, 35.95],
     states: ['TN'],
     name: 'Aerial',
-    description: 'Aerial photography flown for the state rather than mosaicked nationally. Source: Tennessee STS GIS',
+    description: 'State aerial imagery. Source: Tennessee STS GIS',
     tiles: [`${TN_GIS}/BASEMAPS/IMAGERY_WEB_MERCATOR/MapServer/export${ESRI_IMAGE}`],
     tileSize: 256,
     maxzoom: 18,
@@ -1954,7 +1932,7 @@ export const OVERLAYS = [
      * down to lidar where there is lidar — while the USGS one is a single
      * national product at a coarser resolution and stops at the border.
      */
-    description: 'Terrain relief, from the best elevation data available per region.',
+    description: 'Terrain relief.',
     tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}'],
     tileSize: 256,
     maxzoom: 16,
@@ -1966,7 +1944,7 @@ export const OVERLAYS = [
     id: 'places',
     group: 'Reference',
     name: 'Labels & boundaries',
-    description: 'Place names and boundaries — good over bare imagery.',
+    description: 'Place names and boundaries.',
     tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'],
     tileSize: 256,
     maxzoom: 16,
@@ -2068,7 +2046,6 @@ export const OVERLAYS = [
    * publishes.
    */
     id: 'vt-camping',
-    legendNote: 'Drawn by the agency, so the colors are theirs. Tap a feature to see what it is.',
     at: [-72.8, 44.2],
     states: ['VT'],
     name: 'Primitive camping areas',
@@ -2084,7 +2061,6 @@ export const OVERLAYS = [
   },
   {
     id: 'vt-trails',
-    legendNote: 'Drawn by the agency, so the colors are theirs. Tap a feature to see what it is.',
     at: [-72.8, 44.2],
     states: ['VT'],
     name: 'Trails',
@@ -2100,7 +2076,6 @@ export const OVERLAYS = [
   },
   {
     id: 'vt-recreation',
-    legendNote: 'Drawn by the agency, so the colors are theirs. Tap a feature to see what it is.',
     at: [-72.7, 44.4],
     states: ['VT'],
     name: 'Recreation sites',
@@ -2130,7 +2105,7 @@ export const OVERLAYS = [
     id: 'ky-byways',
     states: ['KY'],
     name: 'Scenic byways',
-    description: 'The routes Kentucky has designated scenic, end to end. Source: Kentucky DGI',
+    description: 'Kentucky\'s designated scenic byways. Source: Kentucky DGI',
     query: {
       url: 'https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Scenic_Byways_WGS84WM/MapServer/0/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
@@ -2231,7 +2206,7 @@ export const OVERLAYS = [
     id: 'ky-forests',
     states: ['KY'],
     name: 'State forests',
-    description: 'The forest boundary, which is where the access and fire rules change. Source: Kentucky DGI',
+    description: 'State forest boundaries. Source: Kentucky DGI',
     query: {
       url: 'https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_StateForests_WGS84WM/MapServer/1/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
@@ -2288,7 +2263,7 @@ export const OVERLAYS = [
     id: 'tn-wma',
     states: ['TN'],
     name: 'Wildlife management areas',
-    description: 'Land the wildlife agency manages — open to the public under its own seasons and rules. Source: Tennessee Wildlife Resources Agency',
+    description: 'Land the wildlife agency manages. Source: Tennessee Wildlife Resources Agency',
     query: {
       url: 'https://tnmap.tn.gov/arcgis/rest/services/ENVIRONMENTAL/TWRA/MapServer/3/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
@@ -2322,7 +2297,6 @@ export const OVERLAYS = [
   },
   {
     id: 'pa-parks',
-    legendNote: 'Drawn by the agency, so the colors are theirs. Tap a feature to see what it is.',
     at: [-77.8, 41.2],
     states: ['PA'],
     name: 'State parks & amenities',
@@ -2338,7 +2312,6 @@ export const OVERLAYS = [
   },
   {
     id: 'vt-routes',
-    legendNote: 'Drawn by the agency, so the colors are theirs. Tap a feature to see what it is.',
     at: [-72.8, 44.2],
     states: ['VT'],
     name: 'ANR travel routes',
@@ -2376,7 +2349,7 @@ export const OVERLAYS = [
     id: 'mt-parks',
     states: ['MT'],
     name: 'State parks',
-    description: 'The park boundary, which is where the camping, fire and vehicle rules change. Source: Montana Fish, Wildlife and Parks',
+    description: 'State park boundaries. Source: Montana Fish, Wildlife and Parks',
     query: {
       url: 'https://services3.arcgis.com/Cdxz8r11hT0MGzg1/arcgis/rest/services/FWPLND_STATEPARKS/FeatureServer/0/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
@@ -2394,7 +2367,7 @@ export const OVERLAYS = [
     id: 'tx-wma',
     states: ['TX'],
     name: 'Wildlife management areas',
-    description: 'Land the wildlife agency manages — open to the public under its own seasons and rules. Source: Texas Parks and Wildlife',
+    description: 'Land the wildlife agency manages. Source: Texas Parks and Wildlife',
     query: {
       url: 'https://services1.arcgis.com/1mtXwieMId59thmg/arcgis/rest/services/WMA_Boundaries_4PublicDistribution/FeatureServer/0/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
@@ -2412,7 +2385,7 @@ export const OVERLAYS = [
     id: 'wi-closures',
     states: ['WI'],
     name: 'State parks',
-    description: 'The park boundary, which is where the camping, fire and vehicle rules change. Source: Wisconsin DNR',
+    description: 'State park boundaries. Source: Wisconsin DNR',
     query: {
       url: 'https://services5.arcgis.com/Ul9AyFFeFTjf08DW/arcgis/rest/services/WI_Park_Closures_PUBLIC_VIEW/FeatureServer/0/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
@@ -2477,7 +2450,6 @@ export const OVERLAYS = [
   },
   {
     id: 'ia-recreation',
-    legendNote: 'Drawn by the agency, so the colors are theirs. Tap a feature to see what it is.',
     at: [-93.6, 42.0],
     states: ['IA'],
     name: 'Recreation lands',
@@ -2496,7 +2468,7 @@ export const OVERLAYS = [
     id: 'fl-forests',
     states: ['FL'],
     name: 'State forests',
-    description: 'The forest boundary, which is where the access and fire rules change. Source: Florida Forest Service',
+    description: 'State forest boundaries. Source: Florida Forest Service',
     query: {
       url: 'https://services3.arcgis.com/XYg2eF8UuxZVuVmF/arcgis/rest/services/Florida_State_Forests/FeatureServer/0/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
@@ -2532,7 +2504,7 @@ export const OVERLAYS = [
     id: 'ma-openspace',
     states: ['MA'],
     name: 'Protected & recreational open space',
-    description: 'Protected land whoever holds it — state, town, or land trust. Source: MassGIS',
+    description: 'Protected land held by the state, towns and land trusts. Source: MassGIS',
     query: {
       url: 'https://gis.eea.mass.gov/server/rest/services/Protected_and_Recreational_OpenSpace_Polygons/FeatureServer/0/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
@@ -2547,7 +2519,6 @@ export const OVERLAYS = [
   },
   {
     id: 'hi-trails',
-    legendNote: 'Drawn by the agency, so the colors are theirs. Tap a feature to see what it is.',
     at: [-155.5, 19.6],
     states: ['HI'],
     name: 'Na Ala Hele trails',
@@ -2566,7 +2537,7 @@ export const OVERLAYS = [
     id: 'de-parks',
     states: ['DE'],
     name: 'State park boundaries',
-    description: 'The park boundary, which is where the camping, fire and vehicle rules change. Source: Delaware DNREC',
+    description: 'State park boundaries. Source: Delaware DNREC',
     query: {
       url: 'https://services2.arcgis.com/JSw5FPLGACZknOZv/arcgis/rest/services/State_Park_Boundaries_Consolidated/FeatureServer/0/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
@@ -2603,7 +2574,7 @@ export const OVERLAYS = [
     id: 'ut-parks',
     states: ['UT'],
     name: 'State park management areas',
-    description: 'The ground each park manages, which reaches wider than the signed entrance. Source: Utah State Parks',
+    description: 'The land each state park manages. Source: Utah State Parks',
     query: {
       url: 'https://services.arcgis.com/ZzrwjTRez6FJiOq4/arcgis/rest/services/Utah_State_Park_Management_Areas/FeatureServer/0/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
@@ -2621,7 +2592,7 @@ export const OVERLAYS = [
     id: 'ok-recreation',
     states: ['OK'],
     name: 'Wildlife management areas',
-    description: 'Land the wildlife department manages — open to the public under its own seasons and rules. Source: Oklahoma Department of Wildlife Conservation',
+    description: 'Land the wildlife department manages. Source: Oklahoma Department of Wildlife Conservation',
     query: {
       url: 'https://services6.arcgis.com/RBtoEUQ2lmN0K3GY/arcgis/rest/services/OklahomaRecreationalAreas/FeatureServer/0/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
@@ -2639,7 +2610,7 @@ export const OVERLAYS = [
     id: 'sc-parks',
     states: ['SC'],
     name: 'State parks',
-    description: 'The park boundary, which is where the camping, fire and vehicle rules change. Source: South Carolina State Parks',
+    description: 'State park boundaries. Source: South Carolina State Parks',
     query: {
       url: 'https://services.arcgis.com/uj05BKeH0fZwqTNZ/arcgis/rest/services/SC_State_Parks/FeatureServer/0/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
@@ -2657,7 +2628,7 @@ export const OVERLAYS = [
     id: 'nd-forest',
     states: ['ND'],
     name: 'State forest',
-    description: 'The forest boundary, which is where the access and fire rules change. Source: North Dakota GIS Hub',
+    description: 'State forest boundaries. Source: North Dakota GIS Hub',
     query: {
       url: 'https://services1.arcgis.com/GOcSXpzwBHyk2nog/arcgis/rest/services/NDGISHUB_State_Forest/FeatureServer/0/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
@@ -2675,7 +2646,7 @@ export const OVERLAYS = [
     id: 'wy-parks',
     states: ['WY'],
     name: 'State park boundaries',
-    description: 'The park boundary, which is where the camping, fire and vehicle rules change. Source: Wyoming State Parks',
+    description: 'State park boundaries. Source: Wyoming State Parks',
     query: {
       url: 'https://services6.arcgis.com/cWzdqIyxbijuhPLw/arcgis/rest/services/StateParkBoundaries/FeatureServer/0/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
@@ -2693,7 +2664,7 @@ export const OVERLAYS = [
     id: 'sd-parks',
     states: ['SD'],
     name: 'State parks',
-    description: 'Where each park is — points, not boundaries. Source: South Dakota Game, Fish and Parks',
+    description: 'State park locations. Source: South Dakota Game, Fish and Parks',
     query: {
       url: 'https://services2.arcgis.com/1sM9tpOC8N7GGkbw/arcgis/rest/services/South_Dakota_State_Parks/FeatureServer/0/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
@@ -2730,7 +2701,7 @@ export const OVERLAYS = [
     id: 'ar-parks',
     states: ['AR'],
     name: 'State parks',
-    description: 'The park boundary, which is where the camping, fire and vehicle rules change. Source: Arkansas State Parks',
+    description: 'State park boundaries. Source: Arkansas State Parks',
     query: {
       url: 'https://services5.arcgis.com/bPacKTm9cauMXVfn/arcgis/rest/services/Arkansas_State_Parks/FeatureServer/0/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'
@@ -2766,7 +2737,7 @@ export const OVERLAYS = [
     id: 'me-bpl',
     states: ['ME'],
     name: 'Bureau of Parks & Lands sites',
-    description: 'State parks and the public reserved lands, which are the wilder half. Source: Maine Bureau of Parks and Lands',
+    description: 'State parks and public reserved lands. Source: Maine Bureau of Parks and Lands',
     query: {
       url: 'https://services1.arcgis.com/RbMX0mRVOFNTdLzd/arcgis/rest/services/BPL_Properties_Points_for_MaineFoliage/FeatureServer/0/query'
         + '?where=1%3D1&geometry={bbox}&geometryType=esriGeometryEnvelope&inSR=4326'

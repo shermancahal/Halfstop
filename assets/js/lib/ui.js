@@ -25,8 +25,8 @@ export function el(tag, attrs = {}, children = []) {
 }
 
 /**
- * A window over the page, closed the three ways people try to close one: the
- * cross, Escape, and a tap outside it.
+ * A window over the page, closed by its cross or Escape, and with a mouse by a
+ * click outside it.
  *
  * Built on <dialog> and showModal(), which is what gives it a backdrop, keeps
  * focus inside while it is open and hands focus back to whatever opened it -
@@ -67,9 +67,19 @@ export function openDialog({ title = '', body = [], className = '', onClose } = 
   dialog.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') event.stopPropagation();
   });
-  // A tap on the backdrop is delivered to the dialog itself; one anywhere on
-  // the card lands on something inside it.
-  dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
+  /*
+   * A click on the backdrop closes it, with a mouse. On a touch screen it
+   * does not: a thumb that lands just outside the window while scrolling it
+   * closed it before it was read, so there the cross is the way out.
+   *
+   * A tap on the backdrop is delivered to the dialog itself; one anywhere on
+   * the card lands on something inside it.
+   */
+  dialog.addEventListener('click', (event) => {
+    if (event.target !== dialog) return;
+    if (globalThis.matchMedia?.('(pointer: coarse)').matches) return;
+    dialog.close();
+  });
 
   document.body.append(dialog);
   if (typeof dialog.showModal === 'function') {
