@@ -44,7 +44,6 @@
 import { mkdir, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium } from 'playwright';
 
 import { OVERLAYS } from '../assets/js/config.js';
 import { STORAGE_KEY as FOLDERS_KEY } from '../assets/js/lib/folders.js';
@@ -318,6 +317,13 @@ async function main() {
     return;
   }
 
+  /*
+   * Loaded here rather than at the top, so the sizes and scenes can be
+   * imported - by the tests, in CI - on a machine with no browser installed.
+   * The unit tests run before any dependency is, and a top-level import of
+   * Playwright failed the whole file there.
+   */
+  const { chromium } = await import('playwright');
   const launch = () => chromium.launch({
     executablePath: process.env.CHROMIUM_PATH || undefined,
     headless: !process.env.HEADED,
