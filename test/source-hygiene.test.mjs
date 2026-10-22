@@ -453,3 +453,59 @@ test('token.js is not tracked by git', async () => {
     'assets/js/token.js is committed. Remove it with `git rm --cached assets/js/token.js`, '
     + 'then rotate any unrestricted token that was in it - see docs/mobile-app.md.');
 });
+
+test('nothing hands the browser\'s own insert calls an empty value to print', async () => {
+  /*
+   * el() skips a null child; the browser's append, prepend and replaceChildren
+   * do not - they write it as the word "null". The fog card did exactly that
+   * on a clear day, with no note to add: "null" under its readings, in the
+   * same panel as everything else.
+   *
+   * So a call to one of those with a `cond ? node : null` argument has to
+   * filter first. Read from the source, at the top level of each call's
+   * arguments, so a null inside an el() list - which is fine - is not flagged.
+   */
+  const splitTop = (args) => {
+    const out = [];
+    let depth = 0; let current = ''; let quote = null;
+    for (let i = 0; i < args.length; i += 1) {
+      const c = args[i];
+      if (quote) {
+        current += c;
+        if (c === '\\') { current += args[i + 1] || ''; i += 1; } else if (c === quote) quote = null;
+      } else if (c === '\'' || c === '"' || c === '`') { quote = c; current += c; }
+      else if ('([{'.includes(c)) { depth += 1; current += c; }
+      else if (')]}'.includes(c)) { depth -= 1; current += c; }
+      else if (c === ',' && depth === 0) { out.push(current); current = ''; }
+      else current += c;
+    }
+    out.push(current);
+    return out;
+  };
+
+  const offenders = [];
+  const files = ['assets/js/viewer.js', ...(await readdir('assets/js/lib')).map((name) => `assets/js/lib/${name}`)]
+    .filter((file) => file.endsWith('.js'));
+  for (const file of files) {
+    const source = await readFile(file, 'utf8');
+    for (const match of source.matchAll(/\.(replaceChildren|append|prepend|before|after|replaceWith)\(/g)) {
+      let depth = 1;
+      let end = match.index + match[0].length;
+      while (end < source.length && depth) {
+        const c = source[end];
+        if ('([{'.includes(c)) depth += 1;
+        else if (')]}'.includes(c)) depth -= 1;
+        end += 1;
+      }
+      const args = source.slice(match.index + match[0].length, end - 1);
+      if (args.includes('filter(Boolean)')) continue;
+      for (const arg of splitTop(args)) {
+        const bare = arg.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '').trim();
+        if (/\?[\s\S]*:\s*(null|undefined)\s*$/.test(bare)) {
+          offenders.push(`${file}:${source.slice(0, match.index).split('\n').length}`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(offenders, [], 'filter the arguments, or build the node with el(), which skips nulls');
+});

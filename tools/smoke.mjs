@@ -3460,6 +3460,12 @@ check('the reasoning is on the card, not in a footnote',
  */
 check('and it says where the numbers come from',
   /Calculated from the weather forecast/.test(fog.hint), true);
+// And nothing the code meant as "no value" printed as a word. The fog card
+// said "null" under its readings on a clear day, from a null handed to the
+// browser's own replaceChildren, which writes what it is given.
+const leaked = await page.evaluate(() => (document.querySelector('#details-body')?.innerText || '')
+  .match(/\b(null|undefined|NaN)\b/g) || []);
+check('no "null", "undefined" or "NaN" anywhere in Details', leaked, []);
 check('the strip covers the hours ahead', fog.blocks > 12, true);
 check('and marks only the foggy ones', fog.likely > 0 && fog.likely < fog.blocks, true);
 check('and names the ground that fogs regardless',

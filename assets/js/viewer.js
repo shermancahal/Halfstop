@@ -4906,14 +4906,19 @@ function renderFog(hero, detail, outlook) {
 
   const note = fogNote(peak);
 
-  detail.replaceChildren(
+  /*
+   * Filtered, because replaceChildren is the browser's and not el(): it
+   * writes a null it is handed as the word "null". With no note to add - the
+   * usual case on a clear day - the card said "null" under its readings.
+   */
+  detail.replaceChildren(...[
     el('div', { class: 'core-rows' }, rows.map(([label, value]) => el('div', { class: 'core-row' }, [
       el('span', { class: 'core-row-label', text: label }),
       el('span', { class: 'core-row-value', text: value }),
     ]))),
     note ? el('p', { class: 'legend-note', style: 'margin:9px 0 0', text: note }) : null,
     fogStrip(outlook.rows),
-  );
+  ].filter(Boolean));
 }
 
 /**
