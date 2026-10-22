@@ -207,6 +207,12 @@ setDOMContent(n){const box=document.createElement('div');
 box.className='maplibregl-popup maplibregl-popup-anchor-bottom';
 if(this._o.maxWidth)box.style.maxWidth=this._o.maxWidth;
 const inner=document.createElement('div');inner.className='maplibregl-popup-content';
+// The engine's own close mark, where the engine puts it: first in the card and
+// pinned to its corner, so anything that runs under it here runs under it there.
+inner.style.position='relative';
+if(this._o.closeButton!==false){const x=document.createElement('button');x.type='button';
+x.className='maplibregl-popup-close-button';x.setAttribute('aria-label','Close popup');x.textContent='\u00d7';
+x.style.position='absolute';x.onclick=()=>this.remove();inner.appendChild(x)}
 inner.appendChild(n);box.appendChild(inner);
 this._n=box;document.body.appendChild(box);return this}
 addTo(){return this}remove(){this._n?.remove();return this}}
@@ -3893,6 +3899,16 @@ await page.waitForTimeout(400);
 await page.locator('.waypoint-edit').first().click();
 await page.waitForTimeout(700);
 check('the editor opens on the pin', await page.locator('.popup-edit').count(), 1);
+// The name box is the editor's first line, which is where the card's close
+// mark sits: it ran under the mark, over the end of the name.
+const underClose = await page.evaluate(() => {
+  const name = document.querySelector('.popup-edit-name')?.getBoundingClientRect();
+  const close = document.querySelector('.popup-edit')?.closest('.maplibregl-popup-content, .mapboxgl-popup-content')
+    ?.querySelector('.maplibregl-popup-close-button, .mapboxgl-popup-close-button')?.getBoundingClientRect();
+  if (!name || !close) return null;
+  return name.right > close.left && name.left < close.right && name.bottom > close.top && name.top < close.bottom;
+});
+check('and its name box keeps clear of the close mark', underClose, false);
 await page.locator('.popup-edit-name').fill('Renamed on the map');
 await page.locator('.popup-edit button', { hasText: 'Save' }).click();
 await page.waitForTimeout(600);

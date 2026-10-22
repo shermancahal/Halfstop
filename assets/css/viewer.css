@@ -2394,6 +2394,9 @@ html, body { touch-action: pan-x pan-y; }
   padding: 6px 8px; border-radius: var(--radius-sm);
   border: 1px solid var(--line); background: var(--surface); color: var(--ink);
 }
+/* The name is the editor's first line, which is where the card's close mark
+   sits - the same room the title leaves for it in .popup-head. */
+.popup-edit-name { width: calc(100% - 32px); }
 .popup-edit-note { resize: vertical; min-height: 52px; }
 .popup-edit-colours { display: flex; flex-wrap: wrap; gap: 5px; }
 .popup-swatch {
