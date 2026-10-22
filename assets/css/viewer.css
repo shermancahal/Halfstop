@@ -348,8 +348,9 @@ html, body { touch-action: pan-x pan-y; }
 /* Set in from the corner. At the default position it overlapped the title on
    any pin whose name filled the line. */
 .maplibregl-popup-close-button, .mapboxgl-popup-close-button {
-  color: var(--ink-3); font-size: 17px; line-height: 1;
-  width: 26px; height: 26px; top: 5px; right: 5px; border-radius: var(--radius-sm);
+  color: var(--ink-2); font-size: 17px; line-height: 1;
+  width: 28px; height: 28px; top: 6px; right: 6px; border-radius: var(--radius);
+  border: 1px solid var(--line-strong); background: var(--surface);
 }
 .maplibregl-popup-close-button:hover, .mapboxgl-popup-close-button:hover {
   color: var(--ink); background: var(--surface-2);
@@ -376,7 +377,7 @@ html, body { touch-action: pan-x pan-y; }
 /* The pin's own mark beside its name, so the card identifies itself the way
    the map does. The right padding is for the close button, which used to sit
    on top of the last word of the title. */
-.popup-head { display: flex; align-items: flex-start; gap: 9px; padding-right: 22px; margin-bottom: 8px; }
+.popup-head { display: flex; align-items: flex-start; gap: 9px; padding-right: 32px; margin-bottom: 8px; }
 .popup-head-text { min-width: 0; }
 .popup-mark {
   flex: none; width: 26px; height: 26px; border-radius: 50%;
@@ -651,6 +652,10 @@ html, body { touch-action: pan-x pan-y; }
  */
 .pin-actions { flex-wrap: wrap; }
 .pin-actions .button { flex: 1 0 9rem; min-width: 0; justify-content: center; }
+/* One row: Save takes what is left after Share and Clear take their words. */
+.pin-actions.is-one-row { flex-wrap: nowrap; }
+.pin-actions.is-one-row .button { flex: 0 0 auto; padding-left: 10px; padding-right: 10px; }
+.pin-actions.is-one-row .button:first-child { flex: 1 1 auto; }
 /* Apply and Cancel were sitting flush against the icon grid above them, which
    read as part of it. They are the end of the form, not another row of it. */
 .style-editor .picker-row { margin-top: 13px; }
@@ -900,8 +905,8 @@ html, body { touch-action: pan-x pan-y; }
     position: absolute; top: 6px; right: 6px; z-index: 3;
     display: flex; align-items: center; justify-content: center;
     width: 34px; height: 34px; padding: 0;
-    background: var(--surface); border: 1px solid var(--line);
-    border-radius: 50%; color: var(--ink-2); cursor: pointer;
+    background: var(--surface); border: 1px solid var(--line-strong);
+    border-radius: var(--radius); color: var(--ink-2); cursor: pointer;
   }
   .panel-close svg { width: 16px; height: 16px; }
   .panel-close-collapse { display: none; }
@@ -947,8 +952,8 @@ html, body { touch-action: pan-x pan-y; }
     position: absolute; top: 6px; right: 6px; z-index: 3;
     display: flex; align-items: center; justify-content: center;
     width: 32px; height: 32px; padding: 0;
-    background: var(--surface); border: 1px solid var(--line);
-    border-radius: 50%; color: var(--ink-3); cursor: pointer;
+    background: var(--surface); border: 1px solid var(--line-strong);
+    border-radius: var(--radius); color: var(--ink-2); cursor: pointer;
   }
   .panel-close:hover { color: var(--ink); background: var(--paper-2); }
   .panel-close svg { width: 16px; height: 16px; }

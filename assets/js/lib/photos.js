@@ -7,7 +7,9 @@
  * stores Blobs natively, has orders of magnitude more room, and keeps the
  * folder JSON small: a pin records only photo ids.
  *
- * Like folders, this is per-browser and per-device until sync exists.
+ * This device's copy. With Premium a photo is also uploaded, so the account's
+ * other devices can fetch it (lib/photo-sync.js); a fetched one is kept here
+ * under the same id, and works with no signal after the first look.
  *
  * NOTHING IS STORED AT THE SIZE IT ARRIVED
  *
@@ -125,9 +127,24 @@ function transact(mode, run) {
 }
 
 let counter = 0;
+/*
+ * Time, a counter, and something nobody can guess.
+ *
+ * An id used to be only the first two, which is enough to be unique on one
+ * device. Once photos are uploaded an id is also half of where a picture
+ * lives, and one that can be worked out from roughly when it was taken is one
+ * a person you shared a folder with could try against your others. The
+ * random part costs nothing and closes that.
+ */
 function makeId() {
   counter += 1;
-  return `p_${Date.now().toString(36)}_${counter.toString(36)}`;
+  return `p_${Date.now().toString(36)}_${counter.toString(36)}_${randomPart()}`;
+}
+
+function randomPart() {
+  const bytes = new Uint8Array(8);
+  globalThis.crypto?.getRandomValues?.(bytes);
+  return [...bytes].map((byte) => byte.toString(36).padStart(2, '0')).join('').slice(0, 12);
 }
 
 /**
@@ -201,6 +218,33 @@ export async function putPhoto(blob, meta = {}, { shrink = true } = {}) {
     original: blob.size,
     width,
     height,
+    added: Date.now(),
+  };
+  await transact('readwrite', (store) => store.put(record));
+  const { blob: _omit, ...summary } = record;
+  return summary;
+}
+
+/**
+ * Keep a photo fetched from the account, under the id the pin knows it by.
+ *
+ * Stored as it arrived: it was shrunk on the device that took it, and doing
+ * it again would only lose quality. Kept so the pin's photos are there with
+ * no signal after the first time they are seen.
+ */
+export async function keepFetchedPhoto(id, blob, meta = {}) {
+  if (!id || !(blob instanceof Blob)) throw new Error('Not an image.');
+  const record = {
+    id,
+    blob,
+    name: meta.name || '',
+    caption: meta.caption || '',
+    source: 'account',
+    type: blob.type,
+    bytes: blob.size,
+    original: blob.size,
+    width: null,
+    height: null,
     added: Date.now(),
   };
   await transact('readwrite', (store) => store.put(record));

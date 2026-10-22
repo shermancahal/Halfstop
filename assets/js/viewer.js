@@ -112,8 +112,9 @@ import {
 } from './lib/offline.js';
 import {
   putPhoto, photoURL, deletePhoto, pruneUnreferenced, fetchLinkedPhoto, formatBytes, photoAccept,
-  listSnapshots, SNAPSHOT_SOURCE,
+  listSnapshots, SNAPSHOT_SOURCE, getPhoto, keepFetchedPhoto,
 } from './lib/photos.js';
+import { photosToUpload, ownUploads, isUploaded, PHOTO_SYNC_LIMIT } from './lib/photo-sync.js';
 
 /* ------------------------------------------------------------------ state */
 
@@ -650,6 +651,9 @@ async function main() {
   });
   state.account.addEventListener('change', () => {
     renderAccount();
+    // A sign-in, a plan arriving or a sync finishing can each leave photos
+    // to upload; the check is cheap when there are none.
+    scheduleSyncPhotos();
     /*
      * The plan is drawn by the settings menu, not by renderAccount, so it has
      * to be told too.
@@ -1427,6 +1431,8 @@ function wirePanel() {
   document.getElementById('share-button')?.addEventListener('click', shareView);
   wireOfflineMenu();
   wirePlaceSearch();
+  // Photos taken with no signal go up when it comes back.
+  window.addEventListener('online', () => scheduleSyncPhotos(3000));
 }
 
 /**
@@ -9259,7 +9265,9 @@ function savedItemActions(props, popup, content) {
       title: 'Delete this waypoint',
       onclick: () => {
         if (!confirmPinDelete(props.name)) return;
+        const gone = pinsNamed([{ folderId: props.folderId, itemId: props.itemId }]);
         state.folders.removeItem(props.folderId, props.itemId);
+        forgetUploadedPhotos(gone);
         popup.remove();
       },
     }),
@@ -10104,15 +10112,14 @@ function renderPointDetails(position) {
      */
     shared ? el('p', { class: 'hint', style: 'margin:6px 0 0', text: 'Sent to you as a link.' }) : null,
     /*
-     * Saving on its own row, then the two ways out on the row under it.
+     * Save, Share and Clear on one row, as the saved waypoint's Zoom to, Edit
+     * and Share are.
      *
-     * Three across is what a card this narrow holds when the labels are one
-     * word, and "Save as waypoint" is three - so on a phone the row came out
-     * as "Save as way...", "Sh...", "Cl...", none of which say what they do.
-     * It is also the wrong grouping: saving is what this panel is for, and
-     * sharing and clearing are what to do instead of it.
+     * Three equal cells cut "Save as waypoint" to "Save as way..." on a phone,
+     * which is why they once had two rows. Here Share and Clear take what
+     * their words need and Save takes the rest, which is enough at 390px.
      */
-    el('div', { class: 'picker-row pin-actions', style: 'margin-top:11px' }, [
+    el('div', { class: 'picker-row pin-actions is-one-row', style: 'margin-top:11px' }, [
       labelledButton(icons.pin, 'Save as waypoint', {
         tone: 'secondary',
         onclick: () => {
@@ -10136,15 +10143,13 @@ function renderPointDetails(position) {
           openTab('folders');
         },
       }),
-    ]),
-    el('div', { class: 'picker-row pin-actions', style: 'margin-top:7px' }, [
       labelledButton(icons.share, 'Share', {
-        tone: 'ghost',
+        tone: 'secondary',
         title: 'Send somebody a link that opens the map here',
         onclick: () => sharePin({ name: shared }, position),
       }),
       labelledButton(icons.close, 'Clear', {
-        tone: 'ghost',
+        tone: 'secondary',
         title: 'Forget this dropped pin',
         onclick: () => {
           state.scratchPoint = null;
@@ -10275,7 +10280,7 @@ function renderPinDetails(folder, item) {
       if (!current.length) return;
       (async () => {
         for (const photo of current) {
-          const url = await photoURL(photo.id).catch(() => null);
+          const url = await pinPhotoURL(photo).catch(() => null);
           if (!url) continue;
           strip.append(el('a', { class: 'photo-tile', href: url, target: '_blank', rel: 'noopener' }, [
             el('img', { src: url, alt: photo.caption || photo.name || 'Pin photo', loading: 'lazy' }),
@@ -10295,18 +10300,18 @@ function renderPinDetails(folder, item) {
     const mayAdd = allowed('pinPhotos');
     const redraw = () => renderDetailsTab();
 
-    const addButton = el('button', {
-      class: 'button button-secondary button-small', type: 'button', text: 'Add photos',
-      disabled: !mayAdd, title: mayAdd ? '' : lockedBecause('pinPhotos'),
+    const addButton = labelledButton(icons.folder, 'Add photos', {
+      title: mayAdd ? 'Add photos from this device' : lockedBecause('pinPhotos'),
     });
-    const cameraButton = el('button', {
-      class: 'button button-secondary button-small', type: 'button', text: 'Take one',
-      disabled: !mayAdd, title: mayAdd ? '' : lockedBecause('pinPhotos'),
+    const cameraButton = labelledButton(icons.camera, 'Take one', {
+      title: mayAdd ? 'Take a photo here' : lockedBecause('pinPhotos'),
     });
+    addButton.disabled = !mayAdd;
+    cameraButton.disabled = !mayAdd;
     const onBusy = (working) => {
       addButton.disabled = working || !mayAdd;
       cameraButton.disabled = working || !mayAdd;
-      addButton.textContent = working ? 'Shrinking…' : 'Add photos';
+      addButton.querySelector('span').textContent = working ? 'Shrinking…' : 'Add photos';
     };
 
     const fromFiles = photoPicker(folder, item, { onDone: redraw, onBusy });
@@ -10790,7 +10795,7 @@ function notesSection(folder, item) {
   };
 
   section.append(list, field, el('div', { class: 'picker-row', style: 'margin-top:7px' }, [
-    el('button', { class: 'button button-secondary button-small', type: 'button', text: 'Add note', onclick: add }),
+    labelledButton(icons.note, 'Add note', { title: 'Add this note to the pin', onclick: add }),
   ]));
 
   // Ctrl/Cmd+Enter to file a note without reaching for the button.
@@ -11768,7 +11773,9 @@ function tripBar(folder) {
         if (!count) return;
         // eslint-disable-next-line no-alert
         if (!window.confirm(`Remove ${count} pin${count === 1 ? '' : 's'} from “${folder.name}”? This cannot be undone.`)) return;
-        for (const item of [...folder.items]) state.folders.removeItem(folder.id, item.id);
+        const gone = [...folder.items];
+        for (const item of gone) state.folders.removeItem(folder.id, item.id);
+        forgetUploadedPhotos(gone);
         toast(`Cleared ${count} pin${count === 1 ? '' : 's'} from “${folder.name}”.`);
       },
     }));
@@ -12540,11 +12547,121 @@ function renderFolderItem(folder, item) {
         if (!confirmPinDelete(props.name, folder.name)) return;
         state.selection.delete(key);
         state.folders.removeItem(folder.id, item.id);
+        forgetUploadedPhotos([item]);
       },
     }),
   ]);
 
   return node;
+}
+
+/* ------------------------------------------------------------ photo sync */
+
+/*
+ * The photos on pins, uploaded so the account's other devices can see them.
+ *
+ * Premium, and the server is what decides that (supabase/schema.sql, "pin
+ * photos"); the plan is asked here only so a free account does not try, be
+ * refused and try again on every sync. Which photos, and where each lives,
+ * is lib/photo-sync.js.
+ */
+let photoSyncRunning = null;
+let photoSyncAgain = false;
+let photoSyncTimer = null;
+
+function photoSyncAllowed() {
+  return state.account?.plan?.tier === 'premium' && Boolean(state.account?.canReachStorage?.());
+}
+
+/** Soon, rather than now: a sign-in sets off several changes in a row. */
+function scheduleSyncPhotos(wait = 1500) {
+  clearTimeout(photoSyncTimer);
+  photoSyncTimer = setTimeout(() => { syncPhotos().catch(() => {}); }, wait);
+}
+
+/**
+ * Upload the photos on this account's pins that only this device has.
+ *
+ * One at a time, and recorded on the pins once each set is done, which is
+ * what sends `by` to the other devices with the folder. A run already going
+ * is joined rather than doubled, and goes round once more if asked while it
+ * worked - a photo added mid-run is not left for the next sign-in.
+ */
+function syncPhotos() {
+  if (!photoSyncAllowed()) return Promise.resolve(0);
+  if (photoSyncRunning) {
+    photoSyncAgain = true;
+    return photoSyncRunning;
+  }
+  photoSyncRunning = (async () => {
+    let marked = 0;
+    do {
+      photoSyncAgain = false;
+      const done = [];
+      for (const entry of photosToUpload(state.folders.list())) {
+        if (!photoSyncAllowed()) break;
+        const record = await getPhoto(entry.photoId).catch(() => null);
+        // Not on this device - another one took it and will upload it - or
+        // too large for the bucket, which only an unshrinkable one is.
+        if (!record?.blob || record.blob.size > PHOTO_SYNC_LIMIT) continue;
+        const result = await state.account.uploadPhoto(entry.photoId, record.blob);
+        if (result.ok) done.push(entry);
+        else if (result.reason !== 'offline') console.warn('[photos] not uploaded:', result.reason);
+      }
+      if (done.length) marked += state.folders.markPhotosUploaded(done, state.account.user.id);
+    } while (photoSyncAgain && photoSyncAllowed());
+    return marked;
+  })().finally(() => { photoSyncRunning = null; });
+  return photoSyncRunning;
+}
+
+/*
+ * A photo another device uploaded, fetched the first time it is looked at
+ * and kept on this device after that - so a pin seen once at home still has
+ * its pictures with no signal.
+ */
+const photoFetches = new Map();
+
+/**
+ * An object URL for one of a pin's photos, from this device or the account.
+ *
+ * @returns {Promise<string|null>} null when it is on another device and cannot
+ *   be fetched now - no signal, not signed in, or not uploaded yet.
+ */
+async function pinPhotoURL(photo) {
+  if (!photo?.id) return null;
+  const local = await photoURL(photo.id).catch(() => null);
+  if (local) return local;
+  if (!isUploaded(photo) || !state.account?.user) return null;
+  if (!photoFetches.has(photo.id)) {
+    photoFetches.set(photo.id, (async () => {
+      const blob = await state.account.downloadPhoto(photo.by, photo.id);
+      if (blob) await keepFetchedPhoto(photo.id, blob, photo).catch(() => {});
+      return blob;
+    })().finally(() => photoFetches.delete(photo.id)));
+  }
+  const blob = await photoFetches.get(photo.id);
+  return blob ? URL.createObjectURL(blob) : null;
+}
+
+/**
+ * After pins are deleted here: take their uploaded photos down too.
+ *
+ * Only this account's own, and only those no remaining pin still shows.
+ * Called with what the pins carried, read before they went.
+ */
+function forgetUploadedPhotos(items = []) {
+  const me = state.account?.user?.id;
+  if (!me || !items.length) return;
+  const paths = ownUploads(items, me, { stillUsed: state.folders.referencedPhotoIds() });
+  if (paths.length) state.account.removePhotos(paths);
+}
+
+/** The pins named by folder and item id, as they are now. */
+function pinsNamed(entries = []) {
+  return entries
+    .map(({ folderId, itemId }) => state.folders.get(folderId)?.items.find((entry) => entry.id === itemId))
+    .filter(Boolean);
 }
 
 /**
@@ -12578,6 +12695,7 @@ async function attachPhotos(folder, item, files) {
 
   if (!stored.length) return stored;
   state.folders.addPhotos(folder.id, item.id, stored);
+  scheduleSyncPhotos();
 
   const count = `${stored.length} photo${stored.length === 1 ? '' : 's'}`;
   // Only worth saying when the shrink actually did something. A picture that
@@ -12652,19 +12770,21 @@ function photoSection(folder, item) {
 
     for (const photo of photos) {
       const tile = el('div', { class: 'photo-tile' });
-      const url = await photoURL(photo.id).catch(() => null);
+      const url = await pinPhotoURL(photo).catch(() => null);
       if (url) {
         urls.push(url);
         tile.append(el('img', { src: url, alt: photo.caption || photo.name || 'Pin photo', loading: 'lazy' }));
       } else {
-        // The record is gone from IndexedDB but the pin still points at it.
-        tile.append(el('span', { class: 'photo-missing', text: 'missing' }));
+        // Not on this device: on another one and not uploaded yet, or
+        // uploaded and out of reach with no signal.
+        tile.append(el('span', { class: 'photo-missing', text: 'not here yet' }));
       }
       tile.append(el('button', {
         class: 'photo-remove', type: 'button', title: 'Remove this photo',
         'aria-label': `Remove ${photo.name || 'photo'}`, text: '×',
         onclick: async () => {
           state.folders.removePhoto(folder.id, item.id, photo.id);
+          forgetUploadedPhotos([{ feature: { properties: { photos: [photo] } } }]);
           await deletePhoto(photo.id).catch(() => {});
           paint();
         },
@@ -12672,13 +12792,8 @@ function photoSection(folder, item) {
       strip.append(tile);
     }
 
-    if (!photos.length) {
-      strip.append(el('p', {
-        class: 'hint', style: 'margin:0',
-        text: 'No photos on this pin yet. One frame from last time is the fastest way to '
-          + 'remember what the light was doing here.',
-      }));
-    }
+    // No photos says nothing: Add photos below is the whole invitation.
+    strip.hidden = !photos.length;
   };
 
   const picker = photoPicker(folder, item, { onDone: paint });
@@ -12686,22 +12801,21 @@ function photoSection(folder, item) {
   /*
    * Photographs already on a pin stay readable whatever the plan says.
    *
-   * Only adding is gated. They are held in this browser and were never
-   * uploaded anywhere, so locking somebody out of their own pictures because a
-   * subscription lapsed would be taking something that was never ours to hold.
+   * Only adding is gated. Ones on this device are held in this browser, and
+   * ones uploaded stay readable after a subscription lapses, so locking
+   * somebody out of their own pictures would be taking something that was
+   * never ours to hold.
    */
   const canAddPhotos = allowed('pinPhotos');
-  const actions = el('div', { class: 'picker-row', style: 'margin-top:8px' }, [
-    el('button', {
-      class: 'button button-secondary button-small', type: 'button', text: 'Add photos',
-      disabled: !canAddPhotos,
-      title: canAddPhotos ? '' : lockedBecause('pinPhotos'),
-      onclick: () => {
-        if (!canAddPhotos) { toast(lockedBecause('pinPhotos'), { tone: 'error' }); return; }
-        picker.click();
-      },
-    }),
-  ]);
+  const addPhotos = labelledButton(icons.folder, 'Add photos', {
+    title: canAddPhotos ? 'Add photos from this device' : lockedBecause('pinPhotos'),
+    onclick: () => {
+      if (!canAddPhotos) { toast(lockedBecause('pinPhotos'), { tone: 'error' }); return; }
+      picker.click();
+    },
+  });
+  addPhotos.disabled = !canAddPhotos;
+  const actions = el('div', { class: 'picker-row', style: 'margin-top:8px' }, [addPhotos]);
 
   // Whatever this pin points at - a GaiaGPS photo page, an NPS page, a trip
   // report somebody typed into the note. Called what the pin calls it.
@@ -13348,7 +13462,9 @@ function renderTableEditor() {
         onclick: () => {
           const count = picked.size;
           if (!window.confirm(`Delete ${count} waypoint${count === 1 ? '' : 's'}? This cannot be undone.`)) return;
+          const removed = pinsNamed(entries());
           const gone = state.folders.removeItems(entries());
+          forgetUploadedPhotos(removed);
           state.table.picked.clear();
           toast(`${gone} waypoint${gone === 1 ? '' : 's'} deleted.`, { tone: 'ok' });
         },
@@ -13911,7 +14027,8 @@ function openStyleEditor(folder, itemIds, anchor) {
 
   const actions = el('div', { class: 'picker-row' }, [
     el('button', {
-      class: 'button button-primary button-small', type: 'button', text: 'Apply',
+      class: 'button button-primary button-small button-with-icon', type: 'button',
+      html: `${icons.check}<span>Apply</span>`,
       onclick: () => {
         const patch = {};
         if (colorTouched || single) patch.color = chosenColor;
@@ -13933,7 +14050,8 @@ function openStyleEditor(folder, itemIds, anchor) {
       },
     }),
     el('button', {
-      class: 'button button-ghost button-small', type: 'button', text: 'Cancel',
+      class: 'button button-ghost button-small button-with-icon', type: 'button',
+      html: `${icons.close}<span>Cancel</span>`,
       onclick: () => { state.openEditor = null; editor.remove(); },
     }),
   ]);
@@ -14166,7 +14284,9 @@ function folderActionsRow(folder) {
             : `Delete “${folder.name}”?${kept}`;
           if (!window.confirm(message)) return;
 
+          const removed = [...folder.items];
           const tombstone = state.folders.remove(folder.id);
+          forgetUploadedPhotos(removed);
           // Push the tombstone so other devices learn of the deletion; without
           // it the folder would simply reappear on the next sync.
           if (tombstone && state.account?.user) state.account.pushFolder(tombstone);

@@ -64,7 +64,7 @@ export const FEATURES = {
   weatherLayers: 'Weather layers',
   offlineDownloads: 'Offline downloads',
   tripRouting: 'Trip routing',
-  pinPhotos: 'Photographs attached to a waypoint',
+  pinPhotos: 'Photographs on a waypoint, synced between devices',
   stateLayers: 'State level detail maps',
   extraBasemaps: 'Extra basemaps',
 };

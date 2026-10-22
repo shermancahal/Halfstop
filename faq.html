@@ -161,6 +161,7 @@
         <div class="faq-answer">
           <p>Select a saved waypoint, choose <b>Details</b>, and the <b>Photos</b> section has <b>Add photos</b> and <b>Take one</b>. On a phone, <b>Take one</b> opens the camera.</p>
           <p>Pictures are resized on the way in: 1024 pixels on the long edge, under 100&nbsp;KB each. That is full width on a phone screen, and small enough that a folder with a hundred of them still opens quickly. A photograph already smaller than that is kept exactly as it arrived.</p>
+          <p>With Premium and signed in, each photograph is also uploaded to your account, so it is on your other devices and visible to the people you share its folder with. Another device fetches a photo the first time you open its pin, and keeps it, so it is there with no signal after that. One taken with no signal goes up when the signal comes back. Removing a photo, or deleting its pin, removes the uploaded copy as well.</p>
           <p>JPEG, PNG, WebP, GIF and AVIF always work, and any other picture your browser can open - BMP or TIFF, say - is converted on the way in. iPhone photos (HEIC) work from an iPhone, which converts them to JPEG as you add them, and in Safari on a Mac. Chrome and Firefox cannot open HEIC; there, save the photo as a JPEG first. RAW files (DNG, NEF, CR3 and the like) need exporting as JPEG before they can be added.</p>
           <p>They stay on the device they were added to. Nothing is uploaded, which is also why they do not appear on your other devices.</p>
         </div>
@@ -358,7 +359,7 @@
           <p>Folders and the pins inside them.</p>
           <p>A free account syncs up to 100 folders and 100 waypoints. A track counts as one waypoint however long it is, and a folder somebody shared with you does not count at all. Past that, your folders stay on the device you made them on, the panel says so, and nothing is deleted. Removing some brings you back under, and Premium syncs any number.</p>
           <p>Why a limit: every folder on the server is storage and every sync is bandwidth, which cost money each time. A hundred waypoints costs next to nothing to carry, and is enough to see whether syncing is worth paying for.</p>
-          <p>Photographs stay on the device they were added to — only the reference travels, so a picture taken on your phone will not appear on your laptop.</p>
+          <p>With Premium, the photographs on your pins too: a picture taken on your phone appears on your laptop, and to whoever you have shared its folder with. Without Premium a photograph stays on the device it was added to, and only the reference to it travels. <a href="#waypoint-photos">More about photographs</a>.</p>
         </div>
       </details>
       <details class="faq-item" id="no-signal">
@@ -443,11 +444,13 @@
         <article class="release">
           <h3><time datetime="2026-10-22">22 October 2026</time></h3>
           <ul>
+            <li><b>Photographs sync, with Premium.</b> The photos on your pins now go to your account, so a picture taken on your phone is on your laptop too, and the people you share a folder with see its photos. Photos you added before are uploaded the next time you open the map signed in. <a href="#waypoint-photos">More about photographs</a>.</li>
             <li><b>Pin cards are windows again on a phone</b>, not the whole screen. On a phone or tablet a card now stays open until you close it with its &times; or Close: tapping or panning the map no longer closes it or swaps it for another.</li>
             <li><b>The buttons on the map are bigger on phones and tablets</b>: search, drop a pin, zoom and your location.</li>
             <li><b>The (i) window for a layer</b> is a window on a phone too, and closes with its &times;.</li>
             <li><b>Now is an arrow</b> on the day's light bar under Photography, pointing at the time.</li>
             <li><b>Shorter layer descriptions</b>, down to what each layer shows and the warnings that matter.</li>
+            <li><b>Buttons look like buttons</b> everywhere: Share, Clear, Details, Close, the directions apps and the download menu are outlined, every &times; is a rounded square, and photo, camera, note and Apply buttons have icons. A dropped pin's Save as waypoint, Share and Clear sit on one row.</li>
             <li><b>Fixed:</b> <b>Edit</b> in a waypoint's Details said it was "no longer in the folder list" when the waypoint was far down a long folder. It opens the editor now, wherever the waypoint is.</li>
           </ul>
         </article>

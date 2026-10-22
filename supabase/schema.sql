@@ -30,7 +30,8 @@ create table if not exists public.folders (
   deleted     boolean not null default false,
 
   -- Waypoints and tracks, in the same shape the browser stores. Photos are not
-  -- included: their bytes stay on the device, and only ids travel.
+  -- included, only their ids - and, once uploaded, who uploaded each (`by`),
+  -- which is where it lives in the pin-photos bucket further down.
   items       jsonb not null default '[]'::jsonb,
 
   -- {from, to, retired} when this folder is a trip, null when it is not. A
@@ -925,3 +926,142 @@ grant execute on function public.open_folder_link(text) to anon, authenticated;
 -- editor; it removes only links more than a day past their end.
 --
 --   delete from public.folder_links where expires_at < now() - interval '1 day';
+
+-- ------------------------------------------------------------- pin photos
+--
+-- The pictures on a pin, so they follow the account to its other devices.
+--
+-- A pin has always carried only the ids of its photos; the pictures stayed in
+-- the browser that took them. Premium now uploads them here, one object each,
+-- at `<uploader's account id>/<photo id>`, and the pin's record of each photo
+-- gains `by`, the uploader, which is how another device knows where to look.
+--
+-- Private: nothing here is served to anybody without a session, and nothing
+-- is listed to anybody but the account that uploaded it. The size limit is a
+-- little over what the app ever stores - every photo is shrunk under 100 KB on
+-- the way in - so a picture the app could not shrink stays on its device
+-- rather than taking a megabyte of somebody else's quota.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('pin-photos', 'pin-photos', false, 262144,
+        array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'])
+on conflict (id) do update
+  set public = excluded.public,
+      file_size_limit = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+-- Who may see a photo that is not their own.
+--
+-- Somebody who can see a folder - theirs, or one shared with them - can see
+-- the photos on its pins. But "a folder you can see points at it" is not
+-- enough on its own: anybody can write a pin into their own folder naming any
+-- photo id and any uploader, and would then be shown somebody else's picture.
+-- So the uploader has to be somebody who could have put it there: the folder's
+-- owner, or a person it is shared with for editing.
+--
+-- SECURITY DEFINER because the second half asks about invitations the reader
+-- cannot see - a collaborator can read their own invitation and nobody else's
+-- - and about the address an account id signs in with. The reader's own
+-- access is still checked explicitly, from their session, so definer rights
+-- decide nothing about who the reader is. All it hands back is one boolean.
+create or replace function private.pin_photo_visible(object_name text)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  uploader text := (storage.foldername(object_name))[1];
+  photo text := storage.filename(object_name);
+  me uuid := auth.uid();
+  my_email text := lower(coalesce(auth.jwt() ->> 'email', ''));
+begin
+  if me is null or uploader is null or photo is null then
+    return false;
+  end if;
+  if uploader = me::text then
+    return true;
+  end if;
+  return exists (
+    select 1
+    from public.folders f
+    where not f.deleted
+      and f.items @> jsonb_build_array(jsonb_build_object('feature', jsonb_build_object(
+            'properties', jsonb_build_object('photos', jsonb_build_array(
+              jsonb_build_object('id', photo, 'by', uploader))))))
+      -- The reader can see this folder.
+      and (
+        f.user_id = me
+        or exists (
+          select 1 from public.folder_shares s
+          where s.owner_id = f.user_id
+            and s.client_id = f.client_id
+            and not s.revoked
+            and my_email <> ''
+            and lower(s.invited_email) = my_email
+        )
+      )
+      -- And the uploader could have put it there: the owner, or somebody it
+      -- was shared with for editing. Withdrawn invitations count here, so
+      -- the photos a collaborator added stay on the owner's pins after they
+      -- leave; they could not add any after, because the folder's own
+      -- policies stop a withdrawn editor writing to it.
+      and (
+        f.user_id::text = uploader
+        or exists (
+          select 1
+          from public.folder_shares s
+          join auth.users u on lower(u.email) = lower(s.invited_email)
+          where s.owner_id = f.user_id
+            and s.client_id = f.client_id
+            and s.role = 'editor'
+            and u.id::text = uploader
+        )
+      )
+  );
+end;
+$$;
+
+revoke execute on function private.pin_photo_visible(text) from public;
+grant execute on function private.pin_photo_visible(text) to authenticated;
+
+-- Uploading is Premium, into your own place and nowhere else: the first part
+-- of the path is the uploader's account id, and there is exactly one part
+-- before the file. The plan is the uploader's, checked here rather than only
+-- in the app, because a gate in the browser is one devtools edit from open.
+drop policy if exists "pin photos: upload your own, on Premium" on storage.objects;
+create policy "pin photos: upload your own, on Premium"
+  on storage.objects
+  for insert
+  to authenticated
+  with check (
+    bucket_id = 'pin-photos'
+    and array_length(storage.foldername(name), 1) = 1
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+    and private.holds_premium((select auth.uid()))
+  );
+
+-- Reading never asks about a plan. A subscription that lapses stops new
+-- photos travelling, not the ones already here: the FAQ promises nothing is
+-- taken away, and a picture of somewhere is exactly the kind of thing that
+-- promise is about.
+drop policy if exists "pin photos: read your own and those on folders you can see" on storage.objects;
+create policy "pin photos: read your own and those on folders you can see"
+  on storage.objects
+  for select
+  to authenticated
+  using (bucket_id = 'pin-photos' and private.pin_photo_visible(name));
+
+-- Removing is the uploader's, and needs no plan either.
+drop policy if exists "pin photos: remove your own" on storage.objects;
+create policy "pin photos: remove your own"
+  on storage.objects
+  for delete
+  to authenticated
+  using (
+    bucket_id = 'pin-photos'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
+
+-- No update policy, on purpose: a photo is never changed in place. A new
+-- picture is a new id, so an object, once there, is the picture it was.

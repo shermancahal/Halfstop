@@ -311,10 +311,15 @@ pre code { background: none; padding: 0; }
 .button-secondary { background: var(--surface); border-color: var(--line-strong); color: var(--ink); }
 .button-secondary:hover { background: var(--paper-2); color: var(--ink); border-color: var(--ink-3); }
 
-.button-ghost { background: transparent; border-color: transparent; color: var(--ink-2); }
-.button-ghost:hover { background: var(--paper-3); color: var(--ink); }
+/* Outlined: a button looks like a button wherever it is, on a card or in a
+   list, rather than a word that turns out to be pressable. Lighter than
+   secondary only in that it has no fill of its own. */
+.button-ghost { background: transparent; border-color: var(--line-strong); color: var(--ink); }
+.button-ghost:hover { background: var(--paper-2); color: var(--ink); border-color: var(--ink-3); }
 
-.button-small { padding: 6px 12px; font-size: .85rem; }
+/* Regular weight at this size: a column of semi-bold labels in a narrow
+   panel read as shouting, and the borders already say they are buttons. */
+.button-small { padding: 6px 12px; font-size: .85rem; font-weight: 500; }
 
 /* ---------- footer ---------- */
 
@@ -1364,7 +1369,7 @@ body > .update-box {
 .app-invite-go { flex: none; white-space: nowrap; }
 .app-invite-close {
   flex: none; display: inline-flex; align-items: center; justify-content: center;
-  width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%;
+  width: 32px; height: 32px; padding: 0; border: 1px solid var(--line-strong); border-radius: var(--radius);
   background: transparent; color: var(--ink-2); cursor: pointer;
 }
 .app-invite-close:hover { background: var(--paper-3); color: var(--ink); }
@@ -1409,7 +1414,8 @@ body > .update-box {
 .dialog-close {
   flex: none; display: flex; align-items: center; justify-content: center;
   width: 34px; height: 34px; padding: 0; margin: -4px 0 0;
-  background: none; border: 0; border-radius: 50%; color: var(--ink-3); cursor: pointer;
+  background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius);
+  color: var(--ink-2); cursor: pointer;
 }
 .dialog-close:hover { background: var(--surface-2); color: var(--ink); }
 .dialog-close svg { width: 18px; height: 18px; }

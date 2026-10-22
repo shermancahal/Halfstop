@@ -78,8 +78,8 @@ https://app.halfstop.app/privacy.html
 Apple's rule, like Play's: data is *collected* when it leaves the device and
 we, or a service working for us, can read it for longer than it takes to
 answer the request. What stays on the iPhone is not collected and is not
-declared. This covers photographs, downloaded maps, the live position and the
-files opened.
+declared. This covers downloaded maps, the live position and the files
+opened - and photographs on an account without Premium.
 
 **Do you or your third-party partners collect data from this app?** Yes.
 
@@ -97,12 +97,12 @@ an account, and an account is optional.
 | Identifiers → **User ID** | Yes | The account id; also given to the App Store to tie a purchase to the account |
 | Location → **Precise Location** | Yes | The coordinates of saved pins, synced to the account. They are places the user chose rather than where the phone is, but the privacy policy treats them as personal location data, and declaring more than the minimum is the safe side of this form, as on Play |
 | Purchases → **Purchase History** | Yes | Whether the account has Premium, from where, and until when |
+| User Content → **Photos or Videos** | Yes | With Premium, the photographs on the account's pins, uploaded so its other devices and the people a folder is shared with can see them |
 | User Content → **Other User Content** | Yes | Folder names, pin names and notes, and who a folder is shared with |
 | Search History → **Search History** | **No** | What is typed into the search box goes to komoot's Photon, and on Premium to Mapbox, to find the place. It is sent with no account id, and we keep none of it. But they are not ours to make promises for, so it is declared, not linked |
 
 **Not collected.** Leave these unticked:
 
-- Photos or Videos: they stay on the iPhone; only an identifier syncs.
 - Coarse Location: the phone's own position never leaves it.
 - Customer Support: support is by email, outside the app.
 - Browsing History, Usage Data, Diagnostics: there is no crash or analytics SDK.
@@ -185,7 +185,7 @@ For the parts that cost us money every time they are used:
 • Offline map downloads, for when the bars run out
 • Weather layers: radar, temperature, cloud cover, wind, rain, snow, fog and storm tracks
 • Trip planning with road routing
-• Photographs kept with a waypoint
+• Photographs on a waypoint, synced between your devices
 • State-level detail maps and extra basemaps
 
 Premium is $4.99 a month or $49 a year in the US, as an auto-renewing subscription. A new account gets a free month first, with nothing to cancel: it simply ends. Payment is charged to your Apple Account when you confirm the purchase. The subscription renews automatically unless it is cancelled at least 24 hours before the end of the current period, and renewal is charged within the 24 hours before the period ends. Manage or cancel it in your Apple Account settings.

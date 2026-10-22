@@ -12,6 +12,7 @@
 import { SUPABASE_URL, SUPABASE_KEY } from '../config.js';
 import { mergeFolders, rowToFolder, folderToRow, missingColumn } from './sync.js';
 import { canEdit, markShared, normaliseEmail, readRole } from './shares.js';
+import { PHOTO_BUCKET, photoPath } from './photo-sync.js';
 import { safeStorage } from './folders.js';
 import { can, tierFor, FREE_SYNC, syncLoad, allowanceNote } from './tiers.js';
 import {
@@ -2015,6 +2016,85 @@ export class Account extends EventTarget {
       }
     } catch {
       // Offline, or the client could not be built. The next sync carries it.
+    }
+  }
+
+  /*
+   * The photos on pins, in the account's storage.
+   *
+   * Uploading is Premium and the bucket says so itself (supabase/schema.sql,
+   * "pin photos"); these do not ask, because the answer that counts is the
+   * server's. Each returns a shape rather than throwing, so one photo that
+   * fails costs that photo and not the rest of a batch.
+   */
+
+  /** Whether this session can reach storage at all right now. */
+  canReachStorage() {
+    return Boolean(this.user) && !this.renewing && !this.offline && online();
+  }
+
+  /**
+   * Upload one photo of this account's.
+   *
+   * Already there counts as done: an upload that went through while its
+   * answer was lost to a dropped connection is retried by the next sync, and
+   * the second try finding the picture in place is the success it reports.
+   *
+   * @returns {Promise<{ok: boolean, reason?: string}>}
+   */
+  async uploadPhoto(id, blob) {
+    if (!this.canReachStorage()) return { ok: false, reason: 'offline' };
+    try {
+      const client = await this.getClient();
+      if (!client?.storage) return { ok: false, reason: 'Accounts are not configured here.' };
+      const { error } = await client.storage.from(PHOTO_BUCKET).upload(photoPath(this.user.id, id), blob, {
+        contentType: blob.type || 'image/jpeg',
+        cacheControl: '31536000',
+        upsert: false,
+      });
+      if (!error) return { ok: true };
+      const status = String(error.statusCode || error.status || '');
+      if (status === '409' || /already exists|duplicate/i.test(error.message || '')) return { ok: true };
+      return { ok: false, reason: error.message || 'refused' };
+    } catch (error) {
+      return { ok: false, reason: error?.message || String(error) };
+    }
+  }
+
+  /**
+   * Fetch a photo another device uploaded.
+   *
+   * @returns {Promise<Blob|null>} null when it cannot be had - no signal, no
+   *   access, or no such picture - which the caller shows as not here yet.
+   */
+  async downloadPhoto(by, id) {
+    if (!by || !id || !this.canReachStorage()) return null;
+    try {
+      const client = await this.getClient();
+      if (!client?.storage) return null;
+      const { data, error } = await client.storage.from(PHOTO_BUCKET).download(photoPath(by, id));
+      return error || !(data instanceof Blob) ? null : data;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Take down photos this account uploaded, when their pin or the photo is
+   * deleted here.
+   *
+   * Best effort and quiet: a photo left in storage after its pin is gone is
+   * reachable by nobody but the account that uploaded it - the policy shows
+   * anybody else a photo only on a pin that names it - and is removed with
+   * the account in any case.
+   */
+  async removePhotos(paths = []) {
+    if (!paths.length || !this.canReachStorage()) return;
+    try {
+      const client = await this.getClient();
+      await client?.storage?.from(PHOTO_BUCKET).remove(paths);
+    } catch {
+      // Left for the account's deletion to clear.
     }
   }
 }

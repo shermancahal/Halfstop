@@ -4273,20 +4273,16 @@ const pinRows = await page.evaluate(() => {
     }),
   };
 });
-check('saving is on a row of its own, above the two ways out', pinRows.perRow, [1, 2]);
-check('two rows, not three buttons across one', pinRows.rows, 2);
+check('save, share and clear on one row, as a waypoint\'s are', pinRows.perRow, [3]);
+check('one row, not two', pinRows.rows, 1);
 check('and no label is cut short at 390px', pinRows.clipped, []);
 /*
- * And the rows are filled rather than huddled at the left.
- *
- * Counting the buttons per row says nothing about what they look like: three
- * content-width buttons wrapped onto two lines would pass that and still read
- * as a bag of controls. Saving takes its whole row, the two ways out take half
- * each, and that is the layout that was asked for.
+ * And the row is filled rather than huddled at the left: Share and Clear take
+ * what their words need, and Save takes the rest, so it is the widest.
  */
-check('saving fills its row', pinRows.share[0][0] > 95, true);
-check('and the two ways out split theirs evenly',
-  Math.abs(pinRows.share[1][0] - pinRows.share[1][1]) <= 2 && pinRows.share[1][0] > 45, true);
+const [saveShare, shareShare, clearShare] = pinRows.share[0] || [];
+check('the row is filled end to end', saveShare + shareShare + clearShare > 92, true);
+check('with Save the widest of the three', saveShare > shareShare && saveShare > clearShare, true);
 
 await page.setViewportSize({ width: 1280, height: 900 });
 await page.waitForTimeout(300);

@@ -200,3 +200,36 @@ rollback;
 --   raise exception 'PROBE RESULT (rolled back):%', report;
 -- end
 -- $probe$;
+
+-- ---------------------------------------------------------------------------
+-- And who can upload and see the photos on pins (storage bucket pin-photos).
+--
+-- Five real accounts: OWNER, EDITOR and STRANGER hold Premium, VIEWER may hold
+-- anything, FREE holds nothing. One statement, ending in an exception so all
+-- of it rolls back; the report is the exception's message. It invents two
+-- folders of OWNER's - one shared live to VIEWER and EDITOR, one shared to
+-- them and withdrawn - and inserts storage rows the way the Storage API does,
+-- so the policies are what is being asked, not the app.
+--
+-- Expected, as it came back on the live project on 2026-10-22:
+--
+--   A owner uploads own (2)                         2 rows
+--   B free uploads own                              refused 42501   uploading is Premium
+--   C owner uploads into another place              refused 42501
+--   D nested path                                   refused 42501   <account>/<photo> only
+--   E editor uploads own (2)                        2 rows
+--   F viewer reads owner's photo                    1               a folder they can see
+--   G viewer reads editor's photo on the pin        1               an editor put it there
+--   O viewer whose invitation was withdrawn reads   0
+--   H owner reads editor's photo on the pin         1
+--   N owner reads a withdrawn editor's photo        1               what they added stays
+--   I editor reads owner's photo                    1
+--   J stranger reads owner's photo                  0
+--   K stranger names it in its own pin, then reads  0               naming a photo is not access
+--   L stranger lists the owner's place              0
+--
+-- The cases are the rows above; the shape of each is the free-account block
+-- before this one: set request.jwt.claims for the account, `set local role
+-- authenticated`, then insert into storage.objects (bucket_id, name) or count
+-- what `select ... from storage.objects` returns. Name PL/pgSQL variables so
+-- they cannot clash with a column - storage.objects has `owner_id`.

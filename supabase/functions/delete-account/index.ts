@@ -18,16 +18,42 @@
  *
  * ORDER
  *
- * Rows first, then the auth record. Deleting the user first would leave the
- * rows behind with no session able to reach them - the row-level policy checks
- * a signed-in user who no longer exists - and the only thing that could clean
- * them up afterwards is another service-key call.
+ * Photos, then rows, then the auth record. Deleting the user first would leave
+ * the rows and pictures behind with no session able to reach them - the
+ * policies check a signed-in user who no longer exists - and the only thing
+ * that could clean them up afterwards is another service-key call.
  */
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 /** The table the app keeps folders in. Rows are filed under `user_id`. */
 const TABLE = 'folders';
+
+/** Where the photos on pins are kept: one object each, at `<account id>/<photo id>`. */
+const PHOTOS = 'pin-photos';
+
+/** How many objects one list or remove call takes - the Storage API's page. */
+const PAGE = 1000;
+
+/**
+ * Remove every photo this account uploaded.
+ *
+ * Listed and removed a page at a time until the account's place is empty,
+ * rather than trusting one list to be the whole of it. A photo left behind
+ * after the account is gone is a picture of somewhere that nobody can ever
+ * take down, which is the one outcome this function exists to prevent.
+ */
+async function removePhotos(admin: ReturnType<typeof createClient>, userId: string): Promise<string> {
+  for (let round = 0; round < 1000; round += 1) {
+    const { data, error } = await admin.storage.from(PHOTOS).list(userId, { limit: PAGE });
+    if (error) return error.message;
+    const paths = (data || []).map((entry: { name: string }) => `${userId}/${entry.name}`);
+    if (!paths.length) return '';
+    const { error: removeError } = await admin.storage.from(PHOTOS).remove(paths);
+    if (removeError) return removeError.message;
+  }
+  return 'too many photos to remove in one go';
+}
 
 /*
  * Both key generations, because a project can be on either.
@@ -96,6 +122,9 @@ Deno.serve(async (req: Request) => {
   if (whoError || !user) return reply(401, { error: 'That session is not valid.' });
 
   const admin = createClient(url, secret, { auth: { persistSession: false } });
+
+  const photoError = await removePhotos(admin, user.id);
+  if (photoError) return reply(500, { error: `Could not delete your photos: ${photoError}` });
 
   const { error: rowsError } = await admin.from(TABLE).delete().eq('user_id', user.id);
   if (rowsError) return reply(500, { error: `Could not delete your folders: ${rowsError.message}` });

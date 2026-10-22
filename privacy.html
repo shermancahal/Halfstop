@@ -65,7 +65,7 @@
   </section>
 
   <div class="wrap legal-wrap">
-    <p class="legal-date">In effect from 8 September 2026. Last changed 4 October 2026 - see <a href="#changes">what changed</a>.</p>
+    <p class="legal-date">In effect from 8 September 2026. Last changed 22 October 2026 - see <a href="#changes">what changed</a>.</p>
 
     <section class="legal-section">
       <h2>The short version</h2>
@@ -75,9 +75,10 @@
         you make in it — your pins, your folders, your photographs, your
         downloaded maps — is stored on your own device and never leaves it. If
         you make an account, your folders and pins are also kept on a server so
-        they can reach your other devices. If you subscribe, Stripe or Google
-        Play takes the payment, and we never see your card. The rest of this
-        page is the detail.
+        they can reach your other devices, and with Premium so are the
+        photographs on your pins. If you subscribe, Stripe or Google Play takes
+        the payment, and we never see your card. The rest of this page is the
+        detail.
       </p>
     </section>
 
@@ -98,7 +99,7 @@
       </p>
       <ul>
         <li><b>Folders, waypoints and tracks</b> you save or import.</li>
-        <li><b>Photographs</b> attached to a pin. The image itself is stored on the device and is never uploaded, even when you have an account — only its identifier is synced, so a picture taken on your phone will not appear on your laptop.</li>
+        <li><b>Photographs</b> attached to a pin, after they are resized. Without Premium the image stays on the device it was added to; only its identifier is synced with your folders. With Premium it is also uploaded to your account - see below.</li>
         <li><b>Downloaded map regions.</b> The map tiles are held on the device.</li>
         <li><b>Settings</b> — theme, units, coordinate format, which layers you had switched on.</li>
         <li><b>Files you open.</b> A GPX, KML, KMZ or GeoJSON file you drop onto the map is read in the browser. It is not uploaded anywhere.</li>
@@ -116,6 +117,7 @@
         <li><b>Your email address</b>, so you can sign in and so we can send you a sign-in link.</li>
         <li><b>A display name</b>, if you set one. If you sign in with Google, Google also gives us your name and the address of your profile picture; we keep them with the account, and use your own display name first.</li>
         <li><b>Your folders and what is in them</b> — the name and color of each folder, and for every pin its coordinates, name, notes, icon and color. Coordinates of places you have saved are location data about places you care about, so we treat them as personal to you.</li>
+        <li><b>Photographs on your pins</b>, with Premium — each picture as it is stored on your device (resized to 1024 pixels on the long edge, under 100&nbsp;KB), so your other devices can show it. A photograph can be seen by your account, and by the people you have shared the folder it is in with; nobody else. Removing a photo, or deleting its pin or folder, removes it here too, and closing your account removes all of them. Photographs taken while you had Premium stay after it ends; new ones stay on the device they were added to.</li>
         <li><b>Who you have shared a folder with</b> — the email address you invited, and whether they can view or edit.</li>
         <li><b>Folder links you send</b> — when you send a folder as a link, a copy of its places (coordinates, names, notes, icons and colors, but not photographs) for thirty days. Anybody holding the link can open that copy, signed in or not; links are not listed or searchable anywhere. After thirty days the link stops opening, and the copy is deleted at our next clear-out of expired links. You can also send a folder as a file instead, which leaves nothing with us.</li>
         <li><b>Your plan</b> — whether you have Premium, where it came from (the free month, a subscription, or a grant from us), when it renews or ends, and, for a subscription, the payment provider's reference for it. Whether you have used your free month, so it is only taken once.</li>
@@ -127,10 +129,12 @@
         where you have been, or anything about how you use the app.
       </p>
       <p>
-        Accounts and folder storage run on <b>Supabase</b>, which hosts the
-        database on our behalf. Rules on the database restrict every row to the
-        account that created it - except a folder link's copy, which is opened
-        by its link, as described above.
+        Accounts, folder storage and the photographs on pins run on
+        <b>Supabase</b>, which hosts the database and the file storage on our
+        behalf. Rules on the database restrict every row to the account that
+        created it - except a folder link's copy, which is opened by its link,
+        as described above - and every photograph to its account and the people
+        the folder it is in is shared with.
       </p>
     </section>
 
@@ -198,7 +202,7 @@
         <li><b>OpenStreetMap</b> — the street basemap, served by community tile servers.</li>
         <li><b>A Valhalla routing server</b> — only when you ask a trip to draw its road route.</li>
         <li><b>GitHub</b> — hosts the website itself.</li>
-        <li><b>Supabase</b> — accounts and folder sync, as above.</li>
+        <li><b>Supabase</b> — accounts, folder sync and, with Premium, the photographs on pins, as above.</li>
         <li><b>Resend</b> — sends the email Halfstop sends you (confirmation and sign-in links, folder invitations, notice of a changed password) and receives mail sent to support@halfstop.app.</li>
         <li><b>Google</b> — signing in with Google, if you choose it, and Google Play billing in the Android app.</li>
         <li><b>Stripe</b> — subscriptions bought on this website.</li>
@@ -273,6 +277,13 @@
         If this changes, the date at the top changes with it. If a change means
         we start collecting something we did not collect before, we will say so
         plainly rather than quietly editing a paragraph.
+      </p>
+      <p>
+        <b>22 October 2026.</b> With Premium, the photographs on your pins are
+        now uploaded to your account, so they appear on your other devices and
+        to the people you share their folder with. Until now they never left the
+        device they were added to. Without Premium nothing about photographs
+        has changed. This is listed above under what we hold.
       </p>
       <p>
         <b>4 October 2026.</b> A folder can now be sent as a link. Doing so keeps

@@ -1253,6 +1253,39 @@ export class FolderStore {
     return true;
   }
 
+  /**
+   * Record that photos are uploaded, by whom, so other devices can fetch them.
+   *
+   * Set on the pin's own record of each photo, which is what travels with the
+   * folder: `by` is the uploader's account id, and with the photo id it is
+   * where the picture lives (lib/photo-sync.js). Set only after the upload, so
+   * a pin never points another device at something that is not there. One
+   * announcement for the lot, however many there are.
+   *
+   * @param {{folderId: string, itemId: string, photoId: string}[]} entries
+   * @returns {number} how many photos were marked
+   */
+  markPhotosUploaded(entries = [], by = '') {
+    if (!by || !entries.length) return 0;
+    let marked = 0;
+    this.batch(() => {
+      for (const { folderId, itemId, photoId } of entries) {
+        const folder = this.get(folderId);
+        const item = folder?.items.find((entry) => entry.id === itemId);
+        const photos = item?.feature?.properties?.photos;
+        if (!Array.isArray(photos)) continue;
+        let changed = false;
+        item.feature.properties.photos = photos.map((photo) => {
+          if (photo?.id !== photoId || photo.by === by) return photo;
+          changed = true;
+          return { ...photo, by };
+        });
+        if (changed) { marked += 1; this.emit(folderId); }
+      }
+    });
+    return marked;
+  }
+
   /** Every photo id referenced anywhere, for pruning orphans from IndexedDB. */
   referencedPhotoIds() {
     const ids = [];
