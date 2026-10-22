@@ -13,7 +13,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Account, displayName, folderDisposition } from '../assets/js/lib/account.js';
+import { Account, APPLE_PLUGIN, displayName, folderDisposition, providersHere } from '../assets/js/lib/account.js';
 
 const folders = { list: () => [], replaceAll() {}, toGeoJSON: () => ({ features: [] }) };
 
@@ -561,19 +561,38 @@ const answering = (body, ok = true) => async () => ({
 
 test('account: only the providers the project says it has are offered', async () => {
   const account = new Account(storeOf([]), { client: async () => ({}), configured: () => true });
-  await withFetch(answering({ external: { apple: true, google: false, github: true } }), async () => {
+  await withFetch(answering({ external: { apple: false, google: true, github: true } }), async () => {
     await account.refreshProviders();
   });
   // github is registered and this app has no button for it, so it is not one.
-  assert.deepEqual(account.providers, ['apple']);
+  assert.deepEqual(account.providers, ['google']);
 });
 
-test('account: both, when both are registered', async () => {
-  const account = new Account(storeOf([]), { client: async () => ({}), configured: () => true });
+const shellOf = (platform, plugins = {}) => () => ({
+  native: platform !== 'web', platform, plugin: (name) => plugins[name] || null,
+});
+
+test('account: both, in the iPhone app that can sign in with Apple', async () => {
+  const account = new Account(storeOf([]), {
+    client: async () => ({}), configured: () => true,
+    shell: shellOf('ios', { [APPLE_PLUGIN]: {} }),
+  });
   await withFetch(answering({ external: { apple: true, google: true } }), async () => {
     await account.refreshProviders();
   });
   assert.deepEqual(account.providers, ['apple', 'google']);
+});
+
+test('account: Apple, registered for the iPhone app, is offered nowhere it cannot finish', () => {
+  // The website and Android go through Apple's web flow, which has no
+  // Services ID or key behind it: the button would open Apple's error page.
+  const external = { apple: true, google: true };
+  assert.deepEqual(providersHere(external, shellOf('web')()), ['google']);
+  assert.deepEqual(providersHere(external, shellOf('android')()), ['google']);
+  // An iPhone build without the native plugin has no way to do it either.
+  assert.deepEqual(providersHere(external, shellOf('ios')()), ['google']);
+  assert.deepEqual(providersHere(external, shellOf('ios', { [APPLE_PLUGIN]: {} })()), ['apple', 'google']);
+  assert.deepEqual(providersHere({ apple: false }, shellOf('ios', { [APPLE_PLUGIN]: {} })()), []);
 });
 
 test('account: a project that answers with nothing registered offers nothing', async () => {

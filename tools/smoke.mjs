@@ -2435,6 +2435,11 @@ if (!external) {
   await narrow.addInitScript(() => {
     window.ABMAP_SUPABASE_URL = 'https://smoke.supabase.co';
     window.ABMAP_SUPABASE_KEY = 'smoke-anon-key';
+    // The iPhone app, with its Sign in with Apple plugin: the one place both
+    // buttons are offered, since Apple's web flow is not set up.
+    window.Capacitor = {
+      isNativePlatform: () => true, getPlatform: () => 'ios', Plugins: { SignInWithApple: {} },
+    };
   });
   const phone = await narrow.newPage();
   await phone.goto(new URL('account.html', MAP_URL).href, { waitUntil: 'domcontentloaded' });

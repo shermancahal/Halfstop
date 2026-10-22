@@ -162,6 +162,26 @@ const LATER_COLUMNS = ['parent_id', 'trip', 'removed_items'];
  */
 const PROVIDERS = ['apple', 'google'];
 
+/** The native Sign in with Apple plugin, as Capacitor names it. */
+export const APPLE_PLUGIN = 'SignInWithApple';
+
+/**
+ * The registered providers whose sign-in can finish on this page.
+ *
+ * Apple is registered for the iPhone app's native sign-in, which needs only
+ * the bundle id in Supabase. The browser flow - the website, and the Android
+ * app - needs a Services ID and a signing key that are not set up, so there
+ * its button would open Apple's error page. It is offered in the iPhone app,
+ * and only once the build carries the plugin that does the native half.
+ */
+export function providersHere(external = {}, shell = appShell()) {
+  return PROVIDERS.filter((id) => {
+    if (external?.[id] !== true) return false;
+    if (id === 'apple') return shell.platform === 'ios' && Boolean(shell.plugin(APPLE_PLUGIN));
+    return true;
+  });
+}
+
 /** The support queue. Readable by one address, decided server-side. */
 const TICKETS = 'support_tickets';
 
@@ -1851,7 +1871,7 @@ export class Account extends EventTarget {
       if (!response.ok) throw new Error(`the project answered ${response.status}`);
       const settings = await response.json();
       const external = settings?.external || {};
-      this.providers = PROVIDERS.filter((id) => external[id] === true);
+      this.providers = providersHere(external, this.shell());
       this.emit();
       return this.providers;
     } catch (error) {
