@@ -3552,7 +3552,44 @@ const track = await page.evaluate(() => {
     labelled: hours.every((hour) => !!hour.properties.label),
   };
 });
-check('the core track is drawn across the night', track.present, true);
+/*
+ * Whether there is a track to draw depends on the date. The core is up after
+ * dark for most of a summer night and for none of a December one, and late
+ * October at this pin is twenty minutes - which failed "more than eight
+ * points" for being autumn. So the app's own sky code says how much of
+ * tonight's dark the core is up for, and the checks follow: a track when
+ * there is one, finely sampled whatever its length, and nothing drawn when
+ * there is nothing to draw.
+ */
+const tonight = await page.evaluate(async () => {
+  const sky = await import(new URL('assets/js/lib/sky.js', document.baseURI).href);
+  const features = window.__map.getSource('light-directions')?._d?.features || [];
+  // Every bearing starts at the pin.
+  const spoke = features.find((feature) => feature.geometry?.type === 'LineString' && !feature.properties.kind);
+  const centre = window.__map.getCenter();
+  const [lon, lat] = spoke ? spoke.geometry.coordinates[0] : [centre.lng, centre.lat];
+  const dark = sky.milkyWayNight(new Date(), lat, lon).dark;
+  const up = dark ? sky.milkyWayTrack([lon, lat], dark.from, dark.to, { stepMinutes: 10 }).length : 0;
+
+  // The widest step of bearing between neighbouring samples: a curve, or a
+  // few points joined by straight lines.
+  const line = features.find((feature) => feature.properties.kind === 'track');
+  const k = Math.cos(lat * Math.PI / 180);
+  const bearing = ([x, y]) => Math.atan2((x - lon) * k, y - lat) * 180 / Math.PI;
+  let widest = 0;
+  const coords = line?.geometry.coordinates || [];
+  for (let i = 1; i < coords.length; i += 1) {
+    const step = Math.abs(bearing(coords[i]) - bearing(coords[i - 1])) % 360;
+    widest = Math.max(widest, Math.min(step, 360 - step));
+  }
+  return { up, widest };
+});
+if (tonight.up < 2) {
+  console.log('  (the core is not up after dark at this pin tonight, so there is no track to draw)');
+  check('with the core never up after dark, no track is drawn', track.present, false);
+} else {
+  check('the core track is drawn across the night', track.present, true);
+}
 /*
  * And inside the frame.
  *
@@ -3578,11 +3615,17 @@ const ringFits = await page.evaluate(() => {
     reach: Math.min(...(line?.geometry.coordinates || [[0, 0]]).map(away)) / tall,
   };
 });
-check('the whole ring is inside the view, at this zoom', ringFits.ring, true);
-check('and far enough out to read a bearing off', ringFits.reach > 0.05, true);
-check('sampled finely enough to read as a curve', track.points > 8, true);
-check('with the hours marked along it', track.hours > 0, true);
-check('and every hour mark carries its time', track.labelled, true);
+if (tonight.up >= 2) {
+  check('the whole ring is inside the view, at this zoom', ringFits.ring, true);
+  check('and far enough out to read a bearing off', ringFits.reach > 0.05, true);
+  check('sampled finely enough to read as a curve', track.points >= 2 && tonight.widest < 8, true);
+}
+// An hour mark needs the track to span a whole hour, which a short autumn
+// track may not.
+if (tonight.up >= 7) {
+  check('with the hours marked along it', track.hours > 0, true);
+  check('and every hour mark carries its time', track.labelled, true);
+}
 
 /*
  * The spoke from the pin to the band, which is the "where do I stand and which
