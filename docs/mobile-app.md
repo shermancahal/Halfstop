@@ -78,13 +78,17 @@ builds the native app.
 ```sh
 npm install --no-save @capacitor/cli @capacitor/core @capacitor/assets
 npm install --no-save @capacitor/ios @capacitor/android
-npm install --no-save @capacitor/app @capacitor/browser @capgo/native-purchases
+npm install --no-save @capacitor/app @capacitor/browser @capgo/native-purchases ./native/halfstop-apple-sign-in
 ```
 
 The third line is the app's plugins: `@capacitor/app` for the app being opened
 by its own links (a sign-in email, the return from Google), `@capacitor/browser`
-for Google sign-in, which Google refuses inside an embedded web view, and
-`@capgo/native-purchases` for Google Play Billing. They are named again in
+for Google sign-in, which Google refuses inside an embedded web view,
+`@capgo/native-purchases` for Google Play Billing and the App Store, and
+`./native/halfstop-apple-sign-in` for Apple's own Sign in with Apple sheet on
+the iPhone. That last one is a folder in this repository rather than a package
+from npm: the published plugin pins Capacitor 7's Swift package, which a
+Capacitor 8 project cannot resolve. Android skips it. They are named again in
 `capacitor.config.json` under `includePlugins`, because `cap sync` finds
 plugins by reading `package.json` and `--no-save` keeps them out of it - so
 without that list sync would quietly build an app with none of them.
@@ -279,7 +283,7 @@ to look at once it is running.
 ### On the Mac
 
 ```sh
-npm install --no-save @capacitor/cli @capacitor/core @capacitor/ios
+npm install --no-save @capacitor/cli @capacitor/core @capacitor/ios @capacitor/android @capacitor/app @capacitor/browser @capgo/native-purchases ./native/halfstop-apple-sign-in
 npm run app:ios
 ```
 
@@ -440,12 +444,12 @@ Settings → System → Developer options → USB debugging).
 ```sh
 cd ~/Halfstop          # wherever you cloned it - not your home directory
 git pull
-npm install --no-save @capacitor/cli @capacitor/core @capacitor/ios @capacitor/android @capacitor/app @capacitor/browser @capgo/native-purchases
+npm install --no-save @capacitor/cli @capacitor/core @capacitor/ios @capacitor/android @capacitor/app @capacitor/browser @capgo/native-purchases ./native/halfstop-apple-sign-in
 npm run app:android
 ```
 
 Run the install line again even if Capacitor is already installed: it now
-carries the three plugins as well, and installing them alone over `--no-save`
+carries the app's plugins as well, and installing them alone over `--no-save`
 packages can remove the ones already there.
 
 Run from inside the clone. From anywhere else npm finds a different

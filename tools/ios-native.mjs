@@ -8,7 +8,7 @@
  * said as much ("this must be scripted, not typed into Xcode") and named this
  * file before it existed.
  *
- * Four things, every run:
+ * Five things, every run:
  *
  *   - The URL scheme, so an emailed sign-in link and the return from Google
  *     open the app rather than Safari. The page side of that is
@@ -20,9 +20,11 @@
  *     the photo library, for the map snapshot.
  *   - The icon and the launch image, from the same master as everything else.
  *   - The version, so App Store Connect accepts each build.
+ *   - The Sign in with Apple entitlement, without which Apple's sheet fails
+ *     with error 1000 rather than opening.
  *
  * Plain text edits rather than a plist library: the project has no
- * dependencies and these are four well-known keys in a file whose shape
+ * dependencies and these are a few well-known keys in files whose shape
  * Capacitor fixes. Each edit adds only what is missing and leaves anything
  * somebody set on purpose alone.
  */
@@ -47,9 +49,9 @@ const escapeXml = (text) => String(text)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 /** Where new top-level keys go: before the dictionary that closes the plist. */
-function insertAtEnd(plist, block) {
+function insertAtEnd(plist, block, file = 'Info.plist') {
   const close = /\n?<\/dict>\s*<\/plist>\s*$/;
-  if (!close.test(plist)) throw new Error('Info.plist does not end in </dict></plist> - not a file this knows how to edit.');
+  if (!close.test(plist)) throw new Error(`${file} does not end in </dict></plist> - not a file this knows how to edit.`);
   return plist.replace(close, (tail) => `\n${block}${tail}`);
 }
 
@@ -121,6 +123,54 @@ export function withIosVersion(pbxproj, version) {
     .replace(/(CURRENT_PROJECT_VERSION = )[^;]+;/g, `$1${version.code};`)
     .replace(/(MARKETING_VERSION = )[^;]+;/g, `$1${name};`);
   return { text: fixed, changed: fixed !== text };
+}
+
+/** The entitlement Sign in with Apple needs. */
+export const APPLE_SIGN_IN = 'com.apple.developer.applesignin';
+
+/** Where the entitlements file goes, relative to ios/App: beside Info.plist. */
+export const ENTITLEMENTS_FILE = 'App/App.entitlements';
+
+const EMPTY_ENTITLEMENTS = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+</dict>
+</plist>
+`;
+
+/**
+ * project.pbxproj pointing the app at an entitlements file, and which file.
+ *
+ * Capacitor's template has none. The app target's two configurations are the
+ * ones naming App/Info.plist, and each gains CODE_SIGN_ENTITLEMENTS beside it.
+ * A project that already names a file - Xcode writes one when a capability is
+ * ticked by hand - is left as it is, and that file is the one to edit.
+ *
+ * @returns {{ text: string, changed: boolean, file: string }} `file` is '' when
+ *   there was nowhere to put the setting.
+ */
+export function withEntitlementsSetting(pbxproj) {
+  const text = String(pbxproj || '');
+  const named = /CODE_SIGN_ENTITLEMENTS = "?([^";]+)"?;/.exec(text);
+  if (named) return { text, changed: false, file: named[1] };
+  const fixed = text.replace(/^([ \t]*)INFOPLIST_FILE = App\/Info\.plist;$/gm,
+    `$1CODE_SIGN_ENTITLEMENTS = ${ENTITLEMENTS_FILE};\n$1INFOPLIST_FILE = App/Info.plist;`);
+  return { text: fixed, changed: fixed !== text, file: fixed !== text ? ENTITLEMENTS_FILE : '' };
+}
+
+/**
+ * The entitlements file with Sign in with Apple in it, made if there is none.
+ *
+ * Without the entitlement Apple's sheet never opens: the request fails at once
+ * with error 1000. Anything else the file holds is kept.
+ */
+export function withAppleSignIn(entitlements = '') {
+  const given = String(entitlements || '');
+  const text = given.trim() ? given : EMPTY_ENTITLEMENTS;
+  if (text.includes(`<key>${APPLE_SIGN_IN}</key>`)) return { text, changed: text !== given };
+  const block = `\t<key>${APPLE_SIGN_IN}</key>\n\t<array>\n\t\t<string>Default</string>\n\t</array>`;
+  return { text: insertAtEnd(text, block, 'The entitlements file'), changed: true };
 }
 
 /** The launch image's side, as Capacitor's template sizes it. */

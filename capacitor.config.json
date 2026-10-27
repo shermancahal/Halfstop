@@ -5,7 +5,8 @@
   "includePlugins": [
     "@capacitor/app",
     "@capacitor/browser",
-    "@capgo/native-purchases"
+    "@capgo/native-purchases",
+    "halfstop-apple-sign-in"
   ],
   "server": {
     "androidScheme": "https"

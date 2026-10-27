@@ -56,10 +56,10 @@ Google:
 Tested in `test/native-shell.test.mjs`; the device itself is the part that
 cannot be tested from here.
 
-**iOS: the same JavaScript, and now the URL scheme.** `npm run app:ios` writes
-the URL type into `Info.plist` on every run (Step B, iOS half -
-`tools/ios-native.mjs`). Sign in with Apple (section 2) is still to do, and
-needs the Apple developer account.
+**iOS: the same JavaScript, the URL scheme, and Sign in with Apple.**
+`npm run app:ios` writes the URL type into `Info.plist` on every run (Step B,
+iOS half - `tools/ios-native.mjs`). Sign in with Apple (section 2) is built,
+natively: the code half is done, and its two console steps are below.
 
 **Still yours, in dashboards** - Step A and Google's side, below. Until Step A
 is done, every link the app sends silently lands on the website instead.
@@ -319,21 +319,14 @@ There are two implementations and the app wants the **native** one.
 | Email sources | [Services](https://developer.apple.com/account/resources/services/list) |
 | The provider itself | [Supabase → Authentication → Providers → Apple](https://supabase.com/dashboard/project/gqemcvuushtfbbbxypvf/auth/providers) |
 
-### Enabling it lights up a button on the website too
+### Enabling it no longer lights up a button on the website
 
-Worth knowing before you tick anything. `refreshProviders()` asks
-`/auth/v1/settings` which providers the project has, and `account-panel.js`
-draws a button for every one that answers `true`:
-
-```js
-this.providers = PROVIDERS.filter((id) => external[id] === true);
-```
-
-So enabling Apple for the *app* will most likely make **Continue with Apple**
-appear on the *website*, where there is no OAuth secret behind it yet. Check
-the sign-in panel on app.halfstop.app immediately after enabling. If the button
-is there, either finish the web configuration below or leave the provider off
-until you are ready to do both.
+It used to. `refreshProviders()` asks `/auth/v1/settings` which providers the
+project has, and drew a button for every one that answered `true` - so turning
+Apple on for the *app* put **Continue with Apple** on the website and in the
+Android app, where there is no OAuth secret behind it, and it opened Apple's
+error page. That happened on 22 October 2026. `providersHere()` now offers
+Apple only in the iPhone app; Google is unchanged.
 
 ### In the app — native **(Mac + code)**
 
@@ -350,16 +343,25 @@ need to configure the OAuth settings"* - no Services ID, no key, no secret.
    and put `com.halfstop.app` in the **Client IDs** field. That field is the
    whole native configuration; every App ID that will use this project goes in
    it, comma separated.
-3. **(code)** Add the Capacitor community Sign in with Apple plugin - check it
-   is still maintained before depending on it - and hand the identity token
-   straight to Supabase:
-   ```js
-   const { response } = await SignInWithApple.authorize({ /* … */ });
-   await client.auth.signInWithIdToken({ provider: 'apple', token: response.identityToken });
-   ```
-4. **(Mac)** Xcode → Signing & Capabilities → **+ Capability** → Sign in with
-   Apple. Same problem as Step B: this edits the generated project, so it
-   belongs in the patch script.
+3. **(code - done)** The sheet is a small plugin of our own,
+   `native/halfstop-apple-sign-in`, because the community plugin pins
+   Capacitor 7's Swift package, which a Capacitor 8 project cannot resolve, and
+   the other maintained one bundles the Facebook and Google SDKs.
+   `Account.signInWithApple()` makes a nonce, gives Apple its SHA-256 and
+   Supabase the raw value, and hands the identity token to
+   `signInWithIdToken`. Apple says somebody's name only the first time, so it
+   is kept as the display name if the account has none. Tested in
+   `test/account.test.mjs`.
+4. **(code - done)** The entitlement. Without it Apple's sheet fails at once
+   with error 1000. `npm run app:ios` writes `App/App.entitlements` with Sign
+   in with Apple in it and points the app target at it, every run, because
+   `ios/` is regenerated and a capability ticked in Xcode by hand lasts until
+   the next clean checkout.
+
+The **Continue with Apple** button appears only in the iPhone app, and only in
+a build carrying that plugin (`providersHere` in `account.js`). The website and
+the Android app would go through Apple's web flow, which has no Services ID or
+key behind it; set up the web flow below first if it is ever wanted there.
 
 ### On the website — the OAuth flow **(console)**
 

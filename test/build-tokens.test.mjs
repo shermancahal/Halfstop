@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { chooseToken, appTokenFile, webTokenFile, appPreflight } from '../tools/build-dist.mjs';
 import {
   preflight as appMachinePreflight, withAndroidPermissions, ANDROID_PERMISSIONS,
-  CAPACITOR_INSTALL, afterOpening, agpMajor, agpDrift, AGP_SUPPORTED_MAJOR,
+  CAPACITOR_INSTALL, LOCAL_PLUGINS, afterOpening, agpMajor, agpDrift, AGP_SUPPORTED_MAJOR,
   withSupportedProguard, withDeepLink, withMapFiles, MAP_FILE_TYPES, APP_PLUGINS, withProjectName, versionFor, withVersion, withAppVersion, carriesVersion,
 } from '../tools/app.mjs';
 import { APP_SCHEME } from '../assets/js/lib/native-shell.js';
@@ -574,8 +574,50 @@ test('app: every plugin installed is one the config tells cap sync to include', 
   const config = JSON.parse(await readFile(new URL('../capacitor.config.json', import.meta.url), 'utf8'));
   assert.deepEqual([...config.includePlugins].sort(), [...APP_PLUGINS].sort());
   for (const name of APP_PLUGINS) {
-    assert.ok(CAPACITOR_INSTALL.split(/\s+/).includes(name), `the install line leaves out ${name}`);
+    const installed = LOCAL_PLUGINS[name] || name;
+    assert.ok(CAPACITOR_INSTALL.split(/\s+/).includes(installed), `the install line leaves out ${name}`);
   }
+});
+
+/*
+ * The Sign in with Apple plugin lives in this repository, so nothing but this
+ * test checks that Capacitor will find it. The CLI derives the Swift package's
+ * name from the npm name and writes it into CapApp-SPM/Package.swift; it
+ * registers the class named by the first @objc(...) in each Swift file; and
+ * the page reaches it by its jsName. Any one of the three disagreeing is an
+ * iPhone build without Apple sign-in, found only on a Mac.
+ */
+test('app: the local Apple sign-in plugin is named the way Capacitor will look for it', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const { APPLE_PLUGIN } = await import('../assets/js/lib/account.js');
+  const root = new URL('../native/halfstop-apple-sign-in/', import.meta.url);
+  const meta = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));
+  assert.equal(LOCAL_PLUGINS[meta.name], './native/halfstop-apple-sign-in');
+  assert.deepEqual(meta.capacitor, { ios: { src: 'ios' } }, 'iPhone only: Android has no Apple sheet');
+
+  // The CLI's own fixName(): '@a/b-c' -> 'ABC'-style PascalCase.
+  const swiftName = meta.name.replace(/\//g, '_').replace(/-/g, '_').replace(/@/g, '')
+    .replace(/_\w/g, (m) => m[1].toUpperCase()).replace(/^./, (c) => c.toUpperCase());
+  assert.equal(swiftName, 'HalfstopAppleSignIn');
+  const pkg = await readFile(new URL('Package.swift', root), 'utf8');
+  assert.match(pkg, new RegExp(`name: "${swiftName}"[\\s\\S]*\\.library\\(\\s*name: "${swiftName}"`));
+  assert.match(pkg, /capacitor-swift-pm\.git", from: "8\.0\.0"/, 'pinned to the Capacitor this app is built with');
+  const podspec = await readFile(new URL('HalfstopAppleSignIn.podspec', root), 'utf8');
+  assert.match(podspec, new RegExp(`s\\.name = '${swiftName}'`));
+
+  const swift = await readFile(
+    new URL('ios/Sources/SignInWithApplePlugin/SignInWithApplePlugin.swift', root), 'utf8');
+  assert.equal(/@objc\(([A-Za-z0-9_-]+)\)/.exec(swift)?.[1], 'SignInWithApplePlugin',
+    'the first @objc(...) in the file is the class Capacitor registers');
+  assert.match(swift, new RegExp(`jsName = "${APPLE_PLUGIN}"`));
+  assert.match(swift, /CAPPluginMethod\(name: "authorize"/);
+
+  // Capacitor's generated ios/ and android/ are ignored at the root only. An
+  // unanchored `ios/` also ignored this plugin's Swift, which then passed
+  // here, on the machine that wrote it, and was missing from every clone.
+  const ignored = (await readFile(new URL('../.gitignore', import.meta.url), 'utf8')).split('\n').map((line) => line.trim());
+  assert.ok(!ignored.includes('ios/') && !ignored.includes('android/'), '.gitignore ignores every ios/ folder, not the root one');
+  assert.ok(ignored.includes('/ios/') && ignored.includes('/android/'), 'the generated projects are still ignored');
 });
 
 test('app tool: a missing plugin stops the build, with the whole install line', () => {

@@ -12,7 +12,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import {
-  IOS_USAGE, SPLASH_SIDE, SPLASH_MARK, iosImages, withIosPlist, withIosVersion,
+  APPLE_SIGN_IN, ENTITLEMENTS_FILE, IOS_USAGE, SPLASH_SIDE, SPLASH_MARK, iosImages, withAppleSignIn,
+  withEntitlementsSetting, withIosPlist, withIosVersion,
 } from '../tools/ios-native.mjs';
 import { readMaster } from '../tools/build-app-icons.mjs';
 import { decodePNG } from '../tools/raster.mjs';
@@ -81,12 +82,14 @@ test('ios: a file that is not a plist is refused', () => {
 });
 
 const PBX = `				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = App/Info.plist;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.halfstop.app;
 			};
 			name = Debug;
 		};
 				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = App/Info.plist;
 				MARKETING_VERSION = 1.0;
 			};
 			name = Release;`;
@@ -145,11 +148,57 @@ test('ios: written into a Capacitor project, and a second run writes nothing', a
     assert.ok(first.added.includes('CFBundleURLTypes'));
     assert.equal(first.written, 4);
     assert.ok(existsSync(path.join(dir, 'App', 'Assets.xcassets', 'AppIcon.appiconset', 'AppIcon-512@2x.png')));
-    assert.match(readFileSync(path.join(dir, 'App.xcodeproj', 'project.pbxproj'), 'utf8'), /CURRENT_PROJECT_VERSION = 185;/);
+    const pbx = readFileSync(path.join(dir, 'App.xcodeproj', 'project.pbxproj'), 'utf8');
+    assert.match(pbx, /CURRENT_PROJECT_VERSION = 185;/);
+    assert.equal(pbx.match(/CODE_SIGN_ENTITLEMENTS = App\/App\.entitlements;/g).length, 2);
+    const entitlements = path.join(dir, ENTITLEMENTS_FILE);
+    assert.ok(readFileSync(entitlements, 'utf8').includes(`<key>${APPLE_SIGN_IN}</key>`));
 
     const second = await patchIos(dir, { master, version });
     assert.deepEqual([second.added, second.written], [[], 0]);
+    assert.equal(readFileSync(path.join(dir, 'App.xcodeproj', 'project.pbxproj'), 'utf8'), pbx, 'nothing added twice');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+/*
+ * Sign in with Apple needs an entitlement, and Capacitor's template has no
+ * entitlements file. Without it the sheet never opens - the request fails at
+ * once with error 1000 - and ios/ is regenerated, so ticking the capability in
+ * Xcode by hand lasts until the next clean checkout.
+ */
+test('ios: the app target is pointed at an entitlements file, once', () => {
+  const first = withEntitlementsSetting(PBX);
+  assert.equal(first.changed, true);
+  assert.equal(first.file, ENTITLEMENTS_FILE);
+  // Beside each configuration's Info.plist, with the same indentation.
+  assert.match(first.text, /\t\t\t\tCODE_SIGN_ENTITLEMENTS = App\/App\.entitlements;\n\t\t\t\tINFOPLIST_FILE = App\/Info\.plist;/);
+  assert.equal(first.text.match(/CODE_SIGN_ENTITLEMENTS/g).length, 2);
+
+  const again = withEntitlementsSetting(first.text);
+  assert.deepEqual([again.changed, again.file], [false, ENTITLEMENTS_FILE]);
+
+  // One that Xcode already named, when the capability was ticked by hand, is
+  // the file used - not a second one beside it.
+  const byHand = PBX.replace(/INFOPLIST_FILE/g, 'CODE_SIGN_ENTITLEMENTS = "App/Halfstop.entitlements";\n\t\t\t\tINFOPLIST_FILE');
+  assert.deepEqual(withEntitlementsSetting(byHand), { text: byHand, changed: false, file: 'App/Halfstop.entitlements' });
+
+  assert.deepEqual(withEntitlementsSetting('nothing here'), { text: 'nothing here', changed: false, file: '' });
+});
+
+test('ios: the entitlements file carries Sign in with Apple, and keeps what else it holds', () => {
+  const made = withAppleSignIn('');
+  assert.equal(made.changed, true);
+  assert.match(made.text, /^<\?xml/);
+  assert.match(made.text, new RegExp(`<key>${APPLE_SIGN_IN.replace(/\./g, '\\.')}</key>\\s*<array>\\s*<string>Default</string>\\s*</array>`));
+  assert.deepEqual(withAppleSignIn(made.text), { text: made.text, changed: false });
+
+  const other = made.text.replace(/\t<key>com\.apple\.developer\.applesignin[\s\S]*?<\/array>\n?/, '\t<key>aps-environment</key>\n\t<string>development</string>\n');
+  assert.ok(!other.includes(APPLE_SIGN_IN), 'the fixture is a file without it');
+  const merged = withAppleSignIn(other);
+  assert.equal(merged.changed, true);
+  assert.ok(merged.text.includes('<key>aps-environment</key>'));
+  assert.ok(merged.text.includes(`<key>${APPLE_SIGN_IN}</key>`));
+  assert.throws(() => withAppleSignIn('<html></html>'), /entitlements file does not end/);
 });

@@ -13,7 +13,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Account, APPLE_PLUGIN, displayName, folderDisposition, providersHere } from '../assets/js/lib/account.js';
+import { Account, APPLE_PLUGIN, appleFailure, appleNonce, displayName, folderDisposition, providersHere } from '../assets/js/lib/account.js';
 
 const folders = { list: () => [], replaceAll() {}, toGeoJSON: () => ({ features: [] }) };
 
@@ -1274,4 +1274,117 @@ test('account: signing out clears the stamp with the folders', async () => {
 
   assert.deepEqual(store.snapshot(), []);
   assert.equal(owner.read(), null);
+});
+
+/*
+ * Sign in with Apple, in the iPhone app.
+ *
+ * Apple's sheet is a native plugin and Supabase is a fake, so what is under
+ * test is the hand-off between them: the nonce Apple is given is the hash of
+ * the one Supabase is given, the token is passed through untouched, the name
+ * Apple says only once is kept, and closing the sheet is not an error.
+ */
+const { createHash } = await import('node:crypto');
+const sha256 = (text) => createHash('sha256').update(text).digest('hex');
+
+function appleShell(answer, seen = []) {
+  const plugin = {
+    async authorize(options) {
+      seen.push(options);
+      if (answer instanceof Error) throw answer;
+      return answer;
+    },
+  };
+  return () => ({ native: true, platform: 'ios', plugin: (name) => (name === APPLE_PLUGIN ? plugin : null) });
+}
+
+function idTokenClient({ user = { id: 'u1', user_metadata: {} }, error = null } = {}) {
+  const client = fakeClient();
+  client.auth.signInWithIdToken = async (options) => {
+    client.calls.push(['signInWithIdToken', options]);
+    return { data: { user, session: {} }, error };
+  };
+  client.auth.updateUser = async (attributes) => {
+    client.calls.push(['updateUser', attributes]);
+    return { data: {}, error: null };
+  };
+  client.auth.signInWithOAuth = async (options) => {
+    client.calls.push(['signInWithOAuth', options]);
+    return { error: null };
+  };
+  return client;
+}
+
+test('apple: the nonce Apple is given is the hash of the one Supabase checks', async () => {
+  const nonce = await appleNonce();
+  assert.match(nonce.raw, /^[0-9a-f]{48}$/);
+  assert.equal(nonce.hashed, sha256(nonce.raw));
+  assert.notEqual((await appleNonce()).raw, nonce.raw, 'a fresh one every time');
+  assert.equal(await appleNonce({}), null, 'no hashing, no nonce - rather than a broken one');
+});
+
+test('apple: on the iPhone the sheet signs in, and the token goes to Supabase as it came', async () => {
+  const seen = [];
+  const client = idTokenClient();
+  const account = new Account(folders, {
+    client: async () => client, configured: () => true,
+    shell: appleShell({ identityToken: 'apple.jwt', givenName: 'Ada', familyName: 'Lovelace' }, seen),
+  });
+
+  assert.equal(await account.signInWithProvider('apple'), true);
+  const [, signedIn] = client.calls.find(([name]) => name === 'signInWithIdToken');
+  assert.equal(signedIn.provider, 'apple');
+  assert.equal(signedIn.token, 'apple.jwt');
+  assert.equal(seen[0].nonce, sha256(signedIn.nonce), 'Apple gets the hash, Supabase the raw value');
+  assert.equal(client.calls.some(([name]) => name === 'signInWithOAuth'), false, 'not the browser round trip');
+
+  // The name Apple gives once, kept on an account that has none.
+  assert.deepEqual(client.calls.find(([name]) => name === 'updateUser')[1], { data: { display_name: 'Ada Lovelace' } });
+});
+
+test('apple: a name the account already has is not replaced, and no name is not written', async () => {
+  const named = idTokenClient({ user: { id: 'u1', user_metadata: { display_name: 'Ada' } } });
+  await new Account(folders, {
+    client: async () => named, configured: () => true,
+    shell: appleShell({ identityToken: 't', givenName: 'Augusta', familyName: 'King' }),
+  }).signInWithApple();
+  assert.equal(named.calls.some(([name]) => name === 'updateUser'), false);
+
+  // Every sign-in after the first: Apple sends no name at all.
+  const later = idTokenClient();
+  await new Account(folders, {
+    client: async () => later, configured: () => true,
+    shell: appleShell({ identityToken: 't', givenName: '', familyName: '' }),
+  }).signInWithApple();
+  assert.equal(later.calls.some(([name]) => name === 'updateUser'), false);
+});
+
+test('apple: closing the sheet is not an error; a refusal says why', async () => {
+  const cancelled = idTokenClient();
+  const closed = new Account(folders, {
+    client: async () => cancelled, configured: () => true,
+    shell: appleShell(Object.assign(new Error('The operation couldn’t be completed.'), { code: 'CANCELED' })),
+  });
+  assert.equal(await closed.signInWithApple(), false);
+  assert.equal(cancelled.calls.length, 0, 'nothing sent to Supabase');
+
+  const unset = new Account(folders, {
+    client: async () => idTokenClient(), configured: () => true,
+    shell: appleShell(Object.assign(new Error('The operation couldn’t be completed.'), { code: 'FAILED_1000' })),
+  });
+  await assert.rejects(() => unset.signInWithApple(), /could not start/);
+
+  const refused = new Account(folders, {
+    client: async () => idTokenClient({ error: { message: 'Bad ID token' } }), configured: () => true,
+    shell: appleShell({ identityToken: 't' }),
+  });
+  await assert.rejects(() => refused.signInWithApple(), /Bad ID token/);
+
+  // A build without the plugin says so rather than doing nothing.
+  const old = new Account(folders, {
+    client: async () => idTokenClient(), configured: () => true,
+    shell: () => ({ native: true, platform: 'ios', plugin: () => null }),
+  });
+  await assert.rejects(() => old.signInWithApple(), /cannot sign in with Apple/);
+  assert.equal(appleFailure({ code: 'FAILED_1001', message: 'x' }), 'Apple did not sign you in: x.');
 });

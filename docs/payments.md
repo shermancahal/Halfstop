@@ -689,7 +689,21 @@ top of a subscription running on the website or Google Play is refused too -
 and, unlike Google, Apple does not refund an unconfirmed purchase by itself, so
 the refusal says to ask Apple for a refund at reportaproblem.apple.com.
 
-What is still to do, once the Apple developer account is there:
+The app's half is built too: `assets/js/lib/appstore-billing.js`, on the same
+`@capgo/native-purchases` plugin the Android app uses (StoreKit 2 on iOS). It
+buys `premium.monthly` or `premium.yearly` with the account id as
+`appAccountToken`, sends only the transaction id to `appstore-billing`, and
+finishes the StoreKit transaction once the server's answer is final - recorded,
+or refused for a reason asking again would not change. The panel shows the App
+Store's own prices, the renewal terms and the links Apple asks for beside them
+(guideline 3.1.2), and **Restore purchases**. It does not offer the free month
+in the iPhone app: that is switched on by our server, and Apple refuses an app
+that unlocks paid features any way but a purchase (3.1.1). An App Store free
+trial would be an introductory offer on the subscription, set in App Store
+Connect, if one is wanted. `test/appstore-purchase.test.mjs` and the smoke
+test's iPhone section hold the rules.
+
+What is still to do, in App Store Connect and Supabase:
 
 1. **App Store Connect: the subscriptions.** App → Monetization →
    Subscriptions → a subscription group (for example *Halfstop Premium*) with
@@ -710,12 +724,18 @@ What is still to do, once the Apple developer account is there:
    `https://gqemcvuushtfbbbxypvf.supabase.co/functions/v1/appstore-billing/notify?token=` followed by
    `APPSTORE_NOTIFY_TOKEN`. Then **Request a Test Notification**: the function's
    log says `test notification from App Store Connect received`.
-5. **The purchase in the app.** The one piece of client code not written yet,
-   because it cannot be tried without products to buy: the same
-   `@capgo/native-purchases` plugin the Android app uses, buying `premium.monthly`
-   or `premium.yearly` with the account id as `appAccountToken`, then sending
-   the transaction id to `appstore-billing`. `purchaseRoute` in `tiers.js`
-   answers `no-store` on an iPhone until that is in.
+5. **The Paid Apps agreement.** Business → Agreements: the Paid Apps
+   agreement, with its tax form and bank account. Until it is active, StoreKit
+   returns no products and the buttons keep our list prices but cannot buy.
+6. **Try it.** Users and Access → Sandbox → add a tester, with an email
+   address that is not anybody's Apple Account. On the iPhone, a TestFlight or
+   Xcode build buys from the sandbox, which charges nothing: Settings → App
+   Store → Sandbox Account to sign in as the tester. Buy a month, check the
+   account page says Premium through the App Store, and check the row in
+   `entitlements` has `source = 'appstore'`.
+7. **Submit the subscriptions with the first version.** The version page in
+   App Store Connect has *In-App Purchases and Subscriptions*: tick both. Apple
+   reviews an app's first subscriptions together with the app.
 
 ## What is not built
 

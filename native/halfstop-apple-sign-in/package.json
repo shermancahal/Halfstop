@@ -1,0 +1,17 @@
+{
+  "name": "halfstop-apple-sign-in",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sign in with Apple for the Halfstop iPhone app: Apple's own sheet, handing its identity token to the page.",
+  "license": "UNLICENSED",
+  "files": [
+    "Package.swift",
+    "HalfstopAppleSignIn.podspec",
+    "ios/Sources"
+  ],
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    }
+  }
+}

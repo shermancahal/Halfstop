@@ -24,8 +24,9 @@ const ALLOWED = new Set([
   'manifest.webmanifest',
   'package.json', 'package-lock.json',
   'sw.js',
-  // Directories.
-  '.git', '.github', 'assets', 'data', 'dist', 'docs', 'node_modules', 'supabase', 'test', 'tools',
+  // Directories. `native` holds the app's own Capacitor plugins - Sign in
+  // with Apple - which npm installs from there by path.
+  '.git', '.github', 'assets', 'data', 'dist', 'docs', 'native', 'node_modules', 'supabase', 'test', 'tools',
 ]);
 
 test('repo: nothing unexpected is sitting in the repository root', async () => {

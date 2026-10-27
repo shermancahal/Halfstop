@@ -610,14 +610,20 @@ test('tiers: the Android app is quiet until billing is live, except for whoever 
     { available: true, where: 'play', preview: true });
 });
 
-test('tiers: the iPhone app offers nothing it cannot complete, and never the website', () => {
-  // StoreKit is not built. A Stripe button inside an iOS app is a rejection,
-  // and "subscribe on the website" is the sentence Apple does not allow.
-  for (const billing of [{ live: true, store: 'stripe' }, { live: false, store: 'stripe' }]) {
-    const route = purchaseRoute({ billing, preview: true, shell: IPHONE });
-    assert.equal(route.available, false);
-    assert.notEqual(route.where, 'stripe');
+test('tiers: the iPhone app sells through the App Store, and never the website', () => {
+  // A Stripe button inside an iOS app is a rejection, and "subscribe on the
+  // website" is the sentence Apple does not allow.
+  for (const store of ['stripe', 'none', 'appstore', '']) {
+    assert.deepEqual(purchaseRoute({ billing: { live: true, store }, shell: IPHONE }),
+      { available: true, where: 'appstore' }, `store '${store}'`);
   }
+  const off = { live: false, store: 'stripe' };
+  assert.deepEqual(purchaseRoute({ billing: off, shell: IPHONE }), { available: false, why: 'not-live' });
+  assert.deepEqual(purchaseRoute({ billing: off, preview: true, shell: IPHONE }),
+    { available: true, where: 'appstore', preview: true });
+  // A platform nobody built a store for sells nothing.
+  assert.deepEqual(purchaseRoute({ billing: { live: true, store: 'stripe' }, shell: { native: true, platform: 'unknown' } }),
+    { available: false, why: 'no-store' });
 });
 
 test('tiers: a preview offers the web checkout before billing is live', () => {

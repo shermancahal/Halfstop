@@ -5980,6 +5980,138 @@ console.log('\nInside the Android app, the account page sells through Google Pla
   await android.close();
 }
 
+/*
+ * And inside the iPhone app, where the only way to pay is the App Store.
+ *
+ * Faked the same way. What is checked: the App Store's prices on the buttons;
+ * no free-trial button, because the trial is switched on by our server and
+ * Apple refuses an app that unlocks paid features any other way than a
+ * purchase; what Apple asks to be said beside a subscription, with the terms
+ * and privacy policy a tap away and Restore purchases; a purchase made for
+ * this account, sent to the server as a transaction id and nothing else, and
+ * finished only after the server has it.
+ */
+console.log('\nInside the iPhone app, the account page sells through the App Store');
+{
+  const REF_IOS = 'smokeios';
+  const far = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30;
+  const iphone = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const recorded = { verify: [] };
+  let paid = false;
+  const cors = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  };
+  await iphone.route(`**://${REF_IOS}.supabase.co/**`, async (route) => {
+    const request = route.request();
+    if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+    const url = request.url();
+    if (url.includes('/functions/v1/appstore-billing')) {
+      recorded.verify.push(JSON.parse(request.postData() || '{}'));
+      paid = true;
+      return route.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+    }
+    if (url.includes('/rest/v1/rpc/my_plan')) {
+      return route.fulfill({
+        status: 200, headers: cors, contentType: 'application/json',
+        body: JSON.stringify(paid
+          ? { tier: 'premium', source: 'appstore', until: new Date(far * 1000).toISOString(), renews: true, trialAvailable: false }
+          // A free month still to take, which the website would offer.
+          : { tier: 'free', source: null, until: null, trialAvailable: true }),
+      });
+    }
+    return route.abort();
+  });
+  await iphone.addInitScript(([url, key, storageKey, session]) => {
+    window.ABMAP_SUPABASE_URL = url;
+    window.ABMAP_SUPABASE_KEY = key;
+    window.ABMAP_BILLING_LIVE = 'true';
+    window.ABMAP_BILLING_STORE = 'stripe';
+    localStorage.setItem(storageKey, session);
+    const calls = [];
+    window.__storeCalls = calls;
+    window.Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+      Plugins: {
+        App: { addListener: () => Promise.resolve({ remove() {} }), getLaunchUrl: () => Promise.resolve(undefined) },
+        NativePurchases: {
+          async getProducts(options) {
+            calls.push(['getProducts', options]);
+            return {
+              products: [
+                { identifier: 'premium.monthly', priceString: '\u00a34.99', price: 4.99, currencyCode: 'GBP' },
+                { identifier: 'premium.yearly', priceString: '\u00a349.99', price: 49.99, currencyCode: 'GBP' },
+              ],
+            };
+          },
+          async purchaseProduct(options) {
+            calls.push(['purchaseProduct', options]);
+            return { transactionId: '2000001043762129', productIdentifier: options.productIdentifier, needsFinish: true };
+          },
+          async finishTransaction(options) { calls.push(['finishTransaction', options]); },
+        },
+      },
+    };
+  }, [`https://${REF_IOS}.supabase.co`, 'smoke-anon-key', `sb-${REF_IOS}-auth-token`, JSON.stringify({
+    access_token: `header.${Buffer.from(JSON.stringify({ sub: 'u-ios', exp: far })).toString('base64url')}.sig`,
+    refresh_token: 'r-1', expires_at: far, expires_in: 60 * 60 * 24 * 30, token_type: 'bearer',
+    user: {
+      id: 'u-ios', aud: 'authenticated', role: 'authenticated', email: 'iphone@example.com',
+      user_metadata: { display_name: 'iPhone' }, app_metadata: {}, created_at: new Date().toISOString(),
+    },
+  })]);
+
+  const store = await iphone.newPage();
+  await store.goto(new URL('account.html', MAP_URL).href, { waitUntil: 'domcontentloaded' });
+  await store.waitForFunction(() => [...document.querySelectorAll('.plan-upgrade-buttons button')]
+    .some((button) => button.textContent.includes('\u00a3')), null, { timeout: 8000 }).catch(() => {});
+
+  const offered = await store.evaluate(() => {
+    const plan = document.querySelector('.account-plan');
+    const saving = [...(plan?.querySelectorAll('.plan-upgrade .hint') || [])]
+      .find((line) => /saves/.test(line.textContent) && !line.hidden);
+    const terms = plan?.querySelector('.plan-store-terms');
+    return {
+      buttons: [...(plan?.querySelectorAll('.plan-upgrade > .plan-upgrade-buttons button') || [])].map((b) => b.textContent.trim()),
+      saving: saving ? saving.textContent.trim() : null,
+      renews: /renews automatically/.test(terms?.textContent || ''),
+      links: [...(terms?.querySelectorAll('a') || [])].map((a) => [a.textContent.trim(), a.getAttribute('href')]),
+      restore: [...(terms?.querySelectorAll('button') || [])].map((b) => b.textContent.trim()),
+    };
+  });
+  check('the buttons carry the App Store\'s prices, and there is no free-trial button',
+    offered.buttons, ['\u00a34.99 a month', '\u00a349.99 a year']);
+  check('the yearly saving is in the currency the App Store charges',
+    offered.saving, 'Paying by the year saves \u00a39.89, about 17%.');
+  check('it says the subscription renews, and how to stop it', offered.renews, true);
+  check('with the terms and the privacy policy a tap away', offered.links, [
+    ['Terms of use', 'https://app.halfstop.app/terms.html'],
+    ['Privacy policy', 'https://app.halfstop.app/privacy.html'],
+  ]);
+  check('and Restore purchases', offered.restore, ['Restore purchases']);
+
+  await store.locator('.plan-upgrade > .plan-upgrade-buttons button', { hasText: 'a year' }).click();
+  await store.waitForFunction(() => !!document.querySelector('.account-plan a[href*="apps.apple.com"]'),
+    null, { timeout: 8000 }).catch(() => {});
+
+  const calls = await store.evaluate(() => window.__storeCalls.map(([name, options]) => [name, options]));
+  const bought = calls.find(([name]) => name === 'purchaseProduct')?.[1] || null;
+  check('pressing a price buys that product, for this account, left for the server to settle', bought, {
+    productIdentifier: 'premium.yearly', appAccountToken: 'u-ios', autoAcknowledgePurchases: false,
+  });
+  check('only the transaction id goes to the server', recorded.verify, [{ transactionId: '2000001043762129' }]);
+  check('and the transaction is finished after the server has it',
+    calls.map(([name]) => name).filter((name) => name !== 'getProducts'), ['purchaseProduct', 'finishTransaction']);
+  check('once the server says so, the way out is Apple\'s subscriptions page',
+    await store.evaluate(() => document.querySelector('.account-plan a[href*="apps.apple.com"]')?.textContent.trim() || null),
+    'Manage subscription');
+
+  await store.close();
+  await iphone.close();
+}
+
 console.log('\nMetered basemaps are shown and not offered, once billing is live');
 {
   const paid = await context.newPage();

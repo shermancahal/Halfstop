@@ -28,6 +28,10 @@ import { mayEdit } from './editors.js';
 import { managePlanBlock } from './manage-plan.js';
 import { appShell } from './native-shell.js';
 import { PLAY_PLUGIN, buyOnPlay, playOffer, playOffers, playPriceLabel, playSaving } from './play-billing.js';
+import {
+  APPSTORE_PLUGIN, PRIVACY_URL, TERMS_URL, appStorePriceLabel, appStoreProduct, appStoreProducts,
+  appStoreSaving, buyOnAppStore, restoreOnAppStore,
+} from './appstore-billing.js';
 import { BILLING } from '../config.js';
 import {
   offersUpgrade, purchaseRoute, annualSaving, plansOffered, describePrice,
@@ -73,6 +77,7 @@ async function startSubscription(account, toast, button = null, plan = 'month') 
   }
 
   if (route.where === 'play') return startPlaySubscription(account, toast, button, plan);
+  if (route.where === 'appstore') return startAppStoreSubscription(account, toast, button, plan);
 
   if (route.where !== 'stripe') {
     // Only reachable if another route is added and this is not taught about
@@ -126,6 +131,95 @@ async function startPlaySubscription(account, toast, button, plan) {
   }
   toast('Premium is active on this account.', { tone: 'ok', timeout: 8000 });
   return true;
+}
+
+/**
+ * The same, through the App Store, in the iPhone app. See ./appstore-billing.js.
+ */
+async function startAppStoreSubscription(account, toast, button, plan) {
+  const said = button?.textContent || 'Subscribe';
+  if (button) { button.disabled = true; button.textContent = 'Opening the App Store…'; }
+  const result = await buyOnAppStore({ account, planId: plan, plugin: appShell().plugin(APPSTORE_PLUGIN) });
+  if (button?.isConnected) { button.disabled = false; button.textContent = said; }
+
+  if (result.cancelled) return false;
+  if (!result.ok) {
+    toast(result.reason, { tone: result.pending ? 'info' : 'error', timeout: 12000 });
+    return false;
+  }
+  toast('Premium is active on this account.', { tone: 'ok', timeout: 8000 });
+  return true;
+}
+
+/** Restore Purchases, which Apple asks every app selling a subscription to offer. */
+async function restoreAppStore(account, toast, button) {
+  const said = button?.textContent || 'Restore purchases';
+  if (button) { button.disabled = true; button.textContent = 'Restoring…'; }
+  const result = await restoreOnAppStore({ account, plugin: appShell().plugin(APPSTORE_PLUGIN) });
+  if (button?.isConnected) { button.disabled = false; button.textContent = said; }
+
+  if (result.cancelled) return false;
+  if (!result.ok) {
+    toast(result.reason, { tone: 'info', timeout: 12000 });
+    return false;
+  }
+  toast('Premium is restored on this account.', { tone: 'ok', timeout: 8000 });
+  return true;
+}
+
+/**
+ * The App Store's prices on the buttons, as with Google Play's below: drawn at
+ * once with ours, then relabelled with the App Store's figure for this
+ * country, which is the one on the sheet somebody agrees to.
+ */
+async function showAppStorePrices(buttons, saving) {
+  const plugin = appShell().plugin(APPSTORE_PLUGIN);
+  if (!plugin?.getProducts) return;
+  let products;
+  try {
+    products = await appStoreProducts(plugin);
+  } catch {
+    return;
+  }
+  const found = {};
+  for (const button of buttons) {
+    const planId = button.dataset.plan;
+    if (!planId) continue;
+    found[planId] = appStoreProduct(products, { planId });
+    const label = appStorePriceLabel(found[planId], { planId });
+    if (label) button.textContent = label;
+  }
+  const saved = appStoreSaving(found.month, found.year);
+  if (saving && saved) {
+    saving.textContent = `Paying by the year saves ${saved.money}, about ${saved.percent}%.`;
+    saving.hidden = false;
+  }
+}
+
+/**
+ * What Apple asks to be said beside a subscription before it is bought: that
+ * it renews, how to stop it, who charges, and the terms and privacy policy one
+ * tap away (App Review guideline 3.1.2).
+ */
+function appStoreTerms(account, toast) {
+  const link = (href, text) => el('a', { href, target: '_blank', rel: 'noopener', text });
+  return el('div', { class: 'plan-store-terms' }, [
+    el('p', {
+      class: 'hint', style: 'margin:8px 0 0',
+      text: 'Premium renews automatically, monthly or yearly, until it is cancelled in your Apple Account '
+        + 'settings at least 24 hours before the end of the current period. Payment is charged to your '
+        + 'Apple Account when you confirm the purchase.',
+    }),
+    el('p', { class: 'hint', style: 'margin:6px 0 0' }, [
+      link(TERMS_URL, 'Terms of use'), ' · ', link(PRIVACY_URL, 'Privacy policy'),
+    ]),
+    el('div', { class: 'plan-upgrade-buttons', style: 'margin-top:8px' }, [
+      el('button', {
+        class: 'button button-ghost button-small', type: 'button', text: 'Restore purchases',
+        onclick: (event) => restoreAppStore(account, toast, event.currentTarget),
+      }),
+    ]),
+  ]);
 }
 
 /**
@@ -248,7 +342,14 @@ export function upgradePlanBlock(plan, { account, toast }) {
    * which holds the record of whether the month has already been spent. A
    * button drawn on a guess is a button whose only outcome is an error.
    */
-  const offerTrial = plan.trialAvailable && route.available;
+  /*
+   * Not in the iPhone app. The free month is switched on by our own server,
+   * and Apple refuses an app that unlocks paid features any way but an App
+   * Store purchase (guideline 3.1.1). An App Store free trial would be an
+   * introductory offer on the subscription itself, set in App Store Connect.
+   */
+  const appStore = route.where === 'appstore';
+  const offerTrial = plan.trialAvailable && route.available && !appStore;
 
   /*
    * Somebody on a trial is being asked to keep what they already have, not
@@ -297,14 +398,16 @@ export function upgradePlanBlock(plan, { account, toast }) {
    * waits for them rather than stating a dollar saving over euro prices.
    */
   const playing = route.where === 'play';
+  const inStore = playing || appStore;
   const savingLine = route.available && saving
     ? el('p', {
       class: 'hint', style: 'margin:8px 0 0',
-      text: playing ? '' : `Paying by the year saves ${saving.money}, about ${saving.percent}%.`,
+      text: inStore ? '' : `Paying by the year saves ${saving.money}, about ${saving.percent}%.`,
     })
     : null;
-  if (savingLine && playing) savingLine.hidden = true;
+  if (savingLine && inStore) savingLine.hidden = true;
   if (playing) showPlayPrices(buttons, savingLine);
+  if (appStore) showAppStorePrices(buttons, savingLine);
 
   return el('div', { class: 'plan-upgrade' }, [
     el('p', { class: 'plan-upgrade-head', text: heading }),
@@ -338,6 +441,7 @@ export function upgradePlanBlock(plan, { account, toast }) {
     // Worked out from the two prices rather than written down, so it cannot
     // overstate the discount or go stale when one of them moves.
     savingLine,
+    route.available && appStore ? appStoreTerms(account, toast) : null,
     // Said plainly, because a preview that looks like the real thing is how
     // somebody ends up wondering whether they were charged.
     route.preview
@@ -353,8 +457,11 @@ export function upgradePlanBlock(plan, { account, toast }) {
         text: playing
           ? 'Test mode. Billing is not live: this is here because you run Halfstop. Google Play charges '
             + 'nothing only for accounts listed as licence testers in Play Console.'
-          : 'Test mode. Billing is not live: this is here because you run '
-            + 'Halfstop, and no real card is charged.',
+          : appStore
+            ? 'Test mode. Billing is not live: this is here because you run Halfstop. Builds from Xcode '
+              + 'and TestFlight buy from Apple\'s sandbox, which charges nothing.'
+            : 'Test mode. Billing is not live: this is here because you run '
+              + 'Halfstop, and no real card is charged.',
       })
       : null,
   ].filter(Boolean));

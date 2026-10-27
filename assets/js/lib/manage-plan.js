@@ -23,6 +23,7 @@
  */
 
 import { el } from './ui.js';
+import { appShell } from './native-shell.js';
 import { BILLING } from '../config.js';
 
 /** The Android app, as Google Play knows it: appId in capacitor.config.json. */
@@ -35,7 +36,22 @@ export const PLAY_PACKAGE = 'com.halfstop.app';
  * @param {Function} options.toast   how this page says things out loud
  * @returns {Node|null} null when there is no subscription to manage
  */
-export function managePlanBlock(summary, { account, toast }) {
+export function managePlanBlock(summary, { account, toast, shell = appShell() }) {
+  /*
+   * Not Stripe's page from inside the iPhone app. It is where a plan is
+   * changed and paid for, and Apple refuses an app that sends anybody to pay
+   * outside the App Store (guideline 3.1.1) - so the app says where the
+   * subscription lives without a way there, which stays true and stays allowed.
+   */
+  if (summary?.source === 'stripe' && shell.platform === 'ios') {
+    return el('div', { class: 'plan-upgrade' }, [
+      el('p', {
+        class: 'hint', style: 'margin:0',
+        text: 'This subscription was not bought through the App Store, so it is managed where it was bought.',
+      }),
+    ]);
+  }
+
   if (summary?.source === 'stripe') {
     const button = el('button', {
       class: 'button button-secondary button-small', type: 'button', text: 'Manage subscription',

@@ -29,7 +29,7 @@ import { fileURLToPath } from 'node:url';
 
 import { androidResources, REPLACED, withSplashBackground } from './android-icons.mjs';
 import { readMaster } from './build-app-icons.mjs';
-import { iosImages, withIosPlist, withIosVersion } from './ios-native.mjs';
+import { iosImages, withAppleSignIn, withEntitlementsSetting, withIosPlist, withIosVersion } from './ios-native.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PLATFORMS = ['ios', 'android'];
@@ -46,7 +46,16 @@ const PLATFORMS = ['ios', 'android'];
  * else, which is all `npx cap` needs.
  */
 export const CAPACITOR_INSTALL = 'npm install --no-save @capacitor/cli @capacitor/core @capacitor/ios @capacitor/android '
-  + '@capacitor/app @capacitor/browser @capgo/native-purchases';
+  + '@capacitor/app @capacitor/browser @capgo/native-purchases ./native/halfstop-apple-sign-in';
+
+/**
+ * Plugins kept in this repository rather than fetched, by package name.
+ *
+ * npm installs a folder as a link under its package name, which is the name
+ * Capacitor looks for - so the install line names the folder and everything
+ * else names the package.
+ */
+export const LOCAL_PLUGINS = { 'halfstop-apple-sign-in': './native/halfstop-apple-sign-in' };
 
 /**
  * The plugins compiled into the app, and why each is there.
@@ -55,7 +64,10 @@ export const CAPACITOR_INSTALL = 'npm install --no-save @capacitor/cli @capacito
  *                             an emailed sign-in, or the return from Google
  *   @capacitor/browser        the system browser, because Google refuses to
  *                             sign anybody in inside an embedded web view
- *   @capgo/native-purchases   Google Play Billing (and StoreKit, later)
+ *   @capgo/native-purchases   Google Play Billing, and StoreKit on the iPhone
+ *   halfstop-apple-sign-in    Apple's own Sign in with Apple sheet, iPhone
+ *                             only - native/halfstop-apple-sign-in, because
+ *                             the published plugin pins Capacitor 7
  *
  * Named in capacitor.config.json as `includePlugins`, and that is not
  * optional here. `cap sync` finds plugins by reading package.json, and
@@ -68,7 +80,7 @@ export const CAPACITOR_INSTALL = 'npm install --no-save @capacitor/cli @capacito
  * find" and carries on. The app still builds, and the button that needed the
  * plugin tells somebody to update an app that is already the newest one.
  */
-export const APP_PLUGINS = ['@capacitor/app', '@capacitor/browser', '@capgo/native-purchases'];
+export const APP_PLUGINS = ['@capacitor/app', '@capacitor/browser', '@capgo/native-purchases', 'halfstop-apple-sign-in'];
 
 /**
  * What stands between this machine and a build, before anything is spent.
@@ -554,6 +566,22 @@ export async function patchIos(appDir = path.join(ROOT, 'ios', 'App'), { master 
   if (written) console.log(`\n>> The Halfstop icon and launch image are in Assets.xcassets (${written} written)`);
 
   const pbxPath = path.join(appDir, 'App.xcodeproj', 'project.pbxproj');
+  if (existsSync(pbxPath)) {
+    const signing = withEntitlementsSetting(readFileSync(pbxPath, 'utf8'));
+    if (signing.changed) writeFileSync(pbxPath, signing.text);
+    if (!signing.file) {
+      console.warn('\n  WARNING: found nowhere in project.pbxproj to name an entitlements file, so Sign in with Apple '
+        + 'will fail with error 1000. In Xcode: App target -> Signing & Capabilities -> + Capability -> Sign in with Apple.');
+    } else {
+      const entitlementsPath = path.join(appDir, signing.file);
+      const entitled = withAppleSignIn(existsSync(entitlementsPath) ? readFileSync(entitlementsPath, 'utf8') : '');
+      if (entitled.changed) {
+        writeFileSync(entitlementsPath, entitled.text);
+        console.log(`\n>> ${signing.file}: Sign in with Apple`);
+      }
+    }
+  }
+
   const chosen = version === undefined ? gitVersion() : version;
   if (!chosen) {
     console.warn('\n  WARNING: could not count this clone\'s commits, so the build number was left as it is.');

@@ -431,14 +431,15 @@ export function purchaseRoute({ billing = BILLING, preview = false, shell = appS
    * card form inside the web view. Asking the platform removes that trap
    * rather than warning about it.
    *
-   * Android sells through Google Play. The iPhone app sells nothing yet:
-   * StoreKit is not built, and "subscribe on the website" is the one sentence
-   * Apple does not allow an app to say, so it says there is no way to
-   * subscribe here - which is true.
+   * Android sells through Google Play and the iPhone through the App Store.
+   * Anywhere else - a platform this does not know - sells nothing, because
+   * "subscribe on the website" is the one sentence Apple does not allow an
+   * app to say.
    */
   if (shell.native) {
-    if (shell.platform !== 'android') return { available: false, why: 'no-store' };
-    return billing.live ? { available: true, where: 'play' } : { available: true, where: 'play', preview: true };
+    const where = { android: 'play', ios: 'appstore' }[shell.platform];
+    if (!where) return { available: false, why: 'no-store' };
+    return billing.live ? { available: true, where } : { available: true, where, preview: true };
   }
 
   // Stripe is the only route a browser can complete, so it is the one a

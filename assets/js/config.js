@@ -292,7 +292,7 @@ export const BILLING = {
    * Where a purchase happens in a browser: 'stripe', or 'none'.
    *
    * The website's setting only. Inside the apps the platform decides - Google
-   * Play on Android, nothing yet on an iPhone - because a store app may sell
+   * Play on Android, the App Store on an iPhone - because a store app may sell
    * through nothing but its store, and this value arrives from a token.js that
    * `--app` copies as it is. See purchaseRoute in ./lib/tiers.js.
    */
@@ -315,6 +315,19 @@ export const BILLING = {
   play: {
     product: 'premium',
     plans: { month: 'monthly', year: 'yearly' },
+  },
+
+  /*
+   * The subscription as the App Store knows it: an auto-renewable product for
+   * each plan, both in one subscription group.
+   *
+   * The same rules as Play's: the ids are permanent in App Store Connect and
+   * have to match it exactly, and the store, not this, holds the price. The
+   * appstore-billing function checks a purchase against the same two ids, from
+   * APPSTORE_PRODUCT_IDS or its own default of these.
+   */
+  appstore: {
+    plans: { month: 'premium.monthly', year: 'premium.yearly' },
   },
 
   /*

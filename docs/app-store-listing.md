@@ -17,17 +17,23 @@ The in-app purchase setup is separate, in the App Store section of
 
 ## Before submitting for review
 
-Two things in the app itself, without which App Review is likely to refuse
-the first submission. TestFlight does not need either.
+Two things App Review checks in the app itself. Both are built; each has
+console steps that have to be done before it works.
 
-- **Sign in with Apple** (guideline 4.8). Required because the app offers
-  Continue with Google. Section 2 of [app-auth.md](app-auth.md).
-- **Buying Premium in the app** (guidelines 3.1.1 and 3.1.3(b)). Premium
-  features are locked in the iPhone app, and anything an app locks has to be
-  for sale in it through the App Store. The server half is built; the steps
-  that come first are in the App Store section of [payments.md](payments.md).
+- **Sign in with Apple** (guideline 4.8), required because the app offers
+  Continue with Google. The App ID has Sign in with Apple ticked, and Supabase's
+  Apple provider is on with `com.halfstop.app` in Client IDs. Section 2 of
+  [app-auth.md](app-auth.md).
+- **Buying Premium in the app** (guidelines 3.1.1, 3.1.2 and 3.1.3(b)). The
+  Paid Apps agreement, the two subscriptions, the In-App Purchase key in
+  Supabase and the server notifications: the App Store section of
+  [payments.md](payments.md). Tick both subscriptions on the version page
+  before submitting.
 
-The description below is written for the app with both in.
+Try both on a TestFlight build first: sign in with Apple, then buy a month
+as a Sandbox tester. The free month is not offered in the iPhone app - Apple
+refuses an app that unlocks paid features any way but a purchase - so the
+description below does not mention it.
 
 ---
 
@@ -188,7 +194,7 @@ For the parts that cost us money every time they are used:
 • Photographs on a waypoint, synced between your devices
 • State-level detail maps and extra basemaps
 
-Premium is $4.99 a month or $49 a year in the US, as an auto-renewing subscription. A new account gets a free month first, with nothing to cancel: it simply ends. Payment is charged to your Apple Account when you confirm the purchase. The subscription renews automatically unless it is cancelled at least 24 hours before the end of the current period, and renewal is charged within the 24 hours before the period ends. Manage or cancel it in your Apple Account settings.
+Premium is $4.99 a month or $49 a year in the US, as an auto-renewing subscription. Payment is charged to your Apple Account when you confirm the purchase. The subscription renews automatically unless it is cancelled at least 24 hours before the end of the current period, and renewal is charged within the 24 hours before the period ends. Manage or cancel it in your Apple Account settings.
 
 No ads, no analytics, no tracking.
 
@@ -237,9 +243,9 @@ email address.
 ```
 Halfstop is a map for planning photography trips. Most of it works without an account: tap the map to see what is there, press the pin button to drop a pin with its sunrise, sunset and moon times, and open Layers to switch maps and overlays. The (i) beside a layer explains it.
 
-To sign in with the review account: tap the gear at the top of the screen, then Sign in, and use the email and password above. Premium is granted on that account, so its features can be seen without a purchase: weather layers, offline map downloads (the download button at the top of the screen), trip routing, photographs on a waypoint, state detail maps, extra basemaps, place and address search, unlimited sync and folder invitations.
+To sign in with the review account: tap the gear at the top of the screen, then Sign in, and use the email and password above. Sign in with Apple is on the same screen. Premium is granted on that account, so its features can be seen without a purchase: weather layers, offline map downloads (the download button at the top of the screen), trip routing, photographs on a waypoint, state detail maps, extra basemaps, place and address search, unlimited sync and folder invitations.
 
-Premium is sold in the app as an auto-renewing subscription, monthly or yearly, through the App Store. To see the purchase, sign out, create a new account with any email address, then tap the gear and Account: the plan and its two prices are on that page.
+Premium is sold in the app as an auto-renewing subscription, monthly or yearly, through the App Store. To see the purchase, sign out, create a new account with any email address (or Sign in with Apple), then tap the gear and Account: the plan, its two prices, the renewal terms, Restore purchases, and the terms of use and privacy policy are on that page.
 
 Location is used only to centre the map on the user and to measure the distance and bearing to a pin. It is not sent to us or stored anywhere.
 

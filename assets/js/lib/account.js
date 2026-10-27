@@ -55,6 +55,9 @@ const PORTAL_FUNCTION = 'stripe-portal';
 /** The one that asks Google what a Play purchase token bought, and records it. */
 const PLAY_FUNCTION = 'play-billing';
 
+/** Records an App Store purchase after asking Apple about it. */
+const APPSTORE_FUNCTION = 'appstore-billing';
+
 /**
  * The one that manages other people's accounts.
  *
@@ -164,6 +167,45 @@ const PROVIDERS = ['apple', 'google'];
 
 /** The native Sign in with Apple plugin, as Capacitor names it. */
 export const APPLE_PLUGIN = 'SignInWithApple';
+
+/**
+ * A fresh nonce for Sign in with Apple: the raw value for Supabase, and its
+ * SHA-256 for Apple.
+ *
+ * Apple writes what it is given into the identity token, and Supabase hashes
+ * the raw value it is handed and refuses a token that does not match - so a
+ * token caught on its way to one sign-in cannot be replayed into another.
+ * Null where this web view cannot hash, and the sign-in goes ahead without
+ * one, which Supabase accepts as long as neither side has one.
+ */
+export async function appleNonce(crypto = globalThis.crypto) {
+  if (!crypto?.getRandomValues || !crypto?.subtle?.digest) return null;
+  const hex = (bytes) => [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  try {
+    const raw = hex(crypto.getRandomValues(new Uint8Array(24)));
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
+    return { raw, hashed: hex(new Uint8Array(digest)) };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Why Apple's sheet ended without a sign-in, as a sentence - or '' for
+ * somebody who closed it, which is not an error and gets no message.
+ */
+export function appleFailure(error) {
+  const code = String(error?.code || '');
+  const message = String(error?.message || error || '');
+  if (/CANCEL/i.test(code) || /cancel/i.test(message)) return '';
+  // Error 1000 is Apple's "unknown": a build without the entitlement, or an
+  // iPhone with no Apple Account signed in.
+  if (code === 'FAILED_1000') {
+    return 'Sign in with Apple could not start. Check this iPhone is signed in to an Apple Account in Settings, '
+      + 'or sign in with your email address instead.';
+  }
+  return `Apple did not sign you in: ${message || code || 'no reason given'}.`;
+}
 
 /**
  * The registered providers whose sign-in can finish on this page.
@@ -1002,10 +1044,14 @@ export class Account extends EventTarget {
    * the app's own scheme, where ./native-shell.js picks it up.
    * `skipBrowserRedirect` is what hands the URL back here instead of
    * navigating this web view to it.
+   *
+   * Apple on the iPhone is the exception, and goes through Apple's own sheet:
+   * see signInWithApple().
    */
   async signInWithProvider(provider) {
-    const client = await this.getClient();
     const shell = this.shell();
+    if (provider === 'apple' && shell.platform === 'ios') return this.signInWithApple();
+    const client = await this.getClient();
     if (shell.native) {
       const browser = shell.plugin('Browser');
       if (!browser?.open) {
@@ -1028,6 +1074,59 @@ export class Account extends EventTarget {
     });
     // Success navigates away, so anything that returns here is a refusal.
     if (error) throw new Error(error.message);
+    return true;
+  }
+
+  /**
+   * Sign in with Apple in the iPhone app, with Apple's own sheet.
+   *
+   * Not the browser round trip Google takes: that needs a Services ID and a
+   * signing key that Apple expires every six months, where the sheet needs
+   * only the bundle id in the Apple provider's Client IDs. The sheet hands
+   * back an identity token and Supabase checks it - Apple's signature, that it
+   * was issued to this app, the nonce - before it makes a session, which then
+   * arrives through onAuthStateChange like any other sign-in.
+   *
+   * @returns {Promise<boolean>} false when somebody closed the sheet.
+   */
+  async signInWithApple() {
+    const plugin = this.shell().plugin(APPLE_PLUGIN);
+    if (!plugin?.authorize) {
+      throw new Error('This version of the app cannot sign in with Apple. Update it, '
+        + 'or sign in with your email address instead.');
+    }
+    const client = await this.getClient();
+    if (!client) throw new Error('Accounts are not configured here.');
+
+    const nonce = await appleNonce();
+    let answer;
+    try {
+      answer = await plugin.authorize(nonce ? { nonce: nonce.hashed } : {});
+    } catch (error) {
+      const said = appleFailure(error);
+      if (!said) return false;
+      throw new Error(said);
+    }
+    if (!answer?.identityToken) throw new Error('Apple did not return a sign-in. Try again.');
+
+    const { data, error } = await client.auth.signInWithIdToken({
+      provider: 'apple',
+      token: answer.identityToken,
+      ...(nonce ? { nonce: nonce.raw } : {}),
+    });
+    if (error) throw new Error(error.message);
+
+    /*
+     * Apple says somebody's name once, the first time they sign in to this
+     * app, and never again - and the token does not carry it. Kept when the
+     * account has no name yet, or it is gone for good.
+     */
+    const name = [answer.givenName, answer.familyName]
+      .map((part) => String(part || '').trim()).filter(Boolean).join(' ');
+    if (name && !displayName(data?.user)) {
+      const { error: nameError } = await client.auth.updateUser({ data: { display_name: name } });
+      if (nameError) console.warn('[account] could not keep the name Apple gave:', nameError.message);
+    }
     return true;
   }
 
@@ -1442,6 +1541,36 @@ export class Account extends EventTarget {
       return { ok: false, reason: said || error.message };
     }
     if (!data?.ok) return { ok: false, reason: data?.error || 'Google Play\'s answer could not be recorded.', pending: Boolean(data?.pending) };
+    await this.refreshPlan();
+    return { ok: true };
+  }
+
+  /**
+   * Hand an App Store purchase to the server, which asks Apple about it.
+   *
+   * The twin of confirmPlayPurchase: only the transaction id travels, and
+   * appstore-billing reads whose it is and until when from Apple.
+   *
+   * `settled` says whether the server's refusal is final. 400, 403 and 409 are
+   * its decision about this transaction - not one, somebody else's, already
+   * paid for elsewhere - and asking again changes nothing; anything else is
+   * the server or Apple having a bad minute, and the purchase is still good.
+   * The caller finishes the StoreKit transaction only on a final answer.
+   */
+  async confirmAppStorePurchase({ transactionId = '' } = {}) {
+    if (!this.user) return { ok: false, reason: 'Sign in first.' };
+    const id = String(transactionId || '');
+    if (!id) return { ok: false, reason: 'There was no purchase to record.' };
+    const client = await this.getClient();
+    if (!client) return { ok: false, reason: 'Accounts are not configured here.' };
+
+    const { data, error } = await client.functions.invoke(APPSTORE_FUNCTION, { body: { transactionId: id } });
+    if (error) {
+      const status = Number(error?.context?.status) || 0;
+      const said = await readFunctionError(error);
+      return { ok: false, reason: said || error.message, settled: [400, 403, 409].includes(status) };
+    }
+    if (!data?.ok) return { ok: false, reason: data?.error || 'The App Store\'s answer could not be recorded.' };
     await this.refreshPlan();
     return { ok: true };
   }
