@@ -43,15 +43,15 @@ function accountAnswering(result) {
 }
 
 test('appstore: the product ids are App Store Connect\'s, and the same ones the server checks', async () => {
-  assert.equal(appStoreProductId('month'), 'premium.monthly');
-  assert.equal(appStoreProductId('year'), 'premium.yearly');
+  assert.equal(appStoreProductId('month'), 'halfstop.premium.monthly');
+  assert.equal(appStoreProductId('year'), 'halfstop.premium.yearly');
   assert.equal(appStoreProductId('decade'), '');
   const server = await import('node:fs/promises').then((fs) => fs.readFile(
     new URL('../supabase/functions/appstore-billing/index.ts', import.meta.url), 'utf8'));
   assert.ok(server.includes(`'${Object.values(BILLING.appstore.plans).join(',')}'`),
     'appstore-billing defaults to a different pair of product ids');
 
-  const products = [{ identifier: 'premium.yearly', priceString: '$49.00' }, { identifier: 'premium.monthly' }];
+  const products = [{ identifier: 'halfstop.premium.yearly', priceString: '$49.00' }, { identifier: 'halfstop.premium.monthly' }];
   assert.equal(appStoreProduct(products, { planId: 'year' }).priceString, '$49.00');
   assert.equal(appStoreProduct(products, { planId: 'decade' }), null);
 });
@@ -62,7 +62,7 @@ test('appstore: a purchase names the account, and is finished once the server ha
   assert.deepEqual(await buyOnAppStore({ account, planId: 'year', plugin }), { ok: true });
 
   assert.deepEqual(plugin.calls[0], ['purchaseProduct', {
-    productIdentifier: 'premium.yearly',
+    productIdentifier: 'halfstop.premium.yearly',
     appAccountToken: ME,
     autoAcknowledgePurchases: false,
   }]);
@@ -111,16 +111,16 @@ test('appstore: no account, an old app or no such plan is said, not attempted', 
 
 test('appstore: what StoreKit says, as a sentence', () => {
   assert.equal(appStoreFailure(new Error('User cancelled')), '');
-  assert.match(appStoreFailure(new Error('Cannot find product for id premium.monthly')), /does not have that plan/);
+  assert.match(appStoreFailure(new Error('Cannot find product for id halfstop.premium.monthly')), /does not have that plan/);
   assert.match(appStoreFailure(new Error('The Internet connection appears to be offline.')), /Could not reach/);
   assert.equal(appStoreFailure(new Error('Unknown error')), 'The App Store did not complete that: Unknown error.');
 });
 
 test('appstore: restoring finds this Apple Account\'s current subscription and records it', async () => {
   const purchases = [
-    { transactionId: '1', productIdentifier: 'premium.monthly', purchaseDate: '2026-01-01T00:00:00Z', isActive: false },
-    { transactionId: '2', productIdentifier: 'premium.yearly', purchaseDate: '2026-06-01T00:00:00Z', isActive: true },
-    { transactionId: '3', productIdentifier: 'premium.monthly', purchaseDate: '2026-07-01T00:00:00Z', isActive: true,
+    { transactionId: '1', productIdentifier: 'halfstop.premium.monthly', purchaseDate: '2026-01-01T00:00:00Z', isActive: false },
+    { transactionId: '2', productIdentifier: 'halfstop.premium.yearly', purchaseDate: '2026-06-01T00:00:00Z', isActive: true },
+    { transactionId: '3', productIdentifier: 'halfstop.premium.monthly', purchaseDate: '2026-07-01T00:00:00Z', isActive: true,
       revocationDate: '2026-07-02T00:00:00Z' },
     { transactionId: '4', productIdentifier: 'some.other.app', purchaseDate: '2026-09-01T00:00:00Z', isActive: true },
   ];

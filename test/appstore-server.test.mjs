@@ -26,10 +26,10 @@ const jws = (payload) => `${b64url(JSON.stringify({ alg: 'ES256', x5c: ['...'] }
 const NOW = Date.parse('2026-09-28T12:00:00Z');
 const DAY = 86400000;
 const USER = '41a86f02-3fe8-4ecb-9d67-c2fcbe29b966';
-const OPTIONS = { bundleId: 'com.halfstop.app', productIds: ['premium.monthly', 'premium.yearly'], now: NOW };
+const OPTIONS = { bundleId: 'com.halfstop.app', productIds: ['halfstop.premium.monthly', 'halfstop.premium.yearly'], now: NOW };
 
 /** A StatusResponse holding one subscription in the given state. */
-function statuses({ status = 1, expires = NOW + 20 * DAY, grace, revoked, token = USER.toUpperCase(), product = 'premium.monthly',
+function statuses({ status = 1, expires = NOW + 20 * DAY, grace, revoked, token = USER.toUpperCase(), product = 'halfstop.premium.monthly',
   bundle = 'com.halfstop.app', renew = 1, original = '2000000111111111' } = {}) {
   return {
     environment: 'Sandbox',
@@ -166,12 +166,12 @@ test('appstore: never written over a subscription still charging on the website 
 });
 
 test('appstore: the row written says what, whose, until when, and which subscription', () => {
-  const decided = decideWrite(readStatus(statuses({ product: 'premium.yearly' }), OPTIONS), null, { now: NOW });
+  const decided = decideWrite(readStatus(statuses({ product: 'halfstop.premium.yearly' }), OPTIONS), null, { now: NOW });
   assert.deepEqual(decided.row, {
     user_id: USER, tier: 'premium', source: 'appstore',
     expires_at: new Date(NOW + 20 * DAY).toISOString(),
     external_ref: '2000000111111111', renews: true,
-    note: 'App Store active, premium.yearly, sandbox',
+    note: 'App Store active, halfstop.premium.yearly, sandbox',
     updated_at: new Date(NOW).toISOString(),
   });
 });

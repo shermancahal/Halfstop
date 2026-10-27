@@ -327,7 +327,7 @@ export const BILLING = {
    * APPSTORE_PRODUCT_IDS or its own default of these.
    */
   appstore: {
-    plans: { month: 'premium.monthly', year: 'premium.yearly' },
+    plans: { month: 'halfstop.premium.monthly', year: 'halfstop.premium.yearly' },
   },
 
   /*

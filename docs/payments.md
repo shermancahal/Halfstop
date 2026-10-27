@@ -691,7 +691,7 @@ the refusal says to ask Apple for a refund at reportaproblem.apple.com.
 
 The app's half is built too: `assets/js/lib/appstore-billing.js`, on the same
 `@capgo/native-purchases` plugin the Android app uses (StoreKit 2 on iOS). It
-buys `premium.monthly` or `premium.yearly` with the account id as
+buys `halfstop.premium.monthly` or `halfstop.premium.yearly` with the account id as
 `appAccountToken`, sends only the transaction id to `appstore-billing`, and
 finishes the StoreKit transaction once the server's answer is final - recorded,
 or refused for a reason asking again would not change. The panel shows the App
@@ -707,8 +707,12 @@ What is still to do, in App Store Connect and Supabase:
 
 1. **App Store Connect: the subscriptions.** App → Monetization →
    Subscriptions → a subscription group (for example *Halfstop Premium*) with
-   two auto-renewable subscriptions, product IDs `premium.monthly` and
-   `premium.yearly` - or set `APPSTORE_PRODUCT_IDS` to whatever you name them.
+   two auto-renewable subscriptions, product IDs `halfstop.premium.monthly` and
+   `halfstop.premium.yearly`. Product IDs are permanent in App Store Connect,
+   so these are the names everything else follows: `BILLING.appstore` in
+   `assets/js/config.js` (what the app asks StoreKit for), the function's
+   default, and `APPSTORE_PRODUCT_IDS` in Supabase if it is set. A test fails
+   if the app and the function's default disagree.
    Prices to match the website: $4.99 and $49.
 2. **The In-App Purchase key.** Users and Access → Integrations → In-App
    Purchase → generate a key. Download the `.p8` (once only), and note the

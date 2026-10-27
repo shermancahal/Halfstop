@@ -6084,8 +6084,8 @@ console.log('\nInside the iPhone app, the account page sells through the App Sto
             calls.push(['getProducts', options]);
             return {
               products: [
-                { identifier: 'premium.monthly', priceString: '\u00a34.99', price: 4.99, currencyCode: 'GBP' },
-                { identifier: 'premium.yearly', priceString: '\u00a349.99', price: 49.99, currencyCode: 'GBP' },
+                { identifier: 'halfstop.premium.monthly', priceString: '\u00a34.99', price: 4.99, currencyCode: 'GBP' },
+                { identifier: 'halfstop.premium.yearly', priceString: '\u00a349.99', price: 49.99, currencyCode: 'GBP' },
               ],
             };
           },
@@ -6142,7 +6142,7 @@ console.log('\nInside the iPhone app, the account page sells through the App Sto
   const calls = await store.evaluate(() => window.__storeCalls.map(([name, options]) => [name, options]));
   const bought = calls.find(([name]) => name === 'purchaseProduct')?.[1] || null;
   check('pressing a price buys that product, for this account, left for the server to settle', bought, {
-    productIdentifier: 'premium.yearly', appAccountToken: 'u-ios', autoAcknowledgePurchases: false,
+    productIdentifier: 'halfstop.premium.yearly', appAccountToken: 'u-ios', autoAcknowledgePurchases: false,
   });
   check('only the transaction id goes to the server', recorded.verify, [{ transactionId: '2000001043762129' }]);
   check('and the transaction is finished after the server has it',

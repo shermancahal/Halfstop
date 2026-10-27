@@ -29,7 +29,7 @@
  *   APPSTORE_ISSUER_ID      the Issuer ID on the same page
  *   APPSTORE_NOTIFY_TOKEN   a long random string, also in the notification URL
  *   APPSTORE_BUNDLE_ID      optional, defaults to com.halfstop.app
- *   APPSTORE_PRODUCT_IDS    optional, defaults to premium.monthly,premium.yearly
+ *   APPSTORE_PRODUCT_IDS    optional, defaults to halfstop.premium.monthly,halfstop.premium.yearly
  */
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -68,7 +68,7 @@ const reply = (status: number, body: Record<string, unknown>) =>
   });
 
 const BUNDLE = () => env('APPSTORE_BUNDLE_ID') || 'com.halfstop.app';
-const PRODUCTS = () => (env('APPSTORE_PRODUCT_IDS') || 'premium.monthly,premium.yearly')
+const PRODUCTS = () => (env('APPSTORE_PRODUCT_IDS') || 'halfstop.premium.monthly,halfstop.premium.yearly')
   .split(',').map((id) => id.trim()).filter(Boolean);
 
 type Outcome = { action: string; why: string; row?: Record<string, unknown>; userId?: string; read?: Record<string, any> };
