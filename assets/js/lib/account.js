@@ -1266,6 +1266,31 @@ export class Account extends EventTarget {
     const client = await this.getClient();
     if (!client) return { ok: false, reason: 'Accounts are not configured here.' };
 
+    /*
+     * Sign in with Apple's link goes with the account, where it can.
+     *
+     * Apple asks for it, and revoking needs a fresh one-time code that only
+     * Apple's sheet hands out - so in the iPhone app an account linked to
+     * Apple confirms with Apple once more, before anything is deleted.
+     * Closing the sheet stops here, as Cancel would. Anywhere else there is no
+     * sheet: the account closes without it, and the message afterwards says
+     * where the person can remove the link themselves.
+     */
+    const linkedToApple = this.linkedToApple();
+    let appleAuthorizationCode = '';
+    const shell = this.shell();
+    if (linkedToApple && shell.platform === 'ios') {
+      const plugin = shell.plugin(APPLE_PLUGIN);
+      if (plugin?.authorize) {
+        try {
+          appleAuthorizationCode = String((await plugin.authorize({}))?.authorizationCode || '');
+        } catch (error) {
+          if (!appleFailure(error)) return { ok: false, cancelled: true, reason: 'Nothing was deleted.' };
+          console.warn('[account] Apple did not confirm, so its link stays:', error?.message || error);
+        }
+      }
+    }
+
     const { error } = await client.from(TABLE).delete().eq('user_id', this.user.id);
     if (error) {
       this.setStatus('signed-in', `Could not delete your data: ${error.message}`);
@@ -1281,10 +1306,15 @@ export class Account extends EventTarget {
      */
     let closed = false;
     let closeReason = '';
+    let apple = '';
     try {
-      const { data, error: fnError } = await client.functions.invoke(DELETE_FUNCTION);
+      const { data, error: fnError } = await client.functions.invoke(DELETE_FUNCTION,
+        appleAuthorizationCode ? { body: { appleAuthorizationCode } } : undefined);
       if (fnError) closeReason = fnError.message;
-      else closed = Boolean(data?.ok);
+      else {
+        closed = Boolean(data?.ok);
+        apple = String(data?.apple || '');
+      }
     } catch (error) {
       closeReason = error?.message || String(error);
     }
@@ -1294,12 +1324,25 @@ export class Account extends EventTarget {
     // the reason the folders stayed - which would be the wrong story entirely.
     await this.signOut({ sync: false });
 
+    // Said only when it is still there, and where to go, because nothing in
+    // this app can reach it any more.
+    const appleStays = closed && linkedToApple && apple !== 'revoked'
+      ? ' Halfstop is still listed under Sign in with Apple in your Apple Account settings, '
+        + 'where you can remove it.'
+      : '';
     this.setStatus('signed-out', closed
       ? 'Your account is closed and everything on the server is deleted. What is saved on '
-        + 'this device is untouched.'
+        + `this device is untouched.${appleStays}`
       : 'Your folders were deleted from the server, but closing the account itself did not '
         + 'go through. Write to support@halfstop.app and it will be finished by hand.');
-    return { ok: true, closed };
+    return { ok: true, closed, apple };
+  }
+
+  /** Whether this account signs in with Apple, and so has a link to revoke when it closes. */
+  linkedToApple() {
+    const user = this.user || {};
+    return (user.identities || []).some((identity) => identity?.provider === 'apple')
+      || (user.app_metadata?.providers || []).includes('apple');
   }
 
   /**

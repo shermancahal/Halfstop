@@ -363,6 +363,35 @@ a build carrying that plugin (`providersHere` in `account.js`). The website and
 the Android app would go through Apple's web flow, which has no Services ID or
 key behind it; set up the web flow below first if it is ever wanted there.
 
+### Closing an account revokes the link **(console, then done)**
+
+Apple asks an app with Sign in with Apple to revoke the user's tokens when
+they delete their account, so the app leaves the list of apps using their
+Apple Account. Supabase keeps no Apple token, and this project stores none
+either. Instead the iPhone app shows Apple's sheet once more when an account
+linked to Apple is closed, and sends the one-time code it returns to
+`delete-account`, which swaps it for a token and revokes it
+(`supabase/functions/delete-account/apple.mjs`, tested in
+`test/apple-revoke.test.mjs`). Closing the sheet cancels the deletion.
+Closed on the website or in the Android app, where there is no sheet, the
+account still closes and the message says where to remove the link by hand.
+
+It needs a **Sign in with Apple key** - not the In-App Purchase key, which
+Apple's token endpoint refuses:
+
+1. [Keys](https://developer.apple.com/account/resources/authkeys/list) → **+**
+   → name it, tick **Sign in with Apple** → **Configure** → primary App ID
+   `com.halfstop.app` → Save → Continue → Register. Download the `.p8` (once
+   only) and note the **Key ID**.
+2. Supabase → Edge Functions → Secrets:
+   - `APPLE_SIGNIN_KEY` - the `.p8` file's whole text
+   - `APPLE_SIGNIN_KEY_ID` - its Key ID
+   - `APPLE_TEAM_ID` - the Team ID, top right of the developer site
+3. Delete the downloaded file, as with the other keys.
+
+Until those are set the account still closes; the function logs that the
+link was not revoked, and the person is told where to remove it.
+
 ### On the website — the OAuth flow **(console)**
 
 Separate from the above and only needed for the site.

@@ -20,12 +20,17 @@ import { el } from './ui.js';
 import { withIcon } from './ui.js';
 import { icons } from './icons.js';
 import { isConfigured as accountsAvailable } from './account.js';
+import { appShell } from './native-shell.js';
 
 const WARNING = 'Delete your account?\n\n'
   + 'The account itself is closed, and your folders and pins are removed from '
   + 'the server. Signing in again will not bring any of it back. What is saved '
   + 'on this device is left alone.\n\n'
   + 'This cannot be undone.';
+
+/** Said before Apple's sheet appears, for an account that signs in with Apple. */
+const APPLE_NOTE = 'Apple will ask you to confirm once more, so Halfstop is also removed from the '
+  + 'apps using your Apple Account.';
 
 /**
  * @param {object}   options
@@ -68,7 +73,9 @@ export function mountDeleteAccount({ container, account, toast }) {
       onclick: async () => {
         // Two confirmations rather than one: the first says what goes, the
         // second asks for the word, because nothing here can be undone.
-        if (!window.confirm(WARNING)) return;
+        // In the iPhone app Apple's sheet comes next, and is not a surprise.
+        const apple = account.linkedToApple?.() && appShell().platform === 'ios';
+        if (!window.confirm(apple ? `${WARNING}\n\n${APPLE_NOTE}` : WARNING)) return;
         if (window.prompt('Type DELETE to confirm.') !== 'DELETE') {
           toast('Nothing was deleted.', { tone: 'info' });
           return;
@@ -77,6 +84,10 @@ export function mountDeleteAccount({ container, account, toast }) {
         const result = await account.deleteAccount()
           .catch((error) => ({ ok: false, reason: error.message }));
         button.disabled = false;
+        if (result.cancelled) {
+          toast('Nothing was deleted.', { tone: 'info' });
+          return;
+        }
         toast(result.ok ? 'Account deleted.' : `Could not delete: ${result.reason}`,
           { tone: result.ok ? 'ok' : 'error' });
       },

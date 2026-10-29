@@ -1388,3 +1388,77 @@ test('apple: closing the sheet is not an error; a refusal says why', async () =>
   await assert.rejects(() => old.signInWithApple(), /cannot sign in with Apple/);
   assert.equal(appleFailure({ code: 'FAILED_1001', message: 'x' }), 'Apple did not sign you in: x.');
 });
+
+/*
+ * Closing an account that signs in with Apple.
+ *
+ * Revoking the link needs a one-time code from Apple's sheet, so in the
+ * iPhone app the sheet comes first - and closing it must delete nothing.
+ * Elsewhere there is no sheet, the account closes anyway, and the person is
+ * told where the link still is.
+ */
+function appleUser() {
+  return { id: 'u1', identities: [{ provider: 'apple', id: '001.apple' }], app_metadata: { providers: ['apple'] } };
+}
+
+test('apple: closing an Apple account in the iPhone app asks Apple first, and sends only its code', async () => {
+  const seen = [];
+  const client = fakeClient();
+  client.functions.invoke = async (name, options) => {
+    client.calls.push(['invoke', name, options]);
+    return { data: { ok: true, apple: 'revoked' }, error: null };
+  };
+  const account = new Account(folders, {
+    client: async () => client, configured: () => true,
+    shell: appleShell({ identityToken: 't', authorizationCode: 'one-time' }, seen),
+  });
+  withHash('');
+  account.user = appleUser();
+
+  const result = await account.deleteAccount();
+  assert.deepEqual([result.ok, result.closed, result.apple], [true, true, 'revoked']);
+  assert.equal(seen.length, 1, 'Apple\'s sheet once');
+  const [, name, options] = client.calls.find(([call]) => call === 'invoke');
+  assert.equal(name, 'delete-account');
+  assert.deepEqual(options, { body: { appleAuthorizationCode: 'one-time' } }, 'the code and nothing else - no user id');
+  assert.doesNotMatch(account.message, /still listed/);
+});
+
+test('apple: closing Apple\'s sheet deletes nothing', async () => {
+  const client = fakeClient();
+  let deleted = 0;
+  client.from = () => ({ delete() { deleted += 1; return { async eq() { return { error: null }; } }; } });
+  const account = new Account(folders, {
+    client: async () => client, configured: () => true,
+    shell: appleShell(Object.assign(new Error('The operation couldn’t be completed.'), { code: 'CANCELED' })),
+  });
+  withHash('');
+  account.user = appleUser();
+
+  assert.deepEqual(await account.deleteAccount(), { ok: false, cancelled: true, reason: 'Nothing was deleted.' });
+  assert.equal(deleted, 0);
+  assert.equal(client.calls.some(([call]) => call === 'invoke'), false);
+});
+
+test('apple: away from the iPhone the account still closes, and says where the link is', async () => {
+  const client = fakeClient();
+  const account = new Account(folders, {
+    client: async () => client, configured: () => true,
+    shell: () => ({ native: false, platform: 'web', plugin: () => null }),
+  });
+  withHash('');
+  account.user = appleUser();
+
+  const result = await account.deleteAccount();
+  assert.equal(result.closed, true);
+  const [, , options] = client.calls.find(([call]) => call === 'invoke');
+  assert.equal(options, undefined, 'no code to send');
+  assert.match(account.message, /still listed under Sign in with Apple/);
+
+  // An account that never used Apple hears nothing about it.
+  const plain = new Account(folders, { client: async () => fakeClient(), configured: () => true });
+  plain.user = { id: 'u2', identities: [{ provider: 'email' }] };
+  assert.equal(plain.linkedToApple(), false);
+  await plain.deleteAccount();
+  assert.doesNotMatch(plain.message, /Apple/);
+});
