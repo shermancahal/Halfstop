@@ -5258,27 +5258,43 @@ check('scaled to the stretch the moon is up', moon.scrubber, 'Moon up');
 check('reporting the moon', /moon/i.test(moon.readout), true);
 
 const core = await drawOne(/Milky Way/, 'core-lines');
-check('the Milky Way tab draws the band alone', core.bodies, ['core']);
-check('the band and its night track among them',
-  core.kinds.includes('arc') && core.kinds.includes('track'), true);
-check('scaled to the night', core.scrubber, 'Tonight');
-
 /*
- * The two lines that carry no label of their own.
- *
- * "What is the light purple line?" is the question the drawing kept prompting,
- * because the band and the track are curves and a label repeated along a
- * sampled curve is a mess. So they are named beside the toggle instead.
+ * Out of season the Milky Way tab has nothing to draw - the panel says when
+ * the core is back, with no toggle - so the band, its track and their key
+ * are checked in season, and out of it the sky code is asked to agree that
+ * there is no night to draw rather than the toggle having gone missing.
  */
-const key = await page.evaluate(() => [...document.querySelectorAll('.line-key-row')]
-  .map((row) => ({
-    swatch: row.querySelector('.line-key-swatch')?.className || '',
-    name: row.querySelector('.line-key-name')?.textContent.trim() || '',
-  })));
-check('the violet lines are named in a key', key.length, 3);
-check('the band, the hour ring, then the bearing to the core',
-  key.map((row) => row.swatch.replace('line-key-swatch ', '')), ['is-band', 'is-track', 'is-spoke']);
-check('and each is named in words', key.every((row) => row.name.length > 5), true);
+if (!core) {
+  const outOfSeason = await page.evaluate(async () => {
+    const sky = await import(new URL('assets/js/lib/sky.js', document.baseURI).href);
+    const { lng, lat } = window.__map.getCenter();
+    return !sky.milkyWayNight(new Date(), lat, lng).possible;
+  });
+  console.log('  (the core is not up after dark at this pin tonight; its drawing is checked in season)');
+  check('without the toggle only because the core is not up after dark tonight', outOfSeason, true);
+} else {
+  check('the Milky Way tab draws the band alone', core.bodies, ['core']);
+  check('the band and its night track among them',
+    core.kinds.includes('arc') && core.kinds.includes('track'), true);
+  check('scaled to the night', core.scrubber, 'Tonight');
+
+  /*
+   * The two lines that carry no label of their own.
+   *
+   * "What is the light purple line?" is the question the drawing kept prompting,
+   * because the band and the track are curves and a label repeated along a
+   * sampled curve is a mess. So they are named beside the toggle instead.
+   */
+  const key = await page.evaluate(() => [...document.querySelectorAll('.line-key-row')]
+    .map((row) => ({
+      swatch: row.querySelector('.line-key-swatch')?.className || '',
+      name: row.querySelector('.line-key-name')?.textContent.trim() || '',
+    })));
+  check('the violet lines are named in a key', key.length, 3);
+  check('the band, the hour ring, then the bearing to the core',
+    key.map((row) => row.swatch.replace('line-key-swatch ', '')), ['is-band', 'is-track', 'is-spoke']);
+  check('and each is named in words', key.every((row) => row.name.length > 5), true);
+}
 
 /*
  * "Moon now" is only true while the slider sits on the present.
