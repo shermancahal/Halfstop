@@ -1648,31 +1648,50 @@ await openSection(page, 'Photography');
 check('no panel is open to begin with', await page.locator('.sky-panel').count(), 0);
 await page.locator('.sky-tab', { hasText: /Milky Way/ }).click();
 await page.waitForTimeout(400);
-check('the Milky Way panel opens', await page.locator('.core-rows').count() > 0, true);
-const mwText = await page.locator('.sky-panel').innerText();
-check('it leads with how much of the band is up', /Most of the band up\s*\n?\s*\d+%/.test(mwText), true);
-check('and says what the percentage measures', /above the horizon/.test(mwText), true);
-
-// The headline is the reason to go or not go, and it is only allowed to state
-// a percentage once cloud cover has actually arrived.
-await page.waitForFunction(() => /sky quality/.test(document.querySelector('.core-hero')?.textContent || ''), null, { timeout: 5000 })
-  .catch(() => {});
-const heroText = await page.locator('.core-hero').innerText();
-check('the headline scores the night', /\d+%\s*\n?\s*sky quality/.test(heroText), true);
 /*
- * The cloud it scored with is still on the card - under the draw button now,
- * as a named row, rather than running along under the verdict as the third
- * number in a dot-separated line.
+ * Whether there is a Milky Way night to describe depends on the date. From
+ * late October to February the core is not up after dark at this pin, and
+ * the panel says why and when it is back rather than drawing a night that is
+ * not there - so these checks failed on 29 October for being autumn. The
+ * app's own sky code says which kind of night this is (the map is on the pin,
+ * having flown to it), and the checks follow.
  */
-const ingredients = await page.locator('.core-ingredients').innerText();
-check('and shows the cloud it used', /Cloud/.test(ingredients), true);
-check('with how long it is dark and how much moon', /Dark for/.test(ingredients) && /Moon/.test(ingredients), true);
+const coreSeason = await page.evaluate(async () => {
+  const sky = await import(new URL('assets/js/lib/sky.js', document.baseURI).href);
+  const { lng, lat } = window.__map.getCenter();
+  return sky.milkyWayNight(new Date(), lat, lng).possible;
+});
+if (!coreSeason) {
+  console.log('  (the core is not up after dark at this pin tonight; the full card is checked in season)');
+  check('out of season, the Milky Way panel says when the core is back',
+    /Back in the night sky around|Not a night-time object/.test(await page.locator('.sky-panel').innerText()), true);
+} else {
+  check('the Milky Way panel opens', await page.locator('.core-rows').count() > 0, true);
+  const mwText = await page.locator('.sky-panel').innerText();
+  check('it leads with how much of the band is up', /Most of the band up\s*\n?\s*\d+%/.test(mwText), true);
+  check('and says what the percentage measures', /above the horizon/.test(mwText), true);
 
-await page.locator('.core-guide-summary').click();
-await page.waitForTimeout(300);
-const moments = await page.locator('.core-moment-name').allInnerTexts();
-check('the guide names the classic moment first', moments[0], 'Core at its highest');
-check('and offers others without padding the list', moments.length > 1 && moments.length <= 5, true);
+  // The headline is the reason to go or not go, and it is only allowed to state
+  // a percentage once cloud cover has actually arrived.
+  await page.waitForFunction(() => /sky quality/.test(document.querySelector('.core-hero')?.textContent || ''), null, { timeout: 5000 })
+    .catch(() => {});
+  const heroText = await page.locator('.core-hero').innerText();
+  check('the headline scores the night', /\d+%\s*\n?\s*sky quality/.test(heroText), true);
+  /*
+   * The cloud it scored with is still on the card - under the draw button now,
+   * as a named row, rather than running along under the verdict as the third
+   * number in a dot-separated line.
+   */
+  const ingredients = await page.locator('.core-ingredients').innerText();
+  check('and shows the cloud it used', /Cloud/.test(ingredients), true);
+  check('with how long it is dark and how much moon', /Dark for/.test(ingredients) && /Moon/.test(ingredients), true);
+
+  await page.locator('.core-guide-summary').click();
+  await page.waitForTimeout(300);
+  const moments = await page.locator('.core-moment-name').allInnerTexts();
+  check('the guide names the classic moment first', moments[0], 'Core at its highest');
+  check('and offers others without padding the list', moments.length > 1 && moments.length <= 5, true);
+}
 
 await page.locator('.sky-tab', { hasText: /^Moon/ }).click();
 await page.waitForTimeout(400);
