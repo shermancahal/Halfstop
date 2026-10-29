@@ -97,8 +97,48 @@ test('appstore: production is asked first, then the sandbox, and a 404 in both i
 
   await assert.rejects(
     getSubscriptionStatuses({ token: 'T', transactionId: '1', fetch: async () => ({ ok: false, status: 401, json: async () => ({ errorMessage: 'Unauthenticated' }) }) }),
-    (error) => error.status === 401 && /Unauthenticated/.test(error.message),
+    (error) => error.status === 401 && /Unauthenticated/.test(error.message) && /sandbox/.test(error.message),
   );
+});
+
+/** A fetch that answers production and the sandbox each with its own status. */
+function byEnvironment({ production, sandbox }) {
+  const asked = [];
+  const fetch = async (url) => {
+    const environment = url.startsWith(API.Production) ? 'Production' : 'Sandbox';
+    asked.push(environment);
+    const status = environment === 'Production' ? production : sandbox;
+    return {
+      ok: status === 200,
+      status,
+      json: async () => (status === 200 ? { data: [] } : { errorMessage: `${environment} said ${status}` }),
+    };
+  };
+  return { asked, fetch };
+}
+
+test('appstore: before the app is released, production\'s 401 does not stop a sandbox purchase', async () => {
+  const { asked, fetch } = byEnvironment({ production: 401, sandbox: 200 });
+  const found = await getSubscriptionStatuses({ token: 'T', transactionId: '2000000222222222', fetch });
+  assert.deepEqual(asked, ['Production', 'Sandbox']);
+  assert.equal(found.environment, 'Sandbox');
+});
+
+test('appstore: a production 401 the sandbox cannot answer is thrown, never read as nobody', async () => {
+  const { fetch } = byEnvironment({ production: 401, sandbox: 404 });
+  await assert.rejects(
+    getSubscriptionStatuses({ token: 'T', transactionId: '2000000222222222', fetch }),
+    (error) => error.status === 401 && /production/.test(error.message),
+  );
+});
+
+test('appstore: any other production refusal is thrown without asking the sandbox', async () => {
+  const { asked, fetch } = byEnvironment({ production: 500, sandbox: 200 });
+  await assert.rejects(
+    getSubscriptionStatuses({ token: 'T', transactionId: '2000000222222222', fetch }),
+    (error) => error.status === 500,
+  );
+  assert.deepEqual(asked, ['Production']);
 });
 
 test('appstore: an active subscription grants until its date, to the account it names', () => {

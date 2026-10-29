@@ -122,18 +122,33 @@ async function refusal(response, what) {
  * does not say which it came from. A 404 in both is "Apple does not know it",
  * answered as null rather than thrown.
  *
+ * A 401 from production is asked past too. Until an app has a release on the
+ * App Store, Apple refuses its production API with 401 even for a good key,
+ * which would otherwise stop every TestFlight purchase before the sandbox was
+ * asked. Only the sandbox can then say whether the key is good: a 401 there
+ * as well is thrown as it stands. And a production 401 is never read as "Apple
+ * does not know it": if the sandbox does not know the id either, the 401 is
+ * thrown, because a real purchase that production would not yet answer for
+ * must be asked about again, not written down as nobody's.
+ *
  * @returns {Promise<object|null>} the StatusResponse, with `environment`
  */
 export async function getSubscriptionStatuses({ token, transactionId, fetch = globalThis.fetch }) {
   const id = encodeURIComponent(String(transactionId));
+  let productionRefused = null;
   for (const environment of ['Production', 'Sandbox']) {
     const response = await fetch(`${API[environment]}/inApps/v1/subscriptions/${id}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (response.status === 404) continue;
-    if (!response.ok) throw await refusal(response, 'Reading the subscription');
+    if (response.status === 401 && environment === 'Production') {
+      productionRefused = await refusal(response, 'Reading the subscription in production');
+      continue;
+    }
+    if (!response.ok) throw await refusal(response, `Reading the subscription in ${environment.toLowerCase()}`);
     const body = await response.json();
     return { environment, ...body };
   }
+  if (productionRefused) throw productionRefused;
   return null;
 }
