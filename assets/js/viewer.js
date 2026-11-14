@@ -115,6 +115,7 @@ import {
   listSnapshots, SNAPSHOT_SOURCE, getPhoto, keepFetchedPhoto,
 } from './lib/photos.js';
 import { photosToUpload, ownUploads, isUploaded, PHOTO_SYNC_LIMIT } from './lib/photo-sync.js';
+import { MAP_MEMORY_KEY, mapSync, parseMapMemory, sameMap, startingBasemap, worthKeeping } from './lib/map-memory.js';
 
 /* ------------------------------------------------------------------ state */
 
@@ -651,6 +652,7 @@ async function main() {
   });
   state.account.addEventListener('change', () => {
     renderAccount();
+    syncMapWithAccount();
     // A sign-in, a plan arriving or a sync finishing can each leave photos
     // to upload; the check is cheap when there are none.
     scheduleSyncPhotos();
@@ -788,14 +790,23 @@ async function main() {
    * itself off.
    */
   const arrivedWithAView = linkCarriesView(location.hash);
-  state.basemapId = initial.basemap || defaultBasemapId();
+  // The map you were last on, unless a link names one - see lib/map-memory.js.
+  const memory = parseMapMemory(readSetting(MAP_MEMORY_KEY, ''));
+  state.mapFromLink = Boolean(initial.basemap || initial.overlays);
+  state.basemapId = startingBasemap({
+    link: initial.basemap, memory, fallback: defaultBasemapId(), usable: usableBasemap,
+  });
 
   const { gl, engine } = await loadEngine(basemapById(state.basemapId));
   state.gl = gl;
   state.engine = engine;
   if (initial.overlays) {
     for (const [id, entry] of state.overlays) entry.visible = initial.overlays.includes(id);
+  } else if (memory) {
+    for (const [id, entry] of state.overlays) entry.visible = memory.overlays.includes(id);
   }
+  // What it opened on, which is not a choice until something changes it.
+  state.mapAtStart = mapOnScreen();
   if (initial.units) state.units = initial.units;
 
   const basemap = basemapById(state.basemapId);
@@ -823,6 +834,8 @@ async function main() {
      */
     preserveDrawingBuffer: true,
   });
+  // The account may have been known before there was a map to switch.
+  state.map.once('load', () => syncMapWithAccount());
 
   /*
    * The image healer, wired before anything is awaited.
@@ -1369,6 +1382,92 @@ function writeURL() {
 
   const query = params.toString();
   history.replaceState(null, '', `${location.pathname}${query ? `?${query}` : ''}${location.hash}`);
+  rememberMap();
+}
+
+/* ------------------------------------------------------------------ the last map */
+
+/** A basemap this deployment can draw: one it lists, with the token it needs. */
+function usableBasemap(id) {
+  const basemap = BASEMAPS.find((entry) => entry.id === id);
+  return Boolean(basemap) && (!basemap.requiresToken || hasMapboxToken());
+}
+
+/** The basemap and layers on screen now. */
+function mapOnScreen() {
+  return {
+    basemap: state.basemapId,
+    overlays: [...state.overlays].filter(([, entry]) => entry.visible).map(([id]) => id),
+  };
+}
+
+let mapPush = 0;
+
+/**
+ * Keep the map on screen as the last map: on this device at once, and on the
+ * account a moment later, so toggling five layers is one save rather than
+ * five. Called wherever the address bar is rewritten, which is every change
+ * of basemap or layer.
+ */
+function rememberMap() {
+  if (state.map) keepMap(mapOnScreen());
+}
+
+function keepMap(map) {
+  const kept = parseMapMemory(readSetting(MAP_MEMORY_KEY, ''));
+  if (!worthKeeping({ now: map, saved: kept, atStart: state.mapAtStart, fromLink: state.mapFromLink })) return;
+  const saved = { ...map, at: new Date().toISOString() };
+  rememberSetting(MAP_MEMORY_KEY, JSON.stringify(saved));
+  clearTimeout(mapPush);
+  mapPush = setTimeout(() => state.account?.saveMapPrefs(saved), 2000);
+}
+
+/**
+ * Bring this device and the account into line, once the account is known.
+ *
+ * Asked on every account change, and cheap when they agree. The account's map
+ * is adopted when it is the newer of the two, which is what makes a choice
+ * made on the laptop the one the phone opens on; this device's is sent up
+ * when it is.
+ */
+function syncMapWithAccount() {
+  const account = state.account;
+  if (!account?.user || !state.map) return;
+  const mine = parseMapMemory(readSetting(MAP_MEMORY_KEY, ''));
+  const theirs = account.mapPrefs();
+  const action = mapSync({ mine, theirs, fromLink: state.mapFromLink });
+  if (action === 'push') account.saveMapPrefs(mine);
+  if (action === 'adopt') adoptMap(theirs);
+}
+
+/** Switch to a saved map: its layers, then its basemap. */
+function adoptMap(choice) {
+  const drawable = usableBasemap(choice.basemap);
+  /*
+   * Kept first: a basemap from the other map library reloads the page, and
+   * the reloaded page has to open on this map. At the account's own time, and
+   * with this build's basemap when it cannot draw the account's - so the two
+   * copies are one choice, and neither is sent back over the other.
+   */
+  rememberSetting(MAP_MEMORY_KEY, JSON.stringify(drawable ? choice : { ...choice, basemap: state.basemapId }));
+  const wanted = new Set(choice.overlays);
+  const basemap = drawable && choice.basemap !== state.basemapId ? choice.basemap : '';
+  for (const [id, entry] of state.overlays) {
+    const on = wanted.has(id);
+    if (entry.visible === on) continue;
+    entry.visible = on;
+    // A basemap change re-adds the layers that are on; otherwise add or drop each here.
+    if (basemap) continue;
+    const overlay = OVERLAYS.find((candidate) => candidate.id === id);
+    if (on && overlay) addOverlayLayer(overlay);
+    if (!on) removeOverlayLayer(id);
+  }
+  if (basemap) {
+    setBasemap(basemap);
+    return;
+  }
+  renderLayersTab();
+  writeURL();
 }
 
 /* ------------------------------------------------------------------ panel chrome */
@@ -6870,6 +6969,8 @@ function setBasemap(id) {
    */
   const needed = engineFor(basemap);
   if (needed && state.engine && needed !== state.engine) {
+    // Kept before leaving, since the reload starts from the address alone.
+    keepMap({ ...mapOnScreen(), basemap: id });
     const url = new URL(window.location.href);
     url.searchParams.set('b', id);
     window.location.assign(url.toString());

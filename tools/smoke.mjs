@@ -6267,6 +6267,72 @@ console.log('\nInside the iPhone app, the account page sells through the App Sto
   await iphone.close();
 }
 
+/*
+ * The map opens on the basemap and layers it was last on.
+ *
+ * They lived only in the address bar, so a bookmark or the iPhone app - which
+ * opens a bare address every time - always came back on the default map.
+ * Chosen here, then opened again from the bare address, the way the app
+ * does. Its own page in the same browser, which shares the page's storage, so
+ * what was saved is put back afterwards for the checks that follow.
+ */
+console.log('\nThe map opens on the basemap and layers it was last on');
+{
+  const before = await page.evaluate(() => localStorage.getItem('ab-maps-map'));
+  const fresh = await context.newPage();
+  await fresh.route('**/*', serveStubs);
+  await fresh.goto(MAP_URL, { waitUntil: 'networkidle' });
+  await fresh.waitForTimeout(900);
+  await fresh.locator('#panel-toggle').click();
+  await fresh.waitForTimeout(400);
+
+  await fresh.locator('.layer-row', { hasText: /^USGS Topo Modern$/ }).locator('input[type=radio]').check();
+  await fresh.waitForTimeout(900);
+  const chosen = await fresh.evaluate(() => {
+    const name = (item) => item?.querySelector('.layer-option-label')?.dataset.layer || '';
+    const basemap = name(document.querySelector('#basemap-list input[type=radio]:checked')?.closest('.layer-item'));
+    const row = [...document.querySelectorAll('#overlay-list .layer-item')]
+      .find((item) => name(item) && item.querySelector('input[type=checkbox]:not(:checked):not(:disabled)'));
+    if (!row) return { basemap, layer: '' };
+    const box = row.querySelector('input[type=checkbox]');
+    box.checked = true;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    return { basemap, layer: name(row) };
+  });
+  await fresh.waitForTimeout(600);
+
+  // Opened again from the bare address, as the iPhone app opens every time.
+  await fresh.goto(MAP_URL, { waitUntil: 'networkidle' });
+  await fresh.waitForTimeout(900);
+  const reopened = await fresh.evaluate((layer) => {
+    const name = (item) => item?.querySelector('.layer-option-label')?.dataset.layer || '';
+    const row = [...document.querySelectorAll('#overlay-list .layer-item')].find((item) => name(item) === layer);
+    return {
+      basemap: name(document.querySelector('#basemap-list input[type=radio]:checked')?.closest('.layer-item')),
+      layer: Boolean(row?.querySelector('input[type=checkbox]')?.checked),
+      saved: JSON.parse(localStorage.getItem('ab-maps-map') || 'null'),
+    };
+  }, chosen.layer);
+  check('a basemap was chosen to remember', Boolean(chosen.basemap) && chosen.basemap !== '', true);
+  check('opened from a bare address, it is on the basemap it was last on', reopened.basemap, chosen.basemap);
+  check('with the layer that was on still on', chosen.layer ? reopened.layer : 'no layer to try', chosen.layer ? true : 'no layer to try');
+  check('and it says when it was chosen, so a newer choice on another device can win',
+    Number.isFinite(Date.parse(reopened.saved?.at || '')), true);
+
+  // A link that names a basemap still wins for that visit.
+  await fresh.goto(`${MAP_URL}?b=${encodeURIComponent('byways-topo')}`, { waitUntil: 'networkidle' });
+  await fresh.waitForTimeout(900);
+  const linked = await fresh.evaluate(() => document.querySelector('#basemap-list input[type=radio]:checked')
+    ?.closest('.layer-item')?.querySelector('.layer-option-label')?.dataset.layer || '');
+  check('while a link that names a basemap still opens on that one', linked === chosen.basemap ? 'the remembered one' : 'the link\'s', 'the link\'s');
+
+  await fresh.close();
+  await page.evaluate((value) => {
+    if (value === null) localStorage.removeItem('ab-maps-map');
+    else localStorage.setItem('ab-maps-map', value);
+  }, before);
+}
+
 console.log('\nMetered basemaps are shown and not offered, once billing is live');
 {
   const paid = await context.newPage();

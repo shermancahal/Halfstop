@@ -1589,6 +1589,34 @@ export class Account extends EventTarget {
   }
 
   /**
+   * The map this account was last on - basemap and layers - so another device
+   * it signs in on opens on the same map. Kept in the account's own metadata
+   * beside the display name: a preference, about nobody but its owner.
+   *
+   * @returns {{basemap: string, overlays: string[], at: string}|null}
+   */
+  mapPrefs() {
+    const saved = this.user?.user_metadata?.map_prefs;
+    return saved && typeof saved === 'object' && typeof saved.basemap === 'string' ? saved : null;
+  }
+
+  /**
+   * Save the map this account is on. Quiet when it cannot: the device keeps
+   * its own copy, and the next change or sign-in sends it again.
+   */
+  async saveMapPrefs(prefs) {
+    if (!this.user || this.offline) return false;
+    const client = await this.getClient();
+    if (!client) return false;
+    const { error } = await client.auth.updateUser({ data: { map_prefs: prefs } });
+    if (error) {
+      console.warn('[account] could not save the map to the account:', error.message);
+      return false;
+    }
+    return true;
+  }
+
+  /**
    * Hand an App Store purchase to the server, which asks Apple about it.
    *
    * The twin of confirmPlayPurchase: only the transaction id travels, and
