@@ -4470,9 +4470,48 @@ function skySpan(mode, position, date) {
     };
   }
 
-  // The core and the everything-at-once drawing share the night: the band is
-  // only worth pointing at between astronomical dusk and dawn, and that window
-  // is what `milkyWayNight` computes.
+  /*
+   * Everything at once covers the day and the night after it, and starts now.
+   *
+   * It used to share the core's window - astronomical dusk to dawn, opening
+   * on the night's best hour - which made it a Milky Way drawing under a
+   * general name: opened at noon it jumped to the middle of the night, could
+   * not be dragged back to the sun, and from November to February drew
+   * almost nothing, the core being down all night. Reported as "I want to
+   * draw what the light is doing now, and I see no lines". So it runs from
+   * first light to first light and opens on the present; the sun and moon are
+   * drawn while they are up, and the band only in the dark.
+   */
+  if (mode === 'sky') {
+    const DAY = 86400000;
+    const firstLight = (day) => {
+      const sun = sunTimes(day, lat, lon);
+      if (sun.civilDawn || sun.sunrise) return sun.civilDawn || sun.sunrise;
+      const midnight = new Date(day);
+      midnight.setHours(0, 0, 0, 0);
+      return midnight;
+    };
+    // Before today's first light it is still yesterday's night.
+    let from = firstLight(date);
+    if (from > date) from = firstLight(new Date(date.valueOf() - DAY));
+    const sun = sunTimes(from, lat, lon);
+    const night = milkyWayNight(from, lat, lon);
+    return {
+      label: 'Today and tonight',
+      window: { from, to: new Date(from.valueOf() + DAY) },
+      peak: date,
+      night,
+      marks: [
+        mark(sun.sunrise, 'sunrise'), mark(sun.solarNoon, 'noon'), mark(sun.sunset, 'sunset'),
+        night?.possible ? mark(night.windowPeak?.when, 'core high') : null,
+      ].filter(Boolean),
+      empty: 'There is no day or night here to draw.',
+    };
+  }
+
+  // The core's drawing is the night's: the band is only worth pointing at
+  // between astronomical dusk and dawn, and that window is what
+  // `milkyWayNight` computes.
   const night = milkyWayNight(date, lat, lon);
   return {
     label: 'Tonight',
@@ -4549,7 +4588,8 @@ function moonTransit(window, lat, lon) {
 function directionsForMode(mode, position, when) {
   const [lon, lat] = position;
   const all = [...lightDirections(when, lat, lon), ...currentDirections(when, lat, lon)];
-  if (mode === 'sky') return all;
+  // The core is up half of every day; a bearing to it at noon points at blue sky.
+  if (mode === 'sky') return all.filter((entry) => entry.body !== 'core' || darkAt(when, lat, lon));
   // An eclipse takes the moon's bearing and nothing else. Moonrise and moonset
   // are about the moon too, but the whole point of the eclipse drawing is that
   // it is one line: which way to face.
@@ -4585,8 +4625,27 @@ function setSkyDrawing(position, date, mode, on) {
   });
 }
 
-/** The body each drawing is about, which is what the readout names. */
-const modeBody = (mode) => (mode === 'eclipse' ? 'moon' : mode === 'sky' ? 'core' : mode);
+/** The body each drawing is about, which is what the readout names. 'sky' is whichever is up. */
+const modeBody = (mode) => (mode === 'eclipse' ? 'moon' : mode);
+
+/** Astronomical darkness: the sun more than 18° down, when the band can be seen at all. */
+const darkAt = (when, lat, lon) => sunPosition(when, lat, lon).altitude < -18;
+
+/**
+ * What the everything drawing's readout names at a moment: the sun while it is
+ * up, then the core in the dark, then the moon - the one somebody standing
+ * there would be looking at.
+ */
+function skyReadout(when, lat, lon) {
+  const where = (name, at) => `${name} ${Math.round(at.altitude)}° at ${Math.round(at.azimuth)}°`;
+  const sun = sunPosition(when, lat, lon);
+  if (sun.altitude > 0) return where('sun', sun);
+  const core = galacticCentre(when, lat, lon);
+  if (sun.altitude < -18 && core.altitude > 0) return where('core', core);
+  const moon = moonPosition(when, lat, lon);
+  if (moon.altitude > 0) return where('moon', moon);
+  return sun.altitude < -18 ? 'dark, nothing bright up' : 'sun below the horizon';
+}
 
 /**
  * The button that puts one sky on the map, and the slider that moves it.
@@ -4711,6 +4770,10 @@ function nightScrubber(position) {
   const readout = el('span', { class: 'scrub-time' });
   const show = (at) => {
     const when = new Date(at);
+    if (body === 'sky') {
+      readout.textContent = `${clockTime(when)} · ${skyReadout(when, lat, lon)}`;
+      return;
+    }
     const where = positionOf(when, lat, lon);
     readout.textContent = where.altitude > 0
       ? `${clockTime(when)} · ${body} ${Math.round(where.altitude)}° at ${Math.round(where.azimuth)}°`
@@ -5041,7 +5104,10 @@ function linesPanel(body, position, date) {
    */
   if (active) body.append(nightScrubber(position));
   body.append(directionRows(all, when));
-  body.append(lineKeyBlock());
+  // The key is to the violet lines, which are drawn only in the dark.
+  const key = lineKeyBlock();
+  key.hidden = !all.some((entry) => entry.body === 'core');
+  body.append(key);
 }
 
 /**
@@ -5123,7 +5189,11 @@ function refreshLineRows() {
   const rows = document.querySelector('.sky-rows');
   if (!rows || !state.lightLines) return;
   const { position, date, mode } = state.lightLines;
-  rows.replaceWith(directionRows(directionsForMode(mode || 'sky', position, date || new Date()), date));
+  const directions = directionsForMode(mode || 'sky', position, date || new Date());
+  rows.replaceWith(directionRows(directions, date));
+  // The everything drawing's key follows the slider into and out of the dark.
+  const key = document.querySelector('.sky-panel .line-key');
+  if (key && (mode || 'sky') === 'sky') key.hidden = !directions.some((entry) => entry.body === 'core');
 }
 
 const capitalise = (text = '') => text.charAt(0).toUpperCase() + text.slice(1);
@@ -5260,7 +5330,15 @@ function refreshLightLines() {
     return;
   }
 
-  const sky = milkyWayGround(lines.position, lines.date || new Date(), { maxKm: REACH });
+  const at = lines.date || new Date();
+  const sky = milkyWayGround(lines.position, at, { maxKm: REACH });
+  /*
+   * The Milky Way only in the dark. The core's own drawing never leaves the
+   * night; the everything drawing does, and a violet band across the map at
+   * noon is a thing nobody can photograph.
+   */
+  const night = lines.mode !== 'sky' || darkAt(at, lines.position[1], lines.position[0]);
+  const core = night ? sky.core : null;
 
   /*
    * The core's own spoke replaces the generic "Milky Way now" bearing.
@@ -5271,11 +5349,10 @@ function refreshLightLines() {
    * what makes the picture readable as "stand here, face this way, the band is
    * there" rather than as two unrelated marks.
    */
-  const drawn = sky.core
+  const drawn = core
     ? lines.directions.filter((direction) => direction.id !== 'core-now')
     : lines.directions;
 
-  const at = lines.date || new Date();
   const features = drawn.map((direction) => ({
     type: 'Feature',
     properties: {
@@ -5299,15 +5376,15 @@ function refreshLightLines() {
    * out of it. That is the question the whole Photography panel is for, and it
    * is the one thing a table of numbers cannot answer.
    */
-  if (sky.core) {
+  if (core) {
     features.push({
       type: 'Feature',
       properties: {
         body: 'core',
         now: true,
-        label: nowLabel('Milky Way core now', sky.core, at),
+        label: nowLabel('Milky Way core now', core, at),
       },
-      geometry: { type: 'LineString', coordinates: [lines.position, sky.core.position] },
+      geometry: { type: 'LineString', coordinates: [lines.position, core.position] },
     });
   }
 
@@ -5320,8 +5397,9 @@ function refreshLightLines() {
    * of bearings rather than as a squiggle, with the hours marked, because a
    * curve alone says where and not when.
    */
-  const window = lines.window || lines.night?.dark;
-  if (window) {
+  // The night's, whichever drawing: the everything drawing's window is a day.
+  const window = lines.night?.dark || lines.window;
+  if (night && window) {
     features.push(...ringFeatures(
       milkyWayTrack(lines.position, window.from, window.to, {
         maxKm: REACH, fixedKm: ringRadius(REACH), stepMinutes: 10,
@@ -5331,7 +5409,7 @@ function refreshLightLines() {
     ));
   }
 
-  if (sky.line.length > 1) {
+  if (night && sky.line.length > 1) {
     features.push({
       type: 'Feature',
       properties: { body: 'core', kind: 'arc' },

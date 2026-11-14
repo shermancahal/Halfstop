@@ -2294,6 +2294,7 @@ html, body { touch-action: pan-x pan-y; }
  * is, so it is answered here, with swatches drawn the way the map draws them.
  */
 .line-key { display: grid; gap: 7px; margin: 10px 0 0; }
+.line-key[hidden] { display: none; }
 .line-key-row { display: flex; align-items: flex-start; gap: 9px; }
 .line-key-swatch { flex: none; width: 26px; height: 12px; margin-top: 2px; border-radius: 2px; }
 .line-key-swatch.is-band {

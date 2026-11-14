@@ -3503,7 +3503,7 @@ check('and names the ground that fogs regardless',
 await shot(page.locator('.sky-panel'), 'fog-panel');
 check('and Kp is translated into what it means here', /storm/i.test(aurora.hero), true);
 
-console.log('\nThe Milky Way band is drawn, and the night can be scrubbed');
+console.log('\nDraw shows the sky at any moment of today and tonight, starting now');
 await showTab('waypoints');
 await page.waitForTimeout(400);
 await page.locator('.waypoint-card').first().click();
@@ -3536,23 +3536,77 @@ const arcOf = () => page.evaluate(() => {
   };
 });
 
-const band = await arcOf();
-check('the band is drawn as its own arc feature', band.present, true);
-check('sampled into a curve rather than a straight line', band.points > 10, true);
-check('and the rise and set bearings are still there', band.bearings > 0, true);
-
-check('the scrubber spans one night', await page.locator('.scrub-range').count(), 1);
-const scrubbed = await (async () => {
-  const range = page.locator('.scrub-range').first();
-  const { min, max } = await range.evaluate((node) => ({ min: node.min, max: node.max }));
-  await range.evaluate((node, value) => {
-    node.value = value;
+/*
+ * Everything at once, at any moment of today and tonight, starting now.
+ *
+ * It used to cover only tonight's darkness and open on the core's best hour,
+ * so opened at noon it showed the middle of the night and could not reach
+ * the sun at all - reported as "I want to draw what the light is doing now,
+ * and I see no lines". The checks are pinned to moments the app's own sky
+ * code names for this pin, so they hold whatever time of day this runs.
+ */
+const scrubTo = async (at) => {
+  await page.locator('.scrub-range').first().evaluate((node, value) => {
+    node.value = String(value);
     node.dispatchEvent(new Event('input', { bubbles: true }));
-  }, String(Number(min) + (Number(max) - Number(min)) * 0.15));
-  await new Promise((resolve) => setTimeout(resolve, 400));
-  return arcOf();
-})();
-check('and moving it moves the band', scrubbed.first !== band.first, true);
+  }, at);
+  await page.waitForTimeout(400);
+};
+const drawnNow = () => page.evaluate(() => {
+  const features = window.__map.getSource('light-directions')?._d?.features || [];
+  return {
+    nowBodies: [...new Set(features.filter((feature) => feature.properties.now).map((feature) => feature.properties.body))].sort(),
+    core: features.filter((feature) => feature.properties.body === 'core').length,
+    readout: document.querySelector('.scrub-time')?.textContent || '',
+    keyShown: !document.querySelector('.sky-panel .line-key')?.hidden,
+  };
+});
+
+const span = await page.locator('.scrub-range').first().evaluate((node) => ({
+  min: Number(node.min), max: Number(node.max), value: Number(node.value),
+}));
+check('the slider covers a whole day and the night after it', span.max - span.min, 24 * 60 * 60 * 1000);
+check('and opens on the present, not the middle of the night', Math.abs(span.value - Date.now()) < 10 * 60 * 1000, true);
+check('labelled for both', await page.locator('.scrub-label').first().innerText(), 'Today and tonight');
+const marked = await page.locator('.scrub-mark-label').allInnerTexts();
+check('with sunrise, noon and sunset marked', ['sunrise', 'noon', 'sunset'].every((label) => marked.includes(label)), true);
+
+const today = await page.evaluate(async (from) => {
+  const sky = await import(new URL('assets/js/lib/sky.js', document.baseURI).href);
+  const { lng, lat } = window.__map.getCenter();
+  const sun = sky.sunTimes(new Date(from), lat, lng);
+  const night = sky.milkyWayNight(new Date(from), lat, lng);
+  return {
+    noon: sun.solarNoon?.valueOf() ?? null,
+    possible: Boolean(night.possible && night.windowPeak?.when),
+    peak: night.windowPeak?.when?.valueOf() ?? null,
+    dark: night.dark ? [night.dark.from.valueOf(), night.dark.to.valueOf()] : null,
+  };
+}, span.min);
+
+await scrubTo(today.noon);
+const noon = await drawnNow();
+check('at noon the sun is drawn where it is', noon.nowBodies.includes('sun'), true);
+check('and the readout names it', /sun \d+° at \d+°/.test(noon.readout), true);
+check('with no Milky Way across the map in daylight', noon.core, 0);
+check('and no key to violet lines that are not there', noon.keyShown, false);
+
+let band = { present: false };
+if (today.possible) {
+  await scrubTo(today.peak);
+  band = await arcOf();
+  check('in the dark, at the core\'s best hour, the band is drawn as its own arc', band.present, true);
+  check('sampled into a curve rather than a straight line', band.points > 10, true);
+  check('and the rise and set bearings are still there', band.bearings > 0, true);
+  check('with the key to its violet lines', (await drawnNow()).keyShown, true);
+  await scrubTo(Math.min(today.peak + 60 * 60 * 1000, today.dark[1]));
+  check('and moving it moves the band', (await arcOf()).first !== band.first, true);
+  await scrubTo(today.peak);
+} else {
+  console.log('  (the core is not up after dark at this pin tonight; the band is checked in season)');
+  if (today.dark) await scrubTo((today.dark[0] + today.dark[1]) / 2);
+  check('out of season, the dark of the night draws no band', (await arcOf()).present, false);
+}
 check('the Now button is there to get back', await page.locator('.scrub-now').count(), 1);
 
 /*
@@ -3587,7 +3641,9 @@ const tonight = await page.evaluate(async () => {
   const spoke = features.find((feature) => feature.geometry?.type === 'LineString' && !feature.properties.kind);
   const centre = window.__map.getCenter();
   const [lon, lat] = spoke ? spoke.geometry.coordinates[0] : [centre.lng, centre.lat];
-  const dark = sky.milkyWayNight(new Date(), lat, lon).dark;
+  // The drawing's own night: the one after the first light its slider starts at.
+  const from = new Date(Number(document.querySelector('.scrub-range').min));
+  const dark = sky.milkyWayNight(from, lat, lon).dark;
   const up = dark ? sky.milkyWayTrack([lon, lat], dark.from, dark.to, { stepMinutes: 10 }).length : 0;
 
   // The widest step of bearing between neighbouring samples: a curve, or a
@@ -5203,8 +5259,9 @@ if (/^Not from here/.test(eclipse.verdict)) {
     const features = window.__map.getSource('light-directions')?._d?.features || [];
     return [...new Set(features.map((feature) => feature.properties.body))].sort();
   });
+  // The eclipse is the moon alone; Draw always has the sun's rise and set.
   check('and opening Draw replaces the eclipse rather than stacking on it',
-    swapped.includes('core'), true);
+    swapped.includes('sun'), true);
 
   await page.locator('.sky-tab', { hasText: /^Draw$/ }).first().click();
   await page.waitForTimeout(400);
@@ -5309,10 +5366,14 @@ await page.waitForTimeout(700);
 const scrubbedNames = await (async () => {
   const range = page.locator('.scrub-range').first();
   const { min, max } = await range.evaluate((node) => ({ min: node.min, max: node.max }));
+  // Whichever of two moments is further from the present: the window is a
+  // whole day now, and one of them can fall within minutes of the run.
+  const away = [0.2, 0.7].map((fraction) => Number(min) + (Number(max) - Number(min)) * fraction)
+    .sort((a, b) => Math.abs(b - Date.now()) - Math.abs(a - Date.now()))[0];
   await range.evaluate((node, value) => {
     node.value = value;
     node.dispatchEvent(new Event('input', { bubbles: true }));
-  }, String(Number(min) + (Number(max) - Number(min)) * 0.2));
+  }, String(away));
   await new Promise((resolve) => setTimeout(resolve, 400));
   return page.evaluate(() => {
     const features = window.__map.getSource('light-directions')?._d?.features || [];
