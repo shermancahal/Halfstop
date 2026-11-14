@@ -3602,10 +3602,26 @@ if (today.possible) {
   await scrubTo(Math.min(today.peak + 60 * 60 * 1000, today.dark[1]));
   check('and moving it moves the band', (await arcOf()).first !== band.first, true);
   await scrubTo(today.peak);
-} else {
-  console.log('  (the core is not up after dark at this pin tonight; the band is checked in season)');
-  if (today.dark) await scrubTo((today.dark[0] + today.dark[1]) / 2);
-  check('out of season, the dark of the night draws no band', (await arcOf()).present, false);
+} else if (today.dark) {
+  /*
+   * Out of season the core is not high after dark, but the band is not the
+   * core: the winter Milky Way is overhead on a November night, and drawing
+   * it is right. What must hold is the core's own line, which follows the
+   * core - read at the slider's actual value, since it snaps to five minutes.
+   */
+  console.log('  (the core is not high after dark at this pin tonight; its best hour is checked in season)');
+  await scrubTo((today.dark[0] + today.dark[1]) / 2);
+  const middle = await page.evaluate(async () => {
+    const sky = await import(new URL('assets/js/lib/sky.js', document.baseURI).href);
+    const { lng, lat } = window.__map.getCenter();
+    const at = new Date(Number(document.querySelector('.scrub-range').value));
+    const features = window.__map.getSource('light-directions')?._d?.features || [];
+    return {
+      up: sky.galacticCentre(at, lat, lng).altitude > 0,
+      drawn: features.some((feature) => feature.properties.body === 'core' && feature.properties.now),
+    };
+  });
+  check('in the dark, the core\'s line is drawn exactly when the core is up', middle.drawn, middle.up);
 }
 check('the Now button is there to get back', await page.locator('.scrub-now').count(), 1);
 
