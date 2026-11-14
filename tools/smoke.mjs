@@ -2244,8 +2244,8 @@ check('as an actual waypoint element', /<wpt[\s>]/.test(gpx || ''), true);
 console.log('\nUnits are chosen, applied and remembered');
 await page.click('#settings-trigger');
 await page.waitForTimeout(200);
-check('the menu offers both conversions and the three themes',
-  await page.locator('.settings-choice').count(), 7);
+check('the menu offers both conversions, the three themes and where it opens',
+  await page.locator('.settings-choice').count(), 9);
 /*
  * Chosen by accessible name, because the face of the button is now "\u00b0C"
  * and "km / m" - short enough for a phone, and spelled out where a screen
@@ -6331,6 +6331,96 @@ console.log('\nThe map opens on the basemap and layers it was last on');
     if (value === null) localStorage.removeItem('ab-maps-map');
     else localStorage.setItem('ab-maps-map', value);
   }, before);
+}
+
+/*
+ * The app can open straight onto the map, where it was left.
+ *
+ * Asked for as "a checkbox in settings so they can skip the splash screen and
+ * go straight to the map to where they were last at". The app starts on the
+ * home page every time, and the map centred on the reader rather than on the
+ * place being scouted. A context of its own, with a position to centre on,
+ * so a map wrongly sent to the reader is a map in Colorado.
+ */
+console.log('\nThe app can open straight to the map, where it was left');
+{
+  const ctx = await browser.newContext({
+    viewport: { width: 1280, height: 900 },
+    serviceWorkers: 'block',
+    permissions: ['geolocation'],
+    geolocation: { latitude: 39.7392, longitude: -104.9903 },
+  });
+  const HOME = new URL('index.html', MAP_URL).href;
+  const UTAH = [-111.5, 40.6];
+  // A new tab is a new visit - its own sessionStorage - the way an app launch is.
+  const launch = async (href = HOME) => {
+    const tab = await ctx.newPage();
+    await tab.route('**/*', serveStubs);
+    await tab.goto(href, { waitUntil: 'commit' });
+    await tab.waitForTimeout(1200);
+    await tab.waitForLoadState('load').catch(() => {});
+    if (/\/map\.html/.test(tab.url())) {
+      await tab.waitForFunction(() => window.__map, null, { timeout: 8000 }).catch(() => {});
+      await tab.waitForTimeout(1500);
+    }
+    return tab;
+  };
+  const onMap = (tab) => new URL(tab.url()).pathname.endsWith('/map.html');
+  const centre = (tab) => tab.evaluate(() => {
+    const { lng, lat } = window.__map.getCenter();
+    return [Number(lng.toFixed(2)), Number(lat.toFixed(2))];
+  });
+  const opensOn = (tab, title) => tab.locator(`.settings-choice[aria-label="${title}"]`);
+
+  const home = await launch();
+  check('until it is chosen, the app opens on the home page', onMap(home), false);
+  await home.click('#settings-trigger');
+  await home.waitForTimeout(300);
+  check('the gear on the home page asks where it opens',
+    await opensOn(home, 'Open on the home page').getAttribute('aria-pressed'), 'true');
+  await opensOn(home, 'Open straight to the map, where you left off').click();
+  await home.waitForTimeout(200);
+  check('choosing the map is kept on this device',
+    await home.evaluate(() => localStorage.getItem('ab-maps-open-on-map')), '1');
+  await home.close();
+
+  const first = await launch();
+  check('launched, the home page goes straight on to the map', onMap(first), true);
+  check('with nowhere kept yet, it centres on the reader as before', await centre(first), [-104.99, 39.74]);
+  await first.evaluate((at) => { window.__map.jumpTo({ center: at, zoom: 10.5 }); window.__map.fire('moveend'); }, UTAH);
+  check('and keeps where it is moved to',
+    await first.evaluate(() => JSON.parse(localStorage.getItem('ab-maps-camera') || 'null')?.center), UTAH);
+  await first.close();
+
+  const second = await launch();
+  check('launched again, it opens on the map', onMap(second), true);
+  check('built where it was left, not where the reader is',
+    await second.evaluate(() => [window.__mapOptions.center, window.__mapOptions.zoom]), [UTAH, 10.5]);
+  check('and is not then moved to the reader', await centre(second), UTAH);
+
+  // The brand link is the way back to the home page, and must not bounce.
+  await second.click('a.brand');
+  await second.waitForTimeout(1200);
+  await second.waitForLoadState('load').catch(() => {});
+  check('the brand link on the map still reaches the home page', onMap(second), false);
+  await second.reload({ waitUntil: 'load' });
+  await second.waitForTimeout(600);
+  check('and so does a reload of it', onMap(second), false);
+
+  const linked = await launch(`${MAP_URL}#view=9/35.96/-84.28`);
+  check('a link carrying a view still opens where it points', await centre(linked), [-84.28, 35.96]);
+  await linked.close();
+
+  await second.click('#settings-trigger');
+  await second.waitForTimeout(300);
+  await opensOn(second, 'Open on the home page').click();
+  await second.waitForTimeout(200);
+  check('choosing the home page again forgets the place as well',
+    await second.evaluate(() => [localStorage.getItem('ab-maps-open-on-map'), localStorage.getItem('ab-maps-camera')]),
+    [null, null]);
+  const after = await launch();
+  check('and the app opens on the home page again', onMap(after), false);
+  await ctx.close();
 }
 
 console.log('\nMetered basemaps are shown and not offered, once billing is live');

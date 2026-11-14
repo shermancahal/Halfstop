@@ -23,6 +23,61 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Halfstop">
 <meta name="mobile-web-app-capable" content="yes">
+<script>
+  /*
+   * A shared map link still lands here, and has to go on to the map.
+   *
+   * The viewer used to be the homepage, so every link this app has written -
+   * and every one anybody has shared - points at the root carrying ?m=, ?b= or
+   * a #view. Dropping those on a landing page would break all of them quietly.
+   * Redirected before anything else loads, so the homepage never flashes past.
+   */
+  (function () {
+    /*
+     * Whether this page is the first of a visit, for the last check below:
+     * read and set before anything can leave it.
+     */
+    var launched = false;
+    try {
+      launched = sessionStorage.getItem('halfstop-opened') === '1';
+      sessionStorage.setItem('halfstop-opened', '1');
+    } catch (e) { launched = false; }
+
+    var search = new URLSearchParams(location.search);
+    /*
+     * `code` and `error` are here because an auth return can land on the root.
+     *
+     * A provider round trip, or an emailed link, comes back to whatever
+     * address the project has in its allow list - and if that is the bare
+     * site, the session arrives on a page that does not load the accounts
+     * code and is never exchanged. It looks exactly like signing in doing
+     * nothing. Carried through to the map, where something is listening.
+     */
+    var carries = ['m', 'b', 'o', 'u', 'f', 'code', 'error'].some(function (key) { return search.has(key); });
+    if (carries || /^#(view|-?\d)/.test(location.hash) || /access_token=|[#&]error=/.test(location.hash)) {
+      location.replace('map.html' + location.search + location.hash);
+      return;
+    }
+    // What's new and the roadmap moved to the help page; links to their old
+    // places on this one follow them there.
+    if (/^#(whats-new|roadmap)$/.test(location.hash)) {
+      location.replace('faq.html' + location.hash);
+      return;
+    }
+    /*
+     * Straight to the map, for somebody who chose that in the gear ("Opens
+     * on: Map"). Only a launch - a bare address, the first page of a visit,
+     * not followed from another page here - so the brand link, Back and a
+     * reload still reach this page. The rule is skipsHome() in
+     * lib/start-page.js, and a test holds the two together.
+     */
+    var onMap = false;
+    try { onMap = localStorage.getItem('ab-maps-open-on-map') === '1'; } catch (e) { onMap = false; }
+    var fromHere = false;
+    try { fromHere = Boolean(document.referrer) && new URL(document.referrer).origin === location.origin; } catch (e) { fromHere = false; }
+    if (onMap && !launched && !fromHere && !location.search && !location.hash) location.replace('map.html');
+  }());
+</script>
 <link rel="stylesheet" href="assets/css/site.css">
 </head>
 <body>
@@ -361,38 +416,6 @@
 </footer>
 
 <!-- Mapbox token, kept out of git. Copy assets/js/token.example.js to token.js. -->
-<script>
-  /*
-   * A shared map link still lands here, and has to go on to the map.
-   *
-   * The viewer used to be the homepage, so every link this app has written -
-   * and every one anybody has shared - points at the root carrying ?m=, ?b= or
-   * a #view. Dropping those on a landing page would break all of them quietly.
-   * Redirected before anything else loads, so the homepage never flashes past.
-   */
-  (function () {
-    var search = new URLSearchParams(location.search);
-    /*
-     * `code` and `error` are here because an auth return can land on the root.
-     *
-     * A provider round trip, or an emailed link, comes back to whatever
-     * address the project has in its allow list - and if that is the bare
-     * site, the session arrives on a page that does not load the accounts
-     * code and is never exchanged. It looks exactly like signing in doing
-     * nothing. Carried through to the map, where something is listening.
-     */
-    var carries = ['m', 'b', 'o', 'u', 'f', 'code', 'error'].some(function (key) { return search.has(key); });
-    if (carries || /^#(view|-?\d)/.test(location.hash) || /access_token=|[#&]error=/.test(location.hash)) {
-      location.replace('map.html' + location.search + location.hash);
-      return;
-    }
-    // What's new and the roadmap moved to the help page; links to their old
-    // places on this one follow them there.
-    if (/^#(whats-new|roadmap)$/.test(location.hash)) {
-      location.replace('faq.html' + location.hash);
-    }
-  }());
-</script>
 <script src="assets/js/token.js"></script>
 <!--
   build.js sets ABMAP_BUILD, and registerServiceWorker treats its absence as

@@ -32,6 +32,7 @@ import { Account } from './account.js';
 import { createAccountPanel } from './account-panel.js';
 import { wireSettingsMenu } from './settings-menu.js';
 import { managePlanBlock } from './manage-plan.js';
+import { startRow } from './start-page.js';
 
 /**
  * The theme row, in the same shape and the same words as the map's.
@@ -106,7 +107,10 @@ export function mountPageSettings({
   panel.element.setAttribute('aria-label', 'Account');
 
   const menu = wireSettingsMenu({
-    rows: [...rows, THEME_ROW],
+    // Opens on: here too, because the home page is where somebody who wants
+    // to skip it is looking when they decide to. Off the map there is no
+    // camera to keep yet; the map keeps one from its first move.
+    rows: [...rows, THEME_ROW, startRow()],
     accountPanel: panel,
     account: () => who,
     // The way out of a subscription, and only that: no checkout off the map,

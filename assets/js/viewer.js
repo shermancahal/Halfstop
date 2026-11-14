@@ -116,6 +116,7 @@ import {
 } from './lib/photos.js';
 import { photosToUpload, ownUploads, isUploaded, PHOTO_SYNC_LIMIT } from './lib/photo-sync.js';
 import { MAP_MEMORY_KEY, mapSync, parseMapMemory, sameMap, startingBasemap, worthKeeping } from './lib/map-memory.js';
+import { LAUNCH_KEY, deviceStorage, keepCamera, resumeCamera, startRow } from './lib/start-page.js';
 
 /* ------------------------------------------------------------------ state */
 
@@ -790,6 +791,15 @@ async function main() {
    * itself off.
    */
   const arrivedWithAView = linkCarriesView(location.hash);
+  /*
+   * Where it was left, for a device set to open on the map, when nothing in
+   * the address says where to go - see lib/start-page.js. Built there rather
+   * than moved there, so the first tiles asked for are the right ones.
+   */
+  const resume = arrivedWithAView || initial.pin || initial.slugs.length || initial.link
+    ? null : resumeCamera(deviceStorage());
+  // This visit has begun, so the home page is reached from here, not launched.
+  try { sessionStore()?.setItem(LAUNCH_KEY, '1'); } catch { /* storage refused */ }
   // The map you were last on, unless a link names one - see lib/map-memory.js.
   const memory = parseMapMemory(readSetting(MAP_MEMORY_KEY, ''));
   state.mapFromLink = Boolean(initial.basemap || initial.overlays);
@@ -815,8 +825,10 @@ async function main() {
   state.map = new gl.Map({
     container: 'map',
     style: initialStyle.style,
-    center: DEFAULT_VIEW.center,
-    zoom: DEFAULT_VIEW.zoom,
+    center: resume?.center || DEFAULT_VIEW.center,
+    zoom: resume?.zoom ?? DEFAULT_VIEW.zoom,
+    bearing: resume?.bearing || 0,
+    pitch: resume?.pitch || 0,
     hash: 'view',
     attributionControl: { compact: true },
     maxPitch: 75,
@@ -836,6 +848,8 @@ async function main() {
   });
   // The account may have been known before there was a map to switch.
   state.map.once('load', () => syncMapWithAccount());
+  // Kept only while this device opens on the map; a no-op otherwise.
+  state.map.on('moveend', () => keepCamera(deviceStorage(), cameraNow()));
 
   /*
    * The image healer, wired before anything is awaited.
@@ -1110,7 +1124,7 @@ async function main() {
   // read before deciding where the map goes, because the file decides that.
   const handed = takeOpenedFile(sessionStore());
 
-  if (!arrivedWithAView && !initial.pin && !initial.slugs.length && !handed && !initial.link) centreOnYou();
+  if (!arrivedWithAView && !initial.pin && !initial.slugs.length && !handed && !initial.link && !resume) centreOnYou();
 
   renderDetailsTab();
   if (handed) openHandedFile(handed);
@@ -1185,6 +1199,17 @@ async function openHandedFile(url) {
  *   confidence nothing here has; zoomForAccuracy sizes the move to the
  *   accuracy that came back with it.
  */
+/** Where the map is looking, as lib/start-page.js keeps it. */
+function cameraNow() {
+  if (!state.map) return null;
+  return {
+    center: state.map.getCenter(),
+    zoom: state.map.getZoom(),
+    bearing: state.map.getBearing?.() || 0,
+    pitch: state.map.getPitch?.() || 0,
+  };
+}
+
 function centreOnYou() {
   if (!navigator.geolocation || !state.map) return;
 
@@ -3456,6 +3481,8 @@ const SETTINGS = [
     read: readTheme,
     write: setTheme,
   },
+  // Home page or map, on this device - and the map where it was left.
+  startRow({ camera: cameraNow }),
 ];
 
 /*
